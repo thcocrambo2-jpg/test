@@ -17,6 +17,7 @@ import re
 import subprocess
 import time
 import urllib.request
+import zipfile
 from pathlib import Path
 
 import gradio as gr
@@ -172,6 +173,32 @@ def refresh_lora_choices():
     return [gr.Dropdown(choices=choices) for _ in range(MAX_LORA_SLOTS)]
 
 
+def list_output_images() -> list[str]:
+    """Every generated image in OUTPUT_DIR, newest first."""
+    return [str(p) for p in sorted(OUTPUT_DIR.rglob("*.png"),
+                                   key=lambda p: p.stat().st_mtime, reverse=True)]
+
+
+def refresh_gallery():
+    """Re-scan OUTPUT_DIR for the Gallery tab."""
+    images = list_output_images()
+    return images, f"{len(images)} image(s) in `{OUTPUT_DIR}`"
+
+
+def zip_outputs():
+    """Bundle all generated images into one zip (the pod disk is ephemeral)."""
+    images = list_output_images()
+    if not images:
+        return None, "No images to zip yet."
+    # PNGs are already compressed — store instead of deflating (much faster).
+    zip_path = OUTPUT_DIR / "all_outputs.zip"
+    with zipfile.ZipFile(zip_path, "w", zipfile.ZIP_STORED) as zf:
+        for img in images:
+            zf.write(img, Path(img).relative_to(OUTPUT_DIR))
+    size_mb = zip_path.stat().st_size / 1e6
+    return str(zip_path), f"📦 Zipped {len(images)} image(s) ({size_mb:.0f} MB)"
+
+
 with gr.Blocks(title="Krea 2 on RunPod") as ui:
     gr.Markdown(
         f"# ⚡ Krea 2 {KREA2_VARIANT.title()} — ComfyUI on RunPod\n"
@@ -270,6 +297,29 @@ with gr.Blocks(title="Krea 2 on RunPod") as ui:
                 fn=generate_from_json,
                 inputs=[json_file_in, json_text_in],
                 outputs=[json_gallery, json_status],
+            )
+
+        with gr.Tab("Gallery"):
+            with gr.Row():
+                gallery_refresh_btn = gr.Button("🔄 Refresh", size="sm")
+                gallery_zip_btn = gr.Button(
+                    "📦 Zip all for download", size="sm"
+                )
+            gallery_info = gr.Markdown(
+                f"{len(list_output_images())} image(s) in `{OUTPUT_DIR}`"
+            )
+            all_gallery = gr.Gallery(
+                label="All generated images (newest first)",
+                value=list_output_images(), columns=4, height=700,
+            )
+            gallery_zip_file = gr.File(
+                label="Zip of all images", interactive=False
+            )
+            gallery_refresh_btn.click(
+                fn=refresh_gallery, outputs=[all_gallery, gallery_info]
+            )
+            gallery_zip_btn.click(
+                fn=zip_outputs, outputs=[gallery_zip_file, gallery_info]
             )
 
 
