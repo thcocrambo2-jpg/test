@@ -91,6 +91,7 @@ CIVITAI_LORAS = [
     (3075498, "nicegirls_krea2.safetensors"),
     (3066973, "Krea2-realism-V1.safetensors"),
     (3075606, "lenovo_krea2.safetensors"),
+    (3114242, "purelens_krea2.safetensors"),
 ]
 
 RESOLUTION_PRESETS = {
