@@ -24,6 +24,7 @@ from config import TEMP_DIR, log
 def main() -> None:
     # 2-3 · Clone ComfyUI (idempotent) and install all requirements.
     bootstrap.install_comfyui()
+    bootstrap.install_custom_nodes()
     bootstrap.link_model_dirs()
     log.info("Environment ready (Python %s)", sys.version.split()[0])
 

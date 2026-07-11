@@ -1,13 +1,16 @@
-"""Krea 2 workflow builders (text-to-image and inpainting).
+"""Krea 2 workflow builders (text-to-image, inpainting, instruction edit).
 
-The workflows use only nodes that ship with current ComfyUI:
-UNETLoader / CLIPLoader(type="krea2") / VAELoader, LoraLoaderModelOnly,
-ConditioningZeroOut and KSampler — plus the native multi-GPU placement
-nodes SelectCLIPDevice / SelectVAEDevice when a second GPU is present
-(these pass through unchanged on machines where gpu:1 does not exist,
-so the same workflow can never fail for lack of a GPU). Inpainting adds
-LoadImage / LoadImageMask / VAEEncode / SetLatentNoiseMask and a final
-ImageCompositeMasked — all core nodes as well.
+The t2i and inpaint workflows use only nodes that ship with current
+ComfyUI: UNETLoader / CLIPLoader(type="krea2") / VAELoader,
+LoraLoaderModelOnly, ConditioningZeroOut and KSampler — plus the native
+multi-GPU placement nodes SelectCLIPDevice / SelectVAEDevice when a
+second GPU is present (these pass through unchanged on machines where
+gpu:1 does not exist, so the same workflow can never fail for lack of a
+GPU). Inpainting adds LoadImage / LoadImageMask / VAEEncode /
+SetLatentNoiseMask and a final ImageCompositeMasked — all core nodes as
+well. The instruction-edit workflow additionally needs the
+ComfyUI-Krea2Edit custom nodes and the Identity Edit LoRA (both fetched
+during bootstrap/downloads).
 """
 
 import difflib
@@ -15,6 +18,7 @@ import difflib
 from comfy import GPU_COUNT
 from config import (
     ABLITERATED_ENCODER_FILE,
+    EDIT_LORA_FILE,
     MODELS_DIR,
     TEXT_ENCODER_FILE,
     UNET_FILE,
@@ -24,8 +28,18 @@ from config import (
 
 
 def list_lora_files() -> list[str]:
-    """LoRA files currently available to ComfyUI."""
-    return sorted(p.name for p in (MODELS_DIR / "loras").glob("*.safetensors"))
+    """Style LoRA files currently available to ComfyUI.
+
+    The Identity Edit LoRA is excluded — it only works together with the
+    Krea2Edit patch nodes, so build_edit_workflow adds it by itself.
+    """
+    return sorted(p.name for p in (MODELS_DIR / "loras").glob("*.safetensors")
+                  if p.name != EDIT_LORA_FILE)
+
+
+def edit_lora_available() -> bool:
+    """True once the Identity Edit LoRA has been downloaded."""
+    return (MODELS_DIR / "loras" / EDIT_LORA_FILE).exists()
 
 
 def active_text_encoder() -> str:
@@ -258,5 +272,92 @@ def build_inpaint_workflow(
     wf["save"] = {
         "class_type": "SaveImage",
         "inputs": {"filename_prefix": filename_prefix, "images": save_ref},
+    }
+    return wf
+
+
+def build_edit_workflow(
+    *,
+    prompt: str,
+    negative: str = "",
+    seed: int = 0,
+    steps: int = 8,
+    cfg: float = 1.0,
+    width: int,
+    height: int,
+    sampler: str = "er_sde",
+    image_name: str,
+    grounding_px: int = 768,
+    loras=(),
+    filename_prefix: str = "Krea2Edit",
+) -> dict:
+    """Build an instruction-edit workflow (Krea 2 Identity Edit LoRA).
+
+    Unlike img2img, the source image is fed to the model itself:
+    Krea2EditModelPatch prepends its VAE latents as clean in-context
+    tokens and Krea2EditGroundedEncode lets the Qwen3-VL encoder read the
+    image alongside the instruction — so "make the jacket red" edits the
+    photo instead of repainting it from scratch. Both nodes come from the
+    ComfyUI-Krea2Edit pack (installed by bootstrap.install_custom_nodes).
+
+    The Identity Edit LoRA is always applied first at strength 1.0 (as
+    trained); style `loras` stack after it. `grounding_px` trades edit
+    adherence (lower) against identity fidelity (higher). Denoise stays
+    1.0: the source enters through conditioning, not the starting latent,
+    and `width`/`height` should match the source aspect ratio (≤ 2 MP).
+    """
+    wf, model_ref, clip_ref, vae_ref = _model_nodes(
+        [(EDIT_LORA_FILE, 1.0), *loras]
+    )
+
+    wf["source"] = {
+        "class_type": "LoadImage",
+        "inputs": {"image": image_name},
+    }
+    wf["encode"] = {
+        "class_type": "VAEEncode",
+        "inputs": {"pixels": ["source", 0], "vae": vae_ref},
+    }
+    wf["edit_model"] = {
+        "class_type": "Krea2EditModelPatch",
+        "inputs": {"model": model_ref, "source_latent": ["encode", 0]},
+    }
+    wf["positive"] = {
+        "class_type": "Krea2EditGroundedEncode",
+        "inputs": {"clip": clip_ref, "prompt": prompt,
+                   "image": ["source", 0], "grounding_px": int(grounding_px)},
+    }
+    if negative.strip():
+        wf["negative"] = {
+            "class_type": "Krea2EditGroundedEncode",
+            "inputs": {"clip": clip_ref, "prompt": negative,
+                       "image": ["source", 0],
+                       "grounding_px": int(grounding_px)},
+        }
+    else:
+        wf["negative"] = {
+            "class_type": "ConditioningZeroOut",
+            "inputs": {"conditioning": ["positive", 0]},
+        }
+    wf["latent"] = {
+        "class_type": "EmptySD3LatentImage",
+        "inputs": {"width": int(width), "height": int(height), "batch_size": 1},
+    }
+    wf["sampler"] = {
+        "class_type": "KSampler",
+        "inputs": {
+            "seed": int(seed), "steps": int(steps), "cfg": float(cfg),
+            "sampler_name": sampler, "scheduler": "simple", "denoise": 1.0,
+            "model": ["edit_model", 0], "positive": ["positive", 0],
+            "negative": ["negative", 0], "latent_image": ["latent", 0],
+        },
+    }
+    wf["decode"] = {
+        "class_type": "VAEDecode",
+        "inputs": {"samples": ["sampler", 0], "vae": vae_ref},
+    }
+    wf["save"] = {
+        "class_type": "SaveImage",
+        "inputs": {"filename_prefix": filename_prefix, "images": ["decode", 0]},
     }
     return wf

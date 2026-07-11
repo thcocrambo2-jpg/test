@@ -54,6 +54,15 @@ VAE_FILE = "qwen_image_vae.safetensors"                      # ~0.25 GB
 ABLITERATED_ENCODER_REPO = "huihui-ai/Huihui-Qwen3-VL-4B-Instruct-abliterated"
 ABLITERATED_ENCODER_FILE = "qwen3vl_4b_abliterated.safetensors"
 
+# Instruction-based image editing ("upload a photo, describe the change"):
+# the community Krea 2 Identity Edit LoRA plus the ComfyUI-Krea2Edit node
+# pack feed the source image into the model itself — as in-context VAE
+# latents and through the Qwen3-VL encoder — so edits preserve identity
+# instead of repainting from scratch like plain img2img/inpaint.
+KREA2EDIT_NODES_REPO = "https://github.com/lbouaraba/comfyui-krea2edit"
+EDIT_LORA_REPO = "conradlocke/krea2-identity-edit"
+EDIT_LORA_FILE = "krea2_identity_edit_v1_1.safetensors"  # ~1.83 GB
+
 HF_MODEL_FILES = [
     f"diffusion_models/{UNET_FILE}",
     f"vae/{VAE_FILE}",

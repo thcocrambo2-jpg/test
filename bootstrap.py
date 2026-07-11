@@ -11,7 +11,7 @@ import shutil
 import subprocess
 import sys
 
-from config import COMFY_DIR, MODELS_DIR, PROJECT_DIR, log
+from config import COMFY_DIR, KREA2EDIT_NODES_REPO, MODELS_DIR, PROJECT_DIR, log
 
 COMFYUI_REPO = "https://github.com/comfyanonymous/ComfyUI.git"
 
@@ -44,6 +44,23 @@ def install_comfyui() -> None:
          "-r", COMFY_DIR / "requirements.txt",
          "-r", PROJECT_DIR / "requirements.txt"],
         desc="Installing ComfyUI + app requirements (single resolver pass)",
+    )
+
+
+def install_custom_nodes() -> None:
+    """Clone the ComfyUI-Krea2Edit node pack (idempotent).
+
+    Provides the Krea2EditModelPatch / Krea2EditGroundedEncode nodes the
+    instruction-edit workflow needs. Must run before the ComfyUI server
+    starts so the nodes register; the pack has no extra Python deps.
+    """
+    dest = COMFY_DIR / "custom_nodes" / "comfyui-krea2edit"
+    if dest.exists():
+        log.info("Krea2Edit nodes already present at %s — skipping clone", dest)
+        return
+    run_cmd(
+        ["git", "clone", "--depth", "1", KREA2EDIT_NODES_REPO, dest],
+        desc="Cloning ComfyUI-Krea2Edit nodes",
     )
 
 

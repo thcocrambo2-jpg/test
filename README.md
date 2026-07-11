@@ -35,9 +35,25 @@ live under the base directory and are lost when the pod is destroyed.
 - `bootstrap.py` — clone ComfyUI + install requirements
 - `downloads.py` — HF / CivitAI model + LoRA downloads (resume + retries)
 - `comfy.py` — GPU detection + ComfyUI server start/wait
-- `workflow.py` — Krea 2 workflow builders, text-to-image + inpainting (ComfyUI API format)
+- `workflow.py` — Krea 2 workflow builders, text-to-image + inpainting + instruction edit (ComfyUI API format)
 - `client.py` — ComfyUI HTTP/websocket client (queue, progress, image upload)
-- `ui.py` — Gradio UI (single/batch, inpaint, JSON batch, gallery tabs) and launch logic
+- `ui.py` — Gradio UI (single/batch, edit, inpaint, JSON batch, gallery tabs) and launch logic
+
+## Instruction editing (Edit tab)
+
+The **✨ Edit (Instruction)** tab does nano-banana-style editing: upload an
+image and describe the change ("make the jacket red", "this person walking
+a dog on a beach") — no mask painting. It uses the community
+[Krea 2 Identity Edit LoRA](https://huggingface.co/conradlocke/krea2-identity-edit)
+(~1.9 GB, auto-downloaded) together with the
+[ComfyUI-Krea2Edit](https://github.com/lbouaraba/comfyui-krea2edit) node
+pack (auto-cloned into `custom_nodes` at bootstrap). The source image is
+injected both as in-context VAE latents and through the Qwen3-VL text
+encoder, so the model actually sees the image it is editing and preserves
+identity/unchanged regions. The **Grounding** slider trades edit strength
+(lower) against likeness fidelity (higher); style LoRAs can be stacked on
+top just like in the other tabs. Outputs are capped at ~2 MP (the LoRA
+duplicates content above that).
 
 ## Inpainting
 
