@@ -326,6 +326,9 @@ def launch_ui() -> None:
     _app, _local_url, share_url = ui.launch(
         server_name="0.0.0.0", server_port=7860, share=True,
         show_error=True, ssr_mode=False, prevent_thread_lock=True,
+        # OUTPUT_DIR is outside the cwd, so Gradio needs it whitelisted to
+        # serve gallery images (on Kaggle the cwd contained the output dir).
+        allowed_paths=[str(OUTPUT_DIR)],
     )
     tunnel_proc, public_url = None, share_url
     if share_url and _probe_url(share_url):
