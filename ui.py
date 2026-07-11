@@ -138,16 +138,22 @@ def _run_jobs(jobs, builder=build_workflow, prefix="Krea2"):
     yield images, f"✅ All {total} job(s) done — images saved under {OUTPUT_DIR}"
 
 
-def generate_single(prompt, negative, seed, randomize, steps, cfg, resolution,
-                    sampler, lora1, w1, lora2, w2, lora3, w3, batch_count):
-    """First tab: run batch_count jobs on sequential seeds."""
-    base_seed = random.randint(0, 2**32 - 1) if randomize else int(seed)
-    width, height = parse_resolution(resolution)
+def _resolve_lora_slots(lora1, w1, lora2, w2, lora3, w3) -> list:
+    """UI LoRA dropdown/weight pairs → resolved (filename, strength) list."""
     loras = []
     for name, weight in ((lora1, w1), (lora2, w2), (lora3, w3)):
         lora_file = resolve_lora_name(name)
         if lora_file:
             loras.append((lora_file, float(weight)))
+    return loras
+
+
+def generate_single(prompt, negative, seed, randomize, steps, cfg, resolution,
+                    sampler, lora1, w1, lora2, w2, lora3, w3, batch_count):
+    """First tab: run batch_count jobs on sequential seeds."""
+    base_seed = random.randint(0, 2**32 - 1) if randomize else int(seed)
+    width, height = parse_resolution(resolution)
+    loras = _resolve_lora_slots(lora1, w1, lora2, w2, lora3, w3)
     jobs = [{
         "prompt": prompt, "negative": negative or "", "seed": base_seed + i,
         "steps": int(steps), "cfg": float(cfg), "width": width, "height": height,
@@ -202,7 +208,8 @@ def _png_bytes(image) -> bytes:
 
 
 def generate_inpaint(editor_value, prompt, negative, seed, randomize, steps,
-                     cfg, denoise, sampler, grow, blur, batch_count):
+                     cfg, denoise, sampler, grow, blur,
+                     lora1, w1, lora2, w2, lora3, w3, batch_count):
     """Inpaint tab: repaint the painted region — or, with nothing painted,
     run the whole image through img2img at the chosen denoise."""
     try:
@@ -231,7 +238,7 @@ def generate_inpaint(editor_value, prompt, negative, seed, randomize, steps,
         "prompt": prompt, "negative": negative or "", "seed": base_seed + i,
         "steps": int(steps), "cfg": float(cfg), "denoise": float(denoise),
         "sampler": sampler, "image_name": image_name, "mask_name": mask_name,
-        "loras": [],
+        "loras": _resolve_lora_slots(lora1, w1, lora2, w2, lora3, w3),
     } for i in range(int(batch_count))]
     prefix = "Krea2Inpaint" if mask is not None else "Krea2Img2Img"
     for images, status in _run_jobs(jobs, builder=build_inpaint_workflow,
@@ -288,6 +295,29 @@ def zip_outputs():
     return str(zip_path), f"📦 Zipped {len(images)} image(s) ({size_mb:.0f} MB)"
 
 
+def _lora_stack():
+    """LoRA slot dropdown/weight rows + rescan button (used by two tabs).
+
+    Must be called inside a gr.Blocks context. Returns (dropdowns, weights);
+    the rescan button is wired to refresh its own tab's dropdowns.
+    """
+    gr.Markdown("### 🎭 LoRA stack")
+    dds, ws = [], []
+    for slot in range(1, MAX_LORA_SLOTS + 1):
+        with gr.Row():
+            dds.append(gr.Dropdown(
+                choices=LORA_CHOICES, value="None",
+                label=f"LoRA {slot}", scale=3,
+            ))
+            ws.append(gr.Slider(
+                0.0, 2.0, value=0.8, step=0.05,
+                label="Weight", scale=1,
+            ))
+    refresh_btn = gr.Button("🔄 Rescan LoRA folder", size="sm")
+    refresh_btn.click(fn=refresh_lora_choices, outputs=dds)
+    return dds, ws
+
+
 with gr.Blocks(title="Krea 2 on RunPod") as ui:
     gr.Markdown(
         f"# ⚡ Krea 2 {KREA2_VARIANT.title()} — ComfyUI on RunPod\n"
@@ -327,19 +357,7 @@ with gr.Blocks(title="Krea 2 on RunPod") as ui:
                         batch_slider = gr.Slider(
                             1, 20, value=1, step=1, label="Batch count"
                         )
-                    gr.Markdown("### 🎭 LoRA stack")
-                    lora_dds, lora_ws = [], []
-                    for slot in range(1, MAX_LORA_SLOTS + 1):
-                        with gr.Row():
-                            lora_dds.append(gr.Dropdown(
-                                choices=LORA_CHOICES, value="None",
-                                label=f"LoRA {slot}", scale=3,
-                            ))
-                            lora_ws.append(gr.Slider(
-                                0.0, 2.0, value=0.8, step=0.05,
-                                label="Weight", scale=1,
-                            ))
-                    refresh_btn = gr.Button("🔄 Rescan LoRA folder", size="sm")
+                    lora_dds, lora_ws = _lora_stack()
                     generate_btn = gr.Button(
                         "🚀 Generate", variant="primary", size="lg"
                     )
@@ -357,7 +375,6 @@ with gr.Blocks(title="Krea 2 on RunPod") as ui:
                         lora_dds[2], lora_ws[2], batch_slider],
                 outputs=[gallery, status_box, seed_out],
             )
-            refresh_btn.click(fn=refresh_lora_choices, outputs=lora_dds)
 
         with gr.Tab("Inpaint / Img2Img"):
             gr.Markdown(
@@ -412,6 +429,7 @@ with gr.Blocks(title="Krea 2 on RunPod") as ui:
                         inpaint_batch = gr.Slider(
                             1, 20, value=1, step=1, label="Batch count"
                         )
+                    inpaint_lora_dds, inpaint_lora_ws = _lora_stack()
                     inpaint_btn = gr.Button(
                         "🖌️ Inpaint", variant="primary", size="lg"
                     )
@@ -430,7 +448,11 @@ with gr.Blocks(title="Krea 2 on RunPod") as ui:
                 inputs=[inpaint_editor, inpaint_prompt, inpaint_negative,
                         inpaint_seed, inpaint_random, inpaint_steps,
                         inpaint_cfg, inpaint_denoise, inpaint_sampler,
-                        inpaint_grow, inpaint_blur, inpaint_batch],
+                        inpaint_grow, inpaint_blur,
+                        inpaint_lora_dds[0], inpaint_lora_ws[0],
+                        inpaint_lora_dds[1], inpaint_lora_ws[1],
+                        inpaint_lora_dds[2], inpaint_lora_ws[2],
+                        inpaint_batch],
                 outputs=[inpaint_gallery, inpaint_status, inpaint_seed_out],
             )
 
