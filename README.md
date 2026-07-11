@@ -35,6 +35,17 @@ live under the base directory and are lost when the pod is destroyed.
 - `bootstrap.py` — clone ComfyUI + install requirements
 - `downloads.py` — HF / CivitAI model + LoRA downloads (resume + retries)
 - `comfy.py` — GPU detection + ComfyUI server start/wait
-- `workflow.py` — Krea 2 workflow builder (ComfyUI API format)
-- `client.py` — ComfyUI HTTP/websocket client
-- `ui.py` — Gradio UI (single/batch tab + JSON batch tab) and launch logic
+- `workflow.py` — Krea 2 workflow builders, text-to-image + inpainting (ComfyUI API format)
+- `client.py` — ComfyUI HTTP/websocket client (queue, progress, image upload)
+- `ui.py` — Gradio UI (single/batch, inpaint, JSON batch, gallery tabs) and launch logic
+
+## Inpainting
+
+The **Inpaint** tab accepts an uploaded image; paint a mask over the region
+to replace and describe the replacement in the prompt. Only stock ComfyUI
+nodes are used (`SetLatentNoiseMask` + `ImageCompositeMasked`), so it works
+with the same Turbo model — no extra downloads. The denoise slider controls
+how much of the original survives in the masked region (1.0 = full
+replacement); grow/blur expand and soften the mask edge for seamless blends.
+Images are downscaled to a 2048 px long side and snapped to multiples of 16
+before encoding.

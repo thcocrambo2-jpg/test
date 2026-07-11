@@ -1,6 +1,7 @@
 """Gradio UI.
 
-Two tabs: single / simple-batch generation and JSON batch jobs. Written
+Four tabs: single / simple-batch generation, inpainting (paint a mask
+over an uploaded image), JSON batch jobs, and an output gallery. Written
 for Gradio 6 (theme/css now belong to launch(), gr.File hands the handler
 a plain file path).
 
@@ -11,17 +12,20 @@ Cloudflare quick tunnel and print that URL instead. launch_ui() blocks
 while the UI is live — press Ctrl-C to shut it down.
 """
 
+import io
 import json
 import random
 import re
 import subprocess
 import time
 import urllib.request
+import uuid
 import zipfile
 from pathlib import Path
 
 import gradio as gr
 import requests
+from PIL import Image, ImageChops, ImageFilter
 
 from client import ComfyUIError, client
 from comfy import GPU_COUNT
@@ -35,7 +39,12 @@ from config import (
     VARIANT_DEFAULTS,
     log,
 )
-from workflow import build_workflow, list_lora_files, resolve_lora_name
+from workflow import (
+    build_inpaint_workflow,
+    build_workflow,
+    list_lora_files,
+    resolve_lora_name,
+)
 
 MAX_LORA_SLOTS = 3
 DEFAULTS = VARIANT_DEFAULTS[KREA2_VARIANT]
@@ -104,20 +113,18 @@ def _normalize_jobs(raw) -> list:
     return jobs
 
 
-def _run_jobs(jobs):
+def _run_jobs(jobs, builder=build_workflow, prefix="Krea2"):
     """Shared executor: yields (gallery_paths, status_text) as work progresses."""
     images = []
     total = len(jobs)
     for idx, job in enumerate(jobs, start=1):
         label = f"{idx}/{total}"
-        prefix = "Krea2"
+        job_prefix = prefix
         if job["loras"]:
-            prefix += "_" + Path(job["loras"][0][0]).stem
-        workflow = build_workflow(filename_prefix=prefix, **job)
-        yield images, (
-            f"⏳ Job {label} — queued "
-            f"(seed {job['seed']}, {job['width']}×{job['height']})"
-        )
+            job_prefix += "_" + Path(job["loras"][0][0]).stem
+        workflow = builder(filename_prefix=job_prefix, **job)
+        size = f", {job['width']}×{job['height']}" if "width" in job else ""
+        yield images, f"⏳ Job {label} — queued (seed {job['seed']}{size})"
         try:
             for event in client.run(workflow):
                 if event["type"] == "progress" and event["total"]:
@@ -147,6 +154,88 @@ def generate_single(prompt, negative, seed, randomize, steps, cfg, resolution,
         "sampler": sampler, "loras": loras,
     } for i in range(int(batch_count))]
     for images, status in _run_jobs(jobs):
+        yield images, status, base_seed
+
+
+def _prepare_inpaint_inputs(editor_value, grow_px: int, blur_px: int):
+    """ImageEditor value → (RGB image, L-mode mask or None), sized for the VAE.
+
+    The mask is the union of the painted layers' alpha channels, optionally
+    dilated (grow) and gaussian-blurred for a soft transition; None when
+    nothing is painted (full-image img2img). Both images are downscaled so
+    the long side is ≤ 2048 (never upscaled) and snapped to multiples of
+    16, which Krea 2's VAE requires.
+    """
+    if not isinstance(editor_value, dict) or editor_value.get("background") is None:
+        raise ValueError("Upload an image first.")
+    background = editor_value["background"].convert("RGB")
+    mask = None
+    for layer in editor_value.get("layers") or []:
+        if "A" not in layer.getbands():
+            continue
+        alpha = layer.getchannel("A")
+        if alpha.size != background.size:
+            alpha = alpha.resize(background.size)
+        mask = alpha if mask is None else ImageChops.lighter(mask, alpha)
+    if mask is not None and mask.getbbox() is None:
+        mask = None
+    if mask is not None:
+        if grow_px:
+            mask = mask.filter(ImageFilter.MaxFilter(grow_px * 2 + 1))
+        if blur_px:
+            mask = mask.filter(ImageFilter.GaussianBlur(blur_px))
+    w, h = background.size
+    scale = min(1.0, 2048 / max(w, h))
+    w2 = max(64, int(w * scale) // 16 * 16)
+    h2 = max(64, int(h * scale) // 16 * 16)
+    if (w2, h2) != (w, h):
+        background = background.resize((w2, h2), Image.LANCZOS)
+        if mask is not None:
+            mask = mask.resize((w2, h2), Image.LANCZOS)
+    return background, mask
+
+
+def _png_bytes(image) -> bytes:
+    buf = io.BytesIO()
+    image.save(buf, format="PNG")
+    return buf.getvalue()
+
+
+def generate_inpaint(editor_value, prompt, negative, seed, randomize, steps,
+                     cfg, denoise, sampler, grow, blur, batch_count):
+    """Inpaint tab: repaint the painted region — or, with nothing painted,
+    run the whole image through img2img at the chosen denoise."""
+    try:
+        image, mask = _prepare_inpaint_inputs(editor_value, int(grow), int(blur))
+    except ValueError as exc:
+        yield [], f"❌ {exc}", 0
+        return
+    if mask is None and float(denoise) >= 1.0:
+        yield [], (
+            "❌ Nothing is painted, so this would run as full-image img2img — "
+            "but Denoise 1.0 would ignore the source image entirely. Lower "
+            "Denoise (e.g. 0.5–0.8) or paint the region to replace."
+        ), 0
+        return
+    base_seed = random.randint(0, 2**32 - 1) if randomize else int(seed)
+    tag = uuid.uuid4().hex[:8]
+    try:
+        image_name = client.upload_image(_png_bytes(image), f"inpaint_{tag}.png")
+        mask_name = (client.upload_image(_png_bytes(mask),
+                                         f"inpaint_{tag}_mask.png")
+                     if mask is not None else None)
+    except Exception as exc:
+        yield [], f"❌ Uploading the image to ComfyUI failed: {exc}", base_seed
+        return
+    jobs = [{
+        "prompt": prompt, "negative": negative or "", "seed": base_seed + i,
+        "steps": int(steps), "cfg": float(cfg), "denoise": float(denoise),
+        "sampler": sampler, "image_name": image_name, "mask_name": mask_name,
+        "loras": [],
+    } for i in range(int(batch_count))]
+    prefix = "Krea2Inpaint" if mask is not None else "Krea2Img2Img"
+    for images, status in _run_jobs(jobs, builder=build_inpaint_workflow,
+                                    prefix=prefix):
         yield images, status, base_seed
 
 
@@ -269,6 +358,81 @@ with gr.Blocks(title="Krea 2 on RunPod") as ui:
                 outputs=[gallery, status_box, seed_out],
             )
             refresh_btn.click(fn=refresh_lora_choices, outputs=lora_dds)
+
+        with gr.Tab("Inpaint / Img2Img"):
+            gr.Markdown(
+                "Upload an image, **paint over the region to replace**, and "
+                "describe what should appear there — unpainted pixels are "
+                "kept from the original. Paint **nothing** to re-imagine the "
+                "whole image (img2img); in that mode lower **Denoise** "
+                "(≈0.5–0.8) to control how much of the original survives."
+            )
+            with gr.Row():
+                with gr.Column(scale=2):
+                    inpaint_editor = gr.ImageEditor(
+                        label="Image — paint the region to replace",
+                        type="pil",
+                        brush=gr.Brush(colors=["#FF3366"], color_mode="fixed"),
+                    )
+                    inpaint_prompt = gr.Textbox(
+                        label="Prompt (describes the masked region)", lines=3
+                    )
+                    inpaint_negative = gr.Textbox(
+                        label="Negative prompt (only used when CFG > 1)", lines=2
+                    )
+                    with gr.Row():
+                        inpaint_steps = gr.Slider(
+                            1, 60, value=DEFAULTS["steps"], step=1, label="Steps"
+                        )
+                        inpaint_cfg = gr.Slider(
+                            0.5, 8.0, value=DEFAULTS["cfg"], step=0.1, label="CFG"
+                        )
+                    with gr.Row():
+                        inpaint_denoise = gr.Slider(
+                            0.1, 1.0, value=1.0, step=0.05,
+                            label="Denoise (1 = replace fully)",
+                        )
+                        inpaint_sampler = gr.Dropdown(
+                            choices=SAMPLERS, value=SAMPLERS[0], label="Sampler"
+                        )
+                    with gr.Row():
+                        inpaint_grow = gr.Slider(
+                            0, 32, value=8, step=1, label="Grow mask (px)"
+                        )
+                        inpaint_blur = gr.Slider(
+                            0, 32, value=8, step=1, label="Blur mask edge (px)"
+                        )
+                    with gr.Row():
+                        inpaint_seed = gr.Number(
+                            label="Seed", value=42, precision=0
+                        )
+                        inpaint_random = gr.Checkbox(
+                            label="🎲 Random seed", value=True
+                        )
+                        inpaint_batch = gr.Slider(
+                            1, 20, value=1, step=1, label="Batch count"
+                        )
+                    inpaint_btn = gr.Button(
+                        "🖌️ Inpaint", variant="primary", size="lg"
+                    )
+                with gr.Column(scale=3):
+                    inpaint_gallery = gr.Gallery(
+                        label="Output", columns=2, height=600
+                    )
+                    inpaint_status = gr.Textbox(
+                        label="Status", interactive=False
+                    )
+                    inpaint_seed_out = gr.Number(
+                        label="Base seed used", interactive=False, precision=0
+                    )
+            inpaint_btn.click(
+                fn=generate_inpaint,
+                inputs=[inpaint_editor, inpaint_prompt, inpaint_negative,
+                        inpaint_seed, inpaint_random, inpaint_steps,
+                        inpaint_cfg, inpaint_denoise, inpaint_sampler,
+                        inpaint_grow, inpaint_blur, inpaint_batch],
+                outputs=[inpaint_gallery, inpaint_status, inpaint_seed_out],
+            )
 
         with gr.Tab("JSON Advanced Batch"):
             gr.Markdown(
