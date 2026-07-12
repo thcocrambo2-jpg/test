@@ -25,6 +25,9 @@ from config import (
     HF_TOKEN,
     MODELS_DIR,
     TEXT_ENCODER_FILE,
+    WAN_ENABLED,
+    WAN_HF_FILES,
+    WAN_HF_REPO,
     log,
 )
 
@@ -113,6 +116,32 @@ def fetch_edit_lora() -> None:
     )
 
 
+def fetch_wan_file(relpath: str) -> None:
+    """Download one Wan 2.2 file into MODELS_DIR.
+
+    The Comfy-Org repo keeps everything under split_files/, which local_dir
+    downloads would mirror — so the file is moved up one level afterwards
+    (a same-filesystem rename, no extra disk needed).
+    """
+    dest = MODELS_DIR / relpath
+    if dest.exists():
+        log.info("✓ %s (cached)", relpath)
+        return
+    log.info("↓ %s (from %s) ...", relpath, WAN_HF_REPO)
+
+    def _download():
+        path = hf_hub_download(
+            repo_id=WAN_HF_REPO,
+            filename=f"split_files/{relpath}",
+            local_dir=MODELS_DIR,
+            token=HF_TOKEN,
+        )
+        dest.parent.mkdir(parents=True, exist_ok=True)
+        Path(path).rename(dest)
+
+    _with_retries(_download, desc=relpath)
+
+
 def fetch_civitai_lora(version_id: int, filename: str) -> None:
     """Download a CivitAI model version with resume support and retries."""
     dest = MODELS_DIR / "loras" / filename
@@ -179,6 +208,16 @@ def download_everything() -> None:
         # The Edit tab warns when this file is missing; everything else works.
         log.error("Identity Edit LoRA unavailable (%s) — the Edit tab will "
                   "stay disabled until it downloads on a later run.", exc)
+    if WAN_ENABLED:
+        for relpath in WAN_HF_FILES:
+            try:
+                fetch_wan_file(relpath)
+            except Exception as exc:
+                # A missing Wan file only degrades the Video tab; the Krea
+                # tabs must never be affected by it.
+                log.error("Wan 2.2 file %s unavailable (%s) — the Video tab "
+                          "will refuse to run until a later run fetches it.",
+                          relpath, exc)
     if CIVITAI_LORAS and not CIVITAI_TOKEN:
         log.warning(
             "CIVITAI_LORAS configured but no CIVITAI_TOKEN environment "

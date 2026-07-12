@@ -58,52 +58,59 @@ log.info(
 )
 
 
-def _server_alive(timeout: float = 3.0) -> bool:
+def _server_alive(timeout: float = 3.0, port: int = COMFY_PORT) -> bool:
     try:
         with urllib.request.urlopen(
-            f"http://{COMFY_HOST}:{COMFY_PORT}/system_stats", timeout=timeout
+            f"http://{COMFY_HOST}:{port}/system_stats", timeout=timeout
         ):
             return True
     except Exception:
         return False
 
 
-def start_comfyui():
-    """Start ComfyUI as a background process (reuses a live server on restart)."""
-    if _server_alive():
-        log.info("ComfyUI already running on port %d — reusing it", COMFY_PORT)
+def start_comfyui(port: int = COMFY_PORT, log_path=COMFY_LOG, extra_args=()):
+    """Start ComfyUI as a background process (reuses a live server on restart).
+
+    `extra_args` lets callers pass flags like --reserve-vram when a second
+    instance (the Wan video server, KREA2_WAN_PARALLEL=1) has to share the
+    GPU with this one.
+    """
+    if _server_alive(port=port):
+        log.info("ComfyUI already running on port %d — reusing it", port)
         return None
     env = os.environ.copy()
     env.pop("CUDA_VISIBLE_DEVICES", None)  # make sure ComfyUI sees every GPU
     cmd = [
         sys.executable, "main.py",
         "--listen", COMFY_HOST,
-        "--port", str(COMFY_PORT),
+        "--port", str(port),
         "--output-directory", str(OUTPUT_DIR),
         "--temp-directory", str(TEMP_DIR / "comfy_temp"),
         "--disable-auto-launch",
+        *[str(a) for a in extra_args],
     ]
-    log.info("Starting ComfyUI (logs → %s)", COMFY_LOG)
-    log_handle = open(COMFY_LOG, "a")
+    log.info("Starting ComfyUI on port %d (logs → %s)", port, log_path)
+    log_handle = open(log_path, "a")
     return subprocess.Popen(
         cmd, cwd=COMFY_DIR, env=env,
         stdout=log_handle, stderr=subprocess.STDOUT,
     )
 
 
-def wait_for_comfyui(process, timeout: int = 300) -> None:
+def wait_for_comfyui(process, timeout: int = 300,
+                     port: int = COMFY_PORT, log_path=COMFY_LOG) -> None:
     """Block until the ComfyUI API answers; raise with the log tail if it dies."""
     deadline = time.time() + timeout
     while time.time() < deadline:
         if process is not None and process.poll() is not None:
-            tail = COMFY_LOG.read_text()[-3000:] if COMFY_LOG.exists() else "<no log>"
+            tail = log_path.read_text()[-3000:] if log_path.exists() else "<no log>"
             raise RuntimeError(
                 f"ComfyUI exited during startup (code {process.returncode}). "
                 f"Log tail:\n{tail}"
             )
-        if _server_alive():
+        if _server_alive(port=port):
             with urllib.request.urlopen(
-                f"http://{COMFY_HOST}:{COMFY_PORT}/system_stats", timeout=10
+                f"http://{COMFY_HOST}:{port}/system_stats", timeout=10
             ) as resp:
                 stats = json.loads(resp.read())
             for dev in stats.get("devices", []):
@@ -111,7 +118,7 @@ def wait_for_comfyui(process, timeout: int = 300) -> None:
                     "ComfyUI device: %s (%.1f GB VRAM)",
                     dev.get("name"), dev.get("vram_total", 0) / 1e9,
                 )
-            log.info("ComfyUI API is ready")
+            log.info("ComfyUI API on port %d is ready", port)
             return
         time.sleep(2)
-    raise TimeoutError(f"ComfyUI did not answer within {timeout}s — check {COMFY_LOG}")
+    raise TimeoutError(f"ComfyUI did not answer within {timeout}s — check {log_path}")

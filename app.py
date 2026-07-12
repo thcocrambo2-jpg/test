@@ -18,7 +18,15 @@ import shutil
 import sys
 
 import bootstrap
-from config import TEMP_DIR, log
+from config import (
+    KREA_RESERVE_VRAM_GB,
+    TEMP_DIR,
+    WAN_COMFY_LOG,
+    WAN_COMFY_PORT,
+    WAN_PARALLEL,
+    WAN_RESERVE_VRAM_GB,
+    log,
+)
 
 
 def main() -> None:
@@ -38,10 +46,23 @@ def main() -> None:
     )
 
     # 5 · GPU detection runs when comfy is imported; then start the server.
+    # With KREA2_WAN_PARALLEL=1 a second ComfyUI instance serves video jobs
+    # on its own port; each instance reserves VRAM for the other so they can
+    # coexist on one GPU (defaults tuned for a 48 GB A40).
     import comfy
 
-    comfy_process = comfy.start_comfyui()
+    main_args = (
+        ("--reserve-vram", str(KREA_RESERVE_VRAM_GB)) if WAN_PARALLEL else ()
+    )
+    comfy_process = comfy.start_comfyui(extra_args=main_args)
     comfy.wait_for_comfyui(comfy_process)
+    if WAN_PARALLEL:
+        wan_process = comfy.start_comfyui(
+            port=WAN_COMFY_PORT, log_path=WAN_COMFY_LOG,
+            extra_args=("--reserve-vram", str(WAN_RESERVE_VRAM_GB)),
+        )
+        comfy.wait_for_comfyui(wan_process, port=WAN_COMFY_PORT,
+                               log_path=WAN_COMFY_LOG)
 
     # 6 · Gradio UI (importing ui pulls in the workflow builder + API client).
     import workflow

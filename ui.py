@@ -28,9 +28,10 @@ import gradio as gr
 import requests
 from PIL import Image, ImageChops, ImageFilter
 
-from client import ComfyUIError, client
+from client import ComfyUIError, client, wan_client
 from comfy import GPU_COUNT
 from config import (
+    DEFAULT_LORAS,
     DEFAULT_RESOLUTION,
     KREA2_VARIANT,
     OUTPUT_DIR,
@@ -38,6 +39,17 @@ from config import (
     SAMPLERS,
     TEMP_DIR,
     VARIANT_DEFAULTS,
+    WAN_5B_DEFAULTS,
+    WAN_5B_FPS,
+    WAN_DEFAULT_NEGATIVE,
+    WAN_DEFAULT_RESOLUTION,
+    WAN_ENABLED,
+    WAN_FPS,
+    WAN_MAX_SECONDS,
+    WAN_MODE_DEFAULTS,
+    WAN_PARALLEL,
+    WAN_RESOLUTIONS,
+    WAN_VARIANT,
     log,
 )
 from workflow import (
@@ -47,6 +59,13 @@ from workflow import (
     edit_lora_available,
     list_lora_files,
     resolve_lora_name,
+)
+from workflow_wan import (
+    build_wan_5b_workflow,
+    build_wan_i2v_workflow,
+    wan_5b_available,
+    wan_lightning_available,
+    wan_models_available,
 )
 
 MAX_LORA_SLOTS = 3
@@ -299,6 +318,138 @@ def generate_edit(image, prompt, negative, seed, randomize, steps, cfg,
         yield images, status, base_seed
 
 
+def _fit_video_size(w: int, h: int, target_area: int, snap: int = 16) -> tuple:
+    """Video size: keep the source aspect ratio at roughly target_area px.
+
+    Sides are snapped to multiples of `snap` (16 for the 14B models, 32
+    for the 5B model's higher-compression VAE). Upscaling small sources
+    is allowed — Wan renders at the target size regardless — and each
+    side is clamped to [256, 1536].
+    """
+    scale = (target_area / (w * h)) ** 0.5
+    return (max(256, min(1536, int(round(w * scale / snap)) * snap)),
+            max(256, min(1536, int(round(h * scale / snap)) * snap)))
+
+
+def _seconds_to_frames(seconds: float, fps: int) -> int:
+    """Wan frame counts must be a multiple of 4 plus 1 (e.g. 81 = 5 s at
+    16 fps for the 14B models, 121 = 5 s at 24 fps for the 5B)."""
+    return max(17, int(round(float(seconds) * fps / 4)) * 4 + 1)
+
+
+def _run_wan_jobs(jobs, builder=build_wan_i2v_workflow):
+    """Video executor: yields (all_videos, latest_video, status_text)."""
+    videos = []
+    total = len(jobs)
+    latest = None
+    for idx, job in enumerate(jobs, start=1):
+        label = f"{idx}/{total}"
+        workflow = builder(**job)
+        yield videos, latest, (
+            f"⏳ Video {label} — queued (seed {job['seed']}, "
+            f"{job['width']}×{job['height']}, {job['length']} frames)"
+        )
+        try:
+            # Raw 720p renders can take the better part of an hour on an
+            # A40, so the video timeout is far above the image one.
+            for event in wan_client.run(workflow, timeout=7200):
+                if event["type"] == "progress" and event["total"]:
+                    yield videos, latest, (
+                        f"⏳ Video {label} — step "
+                        f"{event['step']}/{event['total']}"
+                    )
+                elif event["type"] == "done":
+                    videos.extend(event["images"])
+                    latest = videos[-1] if videos else None
+                    yield videos, latest, f"✅ Video {label} finished"
+        except ComfyUIError as exc:
+            yield videos, latest, f"❌ Video {label} failed: {exc}"
+            return
+    yield videos, latest, (
+        f"✅ All {total} video(s) done — saved under {OUTPUT_DIR}"
+    )
+
+
+def _is_wan_5b(model) -> bool:
+    return "5b" in str(model).lower()
+
+
+def generate_wan_video(image, prompt, negative, model, mode, seed, randomize,
+                       steps, cfg, resolution, seconds, sampler, batch_count):
+    """Video tab: animate an uploaded image with Wan 2.2 (14B I2V or 5B TI2V)."""
+    if image is None:
+        yield [], None, "❌ Upload an image first.", 0
+        return
+    use_5b = _is_wan_5b(model)
+    if use_5b and not wan_5b_available():
+        yield [], None, ("❌ The Wan 2.2 5B model is not downloaded yet — "
+                         "restart the app so the download step can fetch "
+                         "it, or switch Model to 14B."), 0
+        return
+    if not use_5b and not wan_models_available():
+        yield [], None, ("❌ The Wan 2.2 14B models are not downloaded yet — "
+                         "restart the app so the download step can fetch "
+                         "them, or switch Model to 5B."), 0
+        return
+    turbo = not use_5b and str(mode).lower().startswith("turbo")
+    if turbo and not wan_lightning_available():
+        yield [], None, ("❌ The Lightning speed LoRAs are missing — switch "
+                         "Mode to Raw, or restart the app to download "
+                         "them."), 0
+        return
+    if use_5b:
+        fps, snap = WAN_5B_FPS, 32
+        shift = WAN_5B_DEFAULTS["shift"]
+        builder = build_wan_5b_workflow
+    else:
+        fps, snap = WAN_FPS, 16
+        shift = WAN_MODE_DEFAULTS["turbo" if turbo else "raw"]["shift"]
+        builder = build_wan_i2v_workflow
+    image = image.convert("RGB")
+    width, height = _fit_video_size(*image.size, WAN_RESOLUTIONS[resolution],
+                                    snap=snap)
+    base_seed = random.randint(0, 2**32 - 1) if randomize else int(seed)
+    tag = uuid.uuid4().hex[:8]
+    try:
+        image_name = wan_client.upload_image(_png_bytes(image),
+                                             f"wan_{tag}.png")
+    except Exception as exc:
+        yield [], None, f"❌ Uploading the image to ComfyUI failed: {exc}", 0
+        return
+    jobs = [{
+        "prompt": prompt or "", "negative": negative or "",
+        "seed": base_seed + i, "steps": int(steps), "cfg": float(cfg),
+        "width": width, "height": height,
+        "length": _seconds_to_frames(seconds, fps), "fps": fps,
+        "sampler": sampler, "shift": shift, "image_name": image_name,
+        **({} if use_5b else {"lightning": turbo}),
+    } for i in range(int(batch_count))]
+    for videos, latest, status in _run_wan_jobs(jobs, builder=builder):
+        yield videos, latest, status, base_seed
+
+
+def wan_model_changed(model, mode):
+    """Model radio → sliders get that model's defaults; the turbo/raw Mode
+    radio only applies to 14B (the 5B has no Lightning distillation)."""
+    if _is_wan_5b(model):
+        return (gr.Radio(interactive=False),
+                gr.Slider(value=WAN_5B_DEFAULTS["steps"]),
+                gr.Slider(value=WAN_5B_DEFAULTS["cfg"]))
+    d = WAN_MODE_DEFAULTS["turbo" if str(mode).lower().startswith("turbo")
+                          else "raw"]
+    return (gr.Radio(interactive=True),
+            gr.Slider(value=d["steps"]), gr.Slider(value=d["cfg"]))
+
+
+def wan_mode_changed(model, mode):
+    """Mode radio → reset the steps/CFG sliders to that mode's defaults."""
+    if _is_wan_5b(model):  # mode is disabled for 5B; keep sliders as-is
+        return gr.Slider(), gr.Slider()
+    d = WAN_MODE_DEFAULTS["turbo" if str(mode).lower().startswith("turbo")
+                          else "raw"]
+    return gr.Slider(value=d["steps"]), gr.Slider(value=d["cfg"])
+
+
 def generate_from_json(json_file, json_text):
     """JSON tab: file upload takes precedence over pasted text."""
     try:
@@ -323,29 +474,43 @@ def refresh_lora_choices():
 
 
 def list_output_images() -> list[str]:
-    """Every generated image in OUTPUT_DIR, newest first."""
-    return [str(p) for p in sorted(OUTPUT_DIR.rglob("*.png"),
-                                   key=lambda p: p.stat().st_mtime, reverse=True)]
+    """Every generated image and video in OUTPUT_DIR, newest first."""
+    media = [p for pattern in ("*.png", "*.mp4", "*.webm")
+             for p in OUTPUT_DIR.rglob(pattern)]
+    return [str(p) for p in sorted(media, key=lambda p: p.stat().st_mtime,
+                                   reverse=True)]
 
 
 def refresh_gallery():
     """Re-scan OUTPUT_DIR for the Gallery tab."""
     images = list_output_images()
-    return images, f"{len(images)} image(s) in `{OUTPUT_DIR}`"
+    return images, f"{len(images)} file(s) in `{OUTPUT_DIR}`"
 
 
 def zip_outputs():
-    """Bundle all generated images into one zip (the pod disk is ephemeral)."""
+    """Bundle all generated media into one zip (the pod disk is ephemeral)."""
     images = list_output_images()
     if not images:
         return None, "No images to zip yet."
-    # PNGs are already compressed — store instead of deflating (much faster).
+    # PNGs/MP4s are already compressed — store instead of deflating (faster).
     zip_path = OUTPUT_DIR / "all_outputs.zip"
     with zipfile.ZipFile(zip_path, "w", zipfile.ZIP_STORED) as zf:
         for img in images:
             zf.write(img, Path(img).relative_to(OUTPUT_DIR))
     size_mb = zip_path.stat().st_size / 1e6
-    return str(zip_path), f"📦 Zipped {len(images)} image(s) ({size_mb:.0f} MB)"
+    return str(zip_path), f"📦 Zipped {len(images)} file(s) ({size_mb:.0f} MB)"
+
+
+def _default_lora_slots() -> list:
+    """Per-slot (name, weight) defaults from config.DEFAULT_LORAS.
+
+    Only LoRAs that actually downloaded are pre-selected; missing files
+    leave their slot at "None" so the UI never references a bad choice.
+    """
+    slots = [(name, weight) for name, weight in DEFAULT_LORAS
+             if name in LORA_CHOICES][:MAX_LORA_SLOTS]
+    slots += [("None", 0.8)] * (MAX_LORA_SLOTS - len(slots))
+    return slots
 
 
 def _lora_stack():
@@ -356,14 +521,15 @@ def _lora_stack():
     """
     gr.Markdown("### 🎭 LoRA stack")
     dds, ws = [], []
-    for slot in range(1, MAX_LORA_SLOTS + 1):
+    for slot, (default_name, default_weight) in enumerate(
+            _default_lora_slots(), start=1):
         with gr.Row():
             dds.append(gr.Dropdown(
-                choices=LORA_CHOICES, value="None",
+                choices=LORA_CHOICES, value=default_name,
                 label=f"LoRA {slot}", scale=3,
             ))
             ws.append(gr.Slider(
-                0.0, 2.0, value=0.8, step=0.05,
+                0.0, 2.0, value=default_weight, step=0.05,
                 label="Weight", scale=1,
             ))
     refresh_btn = gr.Button("🔄 Rescan LoRA folder", size="sm")
@@ -373,7 +539,9 @@ def _lora_stack():
 
 with gr.Blocks(title="Krea 2 on RunPod") as ui:
     gr.Markdown(
-        f"# ⚡ Krea 2 {KREA2_VARIANT.title()} — ComfyUI on RunPod\n"
+        f"# ⚡ Krea 2 {KREA2_VARIANT.title()}"
+        + (" + Wan 2.2 Video" if WAN_ENABLED else "")
+        + " — ComfyUI on RunPod\n"
         f"{GPU_COUNT} GPU(s) detected · native ComfyUI multi-GPU placement · "
         f"outputs saved to `{OUTPUT_DIR}`"
     )
@@ -577,6 +745,130 @@ with gr.Blocks(title="Krea 2 on RunPod") as ui:
                 outputs=[inpaint_gallery, inpaint_status, inpaint_seed_out],
             )
 
+        if WAN_ENABLED:
+            with gr.Tab("🎬 Video (Wan 2.2)"):
+                _wan_defaults = WAN_MODE_DEFAULTS[WAN_VARIANT]
+                _wan_mode_choices = ["Turbo (Lightning, 4 steps)",
+                                     "Raw (20 steps)"]
+                _wan_model_choices = ["14B two-expert (best quality, 16 fps)",
+                                      "5B TI2V (lighter, 24 fps)"]
+                gr.Markdown(
+                    "Upload an image and **describe the motion** — Wan 2.2 "
+                    "animates it into a clip of up to 5 s. The **14B** "
+                    "two-expert model gives the best quality at 16 fps: "
+                    "**Turbo** uses the Lightning distillation LoRAs "
+                    "(4 steps, CFG 1, ~5× faster); **Raw** is the "
+                    "undistilled 20-step schedule — slightly better motion "
+                    "and detail, but expect 15–45+ min per clip on an A40. "
+                    "The **5B** model is a single lighter model at 24 fps — "
+                    "lower quality than 14B, but far less VRAM (best choice "
+                    "in parallel mode) and no turbo/raw split. "
+                    + ("Videos run on their own ComfyUI instance, so the "
+                       "image tabs stay responsive while a clip renders."
+                       if WAN_PARALLEL else
+                       "Videos share the image tabs' ComfyUI queue: a "
+                       "running video delays queued image jobs (start with "
+                       "KREA2_WAN_PARALLEL=1 for a separate video instance).")
+                    + ("" if wan_models_available() or wan_5b_available() else
+                       "\n\n⚠️ **The Wan 2.2 models are not downloaded yet** "
+                       "(~49 GB) — restart the app to fetch them; this tab "
+                       "will refuse to run until then.")
+                )
+                with gr.Row():
+                    with gr.Column(scale=2):
+                        wan_image = gr.Image(label="Start image", type="pil")
+                        wan_prompt = gr.Textbox(
+                            label="Motion prompt",
+                            placeholder="she turns her head and smiles, "
+                                        "gentle camera push-in, wind in "
+                                        "the hair",
+                            lines=3,
+                        )
+                        wan_negative = gr.Textbox(
+                            label="Negative prompt (only used when CFG > 1, "
+                                  "i.e. Raw mode)",
+                            value=WAN_DEFAULT_NEGATIVE, lines=2,
+                        )
+                        wan_model = gr.Radio(
+                            choices=_wan_model_choices,
+                            value=_wan_model_choices[0],
+                            label="Model",
+                        )
+                        wan_mode = gr.Radio(
+                            choices=_wan_mode_choices,
+                            value=_wan_mode_choices[0 if WAN_VARIANT == "turbo"
+                                                    else 1],
+                            label="Mode (14B only — the 5B has no Lightning)",
+                        )
+                        with gr.Row():
+                            wan_steps = gr.Slider(
+                                1, 40, value=_wan_defaults["steps"], step=1,
+                                label="Steps",
+                            )
+                            wan_cfg = gr.Slider(
+                                0.5, 8.0, value=_wan_defaults["cfg"], step=0.1,
+                                label="CFG",
+                            )
+                        with gr.Row():
+                            wan_resolution = gr.Radio(
+                                choices=list(WAN_RESOLUTIONS),
+                                value=WAN_DEFAULT_RESOLUTION,
+                                label="Resolution (keeps the source aspect)",
+                            )
+                        with gr.Row():
+                            wan_seconds = gr.Slider(
+                                1.0, WAN_MAX_SECONDS, value=WAN_MAX_SECONDS,
+                                step=0.25, label="Duration (seconds)",
+                            )
+                            wan_sampler = gr.Dropdown(
+                                choices=SAMPLERS + ["uni_pc"], value="euler",
+                                label="Sampler",
+                            )
+                        with gr.Row():
+                            wan_seed = gr.Number(
+                                label="Seed", value=42, precision=0
+                            )
+                            wan_random = gr.Checkbox(
+                                label="🎲 Random seed", value=True
+                            )
+                            wan_batch = gr.Slider(
+                                1, 10, value=1, step=1, label="Batch count"
+                            )
+                        wan_btn = gr.Button(
+                            "🎬 Generate video", variant="primary", size="lg"
+                        )
+                    with gr.Column(scale=3):
+                        wan_video_out = gr.Video(
+                            label="Latest video", autoplay=True
+                        )
+                        wan_files_out = gr.Files(
+                            label="All videos from this run", interactive=False
+                        )
+                        wan_status = gr.Textbox(
+                            label="Status", interactive=False
+                        )
+                        wan_seed_out = gr.Number(
+                            label="Base seed used", interactive=False,
+                            precision=0,
+                        )
+                wan_model.change(
+                    fn=wan_model_changed, inputs=[wan_model, wan_mode],
+                    outputs=[wan_mode, wan_steps, wan_cfg],
+                )
+                wan_mode.change(
+                    fn=wan_mode_changed, inputs=[wan_model, wan_mode],
+                    outputs=[wan_steps, wan_cfg],
+                )
+                wan_btn.click(
+                    fn=generate_wan_video,
+                    inputs=[wan_image, wan_prompt, wan_negative, wan_model,
+                            wan_mode, wan_seed, wan_random, wan_steps,
+                            wan_cfg, wan_resolution, wan_seconds, wan_sampler,
+                            wan_batch],
+                    outputs=[wan_files_out, wan_video_out, wan_status,
+                             wan_seed_out],
+                )
+
         with gr.Tab("JSON Advanced Batch"):
             gr.Markdown(
                 "Submit a list of jobs, e.g.\n"
@@ -613,10 +905,10 @@ with gr.Blocks(title="Krea 2 on RunPod") as ui:
                     "📦 Zip all for download", size="sm"
                 )
             gallery_info = gr.Markdown(
-                f"{len(list_output_images())} image(s) in `{OUTPUT_DIR}`"
+                f"{len(list_output_images())} file(s) in `{OUTPUT_DIR}`"
             )
             all_gallery = gr.Gallery(
-                label="All generated images (newest first)",
+                label="All generated images & videos (newest first)",
                 value=list_output_images(), columns=4, height=700,
             )
             gallery_zip_file = gr.File(
