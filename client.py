@@ -6,6 +6,7 @@ import urllib.error
 import urllib.request
 import uuid
 
+import requests
 import websocket  # websocket-client, installed by bootstrap.py
 
 from config import COMFY_HOST, COMFY_PORT, OUTPUT_DIR, log
@@ -47,6 +48,24 @@ class ComfyClient:
         if not prompt_id:
             raise ComfyUIError(f"No prompt_id in ComfyUI response: {result}")
         return prompt_id
+
+    def upload_image(self, data: bytes, name: str) -> str:
+        """Upload PNG bytes to ComfyUI's input folder.
+
+        Returns the name (with subfolder, if any) that LoadImage /
+        LoadImageMask nodes must use to reference the file.
+        """
+        resp = requests.post(
+            self.base + "/upload/image",
+            files={"image": (name, data, "image/png")},
+            data={"overwrite": "true"},
+            timeout=120,
+        )
+        resp.raise_for_status()
+        info = resp.json()
+        stored = info.get("name", name)
+        subfolder = info.get("subfolder")
+        return f"{subfolder}/{stored}" if subfolder else stored
 
     def _finished(self, prompt_id: str) -> bool:
         return prompt_id in self._get_json(f"/history/{prompt_id}")
