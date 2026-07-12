@@ -72,6 +72,14 @@ replacement); grow/blur expand and soften the mask edge for seamless blends.
 Images are downscaled to a 2048 px long side and snapped to multiples of 16
 before encoding.
 
+## Image input shortcuts
+
+All image inputs (Edit, Inpaint, Video) accept **clipboard paste** — press
+Ctrl+V with the component focused or use its paste source button. The Edit
+and Video tabs additionally have a collapsed **"Use a previous generation"**
+picker showing the last 20 generated images; clicking a thumbnail loads it
+as the source directly, no download/re-upload round-trip.
+
 ## Video (Wan 2.2 image-to-video)
 
 The **🎬 Video (Wan 2.2)** tab animates an uploaded image into a clip of

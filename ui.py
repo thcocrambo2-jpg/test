@@ -481,6 +481,48 @@ def list_output_images() -> list[str]:
                                    reverse=True)]
 
 
+RECENT_IMAGES_LIMIT = 20
+
+
+def list_recent_images(limit: int = RECENT_IMAGES_LIMIT) -> list[str]:
+    """The newest generated still images (for the pick-from-existing pickers)."""
+    pngs = sorted(OUTPUT_DIR.rglob("*.png"),
+                  key=lambda p: p.stat().st_mtime, reverse=True)
+    return [str(p) for p in pngs[:limit]]
+
+
+def _picked_recent(evt: gr.SelectData):
+    """Gallery click → file path for a gr.Image input (no-op if unreadable)."""
+    value = evt.value
+    path = None
+    if isinstance(value, dict):
+        media = value.get("image") or {}
+        path = media.get("path") or media.get("url")
+    elif isinstance(value, str):
+        path = value
+    return path if path else gr.Image()
+
+
+def _recent_picker(target_image):
+    """A collapsed 'use a previous generation' gallery under an image input.
+
+    Must be called inside a gr.Blocks context, after `target_image` exists.
+    Clicking a thumbnail loads that file into `target_image`; the refresh
+    button re-scans OUTPUT_DIR for the newest images.
+    """
+    with gr.Accordion(
+        f"📂 Use a previous generation (last {RECENT_IMAGES_LIMIT} images)",
+        open=False,
+    ):
+        picker = gr.Gallery(
+            value=list_recent_images(), label="Click an image to use it",
+            columns=5, height=240, allow_preview=False,
+        )
+        refresh_btn = gr.Button("🔄 Refresh", size="sm")
+        refresh_btn.click(fn=list_recent_images, outputs=picker)
+        picker.select(fn=_picked_recent, outputs=target_image)
+
+
 def refresh_gallery():
     """Re-scan OUTPUT_DIR for the Gallery tab."""
     images = list_output_images()
@@ -612,7 +654,11 @@ with gr.Blocks(title="Krea 2 on RunPod") as ui:
             )
             with gr.Row():
                 with gr.Column(scale=2):
-                    edit_image = gr.Image(label="Source image", type="pil")
+                    edit_image = gr.Image(
+                        label="Source image (paste with Ctrl+V)", type="pil",
+                        sources=["upload", "clipboard"],
+                    )
+                    _recent_picker(edit_image)
                     edit_prompt = gr.Textbox(
                         label="Edit instruction",
                         placeholder="make the jacket red · this person "
@@ -676,8 +722,10 @@ with gr.Blocks(title="Krea 2 on RunPod") as ui:
             with gr.Row():
                 with gr.Column(scale=2):
                     inpaint_editor = gr.ImageEditor(
-                        label="Image — paint the region to replace",
+                        label="Image — paint the region to replace "
+                              "(paste with Ctrl+V)",
                         type="pil",
+                        sources=["upload", "clipboard"],
                         brush=gr.Brush(colors=["#FF3366"], color_mode="fixed"),
                     )
                     inpaint_prompt = gr.Textbox(
@@ -776,7 +824,11 @@ with gr.Blocks(title="Krea 2 on RunPod") as ui:
                 )
                 with gr.Row():
                     with gr.Column(scale=2):
-                        wan_image = gr.Image(label="Start image", type="pil")
+                        wan_image = gr.Image(
+                            label="Start image (paste with Ctrl+V)",
+                            type="pil", sources=["upload", "clipboard"],
+                        )
+                        _recent_picker(wan_image)
                         wan_prompt = gr.Textbox(
                             label="Motion prompt",
                             placeholder="she turns her head and smiles, "
