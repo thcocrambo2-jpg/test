@@ -36,7 +36,7 @@ live under the base directory and are lost when the pod is destroyed.
 ## Layout
 
 - `app.py` — entry point; orchestrates the startup flow
-- `config.py` — paths, model variant (Turbo), LoRA lists, Wan 2.2 settings, tokens, presets
+- `config.py` — paths, Krea 2 model registry, LoRA lists, Wan 2.2 settings, tokens, presets
 - `bootstrap.py` — clone ComfyUI + install requirements
 - `downloads.py` — HF / CivitAI model + LoRA downloads (resume + retries)
 - `comfy.py` — GPU detection + ComfyUI server start/wait (1–2 instances)
@@ -71,6 +71,21 @@ how much of the original survives in the masked region (1.0 = full
 replacement); grow/blur expand and soften the mask edge for seamless blends.
 Images are downscaled to a 2048 px long side and snapped to multiples of 16
 before encoding.
+
+## Krea 2 model switching
+
+The generate / edit / inpaint tabs each have a **Model** dropdown fed by
+the `KREA2_MODELS` registry in `config.py` — the same add-an-entry-and-
+restart workflow as the LoRA lists. Each entry names its file, a
+`variant` flag (`turbo` or `raw`) that supplies the step/CFG defaults
+(overridable per model), a download source (`hf_path` in the official
+repo **or** `civitai_version` — the number after the `@` in a CivitAI AIR
+urn), and optional `trigger` words. Picking a model resets the Steps/CFG
+sliders to its defaults and, if it has trigger words, inserts them into
+the prompt box — visible and editable, never appended silently; delete
+them if you don't want them. JSON batch jobs select a model with an
+optional `"model"` key. A model whose download failed shows a warning
+under the dropdown and refuses to run, without affecting the others.
 
 ## Image input shortcuts
 

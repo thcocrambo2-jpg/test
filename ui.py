@@ -33,12 +33,11 @@ from comfy import GPU_COUNT
 from config import (
     DEFAULT_LORAS,
     DEFAULT_RESOLUTION,
-    KREA2_VARIANT,
+    KREA2_MODELS,
     OUTPUT_DIR,
     RESOLUTION_PRESETS,
     SAMPLERS,
     TEMP_DIR,
-    VARIANT_DEFAULTS,
     WAN_5B_DEFAULTS,
     WAN_5B_FPS,
     WAN_DEFAULT_NEGATIVE,
@@ -58,7 +57,11 @@ from workflow import (
     build_workflow,
     edit_lora_available,
     list_lora_files,
+    list_model_names,
+    model_defaults,
+    model_file_available,
     resolve_lora_name,
+    resolve_model_entry,
 )
 from workflow_wan import (
     build_wan_5b_workflow,
@@ -69,7 +72,9 @@ from workflow_wan import (
 )
 
 MAX_LORA_SLOTS = 3
-DEFAULTS = VARIANT_DEFAULTS[KREA2_VARIANT]
+MODEL_CHOICES = list_model_names()
+_d_steps, _d_cfg = model_defaults(resolve_model_entry(None))
+DEFAULTS = {"steps": _d_steps, "cfg": _d_cfg}
 LORA_CHOICES = ["None"] + list_lora_files()
 
 
@@ -121,16 +126,22 @@ def _normalize_jobs(raw) -> list:
                 resolved.append((lora_file, float(weight)))
         width, height = parse_resolution(item.get("resolution"))
         sampler = item.get("sampler", SAMPLERS[0])
+        # Optional "model" key (registry name, filename or a fragment of
+        # either); absent/unknown falls back to the default model, and the
+        # model's own step/CFG defaults apply unless the job sets them.
+        entry = resolve_model_entry(item.get("model"))
+        model_steps, model_cfg = model_defaults(entry)
         jobs.append({
             "prompt": item.get("prompt", ""),
             "negative": item.get("negative", ""),
             "seed": int(item.get("seed", random.randint(0, 2**32 - 1))),
-            "steps": int(item.get("steps", DEFAULTS["steps"])),
-            "cfg": float(item.get("cfg", DEFAULTS["cfg"])),
+            "steps": int(item.get("steps", model_steps)),
+            "cfg": float(item.get("cfg", model_cfg)),
             "width": width,
             "height": height,
             "sampler": sampler if sampler in SAMPLERS else SAMPLERS[0],
             "loras": resolved,
+            "unet_file": entry["file"],
         })
     return jobs
 
@@ -170,16 +181,30 @@ def _resolve_lora_slots(lora1, w1, lora2, w2, lora3, w3) -> list:
     return loras
 
 
+def _check_model(model):
+    """Resolve the dropdown value; return (entry, error_message_or_None)."""
+    entry = resolve_model_entry(model)
+    if not model_file_available(entry):
+        return entry, (f"❌ Model “{entry['name']}” is not downloaded yet — "
+                       "restart the app so the download step can fetch it.")
+    return entry, None
+
+
 def generate_single(prompt, negative, seed, randomize, steps, cfg, resolution,
-                    sampler, lora1, w1, lora2, w2, lora3, w3, batch_count):
+                    sampler, model, lora1, w1, lora2, w2, lora3, w3,
+                    batch_count):
     """First tab: run batch_count jobs on sequential seeds."""
+    entry, error = _check_model(model)
+    if error:
+        yield [], error, 0
+        return
     base_seed = random.randint(0, 2**32 - 1) if randomize else int(seed)
     width, height = parse_resolution(resolution)
     loras = _resolve_lora_slots(lora1, w1, lora2, w2, lora3, w3)
     jobs = [{
         "prompt": prompt, "negative": negative or "", "seed": base_seed + i,
         "steps": int(steps), "cfg": float(cfg), "width": width, "height": height,
-        "sampler": sampler, "loras": loras,
+        "sampler": sampler, "loras": loras, "unet_file": entry["file"],
     } for i in range(int(batch_count))]
     for images, status in _run_jobs(jobs):
         yield images, status, base_seed
@@ -230,10 +255,14 @@ def _png_bytes(image) -> bytes:
 
 
 def generate_inpaint(editor_value, prompt, negative, seed, randomize, steps,
-                     cfg, denoise, sampler, grow, blur,
+                     cfg, denoise, sampler, grow, blur, model,
                      lora1, w1, lora2, w2, lora3, w3, batch_count):
     """Inpaint tab: repaint the painted region — or, with nothing painted,
     run the whole image through img2img at the chosen denoise."""
+    entry, error = _check_model(model)
+    if error:
+        yield [], error, 0
+        return
     try:
         image, mask = _prepare_inpaint_inputs(editor_value, int(grow), int(blur))
     except ValueError as exc:
@@ -261,6 +290,7 @@ def generate_inpaint(editor_value, prompt, negative, seed, randomize, steps,
         "steps": int(steps), "cfg": float(cfg), "denoise": float(denoise),
         "sampler": sampler, "image_name": image_name, "mask_name": mask_name,
         "loras": _resolve_lora_slots(lora1, w1, lora2, w2, lora3, w3),
+        "unet_file": entry["file"],
     } for i in range(int(batch_count))]
     prefix = "Krea2Inpaint" if mask is not None else "Krea2Img2Img"
     for images, status in _run_jobs(jobs, builder=build_inpaint_workflow,
@@ -280,13 +310,17 @@ def _fit_edit_size(w: int, h: int, max_pixels: int = 2_000_000) -> tuple:
 
 
 def generate_edit(image, prompt, negative, seed, randomize, steps, cfg,
-                  sampler, grounding, lora1, w1, lora2, w2, lora3, w3,
+                  sampler, grounding, model, lora1, w1, lora2, w2, lora3, w3,
                   batch_count):
     """Edit tab: instruction-based editing. The model sees the source image
     (Identity Edit LoRA dual conditioning), so the prompt describes the
     change to make — no mask, no denoise tuning."""
     if image is None:
         yield [], "❌ Upload an image first.", 0
+        return
+    entry, error = _check_model(model)
+    if error:
+        yield [], error, 0
         return
     if not edit_lora_available():
         yield [], ("❌ The Identity Edit LoRA is not downloaded yet — "
@@ -312,6 +346,7 @@ def generate_edit(image, prompt, negative, seed, randomize, steps, cfg,
         "height": height, "sampler": sampler, "image_name": image_name,
         "grounding_px": int(grounding),
         "loras": _resolve_lora_slots(lora1, w1, lora2, w2, lora3, w3),
+        "unet_file": entry["file"],
     } for i in range(int(batch_count))]
     for images, status in _run_jobs(jobs, builder=build_edit_workflow,
                                     prefix="Krea2Edit"):
@@ -543,6 +578,63 @@ def zip_outputs():
     return str(zip_path), f"📦 Zipped {len(images)} file(s) ({size_mb:.0f} MB)"
 
 
+def _swap_trigger(text, entry) -> str:
+    """Put the selected model's trigger words into the prompt text.
+
+    Any other registered model's trigger is removed first, so switching
+    models swaps triggers instead of stacking them. The text stays fully
+    editable — whatever ends up in the box is used verbatim (nothing is
+    added silently at generation time).
+    """
+    text = text or ""
+    for other in KREA2_MODELS:
+        trig = (other.get("trigger") or "").strip()
+        if not trig:
+            continue
+        idx = text.lower().find(trig.lower())
+        if idx >= 0:
+            text = text[:idx] + text[idx + len(trig):]
+    text = text.strip().strip(",").strip()
+    trigger = (entry.get("trigger") or "").strip()
+    if trigger:
+        return f"{trigger}, {text}" if text else trigger
+    return text
+
+
+def _model_info_text(entry) -> str:
+    """One-line summary shown under the Model dropdown."""
+    steps, cfg = model_defaults(entry)
+    info = (f"**{entry.get('variant', 'turbo').title()}** · "
+            f"defaults: {steps} steps, CFG {cfg:g}")
+    if entry.get("trigger"):
+        info += " · trigger words are inserted into the prompt (editable)"
+    if not model_file_available(entry):
+        info += " · ⚠️ **not downloaded yet** — restart the app to fetch it"
+    return info
+
+
+def krea_model_changed(model_name, prompt_text):
+    """Model dropdown → that model's step/CFG defaults, info line, and
+    trigger words swapped into the prompt box."""
+    entry = resolve_model_entry(model_name)
+    steps, cfg = model_defaults(entry)
+    return (gr.Slider(value=steps), gr.Slider(value=cfg),
+            gr.Markdown(value=_model_info_text(entry)),
+            gr.Textbox(value=_swap_trigger(prompt_text, entry)))
+
+
+def _model_selector():
+    """Model dropdown + info line (must be inside a gr.Blocks context).
+
+    The caller wires .change() once its tab's steps/CFG sliders and
+    prompt box exist.
+    """
+    dropdown = gr.Dropdown(choices=MODEL_CHOICES, value=MODEL_CHOICES[0],
+                           label="Model")
+    info = gr.Markdown(_model_info_text(resolve_model_entry(None)))
+    return dropdown, info
+
+
 def _default_lora_slots() -> list:
     """Per-slot (name, weight) defaults from config.DEFAULT_LORAS.
 
@@ -581,10 +673,11 @@ def _lora_stack():
 
 with gr.Blocks(title="Krea 2 on RunPod") as ui:
     gr.Markdown(
-        f"# ⚡ Krea 2 {KREA2_VARIANT.title()}"
+        "# ⚡ Krea 2"
         + (" + Wan 2.2 Video" if WAN_ENABLED else "")
         + " — ComfyUI on RunPod\n"
-        f"{GPU_COUNT} GPU(s) detected · native ComfyUI multi-GPU placement · "
+        f"{len(MODEL_CHOICES)} Krea model(s) · {GPU_COUNT} GPU(s) detected · "
+        f"native ComfyUI multi-GPU placement · "
         f"outputs saved to `{OUTPUT_DIR}`"
     )
     with gr.Tabs():
@@ -599,6 +692,7 @@ with gr.Blocks(title="Krea 2 on RunPod") as ui:
                     negative_box = gr.Textbox(
                         label="Negative prompt (only used when CFG > 1)", lines=2
                     )
+                    model_dd, model_info = _model_selector()
                     with gr.Row():
                         steps_slider = gr.Slider(
                             1, 60, value=DEFAULTS["steps"], step=1, label="Steps"
@@ -606,6 +700,12 @@ with gr.Blocks(title="Krea 2 on RunPod") as ui:
                         cfg_slider = gr.Slider(
                             0.5, 8.0, value=DEFAULTS["cfg"], step=0.1, label="CFG"
                         )
+                    model_dd.change(
+                        fn=krea_model_changed,
+                        inputs=[model_dd, prompt_box],
+                        outputs=[steps_slider, cfg_slider, model_info,
+                                 prompt_box],
+                    )
                     with gr.Row():
                         resolution_dd = gr.Dropdown(
                             choices=list(RESOLUTION_PRESETS),
@@ -634,6 +734,7 @@ with gr.Blocks(title="Krea 2 on RunPod") as ui:
                 fn=generate_single,
                 inputs=[prompt_box, negative_box, seed_box, randomize_cb,
                         steps_slider, cfg_slider, resolution_dd, sampler_dd,
+                        model_dd,
                         lora_dds[0], lora_ws[0], lora_dds[1], lora_ws[1],
                         lora_dds[2], lora_ws[2], batch_slider],
                 outputs=[gallery, status_box, seed_out],
@@ -668,6 +769,7 @@ with gr.Blocks(title="Krea 2 on RunPod") as ui:
                     edit_negative = gr.Textbox(
                         label="Negative prompt (only used when CFG > 1)", lines=2
                     )
+                    edit_model_dd, edit_model_info = _model_selector()
                     with gr.Row():
                         edit_steps = gr.Slider(
                             1, 60, value=DEFAULTS["steps"], step=1, label="Steps"
@@ -675,6 +777,12 @@ with gr.Blocks(title="Krea 2 on RunPod") as ui:
                         edit_cfg = gr.Slider(
                             0.5, 8.0, value=DEFAULTS["cfg"], step=0.1, label="CFG"
                         )
+                    edit_model_dd.change(
+                        fn=krea_model_changed,
+                        inputs=[edit_model_dd, edit_prompt],
+                        outputs=[edit_steps, edit_cfg, edit_model_info,
+                                 edit_prompt],
+                    )
                     with gr.Row():
                         edit_grounding = gr.Slider(
                             512, 1536, value=768, step=64,
@@ -704,7 +812,7 @@ with gr.Blocks(title="Krea 2 on RunPod") as ui:
                 fn=generate_edit,
                 inputs=[edit_image, edit_prompt, edit_negative, edit_seed,
                         edit_random, edit_steps, edit_cfg, edit_sampler,
-                        edit_grounding,
+                        edit_grounding, edit_model_dd,
                         edit_lora_dds[0], edit_lora_ws[0],
                         edit_lora_dds[1], edit_lora_ws[1],
                         edit_lora_dds[2], edit_lora_ws[2], edit_batch],
@@ -734,6 +842,7 @@ with gr.Blocks(title="Krea 2 on RunPod") as ui:
                     inpaint_negative = gr.Textbox(
                         label="Negative prompt (only used when CFG > 1)", lines=2
                     )
+                    inpaint_model_dd, inpaint_model_info = _model_selector()
                     with gr.Row():
                         inpaint_steps = gr.Slider(
                             1, 60, value=DEFAULTS["steps"], step=1, label="Steps"
@@ -741,6 +850,12 @@ with gr.Blocks(title="Krea 2 on RunPod") as ui:
                         inpaint_cfg = gr.Slider(
                             0.5, 8.0, value=DEFAULTS["cfg"], step=0.1, label="CFG"
                         )
+                    inpaint_model_dd.change(
+                        fn=krea_model_changed,
+                        inputs=[inpaint_model_dd, inpaint_prompt],
+                        outputs=[inpaint_steps, inpaint_cfg,
+                                 inpaint_model_info, inpaint_prompt],
+                    )
                     with gr.Row():
                         inpaint_denoise = gr.Slider(
                             0.1, 1.0, value=1.0, step=0.05,
@@ -785,7 +900,7 @@ with gr.Blocks(title="Krea 2 on RunPod") as ui:
                 inputs=[inpaint_editor, inpaint_prompt, inpaint_negative,
                         inpaint_seed, inpaint_random, inpaint_steps,
                         inpaint_cfg, inpaint_denoise, inpaint_sampler,
-                        inpaint_grow, inpaint_blur,
+                        inpaint_grow, inpaint_blur, inpaint_model_dd,
                         inpaint_lora_dds[0], inpaint_lora_ws[0],
                         inpaint_lora_dds[1], inpaint_lora_ws[1],
                         inpaint_lora_dds[2], inpaint_lora_ws[2],
@@ -927,8 +1042,12 @@ with gr.Blocks(title="Krea 2 on RunPod") as ui:
                 '```json\n'
                 '[{"prompt": "a cat", "steps": 8, "resolution": "1216x832",\n'
                 '  "loras": {"krea2_darkbrush": 1.0}},\n'
-                ' {"prompt": "a dog", "seed": 7}]\n'
-                '```'
+                ' {"prompt": "a dog", "seed": 7, "model": "FinePn"}]\n'
+                '```\n'
+                'The optional `"model"` picks a registered Krea 2 model by '
+                'name, filename or fragment (steps/CFG default to that '
+                "model's settings; trigger words are **not** auto-added — "
+                "write the full prompt you want)."
             )
             with gr.Row():
                 with gr.Column(scale=2):
