@@ -71,15 +71,15 @@ HF_MODEL_FILES = [
 # Official Krea 2 style LoRAs from the same HF repo (~0.5 GB each).
 # Trim this list to save download time and disk space.
 HF_LORA_FILES = [
-    "loras/krea2_darkbrush.safetensors",
-    "loras/krea2_dotmatrix.safetensors",
-    "loras/krea2_kidsdrawing.safetensors",
-    "loras/krea2_neondrip.safetensors",
-    "loras/krea2_rainywindow.safetensors",
-    "loras/krea2_retroanime.safetensors",
-    "loras/krea2_softwatercolor.safetensors",
-    "loras/krea2_sunsetblur.safetensors",
-    "loras/krea2_vintagetarot.safetensors",
+    # "loras/krea2_darkbrush.safetensors",
+    # "loras/krea2_dotmatrix.safetensors",
+    # "loras/krea2_kidsdrawing.safetensors",
+    # "loras/krea2_neondrip.safetensors",
+    # "loras/krea2_rainywindow.safetensors",
+    # "loras/krea2_retroanime.safetensors",
+    # "loras/krea2_softwatercolor.safetensors",
+    # "loras/krea2_sunsetblur.safetensors",
+    # "loras/krea2_vintagetarot.safetensors",
 ]
 
 # ── Wan 2.2 image-to-video ────────────────────────────────────────────────────
@@ -172,7 +172,7 @@ WAN_RESERVE_VRAM_GB = float(os.environ.get("KREA2_WAN_RESERVE_VRAM", 22))
 # var). Add or remove entries freely — a failed LoRA download is logged
 # and skipped, it never aborts the setup.
 CIVITAI_LORAS = [
-    (3067151, "Krea2FilterBypass_3vector.safetensors"),
+    # (3067151, "Krea2FilterBypass_3vector.safetensors"),
     (3070702, "Realism_Engine_Krea2_v2.0.safetensors"),
     (3072664, "SNOFS_Krea2_v1.0.safetensors"),
     (3090634, "Krea2-realism-V2.safetensors"),
@@ -181,9 +181,9 @@ CIVITAI_LORAS = [
     (3069544, "galaxyace_krea2.safetensors"),
     (3084588, "Krea2_NSFW_plus.safetensors"),
     (3075498, "nicegirls_krea2.safetensors"),
-    (3066973, "Krea2-realism-V1.safetensors"),
-    (3075606, "lenovo_krea2.safetensors"),
-    (3114242, "purelens_krea2.safetensors"),
+    # (3066973, "Krea2-realism-V1.safetensors"),
+    # (3075606, "lenovo_krea2.safetensors"),
+    # (3114242, "purelens_krea2.safetensors"),
     (3104629, "snofs_krea_v1_1.safetensors"),
 ]
 
