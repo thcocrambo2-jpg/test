@@ -1,7 +1,8 @@
 """Gradio UI.
 
-Four tabs: single / simple-batch generation, inpainting (paint a mask
-over an uploaded image), JSON batch jobs, and an output gallery. Written
+Five tabs: single / simple-batch generation, instruction-based editing
+(upload an image, describe the change), inpainting (paint a mask over an
+uploaded image), JSON batch jobs, and an output gallery. Written
 for Gradio 6 (theme/css now belong to launch(), gr.File hands the handler
 a plain file path).
 
@@ -40,8 +41,10 @@ from config import (
     log,
 )
 from workflow import (
+    build_edit_workflow,
     build_inpaint_workflow,
     build_workflow,
+    edit_lora_available,
     list_lora_files,
     resolve_lora_name,
 )
@@ -246,6 +249,56 @@ def generate_inpaint(editor_value, prompt, negative, seed, randomize, steps,
         yield images, status, base_seed
 
 
+def _fit_edit_size(w: int, h: int, max_pixels: int = 2_000_000) -> tuple:
+    """Edit-target size: keep aspect, cap at max_pixels, never upscale, /16.
+
+    The Identity Edit LoRA bleeds/duplicates content above ~2 MP, so the
+    cap is by area rather than the inpaint tab's 2048-px long side.
+    """
+    scale = min(1.0, (max_pixels / (w * h)) ** 0.5)
+    return (max(64, int(w * scale) // 16 * 16),
+            max(64, int(h * scale) // 16 * 16))
+
+
+def generate_edit(image, prompt, negative, seed, randomize, steps, cfg,
+                  sampler, grounding, lora1, w1, lora2, w2, lora3, w3,
+                  batch_count):
+    """Edit tab: instruction-based editing. The model sees the source image
+    (Identity Edit LoRA dual conditioning), so the prompt describes the
+    change to make — no mask, no denoise tuning."""
+    if image is None:
+        yield [], "❌ Upload an image first.", 0
+        return
+    if not edit_lora_available():
+        yield [], ("❌ The Identity Edit LoRA is not downloaded yet — "
+                   "restart the app so the download step can fetch it."), 0
+        return
+    if not str(prompt or "").strip():
+        yield [], "❌ Describe the change (e.g. “make the jacket red”).", 0
+        return
+    image = image.convert("RGB")
+    width, height = _fit_edit_size(*image.size)
+    if (width, height) != image.size:
+        image = image.resize((width, height), Image.LANCZOS)
+    base_seed = random.randint(0, 2**32 - 1) if randomize else int(seed)
+    tag = uuid.uuid4().hex[:8]
+    try:
+        image_name = client.upload_image(_png_bytes(image), f"edit_{tag}.png")
+    except Exception as exc:
+        yield [], f"❌ Uploading the image to ComfyUI failed: {exc}", base_seed
+        return
+    jobs = [{
+        "prompt": prompt, "negative": negative or "", "seed": base_seed + i,
+        "steps": int(steps), "cfg": float(cfg), "width": width,
+        "height": height, "sampler": sampler, "image_name": image_name,
+        "grounding_px": int(grounding),
+        "loras": _resolve_lora_slots(lora1, w1, lora2, w2, lora3, w3),
+    } for i in range(int(batch_count))]
+    for images, status in _run_jobs(jobs, builder=build_edit_workflow,
+                                    prefix="Krea2Edit"):
+        yield images, status, base_seed
+
+
 def generate_from_json(json_file, json_text):
     """JSON tab: file upload takes precedence over pasted text."""
     try:
@@ -374,6 +427,74 @@ with gr.Blocks(title="Krea 2 on RunPod") as ui:
                         lora_dds[0], lora_ws[0], lora_dds[1], lora_ws[1],
                         lora_dds[2], lora_ws[2], batch_slider],
                 outputs=[gallery, status_box, seed_out],
+            )
+
+        with gr.Tab("✨ Edit (Instruction)"):
+            gr.Markdown(
+                "Upload an image and **describe the change** — no painting "
+                "needed. The Identity Edit LoRA lets the model see the "
+                "source image, so it can recolor, add or replace objects, "
+                "restyle, or re-stage a person in a new scene while keeping "
+                "their identity. Defaults (8–12 steps, CFG 1.0) suit most "
+                "edits; removals work better with ~20 steps and CFG ≈ 3."
+                + ("" if edit_lora_available() else
+                   "\n\n⚠️ **The Identity Edit LoRA is not downloaded yet** "
+                   "(~1.9 GB) — restart the app to fetch it; this tab will "
+                   "refuse to run until then.")
+            )
+            with gr.Row():
+                with gr.Column(scale=2):
+                    edit_image = gr.Image(label="Source image", type="pil")
+                    edit_prompt = gr.Textbox(
+                        label="Edit instruction",
+                        placeholder="make the jacket red · this person "
+                                    "walking a dog on a beach at sunset",
+                        lines=3,
+                    )
+                    edit_negative = gr.Textbox(
+                        label="Negative prompt (only used when CFG > 1)", lines=2
+                    )
+                    with gr.Row():
+                        edit_steps = gr.Slider(
+                            1, 60, value=DEFAULTS["steps"], step=1, label="Steps"
+                        )
+                        edit_cfg = gr.Slider(
+                            0.5, 8.0, value=DEFAULTS["cfg"], step=0.1, label="CFG"
+                        )
+                    with gr.Row():
+                        edit_grounding = gr.Slider(
+                            512, 1536, value=768, step=64,
+                            label="Grounding (low = stronger edit, "
+                                  "high = keep likeness)",
+                        )
+                        edit_sampler = gr.Dropdown(
+                            choices=SAMPLERS, value=SAMPLERS[0], label="Sampler"
+                        )
+                    with gr.Row():
+                        edit_seed = gr.Number(label="Seed", value=42, precision=0)
+                        edit_random = gr.Checkbox(
+                            label="🎲 Random seed", value=True
+                        )
+                        edit_batch = gr.Slider(
+                            1, 20, value=1, step=1, label="Batch count"
+                        )
+                    edit_lora_dds, edit_lora_ws = _lora_stack()
+                    edit_btn = gr.Button("✨ Edit", variant="primary", size="lg")
+                with gr.Column(scale=3):
+                    edit_gallery = gr.Gallery(label="Output", columns=2, height=600)
+                    edit_status = gr.Textbox(label="Status", interactive=False)
+                    edit_seed_out = gr.Number(
+                        label="Base seed used", interactive=False, precision=0
+                    )
+            edit_btn.click(
+                fn=generate_edit,
+                inputs=[edit_image, edit_prompt, edit_negative, edit_seed,
+                        edit_random, edit_steps, edit_cfg, edit_sampler,
+                        edit_grounding,
+                        edit_lora_dds[0], edit_lora_ws[0],
+                        edit_lora_dds[1], edit_lora_ws[1],
+                        edit_lora_dds[2], edit_lora_ws[2], edit_batch],
+                outputs=[edit_gallery, edit_status, edit_seed_out],
             )
 
         with gr.Tab("Inpaint / Img2Img"):

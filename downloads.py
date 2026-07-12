@@ -17,6 +17,8 @@ from config import (
     ABLITERATED_ENCODER_REPO,
     CIVITAI_LORAS,
     CIVITAI_TOKEN,
+    EDIT_LORA_FILE,
+    EDIT_LORA_REPO,
     HF_LORA_FILES,
     HF_MODEL_FILES,
     HF_MODEL_REPO,
@@ -93,6 +95,24 @@ def fetch_abliterated_encoder() -> None:
     log.info("Merged abliterated encoder → %s", dest)
 
 
+def fetch_edit_lora() -> None:
+    """Download the Krea 2 Identity Edit LoRA into the loras folder."""
+    dest = MODELS_DIR / "loras" / EDIT_LORA_FILE
+    if dest.exists():
+        log.info("✓ %s (cached)", EDIT_LORA_FILE)
+        return
+    log.info("↓ %s (from %s) ...", EDIT_LORA_FILE, EDIT_LORA_REPO)
+    _with_retries(
+        lambda: hf_hub_download(
+            repo_id=EDIT_LORA_REPO,
+            filename=EDIT_LORA_FILE,
+            local_dir=MODELS_DIR / "loras",
+            token=HF_TOKEN,
+        ),
+        desc=EDIT_LORA_FILE,
+    )
+
+
 def fetch_civitai_lora(version_id: int, filename: str) -> None:
     """Download a CivitAI model version with resume support and retries."""
     dest = MODELS_DIR / "loras" / filename
@@ -153,6 +173,12 @@ def download_everything() -> None:
             "falling back to the standard encoder.", exc,
         )
         fetch_hf_file(f"text_encoders/{TEXT_ENCODER_FILE}")
+    try:
+        fetch_edit_lora()
+    except Exception as exc:
+        # The Edit tab warns when this file is missing; everything else works.
+        log.error("Identity Edit LoRA unavailable (%s) — the Edit tab will "
+                  "stay disabled until it downloads on a later run.", exc)
     if CIVITAI_LORAS and not CIVITAI_TOKEN:
         log.warning(
             "CIVITAI_LORAS configured but no CIVITAI_TOKEN environment "
