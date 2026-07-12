@@ -23,18 +23,21 @@ from config import (
     TEXT_ENCODER_FILE,
     UNET_FILE,
     VAE_FILE,
+    WAN_LIGHTNING_HIGH,
+    WAN_LIGHTNING_LOW,
     log,
 )
 
+# LoRAs that live in the same folder but do not belong in the Krea style
+# stack: the Identity Edit LoRA (added by build_edit_workflow itself) and
+# the Wan 2.2 Lightning speed LoRAs (Wan-architecture, video tab only).
+_NON_STYLE_LORAS = {EDIT_LORA_FILE, WAN_LIGHTNING_HIGH, WAN_LIGHTNING_LOW}
+
 
 def list_lora_files() -> list[str]:
-    """Style LoRA files currently available to ComfyUI.
-
-    The Identity Edit LoRA is excluded — it only works together with the
-    Krea2Edit patch nodes, so build_edit_workflow adds it by itself.
-    """
+    """Style LoRA files currently available to ComfyUI."""
     return sorted(p.name for p in (MODELS_DIR / "loras").glob("*.safetensors")
-                  if p.name != EDIT_LORA_FILE)
+                  if p.name not in _NON_STYLE_LORAS)
 
 
 def edit_lora_available() -> bool:
