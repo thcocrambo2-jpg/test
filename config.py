@@ -33,19 +33,62 @@ COMFY_HOST = "127.0.0.1"
 COMFY_PORT = 8188
 
 # ── Model selection ───────────────────────────────────────────────────────────
-# "turbo" = 8-step distilled model, CFG 1.0 (default)
-# "raw"   = full model, ~50 steps, CFG 3.5-4.5 (much slower)
-KREA2_VARIANT = "turbo"
-
+# Variant-level defaults; a registry entry below can override them per-model.
+# "turbo" = distilled models: few steps, CFG 1.0
+# "raw"   = undistilled models: many steps, CFG 3.5-4.5 (much slower)
 VARIANT_DEFAULTS = {
     "turbo": {"steps": 8, "cfg": 1.0},
     "raw": {"steps": 50, "cfg": 4.0},
 }
 
 HF_MODEL_REPO = "Comfy-Org/Krea-2"
-UNET_FILE = f"krea2_{KREA2_VARIANT}_fp8_scaled.safetensors"  # ~13.1 GB
 TEXT_ENCODER_FILE = "qwen3vl_4b_fp8_scaled.safetensors"      # ~5.2 GB
 VAE_FILE = "qwen_image_vae.safetensors"                      # ~0.25 GB
+
+# Registry of selectable Krea 2 diffusion models (UNets) — same spirit as
+# the LoRA lists further down: add an entry, restart (downloads are
+# idempotent and a failed one never aborts setup), and it appears in the
+# Model dropdown of the generate / edit / inpaint tabs and as "model" in
+# JSON batch jobs. The FIRST entry is the default. Fields:
+#   name            — unique label shown in the UI dropdown
+#   file            — filename saved under models/diffusion_models/
+#   variant         — "turbo" or "raw"; supplies the step/CFG defaults
+#                     from VARIANT_DEFAULTS when the model is selected
+#   steps, cfg      — optional per-model overrides of those defaults
+#   hf_path         — repo path inside HF_MODEL_REPO to download, OR
+#   civitai_version — CivitAI model *version* id: the number in
+#                     civitai.com/api/download/models/<id>, which is also
+#                     the part after the @ in an AIR urn like
+#                     urn:air:krea2:unet:civitai:2762538@3118978
+#                     (most downloads need CIVITAI_TOKEN)
+#   trigger         — optional trigger words, auto-prepended to the prompt
+#                     whenever this model is used (generate/inpaint/JSON;
+#                     not in Edit instructions)
+KREA2_MODELS = [
+    {
+        "name": "Krea 2 Turbo (official)",
+        "file": "krea2_turbo_fp8_scaled.safetensors",   # ~13.1 GB
+        "variant": "turbo",
+        "hf_path": "diffusion_models/krea2_turbo_fp8_scaled.safetensors",
+    },
+    {
+        "name": "Krea 2 Raw (official)",
+        "file": "krea2_raw_fp8_scaled.safetensors",     # ~13.1 GB
+        "variant": "raw",
+        "hf_path": "diffusion_models/krea2_raw_fp8_scaled.safetensors",
+    },
+    {
+        "name": "FinePn V2 (amateur phone photo)",
+        "file": "Krea2_FinePornV2_FP8.safetensors",       # ~12.2 GB
+        "variant": "turbo",
+        "civitai_version": 3118978,
+        "trigger": "this is an amateur photo taken from smartphone, "
+                   "casual photo",
+    },
+]
+
+# The default model's variant (first registry entry) — used for logging.
+KREA2_VARIANT = KREA2_MODELS[0].get("variant", "turbo")
 
 # Abliterated (uncensored) text encoder: its shards are downloaded from this
 # repo and merged into a single ComfyUI-loadable file. When the merged file
@@ -63,8 +106,9 @@ KREA2EDIT_NODES_REPO = "https://github.com/lbouaraba/comfyui-krea2edit"
 EDIT_LORA_REPO = "conradlocke/krea2-identity-edit"
 EDIT_LORA_FILE = "krea2_identity_edit_v1_1.safetensors"  # ~1.83 GB
 
+# Diffusion models come from the KREA2_MODELS registry above; only the
+# shared VAE is a fixed download.
 HF_MODEL_FILES = [
-    f"diffusion_models/{UNET_FILE}",
     f"vae/{VAE_FILE}",
 ]
 
@@ -184,7 +228,8 @@ CIVITAI_LORAS = [
     # (3066973, "Krea2-realism-V1.safetensors"),
     # (3075606, "lenovo_krea2.safetensors"),
     # (3114242, "purelens_krea2.safetensors"),
-    (3104629, "snofs_krea_v1_1.safetensors"),
+    # (3104629, "snofs_krea_v1_1.safetensors"),
+    (3085473, "KNPV4.1_pre.safetensors"),
 ]
 
 # LoRAs pre-selected in the UI's three slots (generate / edit / inpaint tabs).

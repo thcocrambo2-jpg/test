@@ -19,10 +19,11 @@ from comfy import GPU_COUNT
 from config import (
     ABLITERATED_ENCODER_FILE,
     EDIT_LORA_FILE,
+    KREA2_MODELS,
     MODELS_DIR,
     TEXT_ENCODER_FILE,
-    UNET_FILE,
     VAE_FILE,
+    VARIANT_DEFAULTS,
     WAN_LIGHTNING_HIGH,
     WAN_LIGHTNING_LOW,
     log,
@@ -38,6 +39,46 @@ def list_lora_files() -> list[str]:
     """Style LoRA files currently available to ComfyUI."""
     return sorted(p.name for p in (MODELS_DIR / "loras").glob("*.safetensors")
                   if p.name not in _NON_STYLE_LORAS)
+
+
+# ── Krea 2 model registry helpers ────────────────────────────────────────────
+
+def list_model_names() -> list[str]:
+    """Dropdown labels for every registered Krea 2 model, in config order."""
+    return [entry["name"] for entry in KREA2_MODELS]
+
+
+def resolve_model_entry(name) -> dict:
+    """Map a UI/JSON model name to its registry entry (default: first entry).
+
+    Accepts the registry name, the filename, or any case-insensitive
+    substring of either — the same forgiving spirit as resolve_lora_name.
+    """
+    if not name or str(name).strip().lower() in ("", "none", "default"):
+        return KREA2_MODELS[0]
+    wanted = str(name).strip().lower()
+    for entry in KREA2_MODELS:
+        if wanted in (entry["name"].lower(), entry["file"].lower()):
+            return entry
+    for entry in KREA2_MODELS:
+        if wanted in entry["name"].lower() or wanted in entry["file"].lower():
+            return entry
+    log.warning("Krea 2 model %r not in KREA2_MODELS — using the default "
+                "(%s)", name, KREA2_MODELS[0]["name"])
+    return KREA2_MODELS[0]
+
+
+def model_defaults(entry: dict) -> tuple[int, float]:
+    """(steps, cfg) for a registry entry: per-model override, else variant."""
+    variant = VARIANT_DEFAULTS.get(entry.get("variant", "turbo"),
+                                   VARIANT_DEFAULTS["turbo"])
+    return (int(entry.get("steps", variant["steps"])),
+            float(entry.get("cfg", variant["cfg"])))
+
+
+def model_file_available(entry: dict) -> bool:
+    """True once the entry's UNet file has been downloaded."""
+    return (MODELS_DIR / "diffusion_models" / entry["file"]).exists()
 
 
 def edit_lora_available() -> bool:
@@ -82,16 +123,18 @@ def resolve_lora_name(name) -> str | None:
     return None
 
 
-def _model_nodes(loras) -> tuple[dict, list, list, list]:
+def _model_nodes(loras, unet_file: str | None = None) -> tuple[dict, list, list, list]:
     """Loader, GPU-placement and LoRA nodes shared by every workflow.
 
-    Returns (wf, model_ref, clip_ref, vae_ref); the refs point at the end
-    of each chain so callers can keep wiring nodes onto them.
+    `unet_file` picks the diffusion model (default: the first registry
+    entry). Returns (wf, model_ref, clip_ref, vae_ref); the refs point at
+    the end of each chain so callers can keep wiring nodes onto them.
     """
     wf = {
         "unet": {
             "class_type": "UNETLoader",
-            "inputs": {"unet_name": UNET_FILE, "weight_dtype": "default"},
+            "inputs": {"unet_name": unet_file or KREA2_MODELS[0]["file"],
+                       "weight_dtype": "default"},
         },
         "clip": {
             "class_type": "CLIPLoader",
@@ -162,6 +205,7 @@ def build_workflow(
     height: int = 1024,
     sampler: str = "er_sde",
     loras=(),
+    unet_file: str | None = None,
     filename_prefix: str = "Krea2",
 ) -> dict:
     """Build a Krea 2 text-to-image workflow in ComfyUI API format.
@@ -169,9 +213,10 @@ def build_workflow(
     Mirrors the official Krea 2 template: no ModelSampling node is needed
     (shift 1.15 is built into ComfyUI's Krea2 model class), LoRAs apply to
     the diffusion model only.
-    `loras` is a sequence of (filename, strength) pairs, already resolved.
+    `loras` is a sequence of (filename, strength) pairs, already resolved;
+    `unet_file` selects the diffusion model (KREA2_MODELS registry).
     """
-    wf, model_ref, clip_ref, vae_ref = _model_nodes(loras)
+    wf, model_ref, clip_ref, vae_ref = _model_nodes(loras, unet_file)
     _conditioning_nodes(wf, prompt, negative, clip_ref)
 
     wf["latent"] = {
@@ -210,6 +255,7 @@ def build_inpaint_workflow(
     image_name: str,
     mask_name: str | None = None,
     loras=(),
+    unet_file: str | None = None,
     filename_prefix: str = "Krea2Inpaint",
 ) -> dict:
     """Build a Krea 2 inpainting / img2img workflow in ComfyUI API format.
@@ -227,7 +273,7 @@ def build_inpaint_workflow(
     and no compositing happens. Output size is the source image size
     (the UI snaps it to /16).
     """
-    wf, model_ref, clip_ref, vae_ref = _model_nodes(loras)
+    wf, model_ref, clip_ref, vae_ref = _model_nodes(loras, unet_file)
     _conditioning_nodes(wf, prompt, negative, clip_ref)
 
     wf["source"] = {
@@ -292,6 +338,7 @@ def build_edit_workflow(
     image_name: str,
     grounding_px: int = 768,
     loras=(),
+    unet_file: str | None = None,
     filename_prefix: str = "Krea2Edit",
 ) -> dict:
     """Build an instruction-edit workflow (Krea 2 Identity Edit LoRA).
@@ -310,7 +357,7 @@ def build_edit_workflow(
     and `width`/`height` should match the source aspect ratio (≤ 2 MP).
     """
     wf, model_ref, clip_ref, vae_ref = _model_nodes(
-        [(EDIT_LORA_FILE, 1.0), *loras]
+        [(EDIT_LORA_FILE, 1.0), *loras], unet_file
     )
 
     wf["source"] = {

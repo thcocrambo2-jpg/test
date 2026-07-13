@@ -23,6 +23,7 @@ from config import (
     HF_MODEL_FILES,
     HF_MODEL_REPO,
     HF_TOKEN,
+    KREA2_MODELS,
     MODELS_DIR,
     TEXT_ENCODER_FILE,
     WAN_ENABLED,
@@ -142,9 +143,11 @@ def fetch_wan_file(relpath: str) -> None:
     _with_retries(_download, desc=relpath)
 
 
-def fetch_civitai_lora(version_id: int, filename: str) -> None:
+def fetch_civitai_file(version_id: int, filename: str,
+                       subdir: str = "loras") -> None:
     """Download a CivitAI model version with resume support and retries."""
-    dest = MODELS_DIR / "loras" / filename
+    dest = MODELS_DIR / subdir / filename
+    dest.parent.mkdir(parents=True, exist_ok=True)
     if dest.exists():
         log.info("✓ %s (cached)", filename)
         return
@@ -191,9 +194,26 @@ def fetch_civitai_lora(version_id: int, filename: str) -> None:
 
 
 def download_everything() -> None:
-    """Fetch base models, official style LoRAs and configured CivitAI LoRAs."""
+    """Fetch base models, registry models, style LoRAs and CivitAI LoRAs."""
     for relpath in HF_MODEL_FILES + HF_LORA_FILES:
         fetch_hf_file(relpath)
+    for entry in KREA2_MODELS:
+        # A missing model only greys out one dropdown choice; it must
+        # never sink the whole setup.
+        try:
+            if entry.get("hf_path"):
+                fetch_hf_file(entry["hf_path"])
+            elif entry.get("civitai_version"):
+                fetch_civitai_file(entry["civitai_version"], entry["file"],
+                                   subdir="diffusion_models")
+            else:
+                log.warning(
+                    "Model %r has no hf_path/civitai_version — expecting "
+                    "%s to be placed in diffusion_models/ manually.",
+                    entry["name"], entry["file"],
+                )
+        except Exception as exc:
+            log.error("Skipping Krea 2 model %s: %s", entry["name"], exc)
     try:
         fetch_abliterated_encoder()
     except Exception as exc:
@@ -225,7 +245,7 @@ def download_everything() -> None:
         )
     for version_id, filename in CIVITAI_LORAS:
         try:
-            fetch_civitai_lora(version_id, filename)
+            fetch_civitai_file(version_id, filename)
         except Exception as exc:
             # A missing LoRA must not sink the whole setup.
             log.error("Skipping LoRA %s: %s", filename, exc)
