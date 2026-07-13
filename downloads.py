@@ -19,6 +19,12 @@ from config import (
     CIVITAI_TOKEN,
     EDIT_LORA_FILE,
     EDIT_LORA_REPO,
+    FLUX_CIVITAI_LORAS,
+    FLUX_ENABLED,
+    FLUX_HF_FILES,
+    FLUX_HF_REPO,
+    FLUX_LORA_SUBDIR,
+    FLUX_MODELS,
     HF_LORA_FILES,
     HF_MODEL_FILES,
     HF_MODEL_REPO,
@@ -117,22 +123,22 @@ def fetch_edit_lora() -> None:
     )
 
 
-def fetch_wan_file(relpath: str) -> None:
-    """Download one Wan 2.2 file into MODELS_DIR.
+def fetch_repackaged_file(repo: str, relpath: str) -> None:
+    """Download one file from a Comfy-Org repackaged repo into MODELS_DIR.
 
-    The Comfy-Org repo keeps everything under split_files/, which local_dir
-    downloads would mirror — so the file is moved up one level afterwards
-    (a same-filesystem rename, no extra disk needed).
+    These repos (Wan 2.2, Flux 2) keep everything under split_files/,
+    which local_dir downloads would mirror — so the file is moved up one
+    level afterwards (a same-filesystem rename, no extra disk needed).
     """
     dest = MODELS_DIR / relpath
     if dest.exists():
         log.info("✓ %s (cached)", relpath)
         return
-    log.info("↓ %s (from %s) ...", relpath, WAN_HF_REPO)
+    log.info("↓ %s (from %s) ...", relpath, repo)
 
     def _download():
         path = hf_hub_download(
-            repo_id=WAN_HF_REPO,
+            repo_id=repo,
             filename=f"split_files/{relpath}",
             local_dir=MODELS_DIR,
             token=HF_TOKEN,
@@ -231,13 +237,43 @@ def download_everything() -> None:
     if WAN_ENABLED:
         for relpath in WAN_HF_FILES:
             try:
-                fetch_wan_file(relpath)
+                fetch_repackaged_file(WAN_HF_REPO, relpath)
             except Exception as exc:
                 # A missing Wan file only degrades the Video tab; the Krea
                 # tabs must never be affected by it.
                 log.error("Wan 2.2 file %s unavailable (%s) — the Video tab "
                           "will refuse to run until a later run fetches it.",
                           relpath, exc)
+    if FLUX_ENABLED:
+        for relpath in FLUX_HF_FILES:
+            try:
+                fetch_repackaged_file(FLUX_HF_REPO, relpath)
+            except Exception as exc:
+                log.error("Flux 2 file %s unavailable (%s) — the Flux tab "
+                          "will refuse to run until a later run fetches it.",
+                          relpath, exc)
+        for entry in FLUX_MODELS:
+            try:
+                if entry.get("hf_path"):
+                    fetch_repackaged_file(FLUX_HF_REPO, entry["hf_path"])
+                elif entry.get("civitai_version"):
+                    fetch_civitai_file(entry["civitai_version"],
+                                       entry["file"],
+                                       subdir="diffusion_models")
+                else:
+                    log.warning(
+                        "Flux model %r has no hf_path/civitai_version — "
+                        "expecting %s to be placed in diffusion_models/ "
+                        "manually.", entry["name"], entry["file"],
+                    )
+            except Exception as exc:
+                log.error("Skipping Flux 2 model %s: %s", entry["name"], exc)
+        for version_id, filename in FLUX_CIVITAI_LORAS:
+            try:
+                fetch_civitai_file(version_id, filename,
+                                   subdir=f"loras/{FLUX_LORA_SUBDIR}")
+            except Exception as exc:
+                log.error("Skipping Flux LoRA %s: %s", filename, exc)
     if CIVITAI_LORAS and not CIVITAI_TOKEN:
         log.warning(
             "CIVITAI_LORAS configured but no CIVITAI_TOKEN environment "

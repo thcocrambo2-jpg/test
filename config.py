@@ -209,6 +209,65 @@ WAN_COMFY_LOG = WORKING_DIR / "comfyui_wan.log"
 KREA_RESERVE_VRAM_GB = float(os.environ.get("KREA2_MAIN_RESERVE_VRAM", 26))
 WAN_RESERVE_VRAM_GB = float(os.environ.get("KREA2_WAN_RESERVE_VRAM", 22))
 
+# ── Flux 2 ────────────────────────────────────────────────────────────────────
+# The Flux tab generates images with Flux 2 Dev (32B, guidance-distilled:
+# no CFG/negative prompt — a FluxGuidance value steers it instead). The
+# fp8 model is ~35.5 GB and the Mistral text encoder ~18 GB, so on a 48 GB
+# A40 run Flux WITHOUT KREA2_WAN_PARALLEL (it needs nearly the whole GPU)
+# and expect a slow model swap when switching between Flux and Krea jobs.
+# Set KREA2_DISABLE_FLUX=1 to skip the ~57 GB of downloads and hide the tab.
+FLUX_ENABLED = not os.environ.get("KREA2_DISABLE_FLUX")
+FLUX_HF_REPO = "Comfy-Org/flux2-dev"
+FLUX_TEXT_ENCODER = "mistral_3_small_flux2_fp8.safetensors"  # ~18.0 GB
+FLUX_VAE = "flux2-vae.safetensors"                           # ~0.34 GB
+FLUX_TURBO_LORA = "Flux2TurboComfyv2.safetensors"            # ~2.8 GB
+
+# Shared Flux files (all under split_files/ in the repo, flattened locally).
+FLUX_HF_FILES = [
+    f"text_encoders/{FLUX_TEXT_ENCODER}",
+    f"vae/{FLUX_VAE}",
+    f"loras/{FLUX_TURBO_LORA}",
+]
+
+# Variant-level defaults for Flux models. "turbo" applies the official
+# Turbo distillation LoRA (8 steps); "raw" is the undistilled 20-step
+# schedule (~2.5× slower). Add new keys ("hyper", ...) freely — a model
+# entry picks one via its "variant" field and can override any value.
+FLUX_VARIANT_DEFAULTS = {
+    "turbo": {"steps": 8, "guidance": 4.0, "turbo_lora": True},
+    "raw": {"steps": 20, "guidance": 4.0, "turbo_lora": False},
+}
+
+# Registry of selectable Flux 2 models — same scheme as KREA2_MODELS
+# (name / file / variant / optional steps, guidance, turbo_lora overrides /
+# hf_path within FLUX_HF_REPO or civitai_version / optional trigger).
+# The first entry is the default. Both official entries share one file:
+# turbo is the same weights plus the Turbo LoRA at generation time.
+FLUX_MODELS = [
+    {
+        "name": "Flux 2 Dev Turbo (official)",
+        "file": "flux2_dev_fp8mixed.safetensors",   # ~35.5 GB
+        "variant": "turbo",
+        "hf_path": "diffusion_models/flux2_dev_fp8mixed.safetensors",
+    },
+    {
+        "name": "Flux 2 Dev Raw (official)",
+        "file": "flux2_dev_fp8mixed.safetensors",   # same file, no Turbo LoRA
+        "variant": "raw",
+        "hf_path": "diffusion_models/flux2_dev_fp8mixed.safetensors",
+    },
+]
+
+# Flux LoRAs live in their own subfolder (loras/flux2/) so they never mix
+# with the Krea 2 LoRA dropdowns — the architectures are incompatible.
+# Entries are (civitai_version_id, filename_to_save_as), exactly like
+# CIVITAI_LORAS below; files dropped into loras/flux2/ by hand also appear
+# after a rescan.
+FLUX_LORA_SUBDIR = "flux2"
+FLUX_CIVITAI_LORAS = [
+    # (1234567, "some_flux2_lora.safetensors"),
+]
+
 # ── CivitAI LoRAs ─────────────────────────────────────────────────────────────
 # Entries are (model_version_id, filename_to_save_as). The version id is the
 # number in the CivitAI download URL: civitai.com/api/download/models/<id>
@@ -224,7 +283,7 @@ CIVITAI_LORAS = [
     (3084537, "Realistic_Snapshot_Krea2_v0.5.safetensors"),
     (3069544, "galaxyace_krea2.safetensors"),
     (3084588, "Krea2_NSFW_plus.safetensors"),
-    (3075498, "nicegirls_krea2.safetensors"),
+    # (3075498, "nicegirls_krea2.safetensors"),
     # (3066973, "Krea2-realism-V1.safetensors"),
     # (3075606, "lenovo_krea2.safetensors"),
     # (3114242, "purelens_krea2.safetensors"),
