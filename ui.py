@@ -33,6 +33,8 @@ from comfy import GPU_COUNT
 from config import (
     DEFAULT_LORAS,
     DEFAULT_RESOLUTION,
+    FLUX_ENABLED,
+    FLUX_MODELS,
     KREA2_MODELS,
     OUTPUT_DIR,
     RESOLUTION_PRESETS,
@@ -63,6 +65,16 @@ from workflow import (
     resolve_lora_name,
     resolve_model_entry,
 )
+from workflow_flux import (
+    build_flux_workflow,
+    flux_model_available,
+    flux_model_defaults,
+    flux_model_names,
+    flux_turbo_lora_available,
+    list_flux_lora_files,
+    resolve_flux_lora,
+    resolve_flux_model,
+)
 from workflow_wan import (
     build_wan_5b_workflow,
     build_wan_i2v_workflow,
@@ -76,6 +88,9 @@ MODEL_CHOICES = list_model_names()
 _d_steps, _d_cfg = model_defaults(resolve_model_entry(None))
 DEFAULTS = {"steps": _d_steps, "cfg": _d_cfg}
 LORA_CHOICES = ["None"] + list_lora_files()
+FLUX_MODEL_CHOICES = flux_model_names()
+FLUX_LORA_CHOICES = ["None"] + list_flux_lora_files()
+_f_steps, _f_guidance, _ = flux_model_defaults(resolve_flux_model(None))
 
 
 def _snap(value, lo: int = 512, hi: int = 2048) -> int:
@@ -207,6 +222,67 @@ def generate_single(prompt, negative, seed, randomize, steps, cfg, resolution,
         "sampler": sampler, "loras": loras, "unet_file": entry["file"],
     } for i in range(int(batch_count))]
     for images, status in _run_jobs(jobs):
+        yield images, status, base_seed
+
+
+def _flux_model_info_text(entry) -> str:
+    """One-line summary shown under the Flux Model dropdown."""
+    steps, guidance, turbo = flux_model_defaults(entry)
+    info = (f"**{entry.get('variant', 'raw').title()}** · "
+            f"defaults: {steps} steps, guidance {guidance:g}"
+            + (" · Turbo LoRA applied" if turbo else ""))
+    if entry.get("trigger"):
+        info += " · trigger words are inserted into the prompt (editable)"
+    if not flux_model_available(entry):
+        info += " · ⚠️ **not downloaded yet** — restart the app to fetch it"
+    return info
+
+
+def flux_model_changed(model_name, prompt_text):
+    """Flux Model dropdown → its step/guidance defaults, info line, and
+    trigger words swapped into the prompt box."""
+    entry = resolve_flux_model(model_name)
+    steps, guidance, _turbo = flux_model_defaults(entry)
+    return (gr.Slider(value=steps), gr.Slider(value=guidance),
+            gr.Markdown(value=_flux_model_info_text(entry)),
+            gr.Textbox(value=_swap_trigger(prompt_text, entry, FLUX_MODELS)))
+
+
+def refresh_flux_lora_choices():
+    """Re-scan loras/flux2/ (e.g. after dropping new files into it)."""
+    choices = ["None"] + list_flux_lora_files()
+    return [gr.Dropdown(choices=choices) for _ in range(MAX_LORA_SLOTS)]
+
+
+def generate_flux(prompt, seed, randomize, steps, guidance, resolution,
+                  sampler, model, lora1, w1, lora2, w2, lora3, w3,
+                  batch_count):
+    """Flux tab: text-to-image with Flux 2 (guidance-distilled, no negative)."""
+    entry = resolve_flux_model(model)
+    if not flux_model_available(entry):
+        yield [], (f"❌ Model “{entry['name']}” is not downloaded yet — "
+                   "restart the app so the download step can fetch it."), 0
+        return
+    _s, _g, turbo = flux_model_defaults(entry)
+    if turbo and not flux_turbo_lora_available():
+        yield [], ("❌ The Flux 2 Turbo LoRA is missing — restart the app to "
+                   "download it, or pick a raw-variant model."), 0
+        return
+    base_seed = random.randint(0, 2**32 - 1) if randomize else int(seed)
+    width, height = parse_resolution(resolution)
+    loras = []
+    for name, weight in ((lora1, w1), (lora2, w2), (lora3, w3)):
+        lora_file = resolve_flux_lora(name)
+        if lora_file:
+            loras.append((lora_file, float(weight)))
+    jobs = [{
+        "prompt": prompt, "seed": base_seed + i, "steps": int(steps),
+        "guidance": float(guidance), "width": width, "height": height,
+        "sampler": sampler, "loras": loras, "unet_file": entry["file"],
+        "turbo_lora": turbo,
+    } for i in range(int(batch_count))]
+    for images, status in _run_jobs(jobs, builder=build_flux_workflow,
+                                    prefix="Flux2"):
         yield images, status, base_seed
 
 
@@ -578,16 +654,16 @@ def zip_outputs():
     return str(zip_path), f"📦 Zipped {len(images)} file(s) ({size_mb:.0f} MB)"
 
 
-def _swap_trigger(text, entry) -> str:
+def _swap_trigger(text, entry, registry=None) -> str:
     """Put the selected model's trigger words into the prompt text.
 
-    Any other registered model's trigger is removed first, so switching
-    models swaps triggers instead of stacking them. The text stays fully
-    editable — whatever ends up in the box is used verbatim (nothing is
-    added silently at generation time).
+    Any other registered model's trigger (within the same registry) is
+    removed first, so switching models swaps triggers instead of stacking
+    them. The text stays fully editable — whatever ends up in the box is
+    used verbatim (nothing is added silently at generation time).
     """
     text = text or ""
-    for other in KREA2_MODELS:
+    for other in (registry if registry is not None else KREA2_MODELS):
         trig = (other.get("trigger") or "").strip()
         if not trig:
             continue
@@ -674,6 +750,7 @@ def _lora_stack():
 with gr.Blocks(title="Krea 2 on RunPod") as ui:
     gr.Markdown(
         "# ⚡ Krea 2"
+        + (" + Flux 2" if FLUX_ENABLED else "")
         + (" + Wan 2.2 Video" if WAN_ENABLED else "")
         + " — ComfyUI on RunPod\n"
         f"{len(MODEL_CHOICES)} Krea model(s) · {GPU_COUNT} GPU(s) detected · "
@@ -907,6 +984,115 @@ with gr.Blocks(title="Krea 2 on RunPod") as ui:
                         inpaint_batch],
                 outputs=[inpaint_gallery, inpaint_status, inpaint_seed_out],
             )
+
+        if FLUX_ENABLED:
+            with gr.Tab("🌊 Flux 2"):
+                gr.Markdown(
+                    "Text-to-image with **Flux 2 Dev** (32B). The model is "
+                    "guidance-distilled: there is no CFG or negative prompt "
+                    "— **Guidance** steers prompt adherence instead "
+                    "(~4 is the sweet spot). **Turbo** (default) applies the "
+                    "official Turbo LoRA at 8 steps; the Raw entry runs the "
+                    "undistilled 20-step schedule. ⚠️ At ~35 GB this model "
+                    "wants nearly the whole A40: don't combine it with "
+                    "KREA2_WAN_PARALLEL, and expect a slow first job / model "
+                    "swap when switching between Flux and Krea."
+                    + ("" if flux_model_available(resolve_flux_model(None))
+                       else "\n\n⚠️ **The Flux 2 models are not downloaded "
+                            "yet** (~57 GB) — restart the app to fetch them; "
+                            "this tab will refuse to run until then.")
+                )
+                with gr.Row():
+                    with gr.Column(scale=2):
+                        flux_prompt = gr.Textbox(
+                            label="Prompt", lines=5,
+                            value="A photorealistic golden-hour portrait, "
+                                  "natural skin texture, shallow depth of "
+                                  "field",
+                        )
+                        flux_model_dd = gr.Dropdown(
+                            choices=FLUX_MODEL_CHOICES,
+                            value=FLUX_MODEL_CHOICES[0], label="Model",
+                        )
+                        flux_model_info = gr.Markdown(
+                            _flux_model_info_text(resolve_flux_model(None))
+                        )
+                        with gr.Row():
+                            flux_steps = gr.Slider(
+                                1, 50, value=_f_steps, step=1, label="Steps"
+                            )
+                            flux_guidance = gr.Slider(
+                                0.0, 10.0, value=_f_guidance, step=0.1,
+                                label="Guidance",
+                            )
+                        flux_model_dd.change(
+                            fn=flux_model_changed,
+                            inputs=[flux_model_dd, flux_prompt],
+                            outputs=[flux_steps, flux_guidance,
+                                     flux_model_info, flux_prompt],
+                        )
+                        with gr.Row():
+                            flux_resolution = gr.Dropdown(
+                                choices=list(RESOLUTION_PRESETS),
+                                value=DEFAULT_RESOLUTION, label="Resolution",
+                            )
+                            flux_sampler = gr.Dropdown(
+                                choices=SAMPLERS, value="euler",
+                                label="Sampler",
+                            )
+                        with gr.Row():
+                            flux_seed = gr.Number(
+                                label="Seed", value=42, precision=0
+                            )
+                            flux_random = gr.Checkbox(
+                                label="🎲 Random seed", value=True
+                            )
+                            flux_batch = gr.Slider(
+                                1, 20, value=1, step=1, label="Batch count"
+                            )
+                        gr.Markdown("### 🎭 Flux LoRA stack (`loras/flux2/`)")
+                        flux_lora_dds, flux_lora_ws = [], []
+                        for _slot in range(1, MAX_LORA_SLOTS + 1):
+                            with gr.Row():
+                                flux_lora_dds.append(gr.Dropdown(
+                                    choices=FLUX_LORA_CHOICES, value="None",
+                                    label=f"LoRA {_slot}", scale=3,
+                                ))
+                                flux_lora_ws.append(gr.Slider(
+                                    0.0, 2.0, value=0.8, step=0.05,
+                                    label="Weight", scale=1,
+                                ))
+                        flux_lora_refresh = gr.Button(
+                            "🔄 Rescan Flux LoRA folder", size="sm"
+                        )
+                        flux_lora_refresh.click(
+                            fn=refresh_flux_lora_choices,
+                            outputs=flux_lora_dds,
+                        )
+                        flux_btn = gr.Button(
+                            "🌊 Generate", variant="primary", size="lg"
+                        )
+                    with gr.Column(scale=3):
+                        flux_gallery = gr.Gallery(
+                            label="Output", columns=2, height=600
+                        )
+                        flux_status = gr.Textbox(
+                            label="Status", interactive=False
+                        )
+                        flux_seed_out = gr.Number(
+                            label="Base seed used", interactive=False,
+                            precision=0,
+                        )
+                flux_btn.click(
+                    fn=generate_flux,
+                    inputs=[flux_prompt, flux_seed, flux_random, flux_steps,
+                            flux_guidance, flux_resolution, flux_sampler,
+                            flux_model_dd,
+                            flux_lora_dds[0], flux_lora_ws[0],
+                            flux_lora_dds[1], flux_lora_ws[1],
+                            flux_lora_dds[2], flux_lora_ws[2], flux_batch],
+                    outputs=[flux_gallery, flux_status, flux_seed_out],
+                )
 
         if WAN_ENABLED:
             with gr.Tab("🎬 Video (Wan 2.2)"):

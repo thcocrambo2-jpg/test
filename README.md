@@ -29,6 +29,7 @@ live under the base directory and are lost when the pod is destroyed.
 | `KREA2_BASE_DIR`           | Base directory for everything (default `/workspace/krea2`)     |
 | `KREA2_SKIP_LAUNCH`        | If set, run setup/downloads/server but skip launching the UI   |
 | `KREA2_DISABLE_WAN`        | If set, skip the ~49 GB Wan 2.2 downloads and hide the Video tab |
+| `KREA2_DISABLE_FLUX`       | If set, skip the ~57 GB Flux 2 downloads and hide the Flux tab  |
 | `KREA2_WAN_PARALLEL`       | If set, video jobs get their own ComfyUI instance (port 8189)   |
 | `KREA2_MAIN_RESERVE_VRAM`  | Parallel mode: GB the Krea instance leaves free (default 26)   |
 | `KREA2_WAN_RESERVE_VRAM`   | Parallel mode: GB the Wan instance leaves free (default 22)    |
@@ -86,6 +87,31 @@ the prompt box — visible and editable, never appended silently; delete
 them if you don't want them. JSON batch jobs select a model with an
 optional `"model"` key. A model whose download failed shows a warning
 under the dropdown and refuses to run, without affecting the others.
+
+## Flux 2
+
+The **🌊 Flux 2** tab does text-to-image with Flux 2 Dev (32B,
+`flux2_dev_fp8mixed`, ~35.5 GB) plus the Mistral-Small text encoder
+(~18 GB) and Flux 2 VAE — ~57 GB of downloads from `Comfy-Org/flux2-dev`;
+set `KREA2_DISABLE_FLUX=1` to skip all of it. Flux 2 is
+guidance-distilled, so there is no CFG/negative prompt — a **Guidance**
+value (~4) steers it, and sampling uses the official template's
+custom-sampler graph (`Flux2Scheduler` + `BasicGuider` +
+`SamplerCustomAdvanced`), all stock ComfyUI nodes.
+
+Models come from the `FLUX_MODELS` registry in `config.py` (same scheme
+as `KREA2_MODELS`: `variant` → defaults from `FLUX_VARIANT_DEFAULTS`,
+per-model overrides, `hf_path`/`civitai_version` sources, optional
+`trigger`). The two stock entries share one weights file: **Turbo**
+applies the official Flux 2 Turbo LoRA (8 steps, default) and **Raw**
+runs undistilled (20 steps). Flux LoRAs are listed in
+`FLUX_CIVITAI_LORAS` and live in `loras/flux2/`, so they never mix with
+the Krea 2 LoRA dropdowns (the architectures are incompatible).
+
+VRAM note: at ~35 GB the fp8 model wants nearly the whole A40 — run Flux
+**without** `KREA2_WAN_PARALLEL`, and expect a 1–3 min model swap when
+alternating Flux and Krea jobs (the two model sets cannot stay resident
+together).
 
 ## Image input shortcuts
 

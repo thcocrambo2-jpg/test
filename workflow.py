@@ -19,6 +19,7 @@ from comfy import GPU_COUNT
 from config import (
     ABLITERATED_ENCODER_FILE,
     EDIT_LORA_FILE,
+    FLUX_TURBO_LORA,
     KREA2_MODELS,
     MODELS_DIR,
     TEXT_ENCODER_FILE,
@@ -30,9 +31,11 @@ from config import (
 )
 
 # LoRAs that live in the same folder but do not belong in the Krea style
-# stack: the Identity Edit LoRA (added by build_edit_workflow itself) and
-# the Wan 2.2 Lightning speed LoRAs (Wan-architecture, video tab only).
-_NON_STYLE_LORAS = {EDIT_LORA_FILE, WAN_LIGHTNING_HIGH, WAN_LIGHTNING_LOW}
+# stack: the Identity Edit LoRA (added by build_edit_workflow itself), the
+# Wan 2.2 Lightning speed LoRAs (Wan-architecture, video tab only) and the
+# Flux 2 Turbo LoRA (Flux-architecture, applied by the Flux workflow).
+_NON_STYLE_LORAS = {EDIT_LORA_FILE, WAN_LIGHTNING_HIGH, WAN_LIGHTNING_LOW,
+                    FLUX_TURBO_LORA}
 
 
 def list_lora_files() -> list[str]:
