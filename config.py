@@ -76,15 +76,15 @@ KREA2_MODELS = [
         "file": "krea2_raw_fp8_scaled.safetensors",     # ~13.1 GB
         "variant": "raw",
         "hf_path": "diffusion_models/krea2_raw_fp8_scaled.safetensors",
-    },
-    {
-        "name": "FinePn V2 (amateur phone photo)",
-        "file": "Krea2_FinePornV2_FP8.safetensors",       # ~12.2 GB
-        "variant": "turbo",
-        "civitai_version": 3118978,
-        "trigger": "this is an amateur photo taken from smartphone, "
-                   "casual photo",
-    },
+    }
+    # {
+    #     "name": "FinePn V2 (amateur phone photo)",
+    #     "file": "Krea2_FinePornV2_FP8.safetensors",       # ~12.2 GB
+    #     "variant": "turbo",
+    #     "civitai_version": 3118978,
+    #     "trigger": "this is an amateur photo taken from smartphone, "
+    #                "casual photo",
+    # },
 ]
 
 # The default model's variant (first registry entry) — used for logging.
@@ -115,6 +115,7 @@ HF_MODEL_FILES = [
 # Official Krea 2 style LoRAs from the same HF repo (~0.5 GB each).
 # Trim this list to save download time and disk space.
 HF_LORA_FILES = [
+    "loras/krea2_turbo_lora_rank_64_bf16.safetensors",
     # "loras/krea2_darkbrush.safetensors",
     # "loras/krea2_dotmatrix.safetensors",
     # "loras/krea2_kidsdrawing.safetensors",
