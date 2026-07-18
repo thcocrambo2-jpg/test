@@ -449,6 +449,35 @@ def _seconds_to_frames(seconds: float, fps: int) -> int:
     return max(17, int(round(float(seconds) * fps / 4)) * 4 + 1)
 
 
+def _wan_stage(node_id, segments: int) -> str:
+    """Human label for a Wan graph node id (they encode the segment:
+    "sampler_high_2", "decode_3", "trim_seg2", ...)."""
+    match = re.fullmatch(r"(.*?)(?:_(\d+))?", str(node_id or ""))
+    base, num = match.group(1), match.group(2)
+    stages = (
+        ("sampler_high", "sampling (high-noise expert)"),
+        ("sampler_low", "sampling (low-noise expert)"),
+        ("sampler", "sampling"),
+        ("i2v", "encoding start frame"),
+        ("latent", "encoding start frame"),
+        ("last_frame", "extracting last frame"),
+        ("decode", "decoding frames"),
+        ("trim", "stitching segments"),
+        ("join", "stitching segments"),
+        ("video", "encoding mp4"),
+        ("save", "saving mp4"),
+    )
+    for prefix, text in stages:
+        if base.startswith(prefix):
+            if segments > 1 and prefix in ("sampler_high", "sampler_low",
+                                           "sampler", "i2v", "latent",
+                                           "last_frame", "decode"):
+                seg = int(num) if num else 1
+                return f"segment {seg}/{segments} · {text}"
+            return text
+    return "loading models"
+
+
 def _run_wan_jobs(jobs, builder=build_wan_i2v_workflow, timeout=7200):
     """Video executor: yields (all_videos, latest_video, status_text)."""
     videos = []
@@ -464,13 +493,21 @@ def _run_wan_jobs(jobs, builder=build_wan_i2v_workflow, timeout=7200):
             f"⏳ Video {label} — queued (seed {job['seed']}, "
             f"{job['width']}×{job['height']}, {frames} frames)"
         )
+        stage = ""
         try:
             # Raw 720p renders can take the better part of an hour on an
             # A40, so the video timeout is far above the image one.
             for event in wan_client.run(workflow, timeout=timeout):
-                if event["type"] == "progress" and event["total"]:
+                if event["type"] == "node":
+                    new_stage = _wan_stage(event["node"], segments)
+                    if new_stage != stage:
+                        stage = new_stage
+                        yield videos, latest, f"⏳ Video {label} — {stage}"
+                elif event["type"] == "progress" and event["total"]:
+                    if event.get("node"):
+                        stage = _wan_stage(event["node"], segments)
                     yield videos, latest, (
-                        f"⏳ Video {label} — step "
+                        f"⏳ Video {label} — {stage or 'working'} — step "
                         f"{event['step']}/{event['total']}"
                     )
                 elif event["type"] == "done":

@@ -283,18 +283,18 @@ FLUX_CIVITAI_LORAS = [
 CIVITAI_LORAS = [
     # (3067151, "Krea2FilterBypass_3vector.safetensors"),
     (3070702, "Realism_Engine_Krea2_v2.0.safetensors"),
-    (3072664, "SNOFS_Krea2_v1.0.safetensors"),
+    # (3072664, "SNOFS_Krea2_v1.0.safetensors"),
     (3090634, "Krea2-realism-V2.safetensors"),
     (3071904, "Krea2_AIO_NSFW_v1.0.safetensors"),
-    (3084537, "Realistic_Snapshot_Krea2_v0.5.safetensors"),
+    # (3084537, "Realistic_Snapshot_Krea2_v0.5.safetensors"),
     (3069544, "galaxyace_krea2.safetensors"),
-    (3084588, "Krea2_NSFW_plus.safetensors"),
+    # (3084588, "Krea2_NSFW_plus.safetensors"),
     # (3075498, "nicegirls_krea2.safetensors"),
     # (3066973, "Krea2-realism-V1.safetensors"),
     # (3075606, "lenovo_krea2.safetensors"),
     # (3114242, "purelens_krea2.safetensors"),
     # (3104629, "snofs_krea_v1_1.safetensors"),
-    (3085473, "KNPV4.1_pre.safetensors"),
+    # (3085473, "KNPV4.1_pre.safetensors"),
 ]
 
 # LoRAs pre-selected in the UI's three slots (generate / edit / inpaint tabs).

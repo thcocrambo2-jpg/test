@@ -54,6 +54,7 @@ class ComfyClient:
         prompt_id = result.get("prompt_id")
         if not prompt_id:
             raise ComfyUIError(f"No prompt_id in ComfyUI response: {result}")
+        log.info("Queued ComfyUI prompt %s (%d nodes)", prompt_id, len(workflow))
         return prompt_id
 
     def upload_image(self, data: bytes, name: str) -> str:
@@ -100,11 +101,15 @@ class ComfyClient:
     def run(self, workflow: dict, timeout: int = 1200):
         """Generator that yields progress events, ending with a 'done' event.
 
-        Events: {"type": "progress", "step": int, "total": int}
+        Events: {"type": "progress", "step": int, "total": int, "node": str}
+                {"type": "node", "node": str}   — a new node started executing
                 {"type": "status", "text": str}
                 {"type": "done", "images": [str, ...]}
-        Uses the websocket API for live sampler progress and falls back to
-        polling /history when the websocket is unavailable.
+        "node" carries the workflow key of the executing node (the ids the
+        builders chose, e.g. "sampler_high_2"), so callers can display
+        which part of a multi-stage graph is running. Uses the websocket
+        API for live sampler progress and falls back to polling /history
+        when the websocket is unavailable.
         """
         client_id = uuid.uuid4().hex
         ws = None
@@ -141,15 +146,18 @@ class ComfyClient:
                     if mtype == "progress":
                         yield {"type": "progress",
                                "step": data.get("value", 0),
-                               "total": data.get("max", 0)}
+                               "total": data.get("max", 0),
+                               "node": data.get("node")}
                     elif mtype == "execution_error":
                         raise ComfyUIError(
                             data.get("exception_message", "execution error")
                         )
                     elif mtype == "execution_interrupted":
                         raise ComfyUIError("Execution was interrupted")
-                    elif mtype == "executing" and data.get("node") is None:
-                        break  # this prompt finished
+                    elif mtype == "executing":
+                        if data.get("node") is None:
+                            break  # this prompt finished
+                        yield {"type": "node", "node": data["node"]}
             else:
                 while not self._finished(prompt_id):
                     if time.time() > deadline:
