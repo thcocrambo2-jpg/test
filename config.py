@@ -77,14 +77,14 @@ KREA2_MODELS = [
         "variant": "raw",
         "hf_path": "diffusion_models/krea2_raw_fp8_scaled.safetensors",
     },
-    {
-        "name": "FinePn V2 (amateur phone photo)",
-        "file": "Krea2_FinePornV2_FP8.safetensors",       # ~12.2 GB
-        "variant": "turbo",
-        "civitai_version": 3118978,
-        "trigger": "this is an amateur photo taken from smartphone, "
-                   "casual photo",
-    },
+    # {
+    #     "name": "FinePn V2 (amateur phone photo)",
+    #     "file": "Krea2_FinePornV2_FP8.safetensors",       # ~12.2 GB
+    #     "variant": "turbo",
+    #     "civitai_version": 3118978,
+    #     "trigger": "this is an amateur photo taken from smartphone, "
+    #                "casual photo",
+    # },
 ]
 
 # The default model's variant (first registry entry) — used for logging.
