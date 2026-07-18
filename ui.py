@@ -47,6 +47,7 @@ from config import (
     WAN_ENABLED,
     WAN_FPS,
     WAN_MAX_SECONDS,
+    WAN_MAX_SEGMENTS,
     WAN_MODE_DEFAULTS,
     WAN_PARALLEL,
     WAN_RESOLUTIONS,
@@ -448,7 +449,7 @@ def _seconds_to_frames(seconds: float, fps: int) -> int:
     return max(17, int(round(float(seconds) * fps / 4)) * 4 + 1)
 
 
-def _run_wan_jobs(jobs, builder=build_wan_i2v_workflow):
+def _run_wan_jobs(jobs, builder=build_wan_i2v_workflow, timeout=7200):
     """Video executor: yields (all_videos, latest_video, status_text)."""
     videos = []
     total = len(jobs)
@@ -456,14 +457,17 @@ def _run_wan_jobs(jobs, builder=build_wan_i2v_workflow):
     for idx, job in enumerate(jobs, start=1):
         label = f"{idx}/{total}"
         workflow = builder(**job)
+        segments = job.get("segments", 1)
+        frames = (f"{segments}×{job['length']}" if segments > 1
+                  else f"{job['length']}")
         yield videos, latest, (
             f"⏳ Video {label} — queued (seed {job['seed']}, "
-            f"{job['width']}×{job['height']}, {job['length']} frames)"
+            f"{job['width']}×{job['height']}, {frames} frames)"
         )
         try:
             # Raw 720p renders can take the better part of an hour on an
             # A40, so the video timeout is far above the image one.
-            for event in wan_client.run(workflow, timeout=7200):
+            for event in wan_client.run(workflow, timeout=timeout):
                 if event["type"] == "progress" and event["total"]:
                     yield videos, latest, (
                         f"⏳ Video {label} — step "
@@ -486,7 +490,8 @@ def _is_wan_5b(model) -> bool:
 
 
 def generate_wan_video(image, prompt, negative, model, mode, seed, randomize,
-                       steps, cfg, resolution, seconds, sampler, batch_count):
+                       steps, cfg, resolution, seconds, segments, sampler,
+                       batch_count):
     """Video tab: animate an uploaded image with Wan 2.2 (14B I2V or 5B TI2V)."""
     if image is None:
         yield [], None, "❌ Upload an image first.", 0
@@ -527,15 +532,19 @@ def generate_wan_video(image, prompt, negative, model, mode, seed, randomize,
     except Exception as exc:
         yield [], None, f"❌ Uploading the image to ComfyUI failed: {exc}", 0
         return
+    segments = max(1, int(segments))
     jobs = [{
         "prompt": prompt or "", "negative": negative or "",
-        "seed": base_seed + i, "steps": int(steps), "cfg": float(cfg),
-        "width": width, "height": height,
+        "seed": base_seed + i * segments, "steps": int(steps),
+        "cfg": float(cfg), "width": width, "height": height,
         "length": _seconds_to_frames(seconds, fps), "fps": fps,
-        "sampler": sampler, "shift": shift, "image_name": image_name,
+        "sampler": sampler, "shift": shift, "segments": segments,
+        "image_name": image_name,
         **({} if use_5b else {"lightning": turbo}),
     } for i in range(int(batch_count))]
-    for videos, latest, status in _run_wan_jobs(jobs, builder=builder):
+    # Each chained segment is a full extra render, so scale the timeout.
+    for videos, latest, status in _run_wan_jobs(jobs, builder=builder,
+                                                timeout=7200 * segments):
         yield videos, latest, status, base_seed
 
 
@@ -1103,8 +1112,13 @@ with gr.Blocks(title="Krea 2 on RunPod") as ui:
                                       "5B TI2V (lighter, 24 fps)"]
                 gr.Markdown(
                     "Upload an image and **describe the motion** — Wan 2.2 "
-                    "animates it into a clip of up to 5 s. The **14B** "
-                    "two-expert model gives the best quality at 16 fps: "
+                    "animates it into a clip of up to 5 s per segment; "
+                    "raise **Segments** to chain runs (each continues from "
+                    "the previous segment's last frame) into one longer "
+                    "video of up to "
+                    f"{WAN_MAX_SECONDS * WAN_MAX_SEGMENTS:.0f} s. The "
+                    "**14B** two-expert model gives the best quality at "
+                    "16 fps: "
                     "**Turbo** uses the Lightning distillation LoRAs "
                     "(4 steps, CFG 1, ~5× faster); **Raw** is the "
                     "undistilled 20-step schedule — slightly better motion "
@@ -1171,7 +1185,13 @@ with gr.Blocks(title="Krea 2 on RunPod") as ui:
                         with gr.Row():
                             wan_seconds = gr.Slider(
                                 1.0, WAN_MAX_SECONDS, value=WAN_MAX_SECONDS,
-                                step=0.25, label="Duration (seconds)",
+                                step=0.25,
+                                label="Duration (seconds per segment)",
+                            )
+                            wan_segments = gr.Slider(
+                                1, WAN_MAX_SEGMENTS, value=1, step=1,
+                                label="Segments (chain last frame → "
+                                      "longer video)",
                             )
                             wan_sampler = gr.Dropdown(
                                 choices=SAMPLERS + ["uni_pc"], value="euler",
@@ -1216,8 +1236,8 @@ with gr.Blocks(title="Krea 2 on RunPod") as ui:
                     fn=generate_wan_video,
                     inputs=[wan_image, wan_prompt, wan_negative, wan_model,
                             wan_mode, wan_seed, wan_random, wan_steps,
-                            wan_cfg, wan_resolution, wan_seconds, wan_sampler,
-                            wan_batch],
+                            wan_cfg, wan_resolution, wan_seconds,
+                            wan_segments, wan_sampler, wan_batch],
                     outputs=[wan_files_out, wan_video_out, wan_status,
                              wan_seed_out],
                 )

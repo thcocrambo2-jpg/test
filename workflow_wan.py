@@ -16,6 +16,12 @@ with raw mode. Raw mode is the undistilled 20-step CFG 3.5 schedule.
 The alternative TI2V 5B model (build_wan_5b_workflow) is a single dense
 model with its own Wan 2.2 VAE and a plain one-KSampler graph — lighter
 in VRAM, 24 fps, no turbo/raw split.
+
+Both builders accept `segments`: with segments > 1 the sampler group is
+repeated, each repeat starting from the previous segment's last decoded
+frame (ImageFromBatch), so clips can run past the 5 s training length.
+Every segment is saved as its own clip plus one stitched full-length
+video — all with stock nodes, no app-side frame extraction or ffmpeg.
 """
 
 from comfy import GPU_COUNT
@@ -59,6 +65,57 @@ def wan_lightning_available() -> bool:
                for f in (WAN_LIGHTNING_HIGH, WAN_LIGHTNING_LOW))
 
 
+def _decoded_frames(length: int) -> int:
+    """Frames the Wan VAE actually decodes: 4n+1 (81 stays 81, 80 → 77)."""
+    return (int(length) - 1) // 4 * 4 + 1
+
+
+def _append_video_outputs(wf: dict, decode_refs: list, *, fps: int,
+                          frames: int, filename_prefix: str) -> None:
+    """Attach CreateVideo/SaveVideo nodes for the decoded segment(s).
+
+    One segment keeps the original graph shape (a single "video" + "save"
+    pair). With several, each segment is also saved on its own (prefix
+    _seg1, _seg2, ... — if a later segment drifts, the earlier clips
+    survive) and the stitched full video is saved under the plain prefix.
+    Segment k > 0 starts with a re-encode of segment k-1's last frame, so
+    that duplicate first frame is dropped before stitching.
+    """
+    def save_video(key: str, images_ref: list, prefix: str) -> None:
+        wf[f"video{key}"] = {
+            "class_type": "CreateVideo",
+            "inputs": {"images": images_ref, "fps": float(fps)},
+        }
+        wf[f"save{key}"] = {
+            "class_type": "SaveVideo",
+            "inputs": {"video": [f"video{key}", 0],
+                       "filename_prefix": prefix,
+                       "format": "mp4", "codec": "h264"},
+        }
+
+    if len(decode_refs) == 1:
+        save_video("", decode_refs[0], filename_prefix)
+        return
+    parts = [decode_refs[0]]
+    for k, decode_ref in enumerate(decode_refs, start=1):
+        save_video(f"_seg{k}", decode_ref, f"{filename_prefix}_seg{k}")
+        if k > 1:
+            wf[f"trim_seg{k}"] = {
+                "class_type": "ImageFromBatch",
+                "inputs": {"image": decode_ref, "batch_index": 1,
+                           "length": frames - 1},
+            }
+            parts.append([f"trim_seg{k}", 0])
+    joined = parts[0]
+    for k, part in enumerate(parts[1:], start=2):
+        wf[f"join_seg{k}"] = {
+            "class_type": "ImageBatch",
+            "inputs": {"image1": joined, "image2": part},
+        }
+        joined = [f"join_seg{k}", 0]
+    save_video("", joined, filename_prefix)
+
+
 def build_wan_i2v_workflow(
     *,
     prompt: str,
@@ -73,6 +130,7 @@ def build_wan_i2v_workflow(
     sampler: str = "euler",
     shift: float = 5.0,
     lightning: bool = True,
+    segments: int = 1,
     image_name: str,
     filename_prefix: str = "wan/Wan22I2V",
 ) -> dict:
@@ -84,7 +142,10 @@ def build_wan_i2v_workflow(
     the frame count and must be a multiple of 4 plus 1 (81 = 5 s at 16
     fps, the training length). The two experts swap at steps // 2, the
     split the official template uses for both the 4- and 20-step
-    schedules.
+    schedules. `segments` > 1 repeats the whole sampler group that many
+    times, feeding each repeat the previous segment's last frame as its
+    start image (same prompt, seed+k) — the frame-chaining way to get
+    clips longer than the 5 s training length.
     """
     wf = {
         "unet_high": {
@@ -163,54 +224,63 @@ def build_wan_i2v_workflow(
         "class_type": "LoadImage",
         "inputs": {"image": image_name},
     }
-    wf["i2v"] = {
-        "class_type": "WanImageToVideo",
-        "inputs": {
-            "positive": ["positive", 0], "negative": ["negative", 0],
-            "vae": vae_ref, "width": int(width), "height": int(height),
-            "length": int(length), "batch_size": 1,
-            "start_image": ["source", 0],
-        },
-    }
 
     boundary = max(1, int(steps) // 2)
-    wf["sampler_high"] = {
-        "class_type": "KSamplerAdvanced",
-        "inputs": {
-            "add_noise": "enable", "noise_seed": int(seed),
-            "steps": int(steps), "cfg": float(cfg),
-            "sampler_name": sampler, "scheduler": "simple",
-            "start_at_step": 0, "end_at_step": boundary,
-            "return_with_leftover_noise": "enable",
-            "model": high_ref, "positive": ["i2v", 0],
-            "negative": ["i2v", 1], "latent_image": ["i2v", 2],
-        },
-    }
-    wf["sampler_low"] = {
-        "class_type": "KSamplerAdvanced",
-        "inputs": {
-            "add_noise": "disable", "noise_seed": 0,
-            "steps": int(steps), "cfg": float(cfg),
-            "sampler_name": sampler, "scheduler": "simple",
-            "start_at_step": boundary, "end_at_step": 10000,
-            "return_with_leftover_noise": "disable",
-            "model": low_ref, "positive": ["i2v", 0],
-            "negative": ["i2v", 1], "latent_image": ["sampler_high", 0],
-        },
-    }
-    wf["decode"] = {
-        "class_type": "VAEDecode",
-        "inputs": {"samples": ["sampler_low", 0], "vae": vae_ref},
-    }
-    wf["video"] = {
-        "class_type": "CreateVideo",
-        "inputs": {"images": ["decode", 0], "fps": float(fps)},
-    }
-    wf["save"] = {
-        "class_type": "SaveVideo",
-        "inputs": {"video": ["video", 0], "filename_prefix": filename_prefix,
-                   "format": "mp4", "codec": "h264"},
-    }
+    frames = _decoded_frames(length)
+    segments = max(1, int(segments))
+    start_ref = ["source", 0]
+    decode_refs = []
+    for k in range(segments):
+        sfx = "" if k == 0 else f"_{k + 1}"
+        wf[f"i2v{sfx}"] = {
+            "class_type": "WanImageToVideo",
+            "inputs": {
+                "positive": ["positive", 0], "negative": ["negative", 0],
+                "vae": vae_ref, "width": int(width), "height": int(height),
+                "length": int(length), "batch_size": 1,
+                "start_image": start_ref,
+            },
+        }
+        wf[f"sampler_high{sfx}"] = {
+            "class_type": "KSamplerAdvanced",
+            "inputs": {
+                "add_noise": "enable", "noise_seed": int(seed) + k,
+                "steps": int(steps), "cfg": float(cfg),
+                "sampler_name": sampler, "scheduler": "simple",
+                "start_at_step": 0, "end_at_step": boundary,
+                "return_with_leftover_noise": "enable",
+                "model": high_ref, "positive": [f"i2v{sfx}", 0],
+                "negative": [f"i2v{sfx}", 1], "latent_image": [f"i2v{sfx}", 2],
+            },
+        }
+        wf[f"sampler_low{sfx}"] = {
+            "class_type": "KSamplerAdvanced",
+            "inputs": {
+                "add_noise": "disable", "noise_seed": 0,
+                "steps": int(steps), "cfg": float(cfg),
+                "sampler_name": sampler, "scheduler": "simple",
+                "start_at_step": boundary, "end_at_step": 10000,
+                "return_with_leftover_noise": "disable",
+                "model": low_ref, "positive": [f"i2v{sfx}", 0],
+                "negative": [f"i2v{sfx}", 1],
+                "latent_image": [f"sampler_high{sfx}", 0],
+            },
+        }
+        wf[f"decode{sfx}"] = {
+            "class_type": "VAEDecode",
+            "inputs": {"samples": [f"sampler_low{sfx}", 0], "vae": vae_ref},
+        }
+        decode_refs.append([f"decode{sfx}", 0])
+        if k + 1 < segments:
+            wf[f"last_frame{sfx}"] = {
+                "class_type": "ImageFromBatch",
+                "inputs": {"image": [f"decode{sfx}", 0],
+                           "batch_index": frames - 1, "length": 1},
+            }
+            start_ref = [f"last_frame{sfx}", 0]
+
+    _append_video_outputs(wf, decode_refs, fps=fps, frames=frames,
+                          filename_prefix=filename_prefix)
     return wf
 
 
@@ -227,6 +297,7 @@ def build_wan_5b_workflow(
     fps: int = 24,
     sampler: str = "euler",
     shift: float = 8.0,
+    segments: int = 1,
     image_name: str,
     filename_prefix: str = "wan/Wan22TI2V5B",
 ) -> dict:
@@ -238,7 +309,8 @@ def build_wan_5b_workflow(
     that frame is kept. Uses the Wan **2.2** VAE (16× spatial compression
     — width/height must be multiples of 32) and runs at 24 fps; 121
     frames ≈ 5 s. There is no Lightning distillation for this model, so
-    there is no turbo/raw split.
+    there is no turbo/raw split. `segments` chains sampler groups off the
+    previous segment's last frame, exactly as in the 14B builder.
     """
     wf = {
         "unet": {
@@ -294,32 +366,42 @@ def build_wan_5b_workflow(
         "class_type": "LoadImage",
         "inputs": {"image": image_name},
     }
-    wf["latent"] = {
-        "class_type": "Wan22ImageToVideoLatent",
-        "inputs": {"vae": vae_ref, "width": int(width), "height": int(height),
-                   "length": int(length), "batch_size": 1,
-                   "start_image": ["source", 0]},
-    }
-    wf["sampler"] = {
-        "class_type": "KSampler",
-        "inputs": {
-            "seed": int(seed), "steps": int(steps), "cfg": float(cfg),
-            "sampler_name": sampler, "scheduler": "simple", "denoise": 1.0,
-            "model": model_ref, "positive": ["positive", 0],
-            "negative": ["negative", 0], "latent_image": ["latent", 0],
-        },
-    }
-    wf["decode"] = {
-        "class_type": "VAEDecode",
-        "inputs": {"samples": ["sampler", 0], "vae": vae_ref},
-    }
-    wf["video"] = {
-        "class_type": "CreateVideo",
-        "inputs": {"images": ["decode", 0], "fps": float(fps)},
-    }
-    wf["save"] = {
-        "class_type": "SaveVideo",
-        "inputs": {"video": ["video", 0], "filename_prefix": filename_prefix,
-                   "format": "mp4", "codec": "h264"},
-    }
+
+    frames = _decoded_frames(length)
+    segments = max(1, int(segments))
+    start_ref = ["source", 0]
+    decode_refs = []
+    for k in range(segments):
+        sfx = "" if k == 0 else f"_{k + 1}"
+        wf[f"latent{sfx}"] = {
+            "class_type": "Wan22ImageToVideoLatent",
+            "inputs": {"vae": vae_ref, "width": int(width),
+                       "height": int(height), "length": int(length),
+                       "batch_size": 1, "start_image": start_ref},
+        }
+        wf[f"sampler{sfx}"] = {
+            "class_type": "KSampler",
+            "inputs": {
+                "seed": int(seed) + k, "steps": int(steps), "cfg": float(cfg),
+                "sampler_name": sampler, "scheduler": "simple", "denoise": 1.0,
+                "model": model_ref, "positive": ["positive", 0],
+                "negative": ["negative", 0],
+                "latent_image": [f"latent{sfx}", 0],
+            },
+        }
+        wf[f"decode{sfx}"] = {
+            "class_type": "VAEDecode",
+            "inputs": {"samples": [f"sampler{sfx}", 0], "vae": vae_ref},
+        }
+        decode_refs.append([f"decode{sfx}", 0])
+        if k + 1 < segments:
+            wf[f"last_frame{sfx}"] = {
+                "class_type": "ImageFromBatch",
+                "inputs": {"image": [f"decode{sfx}", 0],
+                           "batch_index": frames - 1, "length": 1},
+            }
+            start_ref = [f"last_frame{sfx}", 0]
+
+    _append_video_outputs(wf, decode_refs, fps=fps, frames=frames,
+                          filename_prefix=filename_prefix)
     return wf

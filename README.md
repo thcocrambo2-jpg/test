@@ -128,6 +128,15 @@ up to 5 s. Two models are switchable per-job in the UI; all files
 (~49 GB total) auto-download from `Comfy-Org/Wan_2.2_ComfyUI_Repackaged`
 and only stock ComfyUI nodes are used.
 
+For longer videos, raise the **Segments** slider (up to 6): the workflow
+chains that many runs, each starting from the previous segment's last
+decoded frame, all inside a single ComfyUI graph. Each segment is saved
+as its own clip (`_seg1`, `_seg2`, ...) plus one stitched full-length
+video with the duplicated boundary frames dropped, so a failed or drifted
+late segment never costs you the earlier ones. Every segment re-encodes
+its start frame through the VAE, so colour/detail drift accumulates —
+past ~4 segments (~20 s) expect visible shifts.
+
 - **14B two-expert (I2V A14B)** — two 14 B fp8 "expert" models
   (high-noise for the early sampler steps, low-noise for the late ones,
   ~14.3 GB each) at 16 fps. Best quality. Two modes mirror the Krea

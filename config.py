@@ -76,15 +76,15 @@ KREA2_MODELS = [
         "file": "krea2_raw_fp8_scaled.safetensors",     # ~13.1 GB
         "variant": "raw",
         "hf_path": "diffusion_models/krea2_raw_fp8_scaled.safetensors",
-    }
-    # {
-    #     "name": "FinePn V2 (amateur phone photo)",
-    #     "file": "Krea2_FinePornV2_FP8.safetensors",       # ~12.2 GB
-    #     "variant": "turbo",
-    #     "civitai_version": 3118978,
-    #     "trigger": "this is an amateur photo taken from smartphone, "
-    #                "casual photo",
-    # },
+    },
+    {
+        "name": "FinePn V2 (amateur phone photo)",
+        "file": "Krea2_FinePornV2_FP8.safetensors",       # ~12.2 GB
+        "variant": "turbo",
+        "civitai_version": 3118978,
+        "trigger": "this is an amateur photo taken from smartphone, "
+                   "casual photo",
+    },
 ]
 
 # The default model's variant (first registry entry) — used for logging.
@@ -182,6 +182,11 @@ WAN_5B_DEFAULTS = {"steps": 20, "cfg": 5.0, "shift": 8.0}
 WAN_FPS = 16                  # the A14B models are trained at 16 fps
 WAN_5B_FPS = 24               # TI2V 5B is trained at 24 fps
 WAN_MAX_SECONDS = 5.0         # 81 frames (14B) / 121 frames (5B)
+# Longer clips: the Segments slider chains up to this many 5 s runs, each
+# starting from the previous segment's last frame (all inside one ComfyUI
+# graph). Render time and VRAM-safe, but colour/detail drift accumulates
+# with every VAE round-trip — beyond ~4 segments expect visible shifts.
+WAN_MAX_SEGMENTS = 6
 # Target pixel areas; the actual size keeps the source image's aspect ratio.
 WAN_RESOLUTIONS = {
     "480p (faster)": 832 * 480,
@@ -281,22 +286,22 @@ CIVITAI_LORAS = [
     (3072664, "SNOFS_Krea2_v1.0.safetensors"),
     (3090634, "Krea2-realism-V2.safetensors"),
     (3071904, "Krea2_AIO_NSFW_v1.0.safetensors"),
-    # (3084537, "Realistic_Snapshot_Krea2_v0.5.safetensors"),
+    (3084537, "Realistic_Snapshot_Krea2_v0.5.safetensors"),
     (3069544, "galaxyace_krea2.safetensors"),
-    # (3084588, "Krea2_NSFW_plus.safetensors"),
+    (3084588, "Krea2_NSFW_plus.safetensors"),
     # (3075498, "nicegirls_krea2.safetensors"),
     # (3066973, "Krea2-realism-V1.safetensors"),
     # (3075606, "lenovo_krea2.safetensors"),
     # (3114242, "purelens_krea2.safetensors"),
     # (3104629, "snofs_krea_v1_1.safetensors"),
-    # (3085473, "KNPV4.1_pre.safetensors"),
+    (3085473, "KNPV4.1_pre.safetensors"),
 ]
 
 # LoRAs pre-selected in the UI's three slots (generate / edit / inpaint tabs).
 # Entries are (filename, default weight); a file that failed to download is
 # silently skipped and the slot falls back to "None".
 DEFAULT_LORAS = [
-    ("Krea2-realism-V2.safetensors", 0.0),
+    ("Krea2-realism-V2.safetensors", 0.8),
     ("Realism_Engine_Krea2_v2.0.safetensors", 0.8),
     ("galaxyace_krea2.safetensors", 0.8),
 ]
