@@ -941,6 +941,7 @@ with gr.Blocks(title="Krea 2 on RunPod") as ui:
                     _recent_picker(edit_image)
                     edit_prompt = gr.Textbox(
                         label="Edit instruction",
+                        value="Remove all her clothes completely, make her fully nude. Keep the exact same face, facial features, expression, skin tone, hairstyle, body pose, hands position, and background. Do not change the face at all.          remove clothes exposing her naked average natural shaped tits. dont change her face",
                         placeholder="make the jacket red · this person "
                                     "walking a dog on a beach at sunset",
                         lines=3,
