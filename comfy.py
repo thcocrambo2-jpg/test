@@ -97,6 +97,74 @@ def start_comfyui(port: int = COMFY_PORT, log_path=COMFY_LOG, extra_args=()):
     )
 
 
+def node_registered(class_type: str, port: int = COMFY_PORT) -> bool:
+    """True if the running ComfyUI has that node class registered.
+
+    /object_info/<class> is the cheap form of the endpoint — it returns
+    just that node's schema (an empty object when it is unknown) instead
+    of the multi-megabyte full listing.
+    """
+    try:
+        with urllib.request.urlopen(
+            f"http://{COMFY_HOST}:{port}/object_info/{class_type}", timeout=30
+        ) as resp:
+            return bool(json.loads(resp.read()))
+    except Exception:
+        return False
+
+
+def _custom_node_traceback(log_path, needle: str) -> str:
+    """The traceback ComfyUI logged for a custom node it could not import.
+
+    ComfyUI ends a failed import with a 'Cannot import <path> module for
+    custom nodes: ...' line, so find that and walk back to the Traceback
+    header above it.
+    """
+    try:
+        lines = log_path.read_text(errors="replace").splitlines()
+    except OSError:
+        return ""
+    for i, line in enumerate(lines):
+        if "Cannot import" in line and needle in line:
+            start = i
+            for j in range(i - 1, max(0, i - 80), -1):
+                if lines[j].lstrip().startswith("Traceback"):
+                    start = j
+                    break
+            return "\n".join(lines[start:i + 1])
+    # No import error logged — fall back to anything mentioning the pack.
+    hits = [ln for ln in lines if needle.lower() in ln.lower()]
+    return "\n".join(hits[-15:])
+
+
+def verify_custom_node(class_type: str, needle: str, node_dir,
+                       log_path=COMFY_LOG, port: int = COMFY_PORT) -> bool:
+    """Log whether a custom node loaded, with the traceback when it did not.
+
+    Without this a failed import is silent until a workflow is submitted
+    and ComfyUI rejects it with a bare "node not found" — the real cause
+    only ever reaches comfyui.log, which nobody reads until something
+    breaks. Purely diagnostic: it never raises and never blocks startup.
+    """
+    try:
+        if node_registered(class_type, port):
+            log.info("Custom node %s is registered", class_type)
+            return True
+        log.error(
+            "Custom node %s did NOT load — ComfyUI will reject the workflow "
+            "that uses it.", class_type,
+        )
+        log.error("  files on disk: %s (nodes.py present: %s)",
+                  node_dir, (node_dir / "nodes.py").exists())
+        detail = _custom_node_traceback(log_path, needle)
+        log.error("  ComfyUI said:\n%s",
+                  detail or f"<nothing about {needle} in {log_path}>")
+        return False
+    except Exception as exc:  # diagnostics must never break startup
+        log.warning("Could not verify custom node %s: %s", class_type, exc)
+        return False
+
+
 def wait_for_comfyui(process, timeout: int = 300,
                      port: int = COMFY_PORT, log_path=COMFY_LOG) -> None:
     """Block until the ComfyUI API answers; raise with the log tail if it dies."""

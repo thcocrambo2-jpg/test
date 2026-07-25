@@ -19,7 +19,10 @@ import sys
 
 import bootstrap
 from config import (
+    COMFY_DIR,
     KREA_RESERVE_VRAM_GB,
+    REACTOR_ENABLED,
+    REACTOR_NODES_DIR,
     TEMP_DIR,
     WAN_COMFY_LOG,
     WAN_COMFY_PORT,
@@ -64,6 +67,15 @@ def main() -> None:
         )
         comfy.wait_for_comfyui(wan_process, port=WAN_COMFY_PORT,
                                log_path=WAN_COMFY_LOG)
+
+    # Custom nodes register at ComfyUI startup, and a failed import is only
+    # reported in comfyui.log — surface it here instead of letting the
+    # first face swap fail with a bare "node not found".
+    if REACTOR_ENABLED:
+        comfy.verify_custom_node(
+            "ReActorFaceSwap", REACTOR_NODES_DIR,
+            COMFY_DIR / "custom_nodes" / REACTOR_NODES_DIR,
+        )
 
     # 6 · Gradio UI (importing ui pulls in the workflow builder + API client).
     import workflow

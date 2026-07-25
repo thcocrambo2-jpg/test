@@ -139,6 +139,19 @@ Two things worth knowing:
   `segment_anything`, `ultralytics`) is a wheel, so no `cmake`, no
   compiler. The `models/insightface/` folder keeps that name only because
   it is where ReActor looks for the swap model and the pack.
+
+- **onnxruntime is matched to the pod's CUDA.** PyPI's current
+  `onnxruntime-gpu` wheel links CUDA 13, so on a CUDA 12 pod it installs
+  cleanly and then dies at import with `libcudart.so.13: cannot open shared
+  object file` — which surfaces only as ComfyUI skipping the node pack and
+  the first swap failing with "node not found". `install_onnxruntime()`
+  therefore picks a build from `torch.version.cuda` (CUDA 12 → pinned
+  `onnxruntime-gpu==1.22.0` plus Microsoft's CUDA 12 feed), **verifies it
+  by actually importing it**, and removes and retries on failure, ending at
+  the CPU build — inswapper_128 is small, so a CPU swap still takes
+  seconds. After ComfyUI starts, `comfy.verify_custom_node()` confirms
+  `ReActorFaceSwap` registered and prints the traceback from `comfyui.log`
+  if it did not.
 - **This is the SFW edition of ReActor.** It classifies every input image
   before swapping (`scripts/reactor_sfw.py`, flagging `nsfw` above score
   0.979). A flagged image is *dropped*, and ReActor's empty-list branch

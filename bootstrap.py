@@ -31,6 +31,16 @@ MODEL_DIRS = ("diffusion_models", "text_encoders", "vae", "loras")
 REACTOR_MODEL_DIRS = ("insightface", "facerestore_models", "facedetection",
                       "nsfw_detector")
 
+# PyPI's current onnxruntime-gpu wheel links CUDA 13, so on a CUDA 12 pod it
+# installs cleanly and then dies at import with "libcudart.so.13: cannot open
+# shared object file". 1.22.0 is the last CUDA 12 line; Microsoft's CUDA 12
+# feed (the one ReActor's own install.py uses) is added as a second source.
+ONNXRUNTIME_CUDA12_PIN = "onnxruntime-gpu==1.22.0"
+ONNXRUNTIME_CUDA12_INDEX = (
+    "https://aiinfra.pkgs.visualstudio.com/PublicPackages/_packaging/"
+    "onnxruntime-cuda-12/pypi/simple/"
+)
+
 
 def run_cmd(cmd: list, cwd=None, desc: str | None = None) -> None:
     """Run a command, raising with the captured output tail on failure."""
@@ -80,6 +90,92 @@ def install_custom_nodes() -> None:
     )
 
 
+def _can_import(module: str) -> bool:
+    """True if `module` imports cleanly in a fresh interpreter.
+
+    pip reporting success is not enough for onnxruntime: a wheel built
+    against the wrong CUDA installs fine and only fails when something
+    imports it — which, for ReActor, means ComfyUI silently skipping the
+    node pack and the first face swap failing with "node not found".
+    """
+    return subprocess.run(
+        [sys.executable, "-c", f"import {module}"],
+        stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL,
+    ).returncode == 0
+
+
+def _cuda_major() -> int | None:
+    """torch's CUDA major version, or None if torch has no CUDA build."""
+    result = subprocess.run(
+        [sys.executable, "-c", "import torch; print(torch.version.cuda or '')"],
+        text=True, stdout=subprocess.PIPE, stderr=subprocess.DEVNULL,
+    )
+    try:
+        return int(result.stdout.strip().split(".")[0])
+    except ValueError:
+        return None
+
+
+def _uninstall_onnxruntime() -> None:
+    """Drop any onnxruntime build so the next install is not 'already met'."""
+    try:
+        run_cmd([sys.executable, "-m", "pip", "uninstall", "-y", "-q",
+                 "onnxruntime-gpu", "onnxruntime"],
+                desc="Removing the existing onnxruntime")
+    except RuntimeError as exc:
+        log.debug("onnxruntime uninstall reported: %s", exc)
+
+
+def install_onnxruntime() -> bool:
+    """Install an onnxruntime that actually imports. True on success.
+
+    Each candidate is verified by importing it, because that is the exact
+    failure this works around, and a build that installs but cannot import
+    is removed before trying the next one (pip would otherwise call the
+    replacement "already satisfied"). The CPU build is the last resort:
+    inswapper_128 is small, so a CPU swap still takes seconds — much
+    better than no Face Swap tab.
+    """
+    if _can_import("onnxruntime"):
+        log.info("onnxruntime already imports cleanly — skipping install")
+        return True
+
+    cuda = _cuda_major()
+    log.info("Selecting an onnxruntime build for CUDA %s",
+             cuda if cuda is not None else "<none detected>")
+    if cuda == 12:
+        candidates = [
+            ([ONNXRUNTIME_CUDA12_PIN, "--extra-index-url",
+              ONNXRUNTIME_CUDA12_INDEX], f"{ONNXRUNTIME_CUDA12_PIN} (CUDA 12)"),
+            (["onnxruntime"], "onnxruntime (CPU)"),
+        ]
+    elif cuda is not None:
+        candidates = [(["onnxruntime-gpu"], "onnxruntime-gpu"),
+                      (["onnxruntime"], "onnxruntime (CPU)")]
+    else:
+        candidates = [(["onnxruntime"], "onnxruntime (CPU)")]
+
+    # A previous run can leave a broken build behind — clear it first.
+    _uninstall_onnxruntime()
+    for args, desc in candidates:
+        try:
+            run_cmd([sys.executable, "-m", "pip", "install", "-q", *args],
+                    desc=f"Installing {desc}")
+        except RuntimeError as exc:
+            log.warning("%s would not install (%s) — trying the next option",
+                        desc, exc)
+            continue
+        if _can_import("onnxruntime"):
+            log.info("%s installed and imports cleanly", desc)
+            return True
+        log.warning("%s installed but does not import (usually a CUDA "
+                    "runtime mismatch) — trying the next option", desc)
+        _uninstall_onnxruntime()
+    log.error("No usable onnxruntime could be installed — the Face Swap tab "
+              "will stay disabled.")
+    return False
+
+
 def install_reactor() -> None:
     """Install ComfyUI-ReActor into custom_nodes + its Python dependencies.
 
@@ -126,21 +222,8 @@ def install_reactor() -> None:
                       "tab will stay disabled.", exc)
             return
 
-    # onnxruntime runs the swap model; the GPU build is worth having but a
-    # CPU fallback still works (a swap is seconds either way).
-    try:
-        run_cmd([sys.executable, "-m", "pip", "install", "-q",
-                 "onnxruntime-gpu"], desc="Installing onnxruntime-gpu")
-    except RuntimeError as exc:
-        log.warning("onnxruntime-gpu unavailable (%s) — falling back to the "
-                    "CPU build", exc)
-        try:
-            run_cmd([sys.executable, "-m", "pip", "install", "-q",
-                     "onnxruntime"], desc="Installing onnxruntime (CPU)")
-        except RuntimeError as exc2:
-            log.error("No onnxruntime could be installed (%s) — the Face "
-                      "Swap tab will stay disabled.", exc2)
-            return
+    if not install_onnxruntime():
+        return
 
     # ReActor's own requirements (onnx, opencv, albumentations, plus
     # segment_anything/ultralytics for its masking nodes — the pack fails to
@@ -153,6 +236,16 @@ def install_reactor() -> None:
         except RuntimeError as exc:
             log.error("ReActor requirements failed to install (%s) — the "
                       "Face Swap tab may not load.", exc)
+
+    # Same trap as onnxruntime: these can install cleanly and still fail to
+    # import (ABI or numpy mismatches). Checking here names the culprit,
+    # instead of ComfyUI reporting it much later as a missing node.
+    broken = [m for m in ("cv2", "onnx", "albumentations", "segment_anything",
+                          "ultralytics") if not _can_import(m)]
+    if broken:
+        log.error("ReActor dependencies installed but NOT importable: %s — "
+                  "the node pack will fail to load in ComfyUI.",
+                  ", ".join(broken))
 
 
 def link_model_dirs() -> None:
