@@ -1,10 +1,11 @@
 """Gradio UI.
 
-Five tabs: single / simple-batch generation, instruction-based editing
-(upload an image, describe the change), inpainting (paint a mask over an
-uploaded image), JSON batch jobs, and an output gallery. Written
-for Gradio 6 (theme/css now belong to launch(), gr.File hands the handler
-a plain file path).
+Tabs: single / simple-batch generation, instruction-based editing (upload
+an image, describe the change), inpainting (paint a mask over an uploaded
+image), ReActor face swap, Flux 2 generation, Wan 2.2 video, JSON batch
+jobs, and an output gallery — the last four appear only when their
+feature is enabled. Written for Gradio 6 (theme/css now belong to
+launch(), gr.File hands the handler a plain file path).
 
 Some hosts' networks break Gradio's *.gradio.live share tunnel (the link
 504s even though the app is healthy), so after launching we probe the
@@ -37,6 +38,9 @@ from config import (
     FLUX_MODELS,
     KREA2_MODELS,
     OUTPUT_DIR,
+    REACTOR_DEFAULT_DETECTOR,
+    REACTOR_DETECTORS,
+    REACTOR_ENABLED,
     RESOLUTION_PRESETS,
     SAMPLERS,
     TEMP_DIR,
@@ -75,6 +79,14 @@ from workflow_flux import (
     resolve_flux_lora,
     resolve_flux_model,
 )
+from workflow_reactor import (
+    build_faceswap_workflow,
+    default_restore_model,
+    default_swap_model,
+    list_restore_models,
+    list_swap_models,
+    reactor_status,
+)
 from workflow_wan import (
     build_wan_5b_workflow,
     build_wan_i2v_workflow,
@@ -91,6 +103,8 @@ LORA_CHOICES = ["None"] + list_lora_files()
 FLUX_MODEL_CHOICES = flux_model_names()
 FLUX_LORA_CHOICES = ["None"] + list_flux_lora_files()
 _f_steps, _f_guidance, _ = flux_model_defaults(resolve_flux_model(None))
+SWAP_MODEL_CHOICES = list_swap_models() or [default_swap_model()]
+RESTORE_CHOICES = list_restore_models()
 
 
 def _snap(value, lo: int = 512, hi: int = 2048) -> int:
@@ -427,6 +441,94 @@ def generate_edit(image, prompt, negative, seed, randomize, steps, cfg,
     for images, status in _run_jobs(jobs, builder=build_edit_workflow,
                                     prefix="Krea2Edit"):
         yield images, status, base_seed
+
+
+def _is_reactor_reject(path) -> bool:
+    """True for the blank frame ReActor returns when its SFW check fires.
+
+    A flagged input is dropped from the image list, and ReActor's empty-list
+    branch hands back a 512×512 solid black image rather than the original —
+    so the swap "succeeds" and writes a black PNG. Detecting it here is the
+    only way to tell the user what actually happened.
+    """
+    try:
+        with Image.open(path) as img:
+            return (img.size == (512, 512)
+                    and img.convert("RGB").getbbox() is None)
+    except Exception:
+        return False
+
+
+def generate_faceswap(base_image, face_image, swap_model, facedetection,
+                      restore_model, restore_visibility, codeformer_weight,
+                      input_index, source_index):
+    """Face Swap tab: put a reference face onto a base image with ReActor.
+
+    Deliberately resizes nothing: ReActor rewrites only the face region,
+    so the saved PNG keeps the base image's exact resolution. One job, no
+    seed and no batch — the swap is deterministic, so re-running the same
+    two images would just rewrite the same result.
+    """
+    if base_image is None:
+        yield [], ("❌ Choose a base image — pick one of your generations "
+                   "below or upload it.")
+        return
+    if face_image is None:
+        yield [], "❌ Upload a reference face image."
+        return
+    ready, message = reactor_status()
+    if not ready:
+        yield [], message
+        return
+    base_image = base_image.convert("RGB")
+    face_image = face_image.convert("RGB")
+    width, height = base_image.size
+    tag = uuid.uuid4().hex[:8]
+    try:
+        base_name = client.upload_image(_png_bytes(base_image),
+                                        f"swap_{tag}_base.png")
+        face_name = client.upload_image(_png_bytes(face_image),
+                                        f"swap_{tag}_face.png")
+    except Exception as exc:
+        yield [], f"❌ Uploading the images to ComfyUI failed: {exc}"
+        return
+    workflow = build_faceswap_workflow(
+        base_image_name=base_name, face_image_name=face_name,
+        swap_model=swap_model, facedetection=facedetection,
+        face_restore_model=restore_model,
+        face_restore_visibility=float(restore_visibility),
+        codeformer_weight=float(codeformer_weight),
+        input_faces_index=str(input_index or "0").strip() or "0",
+        source_faces_index=str(source_index or "0").strip() or "0",
+    )
+    yield [], f"⏳ Swapping face — queued ({width}×{height})"
+    images = []
+    try:
+        for event in client.run(workflow, timeout=600):
+            if event["type"] == "progress" and event["total"]:
+                yield images, (f"⏳ Swapping face — step "
+                               f"{event['step']}/{event['total']}")
+            elif event["type"] == "done":
+                images = event["images"]
+    except ComfyUIError as exc:
+        yield images, f"❌ Face swap failed: {exc}"
+        return
+    if not images:
+        yield [], ("❌ ReActor returned no image — usually no face was "
+                   "detected in one of the two inputs. Check the ComfyUI "
+                   "log, or try a clearer, more front-facing reference.")
+        return
+    if _is_reactor_reject(images[0]):
+        yield images, (
+            "⚠️ ReActor's SFW filter rejected an input, so no swap was "
+            "performed — it returned a blank 512×512 frame instead, which "
+            f"was still written to {OUTPUT_DIR}. Note the check also fails "
+            "closed: if its detector model is missing, every swap comes back "
+            "blank (see the ComfyUI log)."
+        )
+        return
+    yield images, (f"✅ Face swapped at {width}×{height} — saved to "
+                   f"{OUTPUT_DIR}")
 
 
 def _fit_video_size(w: int, h: int, target_area: int, snap: int = 16) -> tuple:
@@ -984,6 +1086,93 @@ with gr.Blocks(title="Krea 2 on RunPod") as ui:
                         inpaint_batch],
                 outputs=[inpaint_gallery, inpaint_status, inpaint_seed_out],
             )
+
+        if REACTOR_ENABLED:
+            with gr.Tab("🎭 Face Swap (ReActor)"):
+                _swap_ready, _swap_problem = reactor_status()
+                gr.Markdown(
+                    "Take one of your generated images, upload a **reference "
+                    "face**, and ReActor replaces the face in place. This is "
+                    "not a diffusion pass: no Krea 2 model is loaded, the "
+                    "swap runs on ONNX in seconds, and the output keeps the "
+                    "base image's **exact resolution** — only the face "
+                    "region is rewritten. Only the finished swap is saved.\n\n"
+                    "Every model is fetched at startup, so a swap makes no "
+                    "network calls. Note that this is the **SFW edition** of "
+                    "ReActor: it classifies every input image first, and an "
+                    "image that trips the filter is dropped — you get a "
+                    "blank 512×512 frame instead of a swap, which the status "
+                    "box calls out. The check fails *closed*, so if its "
+                    "detector model ever goes missing every swap comes back "
+                    "blank."
+                    + ("" if _swap_ready else f"\n\n⚠️ {_swap_problem[2:]}")
+                )
+                with gr.Row():
+                    with gr.Column(scale=2):
+                        swap_base = gr.Image(
+                            label="Base image — the face here gets replaced "
+                                  "(paste with Ctrl+V)",
+                            type="pil", sources=["upload", "clipboard"],
+                        )
+                        _recent_picker(swap_base)
+                        swap_face = gr.Image(
+                            label="Reference face — the face to put in "
+                                  "(paste with Ctrl+V)",
+                            type="pil", sources=["upload", "clipboard"],
+                        )
+                        with gr.Row():
+                            swap_model_dd = gr.Dropdown(
+                                choices=SWAP_MODEL_CHOICES,
+                                value=default_swap_model(),
+                                label="Swap model",
+                            )
+                            swap_detector_dd = gr.Dropdown(
+                                choices=REACTOR_DETECTORS,
+                                value=REACTOR_DEFAULT_DETECTOR,
+                                label="Face detector",
+                            )
+                        with gr.Row():
+                            swap_restore_dd = gr.Dropdown(
+                                choices=RESTORE_CHOICES,
+                                value=default_restore_model(),
+                                label="Face restoration (optional)",
+                            )
+                            swap_visibility = gr.Slider(
+                                0.1, 1.0, value=1.0, step=0.05,
+                                label="Restoration visibility",
+                            )
+                        swap_codeformer_w = gr.Slider(
+                            0.0, 1.0, value=0.5, step=0.05,
+                            label="CodeFormer weight (0 = stronger cleanup, "
+                                  "1 = stay closer to the swap)",
+                        )
+                        with gr.Row():
+                            swap_input_idx = gr.Textbox(
+                                value="0", label="Face index in base image",
+                                info="Left to right. Also accepts 0,1 or 0-2",
+                            )
+                            swap_source_idx = gr.Textbox(
+                                value="0", label="Face index in reference",
+                                info="Left to right. Also accepts 0,1 or 0-2",
+                            )
+                        swap_btn = gr.Button(
+                            "🎭 Swap face", variant="primary", size="lg"
+                        )
+                    with gr.Column(scale=3):
+                        swap_gallery = gr.Gallery(
+                            label="Swapped output", columns=1, height=600
+                        )
+                        swap_status = gr.Textbox(
+                            label="Status", interactive=False
+                        )
+                swap_btn.click(
+                    fn=generate_faceswap,
+                    inputs=[swap_base, swap_face, swap_model_dd,
+                            swap_detector_dd, swap_restore_dd, swap_visibility,
+                            swap_codeformer_w, swap_input_idx,
+                            swap_source_idx],
+                    outputs=[swap_gallery, swap_status],
+                )
 
         if FLUX_ENABLED:
             with gr.Tab("🌊 Flux 2"):

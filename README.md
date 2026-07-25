@@ -30,12 +30,14 @@ live under the base directory and are lost when the pod is destroyed.
 | `KREA2_SKIP_LAUNCH`        | If set, run setup/downloads/server but skip launching the UI   |
 | `KREA2_DISABLE_WAN`        | If set, skip the ~49 GB Wan 2.2 downloads and hide the Video tab |
 | `KREA2_DISABLE_FLUX`       | If set, skip the ~57 GB Flux 2 downloads and hide the Flux tab  |
+| `KREA2_DISABLE_REACTOR`    | If set, skip the ~1.8 GB ReActor downloads and hide the Face Swap tab |
 | `KREA2_WAN_PARALLEL`       | If set, video jobs get their own ComfyUI instance (port 8189)   |
 | `KREA2_MAIN_RESERVE_VRAM`  | Parallel mode: GB the Krea instance leaves free (default 26)   |
 | `KREA2_WAN_RESERVE_VRAM`   | Parallel mode: GB the Wan instance leaves free (default 22)    |
 
 ## Layout
 
+- `deps/ComfyUI-ReActor` — vendored ReActor node pack, copied into `custom_nodes` at bootstrap
 - `app.py` — entry point; orchestrates the startup flow
 - `config.py` — paths, Krea 2 model registry, LoRA lists, Wan 2.2 settings, tokens, presets
 - `bootstrap.py` — clone ComfyUI + install requirements
@@ -43,8 +45,9 @@ live under the base directory and are lost when the pod is destroyed.
 - `comfy.py` — GPU detection + ComfyUI server start/wait (1–2 instances)
 - `workflow.py` — Krea 2 workflow builders, text-to-image + inpainting + instruction edit (ComfyUI API format)
 - `workflow_wan.py` — Wan 2.2 image-to-video workflow builder (two-expert A14B)
+- `workflow_reactor.py` — ReActor face-swap workflow builder + availability checks
 - `client.py` — ComfyUI HTTP/websocket client (queue, progress, image upload)
-- `ui.py` — Gradio UI (single/batch, edit, inpaint, video, JSON batch, gallery tabs) and launch logic
+- `ui.py` — Gradio UI (single/batch, edit, inpaint, face swap, flux, video, JSON batch, gallery tabs) and launch logic
 
 ## Instruction editing (Edit tab)
 
@@ -72,6 +75,87 @@ how much of the original survives in the masked region (1.0 = full
 replacement); grow/blur expand and soften the mask edge for seamless blends.
 Images are downscaled to a 2048 px long side and snapped to multiples of 16
 before encoding.
+
+## Face swap (ReActor)
+
+The **🎭 Face Swap (ReActor)** tab replaces the face in one image with the
+face from a reference photo, using
+[ComfyUI-ReActor](https://github.com/Gourieff/ComfyUI-ReActor). The node
+pack is **vendored in `deps/ComfyUI-ReActor`** and bootstrap installs it by
+copying that folder into `custom_nodes` — nothing is fetched from GitHub.
+(It is copied rather than symlinked so the `../../models/...` paths inside
+`r_facelib` resolve against the ComfyUI install instead of this project
+directory.) A checkout without `deps/` falls back to cloning the repo, and
+an existing `custom_nodes/ComfyUI-ReActor` is always left alone. Pick the
+base image from the collapsed
+**"Use a previous generation"** picker — the same last-20 gallery the Edit
+and Video tabs use — or upload/paste one, then upload the reference face.
+
+This is not a diffusion pass. No UNet, text encoder or VAE is loaded: the
+graph is `LoadImage ×2 → ReActorFaceSwap → SaveImage`, ReActor detects the
+face, takes the reference identity embedding and rewrites only the face
+region with an ONNX model. So it runs in seconds, costs almost no VRAM,
+leaves the Krea 2 pipeline completely untouched, and the output keeps the
+base image's **exact resolution** — nothing on either side resizes (the
+one exception is a rejected input, see the SFW note below). The
+`SaveImage` node reads output 0 (`SWAPPED_IMAGE`), so exactly one file is
+written and it is the finished swap; it lands in `OUTPUT_DIR` with the
+usual ComfyUI PNG metadata and shows up in the Gallery tab and the zip
+download like every other output.
+
+Defaults match the ReActor recommendations: `inswapper_128`,
+`retinaface_resnet50`, CodeFormer restoration (visibility 1.0, weight 0.5)
+and face index 0 on both sides. Restoration is optional — set **Face
+restoration** to `none` to skip it. Both index boxes accept `0`, `0,1` or
+`0-2` to pick among several detected faces, counted left to right.
+
+Everything is downloaded up front by `downloads.py` (~1.8 GB) so a swap
+makes **no network calls at generation time**:
+
+| File | Destination |
+| --- | --- |
+| `inswapper_128.onnx` (~554 MB) | `models/insightface/` |
+| `buffalo_l` pack (~289 MB, unzipped) | `models/insightface/models/buffalo_l/` |
+| `codeformer-v0.1.0.pth` (~377 MB) | `models/facerestore_models/` |
+| `detection_Resnet50_Final.pth` (~110 MB) | `models/facedetection/` |
+| `parsing_parsenet.pth` (~85 MB) | `models/facedetection/` |
+| `AdamCodd/vit-base-nsfw-detector` (~350 MB) | `models/nsfw_detector/vit-base-nsfw-detector/` |
+
+The last three are the ones ReActor would otherwise fetch lazily during
+the first swap (via `r_facelib` and its SFW check), which is why they are
+pre-fetched here rather than left to download themselves. Add another
+restorer from the same repo to `REACTOR_HF_FILES` in `config.py` and it
+appears in the dropdown after a restart.
+
+Two things worth knowing:
+
+- **No C++ toolchain is needed.** Despite ReActor's reputation, this
+  version does *not* use the `insightface` package: it vendors its own face
+  analysis in `reactor_core/` (`ReActorFaceAnalysis`, `SCRFD`,
+  `ArcFaceONNX`, ...) and runs the `buffalo_l` ONNX files through
+  `onnxruntime` directly — `import insightface` appears nowhere in the pack
+  and it is absent from its `requirements.txt`. Everything bootstrap
+  installs (`onnxruntime-gpu`, `onnx`, `opencv-python`, `albumentations`,
+  `segment_anything`, `ultralytics`) is a wheel, so no `cmake`, no
+  compiler. The `models/insightface/` folder keeps that name only because
+  it is where ReActor looks for the swap model and the pack.
+- **This is the SFW edition of ReActor.** It classifies every input image
+  before swapping (`scripts/reactor_sfw.py`, flagging `nsfw` above score
+  0.979). A flagged image is *dropped*, and ReActor's empty-list branch
+  returns a **512×512 solid black frame** rather than the original — so the
+  job "succeeds" and writes a black PNG. The tab detects that frame and
+  says so in the status box instead of reporting success, but it is the one
+  case where the output does not keep the base resolution. Given the NSFW
+  LoRAs in `CIVITAI_LORAS`, expect it to trigger on some inputs.
+
+  The check also **fails closed**: `nsfw_image()` returns `True` for
+  everything when its model cannot be loaded, so a missing detector makes
+  *every* swap come back blank. That is why the ~350 MB
+  `vit-base-nsfw-detector` is in the pre-download list above and not
+  treated as optional — `ensure_nsfw_model` looks for exactly `config.json`,
+  `model.safetensors` and `preprocessor_config.json` in that directory.
+
+Set `KREA2_DISABLE_REACTOR=1` to skip the downloads and hide the tab.
 
 ## Krea 2 model switching
 
@@ -115,11 +199,12 @@ together).
 
 ## Image input shortcuts
 
-All image inputs (Edit, Inpaint, Video) accept **clipboard paste** — press
-Ctrl+V with the component focused or use its paste source button. The Edit
-and Video tabs additionally have a collapsed **"Use a previous generation"**
-picker showing the last 20 generated images; clicking a thumbnail loads it
-as the source directly, no download/re-upload round-trip.
+All image inputs (Edit, Inpaint, Face Swap, Video) accept **clipboard
+paste** — press Ctrl+V with the component focused or use its paste source
+button. The Edit, Face Swap and Video tabs additionally have a collapsed
+**"Use a previous generation"** picker showing the last 20 generated
+images; clicking a thumbnail loads it as the source directly, no
+download/re-upload round-trip.
 
 ## Video (Wan 2.2 image-to-video)
 
