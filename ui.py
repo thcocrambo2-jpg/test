@@ -965,7 +965,7 @@ with gr.Blocks(title="Krea 2 on RunPod") as ui:
                     )
                     with gr.Row():
                         edit_grounding = gr.Slider(
-                            512, 1536, value=768, step=64,
+                            512, 1536, value=1152, step=64,
                             label="Grounding (low = stronger edit, "
                                   "high = keep likeness)",
                         )
@@ -1015,6 +1015,20 @@ with gr.Blocks(title="Krea 2 on RunPod") as ui:
                         type="pil",
                         sources=["upload", "clipboard"],
                         brush=gr.Brush(colors=["#FF3366"], color_mode="fixed"),
+                        # fixed_canvas defaults to False, which sizes the
+                        # canvas to the uploaded image: a 12 MP phone photo
+                        # then allocates a 4032×3024 RGBA canvas *plus* a
+                        # paint layer, the browser tab runs out of memory and
+                        # the page reloads (gradio#8556). Pinning the canvas
+                        # makes Gradio rescale the upload to fit it instead.
+                        # 1536 is a deliberate cap: _prepare_inpaint_inputs
+                        # would downscale to 2048 anyway, and Krea 2 inpaints
+                        # comfortably at this size.
+                        canvas_size=(1536, 1536),
+                        fixed_canvas=True,
+                        # Default is lossy webp. Unmasked pixels are composited
+                        # back from this image, so keep it lossless.
+                        format="png",
                     )
                     inpaint_prompt = gr.Textbox(
                         label="Prompt (describes the masked region)", lines=3

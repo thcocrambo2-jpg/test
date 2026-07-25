@@ -73,8 +73,17 @@ nodes are used (`SetLatentNoiseMask` + `ImageCompositeMasked`), so it works
 with the same Turbo model — no extra downloads. The denoise slider controls
 how much of the original survives in the masked region (1.0 = full
 replacement); grow/blur expand and soften the mask edge for seamless blends.
-Images are downscaled to a 2048 px long side and snapped to multiples of 16
-before encoding.
+Images are snapped to multiples of 16 before encoding.
+
+The editor runs with `fixed_canvas=True` and a 1536 px canvas. That is not
+cosmetic: with Gradio's default `fixed_canvas=False` the canvas grows to the
+uploaded image's dimensions, so a 12 MP phone photo allocates a 4032×3024
+RGBA canvas *plus* a paint layer in the browser, the tab runs out of memory
+and **the page reloads on upload** ([gradio#8556](https://github.com/gradio-app/gradio/issues/8556)).
+Pinning the canvas makes Gradio rescale uploads to fit it instead, so large
+photos work — at the cost of small images being scaled up to the canvas.
+`format="png"` overrides Gradio's lossy webp default, since unmasked pixels
+are composited back from that image.
 
 ## Face swap (ReActor)
 
