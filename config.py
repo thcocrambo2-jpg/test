@@ -352,6 +352,7 @@ CIVITAI_LORAS = [
     (3071904, "Krea2_AIO_NSFW_v1.0.safetensors"),
     # (3084537, "Realistic_Snapshot_Krea2_v0.5.safetensors"),
     (3069544, "galaxyace_krea2.safetensors"),
+    (3160327, "HMBody_D_e10.safetensors"),
     # (3084588, "Krea2_NSFW_plus.safetensors"),
     # (3075498, "nicegirls_krea2.safetensors"),
     # (3066973, "Krea2-realism-V1.safetensors"),
