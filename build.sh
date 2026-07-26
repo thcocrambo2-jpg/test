@@ -53,16 +53,22 @@ fi
     "$PYTHON" -m pip install -q nuitka
 }
 
-# The packages compiled into the binary must be importable here. A normal
-# `python3 app.py` run on this pod has already installed them; this is only a
-# safety net for a pod that has never run the app.
+# Nuitka can only compile in what it can import, so these must be present in
+# the build interpreter. A pod that has already run `python3 app.py` has them;
+# a fresh one does not.
 echo ">>> Checking the app's own dependencies are present ..."
-"$PYTHON" - <<'PY' || "$PYTHON" -m pip install -q -r requirements.txt
-import importlib
-for m in ("gradio", "huggingface_hub", "requests", "safetensors",
-          "websocket", "PIL"):
-    importlib.import_module(m)
-PY
+if "$PYTHON" -c "import gradio, huggingface_hub, requests, safetensors, websocket, PIL" \
+        >/dev/null 2>&1; then
+    echo "    all present"
+else
+    echo "    missing — installing from requirements.txt ..."
+    "$PYTHON" -m pip install -q -r requirements.txt
+    "$PYTHON" -c "import gradio, huggingface_hub, requests, safetensors, websocket, PIL" || {
+        echo "ERROR: dependencies still not importable after install." >&2
+        exit 1
+    }
+    echo "    installed"
+fi
 
 echo ">>> Compiling (first build is slow — it compiles gradio's tree too) ..."
 "$PYTHON" -m nuitka \
@@ -91,9 +97,9 @@ echo ">>> Compiling (first build is slow — it compiles gradio's tree too) ..."
     --include-package-data=gradio_client \
     --include-distribution-metadata=gradio_client \
     \
-    `# Re-extracting ~150 MB on every start is wasteful; cache it per build.` \
-    --onefile-tempdir-spec="{CACHE_DIR}/krea2app/{VERSION}" \
-    \
+    `# No --onefile-tempdir-spec on purpose: a fixed cache dir lets a rebuilt` \
+    `# binary silently reuse the previous extraction. Re-extracting on each` \
+    `# launch costs seconds, against an app that then loads 13 GB of models.` \
     app.py
 
 echo
