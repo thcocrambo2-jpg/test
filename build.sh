@@ -28,6 +28,38 @@ if [[ "$(uname -s)" != "Linux" ]]; then
     exit 1
 fi
 
+# Nuitka patches RPATHs into the bundled .so files and restores their modes
+# with chmod. WSL's DrvFs mounts (/mnt/c) cannot store Unix modes unless the
+# 'metadata' option is set, and chmod then fails with EPERM — minutes into the
+# build, with a traceback that never mentions the mount.
+#
+# Probe the real capability rather than pattern-matching the path, so a
+# /mnt/c mounted with metadata is allowed through and the pod is unaffected.
+probe="$(mktemp -p . .buildprobe.XXXXXX)"
+if ! chmod 0400 "$probe" 2>/dev/null || ! chmod 0600 "$probe" 2>/dev/null; then
+    rm -f "$probe"
+    here=$(basename "$PWD")
+    cat >&2 <<EOF
+ERROR: cannot change file permissions in $PWD
+
+       Nuitka needs chmod to set RPATHs on the bundled libraries and would
+       fail partway through the build with 'Operation not permitted'.
+       This is a WSL Windows-drive mount without Unix metadata. Either:
+
+       1) enable metadata and keep building here (still slower than native):
+
+            printf '[automount]\\noptions = "metadata"\\n' | sudo tee /etc/wsl.conf
+            # then, from PowerShell:   wsl --shutdown     and reopen WSL
+
+       2) or build from the WSL filesystem, which is also much faster:
+
+            cp -r "$PWD" ~/$here
+            cd ~/$here && ./build.sh
+EOF
+    exit 1
+fi
+rm -f "$probe"
+
 PYTHON="${PYTHON:-python3}"
 OUTPUT_DIR="dist"
 OUTPUT_NAME="krea2app"
@@ -36,14 +68,40 @@ OUTPUT_NAME="krea2app"
 # fresh pod needs all of it. Each tool is checked on its own: gcc being present
 # does not mean patchelf is. Keep the build one command either way.
 echo ">>> Ensuring build tooling ..."
+
+# On Debian-family Python, Nuitka links a *static* libpython and needs the
+# development headers to do it. The RunPod ML image ships them; a stock WSL
+# Ubuntu does not, and the failure is an unhelpful
+# "Automatic detection of static libpython failed".
+# Probe INCLUDEPY (the base interpreter's include dir) rather than
+# sysconfig.get_paths(), whose 'include' is empty inside a venv.
+have_python_headers() {
+    "$PYTHON" - <<'PY' >/dev/null 2>&1
+import os, sys, sysconfig
+sys.exit(0 if os.path.exists(
+    os.path.join(sysconfig.get_config_var("INCLUDEPY"), "Python.h")) else 1)
+PY
+}
+
 missing=()
 command -v gcc      >/dev/null 2>&1 || missing+=(build-essential)
 command -v patchelf >/dev/null 2>&1 || missing+=(patchelf)  # Nuitka rewrites RPATHs
 command -v ccache   >/dev/null 2>&1 || missing+=(ccache)    # what makes rebuilds fast
+have_python_headers                 || missing+=(python3-dev)
 if (( ${#missing[@]} )); then
+    # Root in a RunPod container, but a normal user under WSL — so only
+    # reach for sudo when we actually need it.
+    SUDO=""
+    if [[ $EUID -ne 0 ]]; then
+        command -v sudo >/dev/null 2>&1 || {
+            echo "ERROR: need root (or sudo) to install: ${missing[*]}" >&2
+            exit 1
+        }
+        SUDO="sudo"
+    fi
     echo "    apt-get install: ${missing[*]}"
-    apt-get update -qq
-    apt-get install -y -qq "${missing[@]}"
+    $SUDO apt-get update -qq
+    $SUDO apt-get install -y -qq "${missing[@]}"
 else
     echo "    system tooling already present"
 fi
@@ -52,6 +110,17 @@ fi
     echo "    pip install nuitka (not shipped in the RunPod image) ..."
     "$PYTHON" -m pip install -q nuitka
 }
+
+# If the headers are still missing (no sudo, or the distro names the package
+# differently), fall back to a shared libpython instead of failing the build:
+# --standalone bundles libpython either way, so this only changes how it links.
+libpython_flag=()
+if have_python_headers; then
+    echo "    Python headers present — linking static libpython"
+else
+    echo "    no Python headers — linking shared libpython instead"
+    libpython_flag=(--static-libpython=no)
+fi
 
 # Nuitka can only compile in what it can import, so these must be present in
 # the build interpreter. A pod that has already run `python3 app.py` has them;
@@ -79,6 +148,7 @@ echo ">>> Compiling (first build is slow — it compiles gradio's tree too) ..."
     --output-dir="$OUTPUT_DIR" \
     --output-filename="$OUTPUT_NAME" \
     --remove-output \
+    ${libpython_flag[@]+"${libpython_flag[@]}"} \
     \
     `# Bundled next to __file__, which is where config.PROJECT_DIR points.` \
     `# deps/ carries the vendored ReActor pack that install_reactor() copies` \
