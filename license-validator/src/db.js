@@ -20,7 +20,18 @@ export async function getDb() {
       serverSelectionTimeoutMS: 8000,
     }).connect();
   }
-  cached.client = await cached.promise;
+  try {
+    cached.client = await cached.promise;
+  } catch (err) {
+    // Clear the cache on failure. A rejected promise left in place would
+    // be re-awaited by every later request for the life of this warm
+    // instance, so one bad connect would keep failing instantly and never
+    // retry — a transient Atlas blip would look permanent until the
+    // instance recycled.
+    cached.promise = null;
+    cached.client = null;
+    throw err;
+  }
   return cached.client.db(DB_NAME);
 }
 

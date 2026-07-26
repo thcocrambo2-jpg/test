@@ -27,11 +27,13 @@ import {
   STALE_SECONDS,
   HEARTBEAT_SECONDS,
   ADMIN_TOKEN,
+  DB_NAME,
 } from "./config.js";
 
 const app = express();
 
 app.set("trust proxy", true);
+app.disable("x-powered-by");   // no need to advertise the framework/version
 app.use(express.json({ limit: "16kb" }));
 
 // Wide open on purpose. The real traffic is server-side: the pod calls
@@ -263,14 +265,37 @@ app.post(
 
 // ── Ops ─────────────────────────────────────────────────────────────────
 
-app.get(
-  "/health",
-  wrap(async (_req, res) => {
+// Unlike /v1/*, this one reports *why* it is unhealthy. That is the whole
+// job of the endpoint: without it a broken deployment is just an opaque
+// 503 at the client and the only clue is in the platform logs. The Atlas
+// error text ("bad auth", "connection timed out") is what distinguishes a
+// wrong password from a blocked IP.
+app.get("/health", async (_req, res) => {
+  try {
     const { licenses } = await collections();
-    await licenses.estimatedDocumentCount();
-    res.json({ ok: true, stale_seconds: STALE_SECONDS });
-  }),
-);
+    const licenseCount = await licenses.estimatedDocumentCount();
+    res.json({
+      ok: true,
+      db: "connected",
+      db_name: DB_NAME,
+      licenses: licenseCount,
+      stale_seconds: STALE_SECONDS,
+    });
+  } catch (err) {
+    console.error("health check failed:", err);
+    res.status(503).json({
+      ok: false,
+      error: "server_error",
+      db: "unreachable",
+      db_name: DB_NAME,
+      reason: err.message,
+      hint:
+        "Check MONGODB_URI is set in the deployment's environment " +
+        "variables, and that Atlas Network Access allows 0.0.0.0/0 " +
+        "(serverless function IPs are not fixed).",
+    });
+  }
+});
 
 function requireAdmin(req, res, next) {
   if (!ADMIN_TOKEN) {
