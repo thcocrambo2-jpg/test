@@ -48,6 +48,59 @@ live under the base directory and are lost when the pod is destroyed.
 - `workflow_reactor.py` — ReActor face-swap workflow builder + availability checks
 - `client.py` — ComfyUI HTTP/websocket client (queue, progress, image upload)
 - `ui.py` — Gradio UI (single/batch, edit, inpaint, face swap, flux, video, JSON batch, gallery tabs) and launch logic
+- `build.sh` — compiles the app into a single distributable binary (see below)
+
+## Shipping a binary (Nuitka)
+
+`./build.sh` compiles the app into one self-contained executable
+(`dist/krea2app`) so it can be handed to someone without shipping the source.
+Nuitka translates Python to C and compiles it to **native machine code** —
+unlike PyInstaller, which ships `.pyc` bytecode that decompiles back to
+near-original source.
+
+**Run it on the pod, not on Windows.** Nuitka cannot cross-compile, and a
+standalone binary links against the build machine's glibc and will not start on
+an older one; building where you deploy sidesteps both. The build needs no GPU
+(Nuitka compiles source rather than running it, so `comfy.py`'s import-time GPU
+check never fires) and `build.sh` installs `nuitka` and a compiler if the pod
+lacks them.
+
+What the binary contains vs. what it still installs at runtime:
+
+| Inside the binary | Installed on first run |
+| --- | --- |
+| this app's code (compiled) | ComfyUI (`git clone`) |
+| gradio, huggingface_hub, requests, safetensors, websocket-client, Pillow | torch + ComfyUI's requirements |
+| `deps/ComfyUI-ReActor` (bundled data) | ReActor's requirements + onnxruntime |
+| | ~90 GB of models |
+
+ComfyUI's and ReActor's dependencies *cannot* be compiled in: the app never
+imports them, and ComfyUI runs as a **separate process with its own
+interpreter**, so it needs them in the pod's system Python. That is also what
+keeps the artifact around 100–200 MB instead of multi-gigabyte. The target pod
+needs `python3`, `git`, an NVIDIA driver and disk — not the CUDA toolkit, since
+torch's wheels ship their own CUDA libraries.
+
+Two things make the compiled and uncompiled paths behave identically:
+
+- **`config.FROZEN`** — the single authoritative "am I compiled?" check
+  (Nuitka injects `__compiled__` into every module). Exactly **two** places may
+  branch on it: `bootstrap.runtime_python()` and the app-requirements skip in
+  `install_comfyui()`. Any third branch is a way for the shipped binary to
+  diverge from what you test.
+- **`bootstrap.runtime_python()`** — compiled, `sys.executable` is *the binary*,
+  so the 7 sites that run `pip` and launch ComfyUI would otherwise pass
+  nonsense arguments to themselves. It resolves the system `python3` when
+  frozen and returns `sys.executable` otherwise, so **`python3 app.py` keeps
+  working exactly as before** — that is the development path and must stay
+  intact.
+
+Day to day nothing changes: keep running `python3 app.py`. Build only when you
+want to hand over an artifact — `git pull` on the pod, then `./build.sh`.
+Nuitka caches the C compilation, so the first build (which compiles gradio's
+whole tree) is the slow one. If you add a dependency that works under
+`python3 app.py` but fails in the binary, the usual cause is package *data*
+files: add `--include-package-data=<pkg>` in `build.sh`.
 
 ## Instruction editing (Edit tab)
 

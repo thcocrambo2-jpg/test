@@ -13,10 +13,10 @@ so importing this module on a machine without an NVIDIA GPU raises.
 import json
 import os
 import subprocess
-import sys
 import time
 import urllib.request
 
+from bootstrap import runtime_python
 from config import (
     COMFY_DIR,
     COMFY_HOST,
@@ -80,8 +80,10 @@ def start_comfyui(port: int = COMFY_PORT, log_path=COMFY_LOG, extra_args=()):
         return None
     env = os.environ.copy()
     env.pop("CUDA_VISIBLE_DEVICES", None)  # make sure ComfyUI sees every GPU
+    # Not sys.executable: compiled with Nuitka that is this binary, and
+    # ComfyUI needs a real interpreter (see bootstrap.runtime_python).
     cmd = [
-        sys.executable, "main.py",
+        runtime_python(), "main.py",
         "--listen", COMFY_HOST,
         "--port", str(port),
         "--output-directory", str(OUTPUT_DIR),

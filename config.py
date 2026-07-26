@@ -16,10 +16,22 @@ logging.basicConfig(
 )
 log = logging.getLogger("krea2")
 
+# ── Build mode ────────────────────────────────────────────────────────────────
+# True when running as a Nuitka-compiled binary (build.sh), False under a
+# plain `python3 app.py`. Nuitka injects __compiled__ into every module it
+# compiles, so this is the one authoritative check — keep it that way.
+# Only two places may branch on it: bootstrap.runtime_python() and the
+# app-requirements skip in bootstrap.install_comfyui(). Every extra branch
+# is another way for the shipped binary to behave differently from a dev run.
+FROZEN = "__compiled__" in globals()
+
 # ── Disk layout ───────────────────────────────────────────────────────────────
 # The pod filesystem is ephemeral: the ComfyUI install, model weights,
 # generated images and logs all live under one base directory and are lost
 # when the pod is destroyed. Override with the KREA2_BASE_DIR env var.
+# Under --onefile PROJECT_DIR is Nuitka's temp extraction dir, which is
+# correct: build.sh bundles deps/ and requirements.txt alongside the code.
+# BASE_DIR is unaffected — it is absolute, so models outlive the extraction.
 PROJECT_DIR = Path(__file__).resolve().parent
 BASE_DIR = Path(os.environ.get("KREA2_BASE_DIR", "/workspace/krea2"))
 TEMP_DIR = BASE_DIR     # ComfyUI install + model weights

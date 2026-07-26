@@ -13,6 +13,7 @@ import sys
 
 from config import (
     COMFY_DIR,
+    FROZEN,
     KREA2EDIT_NODES_REPO,
     MODELS_DIR,
     PROJECT_DIR,
@@ -42,6 +43,32 @@ ONNXRUNTIME_CUDA12_INDEX = (
 )
 
 
+def runtime_python() -> str:
+    """The interpreter used for pip and for launching ComfyUI.
+
+    This app never imports torch or ComfyUI — it pip-installs them and runs
+    ComfyUI as a separate process, which only works while there is a real
+    interpreter to hand. Compiled with Nuitka there is not: sys.executable
+    is this binary, so `-m pip install ...` and `main.py ...` would just be
+    nonsense arguments to ourselves. Fall back to the system python3 that
+    the pod already ships.
+
+    Uncompiled this returns sys.executable, so `python3 app.py` behaves
+    exactly as before — that has to stay true, it is how the app is
+    developed.
+    """
+    if not FROZEN:
+        return sys.executable
+    found = shutil.which("python3") or shutil.which("python")
+    if not found:
+        raise RuntimeError(
+            "No python3 found on PATH. The binary bundles this app, but "
+            "ComfyUI still runs as a separate Python process and needs an "
+            "interpreter — install python3 and re-run."
+        )
+    return found
+
+
 def run_cmd(cmd: list, cwd=None, desc: str | None = None) -> None:
     """Run a command, raising with the captured output tail on failure."""
     log.info("%s ...", desc or " ".join(map(str, cmd)))
@@ -65,12 +92,16 @@ def install_comfyui() -> None:
             ["git", "clone", "--depth", "1", COMFYUI_REPO, COMFY_DIR],
             desc="Cloning ComfyUI",
         )
-    run_cmd(
-        [sys.executable, "-m", "pip", "install", "-q",
-         "-r", COMFY_DIR / "requirements.txt",
-         "-r", PROJECT_DIR / "requirements.txt"],
-        desc="Installing ComfyUI + app requirements (single resolver pass)",
-    )
+    # ComfyUI's requirements always install — they belong to the subprocess,
+    # not to us. The app's own (gradio, huggingface_hub, ...) are compiled
+    # into the binary by build.sh, so re-installing them on someone else's
+    # pod would only cost time and bandwidth.
+    reqs = ["-r", COMFY_DIR / "requirements.txt"]
+    desc = "Installing ComfyUI requirements"
+    if not FROZEN:
+        reqs += ["-r", PROJECT_DIR / "requirements.txt"]
+        desc = "Installing ComfyUI + app requirements (single resolver pass)"
+    run_cmd([runtime_python(), "-m", "pip", "install", "-q", *reqs], desc=desc)
 
 
 def install_custom_nodes() -> None:
@@ -99,7 +130,7 @@ def _can_import(module: str) -> bool:
     node pack and the first face swap failing with "node not found".
     """
     return subprocess.run(
-        [sys.executable, "-c", f"import {module}"],
+        [runtime_python(), "-c", f"import {module}"],
         stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL,
     ).returncode == 0
 
@@ -107,7 +138,7 @@ def _can_import(module: str) -> bool:
 def _cuda_major() -> int | None:
     """torch's CUDA major version, or None if torch has no CUDA build."""
     result = subprocess.run(
-        [sys.executable, "-c", "import torch; print(torch.version.cuda or '')"],
+        [runtime_python(), "-c", "import torch; print(torch.version.cuda or '')"],
         text=True, stdout=subprocess.PIPE, stderr=subprocess.DEVNULL,
     )
     try:
@@ -119,7 +150,7 @@ def _cuda_major() -> int | None:
 def _uninstall_onnxruntime() -> None:
     """Drop any onnxruntime build so the next install is not 'already met'."""
     try:
-        run_cmd([sys.executable, "-m", "pip", "uninstall", "-y", "-q",
+        run_cmd([runtime_python(), "-m", "pip", "uninstall", "-y", "-q",
                  "onnxruntime-gpu", "onnxruntime"],
                 desc="Removing the existing onnxruntime")
     except RuntimeError as exc:
@@ -159,7 +190,7 @@ def install_onnxruntime() -> bool:
     _uninstall_onnxruntime()
     for args, desc in candidates:
         try:
-            run_cmd([sys.executable, "-m", "pip", "install", "-q", *args],
+            run_cmd([runtime_python(), "-m", "pip", "install", "-q", *args],
                     desc=f"Installing {desc}")
         except RuntimeError as exc:
             log.warning("%s would not install (%s) — trying the next option",
@@ -231,7 +262,7 @@ def install_reactor() -> None:
     reqs = dest / "requirements.txt"
     if reqs.exists():
         try:
-            run_cmd([sys.executable, "-m", "pip", "install", "-q", "-r", reqs],
+            run_cmd([runtime_python(), "-m", "pip", "install", "-q", "-r", reqs],
                     desc="Installing ReActor requirements")
         except RuntimeError as exc:
             log.error("ReActor requirements failed to install (%s) — the "

@@ -1,0 +1,14 @@
+# Python bytecode
+__pycache__/
+*.py[cod]
+
+# Nuitka build output (see build.sh)
+dist/
+*.build/
+*.dist/
+*.onefile-build/
+krea2app
+
+# Local environments
+.venv/
+venv/
