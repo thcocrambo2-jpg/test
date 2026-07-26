@@ -398,6 +398,22 @@ DEFAULT_RESOLUTION = "1024×1536 (Portrait XL)"
 # Valid native ComfyUI samplers that work well with Krea 2 ("simple" scheduler).
 SAMPLERS = ["er_sde", "euler", "euler_ancestral", "dpmpp_2m", "res_multistep"]
 
+# ── Licensing ─────────────────────────────────────────────────────────────────
+# One customer key allows a fixed number of concurrent running instances.
+# The key is per-customer and set on the pod like the tokens below; the API
+# URL is the same service for everyone, so it is compiled in rather than
+# read from the environment — an endpoint that can be repointed is a
+# licence check that can be answered by any server the customer chooses.
+# The env override exists for testing against a local license-validator.
+LICENSE_API_URL = os.environ.get(
+    "KREA2_LICENSE_API", "https://krea2-license.vercel.app"
+).rstrip("/")
+LICENSE_KEY = os.environ.get("KREA2_LICENSE_KEY") or None
+# How long the app keeps running when the license server is unreachable.
+# Long enough that an outage does not kill a video render mid-way, short
+# enough that a pod cut off from the server does not run indefinitely.
+LICENSE_GRACE_SECONDS = float(os.environ.get("KREA2_LICENSE_GRACE", 1800))
+
 # Optional — Comfy-Org/Krea-2 is a public repo; only needed for gated repos.
 HF_TOKEN = os.environ.get("HF_TOKEN") or None
 # Needed for most CivitAI downloads (create one at civitai.com → account settings).

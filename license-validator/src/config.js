@@ -1,0 +1,54 @@
+// Configuration, all from the environment.
+//
+// Nothing here is secret to the *client* — the client never sees any of it.
+// The whole point of putting this service in front of Atlas is that the
+// connection string lives here and not in a binary handed to customers.
+
+import { dirname, join } from "node:path";
+import { fileURLToPath } from "node:url";
+
+import dotenv from "dotenv";
+
+// Load .env for local runs (npm start, npm run init-db, npm run issue-key).
+// Everything imports this module, so loading it here covers the scripts
+// too. On Vercel there is no .env and the platform supplies the variables
+// directly — dotenv is a silent no-op then, which is why this is not
+// guarded by NODE_ENV. Existing process.env always wins, so a real
+// deployment can never be overridden by a stray file.
+//
+// Resolved against this file rather than process.cwd(), so it still works
+// when the scripts are run from the repository root instead of from here.
+const packageRoot = join(dirname(fileURLToPath(import.meta.url)), "..");
+dotenv.config({ path: join(packageRoot, ".env"), quiet: true });
+
+function int(name, fallback) {
+  const raw = process.env[name];
+  if (raw === undefined || raw === "") return fallback;
+  const parsed = Number.parseInt(raw, 10);
+  return Number.isFinite(parsed) ? parsed : fallback;
+}
+
+export const MONGODB_URI = process.env.MONGODB_URI || "";
+export const DB_NAME = process.env.MONGODB_DB || "krea2_license";
+
+// A session counts against the seat limit only while its last_seen is
+// newer than this. It is the single number that makes an ungraceful death
+// (SIGKILL, pod terminate, host failure) self-healing: nothing has to run
+// on the client for the seat to come back.
+export const STALE_SECONDS = int("STALE_SECONDS", 180);
+
+// How often the client should call /v1/heartbeat. Sent in the acquire
+// response so the cadence is server-controlled — you can slow every
+// deployed binary down from here without reshipping anything.
+export const HEARTBEAT_SECONDS = int("HEARTBEAT_SECONDS", 60);
+
+// TTL index retention. Deliberately well above STALE_SECONDS: expiry is
+// housekeeping to keep the collection small, not the correctness
+// mechanism. Mongo's TTL monitor only runs about once a minute, so the
+// acquire query filters on last_seen rather than trusting the sweep.
+export const SESSION_TTL_SECONDS = int("SESSION_TTL_SECONDS", 900);
+
+// Optional. When set, guards /v1/admin/*.
+export const ADMIN_TOKEN = process.env.ADMIN_TOKEN || "";
+
+export const PORT = int("PORT", 3000);

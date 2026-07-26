@@ -24,6 +24,7 @@ live under the base directory and are lost when the pod is destroyed.
 
 | Variable                   | Purpose                                                         |
 | -------------------------- | --------------------------------------------------------------- |
+| `KREA2_LICENSE_KEY`        | **Required.** Customer license key (see Licensing below)        |
 | `HF_TOKEN`                 | Hugging Face token — only needed for gated repos                |
 | `CIVITAI_TOKEN`            | CivitAI API token — needed for most CivitAI LoRA downloads      |
 | `KREA2_BASE_DIR`           | Base directory for everything (default `/workspace/krea2`)     |
@@ -35,10 +36,38 @@ live under the base directory and are lost when the pod is destroyed.
 | `KREA2_MAIN_RESERVE_VRAM`  | Parallel mode: GB the Krea instance leaves free (default 26)   |
 | `KREA2_WAN_RESERVE_VRAM`   | Parallel mode: GB the Wan instance leaves free (default 22)    |
 
+## Licensing
+
+The app takes a **license seat** before it does anything else and will not
+start without one. Set `KREA2_LICENSE_KEY` on the pod to the key you were
+given; one key allows a fixed number of instances running at the same time.
+
+Seats are leases rather than a counter, so an instance that dies without
+releasing — `SIGKILL`, an OOM kill, a hard pod terminate — frees its own
+seat within a few minutes with nothing to clean up. Stopping the app
+cleanly returns it immediately. Restarting on the same pod reclaims the
+same seat rather than spending a second one, because `RUNPOD_POD_ID` is
+used as the instance identity when it is present.
+
+The check runs first in `main()`, ahead of the ComfyUI clone and the
+downloads, so a seat problem surfaces in seconds instead of after ~90 GB.
+If the license server becomes unreachable *while* the app is running it
+keeps going for `KREA2_LICENSE_GRACE` seconds (default 1800) so an outage
+does not kill a long video render.
+
+Exit codes: `2` no key set, `3` key rejected (invalid, revoked, expired,
+or all seats in use), `4` license server unreachable at startup, `5` the
+license stopped being valid mid-run.
+
+The server lives in `license-validator/` — see its README for issuing keys
+and deploying.
+
 ## Layout
 
 - `deps/ComfyUI-ReActor` — vendored ReActor node pack, copied into `custom_nodes` at bootstrap
 - `app.py` — entry point; orchestrates the startup flow
+- `licensing.py` — license seat acquire / heartbeat / release (stdlib only)
+- `license-validator/` — the Node/Express + MongoDB license server
 - `config.py` — paths, Krea 2 model registry, LoRA lists, Wan 2.2 settings, tokens, presets
 - `bootstrap.py` — clone ComfyUI + install requirements
 - `downloads.py` — HF / CivitAI model + LoRA downloads (resume + retries)
@@ -96,11 +125,135 @@ Two things make the compiled and uncompiled paths behave identically:
   intact.
 
 Day to day nothing changes: keep running `python3 app.py`. Build only when you
-want to hand over an artifact — `git pull` on the pod, then `./build.sh`.
-Nuitka caches the C compilation, so the first build (which compiles gradio's
-whole tree) is the slow one. If you add a dependency that works under
-`python3 app.py` but fails in the binary, the usual cause is package *data*
-files: add `--include-package-data=<pkg>` in `build.sh`.
+want to hand over an artifact. Nuitka caches the C compilation, so the first
+build (which compiles gradio's whole tree) is the slow one. If you add a
+dependency that works under `python3 app.py` but fails in the binary, the usual
+cause is package *data* files: add `--include-package-data=<pkg>` in
+`build.sh`.
+
+### Building on the pod
+
+```bash
+cd /test
+git pull
+bash build.sh          # or chmod +x build.sh && ./build.sh
+```
+
+`bash build.sh` avoids needing the executable bit, which git does not carry
+when the file is committed from Windows. The script installs whatever the pod
+lacks — `build-essential`, `patchelf`, `ccache`, `nuitka` — none of which ship
+in the RunPod image, and all of which are gone again on a fresh pod. Output is
+`dist/krea2app`.
+
+Smoke-test it on the same pod, which is the fastest check available: ComfyUI
+and the models are already on disk, so the bootstrap skips everything and goes
+straight to serving.
+
+```bash
+./dist/krea2app
+```
+
+Expect `ComfyUI already present … — skipping clone`,
+`ReActor nodes already present …`, `ComfyUI API on port 8188 is ready` and
+`Custom node ReActorFaceSwap is registered`. A **fresh** pod is the real
+end-to-end test — only that exercises the clone and download paths.
+
+### Building locally in WSL2 (optional)
+
+The pod image is `runpod/pytorch:…-ubuntu2404` → glibc 2.39, Python 3.12, so
+**WSL2 with Ubuntu 24.04 matches it exactly** and its output runs on the pod.
+Ubuntu 22.04 (glibc 2.35) also works and is safer, since older glibc runs on
+newer hosts but not the reverse. The build needs no GPU, no CUDA and no torch.
+
+```powershell
+wsl --install -d Ubuntu-24.04     # once
+wsl -d Ubuntu-24.04               # every time, to open a shell in it
+```
+
+**Always pass `-d Ubuntu-24.04`.** Bare `wsl` opens whatever distro is
+*default*, which on a machine with Docker Desktop or Rancher Desktop is their
+bundled one — recognisable by a `#` root prompt, no `sudo`, and Windows drives
+at `/mnt/host/c/…` instead of `/mnt/c/…`. Each distro has its own filesystem, so
+the venv and `/etc/wsl.conf` below exist only inside Ubuntu-24.04. Check with
+`wsl --list --verbose` (`*` marks the default) or make it the default once:
+
+```powershell
+wsl --set-default Ubuntu-24.04
+```
+
+```bash
+sudo apt update && sudo apt install -y python3-venv git
+git clone <this repo> && cd test
+python3 -m venv ~/build-venv && source ~/build-venv/bin/activate
+pip install -r requirements.txt
+./build.sh
+```
+
+Use a venv: Ubuntu 24.04 enforces PEP 668, so installing into the system
+Python fails with `externally-managed-environment` (the RunPod image disables
+this, which is why the pod does not need it). `build.sh` uses whichever
+`python3` is active, so an activated venv is picked up automatically, and it
+prefixes `sudo` when not running as root.
+
+**Building under `/mnt/c/…` needs one extra setting.** WSL mounts Windows
+drives with DrvFs, which cannot store Unix file modes by default, so `chmod`
+fails with `EPERM`. Nuitka patches RPATHs into the bundled `.so` files and
+restores their modes afterwards, and dies there — minutes into the compile,
+with a `PermissionError` traceback that never mentions the mount. `build.sh`
+probes for this up front (it tries a real `chmod`, rather than guessing from
+the path) and stops in a second with both fixes printed. Either:
+
+```bash
+# 1) allow Unix modes on Windows drives, and keep building where you are
+printf '[automount]\noptions = "metadata"\n' | sudo tee /etc/wsl.conf
+#    then, from PowerShell:  wsl --shutdown    (wait ~8s, then reopen)
+#    verify with:            mount | grep ' /mnt/c '
+```
+
+```bash
+# 2) or build from the WSL filesystem, which is also much faster
+cp -r /mnt/c/…/test ~/test && cd ~/test && ./build.sh
+```
+
+Option 2 is the better default: WSL2 reaches `/mnt/c` over 9p, and this build
+touches ~1745 C files plus all of gradio's tree. Note that enabling `metadata`
+also makes git notice file-mode changes it previously ignored; if that produces
+spurious `old mode / new mode` diffs, set `git config core.fileMode false`.
+
+Trade-off: the pod keeps the build environment identical *by construction*,
+while WSL matches it *by version*. If RunPod bumps its base image past Ubuntu
+24.04, a WSL-built binary may stop starting, and the symptom — a glibc error at
+exec — is obscure.
+
+### Getting the binary off the pod
+
+`scp` over RunPod's SSH proxy often fails (`ssh.runpod.io` is a terminal proxy,
+not a full SSH server), so try it first and fall back:
+
+```bash
+# locally — works only if the proxy supports SCP
+scp -i ~/.ssh/id_ed25519 <user>@ssh.runpod.io:/test/dist/krea2app .
+```
+
+```bash
+# on the pod — prints a one-time code
+runpodctl send /test/dist/krea2app
+# locally
+runpodctl receive <code>
+```
+
+`runpodctl` ships on pods and is peer-to-peer, so it ignores the SSH proxy's
+limitations. Failing both, serve it over the already-exposed Gradio port while
+the app is stopped:
+
+```bash
+cd /test/dist && python3 -m http.server 7860
+# then download https://<POD_ID>-7860.proxy.runpod.net/krea2app
+```
+
+The artifact is a **Linux** binary — it will not run on Windows; downloading is
+only for redistribution. Whoever receives it needs `chmod +x krea2app` first,
+since the executable bit does not survive most transfers.
 
 ## Instruction editing (Edit tab)
 

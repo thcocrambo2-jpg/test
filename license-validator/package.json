@@ -1,0 +1,22 @@
+{
+  "name": "license-validator",
+  "version": "1.0.0",
+  "private": true,
+  "type": "module",
+  "description": "Seat-limited license server for the Krea 2 app",
+  "scripts": {
+    "start": "node server.js",
+    "dev": "node --watch server.js",
+    "init-db": "node scripts/init-db.js",
+    "issue-key": "node scripts/issue-key.js"
+  },
+  "engines": {
+    "node": ">=20"
+  },
+  "dependencies": {
+    "cors": "^2.8.5",
+    "dotenv": "^17.4.2",
+    "express": "^4.19.2",
+    "mongodb": "^6.8.0"
+  }
+}
