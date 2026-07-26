@@ -95,7 +95,13 @@ from workflow_wan import (
     wan_models_available,
 )
 
-MAX_LORA_SLOTS = 3
+# Number of LoRA slots every stacking tab renders (Single, Edit, Inpaint,
+# Flux). The UI rows, the handlers and the workflow chain are all driven
+# from this, so changing it here is the whole change.
+MAX_LORA_SLOTS = 8
+# Slots past this stay in a collapsed accordion so a tall stack does not
+# eat the whole column. Set it >= MAX_LORA_SLOTS to show every slot.
+VISIBLE_LORA_SLOTS = 3
 MODEL_CHOICES = list_model_names()
 _d_steps, _d_cfg = model_defaults(resolve_model_entry(None))
 DEFAULTS = {"steps": _d_steps, "cfg": _d_cfg}
@@ -200,14 +206,38 @@ def _run_jobs(jobs, builder=build_workflow, prefix="Krea2"):
     yield images, f"✅ All {total} job(s) done — images saved under {OUTPUT_DIR}"
 
 
-def _resolve_lora_slots(lora1, w1, lora2, w2, lora3, w3) -> list:
-    """UI LoRA dropdown/weight pairs → resolved (filename, strength) list."""
+def _resolve_lora_slots(*slots) -> list:
+    """Flat (name, weight, name, weight, ...) UI values → (file, strength).
+
+    Variadic on purpose: the slot count then lives only in MAX_LORA_SLOTS,
+    so adding a slot needs no change here or in any handler signature.
+    Slots left at "None" resolve to nothing and drop out.
+    """
     loras = []
-    for name, weight in ((lora1, w1), (lora2, w2), (lora3, w3)):
+    for name, weight in zip(slots[::2], slots[1::2]):
         lora_file = resolve_lora_name(name)
         if lora_file:
             loras.append((lora_file, float(weight)))
     return loras
+
+
+def _resolve_flux_lora_slots(*slots) -> list:
+    """_resolve_lora_slots for the Flux tab's separate LoRA folder."""
+    loras = []
+    for name, weight in zip(slots[::2], slots[1::2]):
+        lora_file = resolve_flux_lora(name)
+        if lora_file:
+            loras.append((lora_file, float(weight)))
+    return loras
+
+
+def _lora_inputs(dropdowns, weights) -> list:
+    """Interleave slot dropdowns/weights for a handler's *lora_slots tail.
+
+    Kept last in every click() input list so the slot count can grow
+    without disturbing the fixed leading arguments.
+    """
+    return [component for pair in zip(dropdowns, weights) for component in pair]
 
 
 def _check_model(model):
@@ -220,8 +250,7 @@ def _check_model(model):
 
 
 def generate_single(prompt, negative, seed, randomize, steps, cfg, resolution,
-                    sampler, model, lora1, w1, lora2, w2, lora3, w3,
-                    batch_count):
+                    sampler, model, batch_count, *lora_slots):
     """First tab: run batch_count jobs on sequential seeds."""
     entry, error = _check_model(model)
     if error:
@@ -229,7 +258,7 @@ def generate_single(prompt, negative, seed, randomize, steps, cfg, resolution,
         return
     base_seed = random.randint(0, 2**32 - 1) if randomize else int(seed)
     width, height = parse_resolution(resolution)
-    loras = _resolve_lora_slots(lora1, w1, lora2, w2, lora3, w3)
+    loras = _resolve_lora_slots(*lora_slots)
     jobs = [{
         "prompt": prompt, "negative": negative or "", "seed": base_seed + i,
         "steps": int(steps), "cfg": float(cfg), "width": width, "height": height,
@@ -269,8 +298,7 @@ def refresh_flux_lora_choices():
 
 
 def generate_flux(prompt, seed, randomize, steps, guidance, resolution,
-                  sampler, model, lora1, w1, lora2, w2, lora3, w3,
-                  batch_count):
+                  sampler, model, batch_count, *lora_slots):
     """Flux tab: text-to-image with Flux 2 (guidance-distilled, no negative)."""
     entry = resolve_flux_model(model)
     if not flux_model_available(entry):
@@ -284,11 +312,7 @@ def generate_flux(prompt, seed, randomize, steps, guidance, resolution,
         return
     base_seed = random.randint(0, 2**32 - 1) if randomize else int(seed)
     width, height = parse_resolution(resolution)
-    loras = []
-    for name, weight in ((lora1, w1), (lora2, w2), (lora3, w3)):
-        lora_file = resolve_flux_lora(name)
-        if lora_file:
-            loras.append((lora_file, float(weight)))
+    loras = _resolve_flux_lora_slots(*lora_slots)
     jobs = [{
         "prompt": prompt, "seed": base_seed + i, "steps": int(steps),
         "guidance": float(guidance), "width": width, "height": height,
@@ -345,8 +369,8 @@ def _png_bytes(image) -> bytes:
 
 
 def generate_inpaint(editor_value, prompt, negative, seed, randomize, steps,
-                     cfg, denoise, sampler, grow, blur, model,
-                     lora1, w1, lora2, w2, lora3, w3, batch_count):
+                     cfg, denoise, sampler, grow, blur, model, batch_count,
+                     *lora_slots):
     """Inpaint tab: repaint the painted region — or, with nothing painted,
     run the whole image through img2img at the chosen denoise."""
     entry, error = _check_model(model)
@@ -379,7 +403,7 @@ def generate_inpaint(editor_value, prompt, negative, seed, randomize, steps,
         "prompt": prompt, "negative": negative or "", "seed": base_seed + i,
         "steps": int(steps), "cfg": float(cfg), "denoise": float(denoise),
         "sampler": sampler, "image_name": image_name, "mask_name": mask_name,
-        "loras": _resolve_lora_slots(lora1, w1, lora2, w2, lora3, w3),
+        "loras": _resolve_lora_slots(*lora_slots),
         "unet_file": entry["file"],
     } for i in range(int(batch_count))]
     prefix = "Krea2Inpaint" if mask is not None else "Krea2Img2Img"
@@ -400,8 +424,7 @@ def _fit_edit_size(w: int, h: int, max_pixels: int = 2_000_000) -> tuple:
 
 
 def generate_edit(image, prompt, negative, seed, randomize, steps, cfg,
-                  sampler, grounding, model, lora1, w1, lora2, w2, lora3, w3,
-                  batch_count):
+                  sampler, grounding, model, batch_count, *lora_slots):
     """Edit tab: instruction-based editing. The model sees the source image
     (Identity Edit LoRA dual conditioning), so the prompt describes the
     change to make — no mask, no denoise tuning."""
@@ -435,7 +458,7 @@ def generate_edit(image, prompt, negative, seed, randomize, steps, cfg,
         "steps": int(steps), "cfg": float(cfg), "width": width,
         "height": height, "sampler": sampler, "image_name": image_name,
         "grounding_px": int(grounding),
-        "loras": _resolve_lora_slots(lora1, w1, lora2, w2, lora3, w3),
+        "loras": _resolve_lora_slots(*lora_slots),
         "unet_file": entry["file"],
     } for i in range(int(batch_count))]
     for images, status in _run_jobs(jobs, builder=build_edit_workflow,
@@ -825,27 +848,59 @@ def _default_lora_slots() -> list:
     return slots
 
 
-def _lora_stack():
-    """LoRA slot dropdown/weight rows + rescan button (used by two tabs).
+def _lora_rows(slots, choices):
+    """Render (dropdown, weight) rows for `slots`, collapsing the overflow.
 
-    Must be called inside a gr.Blocks context. Returns (dropdowns, weights);
-    the rescan button is wired to refresh its own tab's dropdowns.
+    Slots past VISIBLE_LORA_SLOTS go inside a closed accordion so raising
+    MAX_LORA_SLOTS does not push the Generate button off screen. The
+    nesting is purely visual: the returned lists stay flat and in slot
+    order, which is what _lora_inputs and the handlers' *lora_slots tail
+    rely on. With MAX_LORA_SLOTS <= VISIBLE_LORA_SLOTS no accordion is
+    created at all, so the layout is unchanged.
+    """
+    dds, ws = [], []
+
+    def row(slot, name, weight):
+        with gr.Row():
+            dds.append(gr.Dropdown(choices=choices, value=name,
+                                   label=f"LoRA {slot}", scale=3))
+            ws.append(gr.Slider(0.0, 2.0, value=weight, step=0.05,
+                                label="Weight", scale=1))
+
+    for slot, (name, weight) in enumerate(slots[:VISIBLE_LORA_SLOTS], start=1):
+        row(slot, name, weight)
+    extra = slots[VISIBLE_LORA_SLOTS:]
+    if extra:
+        # Start open when a hidden slot is already in use, so an active
+        # LoRA is never invisible behind a collapsed header.
+        with gr.Accordion(
+            f"➕ {len(extra)} more LoRA slot{'s' if len(extra) > 1 else ''}",
+            open=any(name != "None" for name, _ in extra),
+        ):
+            for offset, (name, weight) in enumerate(extra):
+                row(VISIBLE_LORA_SLOTS + offset + 1, name, weight)
+    return dds, ws
+
+
+def _lora_stack():
+    """Krea 2 LoRA rows + rescan button (Single, Edit and Inpaint tabs).
+
+    Must be called inside a gr.Blocks context. Returns (dropdowns, weights)
+    in slot order; the rescan button refreshes its own tab's dropdowns.
     """
     gr.Markdown("### 🎭 LoRA stack")
-    dds, ws = [], []
-    for slot, (default_name, default_weight) in enumerate(
-            _default_lora_slots(), start=1):
-        with gr.Row():
-            dds.append(gr.Dropdown(
-                choices=LORA_CHOICES, value=default_name,
-                label=f"LoRA {slot}", scale=3,
-            ))
-            ws.append(gr.Slider(
-                0.0, 2.0, value=default_weight, step=0.05,
-                label="Weight", scale=1,
-            ))
-    refresh_btn = gr.Button("🔄 Rescan LoRA folder", size="sm")
-    refresh_btn.click(fn=refresh_lora_choices, outputs=dds)
+    dds, ws = _lora_rows(_default_lora_slots(), LORA_CHOICES)
+    gr.Button("🔄 Rescan LoRA folder", size="sm").click(
+        fn=refresh_lora_choices, outputs=dds)
+    return dds, ws
+
+
+def _flux_lora_stack():
+    """The same stack for Flux, which has its own folder and choices."""
+    gr.Markdown("### 🎭 Flux LoRA stack (`loras/flux2/`)")
+    dds, ws = _lora_rows([("None", 0.8)] * MAX_LORA_SLOTS, FLUX_LORA_CHOICES)
+    gr.Button("🔄 Rescan Flux LoRA folder", size="sm").click(
+        fn=refresh_flux_lora_choices, outputs=dds)
     return dds, ws
 
 
@@ -913,9 +968,8 @@ with gr.Blocks(title="Krea 2 on RunPod") as ui:
                 fn=generate_single,
                 inputs=[prompt_box, negative_box, seed_box, randomize_cb,
                         steps_slider, cfg_slider, resolution_dd, sampler_dd,
-                        model_dd,
-                        lora_dds[0], lora_ws[0], lora_dds[1], lora_ws[1],
-                        lora_dds[2], lora_ws[2], batch_slider],
+                        model_dd, batch_slider,
+                        *_lora_inputs(lora_dds, lora_ws)],
                 outputs=[gallery, status_box, seed_out],
             )
 
@@ -992,10 +1046,8 @@ with gr.Blocks(title="Krea 2 on RunPod") as ui:
                 fn=generate_edit,
                 inputs=[edit_image, edit_prompt, edit_negative, edit_seed,
                         edit_random, edit_steps, edit_cfg, edit_sampler,
-                        edit_grounding, edit_model_dd,
-                        edit_lora_dds[0], edit_lora_ws[0],
-                        edit_lora_dds[1], edit_lora_ws[1],
-                        edit_lora_dds[2], edit_lora_ws[2], edit_batch],
+                        edit_grounding, edit_model_dd, edit_batch,
+                        *_lora_inputs(edit_lora_dds, edit_lora_ws)],
                 outputs=[edit_gallery, edit_status, edit_seed_out],
             )
 
@@ -1095,10 +1147,8 @@ with gr.Blocks(title="Krea 2 on RunPod") as ui:
                         inpaint_seed, inpaint_random, inpaint_steps,
                         inpaint_cfg, inpaint_denoise, inpaint_sampler,
                         inpaint_grow, inpaint_blur, inpaint_model_dd,
-                        inpaint_lora_dds[0], inpaint_lora_ws[0],
-                        inpaint_lora_dds[1], inpaint_lora_ws[1],
-                        inpaint_lora_dds[2], inpaint_lora_ws[2],
-                        inpaint_batch],
+                        inpaint_batch,
+                        *_lora_inputs(inpaint_lora_dds, inpaint_lora_ws)],
                 outputs=[inpaint_gallery, inpaint_status, inpaint_seed_out],
             )
 
@@ -1254,25 +1304,7 @@ with gr.Blocks(title="Krea 2 on RunPod") as ui:
                             flux_batch = gr.Slider(
                                 1, 20, value=1, step=1, label="Batch count"
                             )
-                        gr.Markdown("### 🎭 Flux LoRA stack (`loras/flux2/`)")
-                        flux_lora_dds, flux_lora_ws = [], []
-                        for _slot in range(1, MAX_LORA_SLOTS + 1):
-                            with gr.Row():
-                                flux_lora_dds.append(gr.Dropdown(
-                                    choices=FLUX_LORA_CHOICES, value="None",
-                                    label=f"LoRA {_slot}", scale=3,
-                                ))
-                                flux_lora_ws.append(gr.Slider(
-                                    0.0, 2.0, value=0.8, step=0.05,
-                                    label="Weight", scale=1,
-                                ))
-                        flux_lora_refresh = gr.Button(
-                            "🔄 Rescan Flux LoRA folder", size="sm"
-                        )
-                        flux_lora_refresh.click(
-                            fn=refresh_flux_lora_choices,
-                            outputs=flux_lora_dds,
-                        )
+                        flux_lora_dds, flux_lora_ws = _flux_lora_stack()
                         flux_btn = gr.Button(
                             "🌊 Generate", variant="primary", size="lg"
                         )
@@ -1291,10 +1323,8 @@ with gr.Blocks(title="Krea 2 on RunPod") as ui:
                     fn=generate_flux,
                     inputs=[flux_prompt, flux_seed, flux_random, flux_steps,
                             flux_guidance, flux_resolution, flux_sampler,
-                            flux_model_dd,
-                            flux_lora_dds[0], flux_lora_ws[0],
-                            flux_lora_dds[1], flux_lora_ws[1],
-                            flux_lora_dds[2], flux_lora_ws[2], flux_batch],
+                            flux_model_dd, flux_batch,
+                            *_lora_inputs(flux_lora_dds, flux_lora_ws)],
                     outputs=[flux_gallery, flux_status, flux_seed_out],
                 )
 

@@ -194,6 +194,21 @@ them if you don't want them. JSON batch jobs select a model with an
 optional `"model"` key. A model whose download failed shows a warning
 under the dropdown and refuses to run, without affecting the others.
 
+The generate / edit / inpaint / Flux tabs each stack **`MAX_LORA_SLOTS`
+LoRA slots** (`ui.py`, currently 8). That one constant drives the UI rows,
+the handlers and the `LoraLoaderModelOnly` chain, so changing it is the
+whole change — the handlers take their slots as a variadic tail and the
+workflow builder already loops over the resolved list. Slots left at
+"None" drop out, and slots beyond `DEFAULT_LORAS` simply start empty.
+
+To keep a tall stack from eating the column, only the first
+`VISIBLE_LORA_SLOTS` (3) are shown; the rest sit in a collapsed
+**"➕ N more LoRA slots"** accordion, which opens on load if any hidden
+slot is already in use so an active LoRA is never invisible. The nesting
+is purely visual — the slot lists stay flat and ordered. Set
+`VISIBLE_LORA_SLOTS >= MAX_LORA_SLOTS` to show every slot and skip the
+accordion entirely.
+
 ## Flux 2
 
 The **🌊 Flux 2** tab does text-to-image with Flux 2 Dev (32B,

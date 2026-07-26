@@ -353,6 +353,7 @@ CIVITAI_LORAS = [
     # (3084537, "Realistic_Snapshot_Krea2_v0.5.safetensors"),
     (3069544, "galaxyace_krea2.safetensors"),
     (3160327, "HMBody_D_e10.safetensors"),
+    (3151907, "elusarca-photo.safetensors"),
     # (3084588, "Krea2_NSFW_plus.safetensors"),
     # (3075498, "nicegirls_krea2.safetensors"),
     # (3066973, "Krea2-realism-V1.safetensors"),
@@ -366,8 +367,8 @@ CIVITAI_LORAS = [
 # Entries are (filename, default weight); a file that failed to download is
 # silently skipped and the slot falls back to "None".
 DEFAULT_LORAS = [
-    ("Krea2-realism-V2.safetensors", 0.0),
-    ("Realism_Engine_Krea2_v2.0.safetensors", 0.8),
+    ("HMBody_D_e10.safetensors", 0.8),
+    ("Realism_Engine_Krea2_v2.0.safetensors", 0.4),
     ("galaxyace_krea2.safetensors", 0.8),
 ]
 
@@ -380,7 +381,7 @@ RESOLUTION_PRESETS = {
     "1536×1024 (Landscape XL)": (1536, 1024),
     "1024×1536 (Portrait XL)": (1024, 1536),
 }
-DEFAULT_RESOLUTION = "1024×1024 (Square)"
+DEFAULT_RESOLUTION = "1024×1536 (Portrait XL)"
 
 # Valid native ComfyUI samplers that work well with Krea 2 ("simple" scheduler).
 SAMPLERS = ["er_sde", "euler", "euler_ancestral", "dpmpp_2m", "res_multistep"]
