@@ -44,6 +44,16 @@ COMFY_LOG = WORKING_DIR / "comfyui.log"
 COMFY_HOST = "127.0.0.1"
 COMFY_PORT = 8188
 
+# Unload the previous models when a job needs different base weights.
+# ComfyUI keeps what it loaded until memory pressure evicts it, so without
+# this a swap briefly holds two full model sets — the moment where the
+# server gets OOM-killed once several multi-GB UNets are in rotation
+# (Krea 2 V1 turbo/raw plus V2 turbo/raw, plus Flux and Wan). Freeing at
+# the boundary caps the peak at one set and costs only the reload that a
+# swap already pays for. Set KREA2_KEEP_MODELS_LOADED=1 to turn it off on
+# a machine with room to spare, where keeping models warm is faster.
+FREE_ON_SWAP = not os.environ.get("KREA2_KEEP_MODELS_LOADED")
+
 # ── Model selection ───────────────────────────────────────────────────────────
 # Variant-level defaults; a registry entry below can override them per-model.
 # "turbo" = distilled models: few steps, CFG 1.0

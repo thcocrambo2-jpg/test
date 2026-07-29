@@ -29,12 +29,15 @@ import gradio as gr
 import requests
 from PIL import Image, ImageChops, ImageFilter
 
-from client import ComfyUIError, client, wan_client
-from comfy import GPU_COUNT
+from client import ComfyUIError, client, model_signature, wan_client
+from comfy import GPU_COUNT, ensure_alive as comfy_ensure_alive
 from config import (
+    COMFY_LOG,
+    COMFY_PORT,
     DEFAULT_LORAS,
     DEFAULT_RESOLUTION,
     FLUX_ENABLED,
+    FREE_ON_SWAP,
     FLUX_MODELS,
     KREA2_MODELS,
     OUTPUT_DIR,
@@ -67,6 +70,8 @@ from config import (
     WAN_FPS,
     WAN_MAX_SECONDS,
     WAN_MODE_DEFAULTS,
+    WAN_COMFY_LOG,
+    WAN_COMFY_PORT,
     WAN_PARALLEL,
     WAN_RESOLUTIONS,
     WAN_VARIANT,
@@ -208,16 +213,57 @@ def _normalize_jobs(raw) -> list:
     return jobs
 
 
+# Base weights each ComfyUI instance currently has loaded, keyed by its
+# base URL. Only ever read and written from _release_on_swap below.
+_LAST_MODEL_SIG = {}
+
+
+def _release_on_swap(comfy_client, workflow) -> str:
+    """Unload the previous models when this graph needs different ones.
+
+    Without this, a swap has a window where both model sets are resident —
+    ComfyUI holds the old ones until memory pressure evicts them — and on
+    a pod with three Krea UNets in rotation that window is where the
+    process gets OOM-killed. Freeing at the boundary makes the peak one
+    model set instead of two.
+
+    Costs nothing on a repeat job (same signature, no call) and costs only
+    the reload on a genuine swap, which was going to happen regardless.
+    Returns a status note, or "" when nothing was done.
+    """
+    if not FREE_ON_SWAP:
+        return ""
+    signature = model_signature(workflow)
+    previous = _LAST_MODEL_SIG.get(comfy_client.base)
+    # Record first: a failed free must not make the next job think the old
+    # models are still the loaded ones.
+    _LAST_MODEL_SIG[comfy_client.base] = signature
+    if previous is None or previous == signature:
+        return ""
+    log.info("Model swap detected — unloading the previous models first")
+    comfy_client.free_models()
+    return "♻️ Different models than the last job — unloading the old ones"
+
+
 def _run_jobs(jobs, builder=build_workflow, prefix="Krea2"):
     """Shared executor: yields (gallery_paths, status_text) as work progresses."""
     images = []
     total = len(jobs)
+    alive, note = comfy_ensure_alive()
+    if not alive:
+        yield images, note
+        return
+    if note:
+        yield images, note
     for idx, job in enumerate(jobs, start=1):
         label = f"{idx}/{total}"
         job_prefix = prefix
         if job["loras"]:
             job_prefix += "_" + Path(job["loras"][0][0]).stem
         workflow = builder(filename_prefix=job_prefix, **job)
+        swap_note = _release_on_swap(client, workflow)
+        if swap_note:
+            yield images, f"{swap_note} — job {label} will be slower"
         size = f", {job['width']}×{job['height']}" if "width" in job else ""
         yield images, f"⏳ Job {label} — queued (seed {job['seed']}{size})"
         try:
@@ -767,9 +813,23 @@ def _run_wan_jobs(jobs, builder=build_wan_i2v_workflow):
     videos = []
     total = len(jobs)
     latest = None
+    # Video jobs go to their own instance under KREA2_WAN_PARALLEL, so the
+    # port that has to be alive is the one wan_client talks to.
+    alive, note = comfy_ensure_alive(
+        port=WAN_COMFY_PORT if WAN_PARALLEL else COMFY_PORT,
+        log_path=WAN_COMFY_LOG if WAN_PARALLEL else COMFY_LOG,
+    )
+    if not alive:
+        yield videos, latest, note
+        return
+    if note:
+        yield videos, latest, note
     for idx, job in enumerate(jobs, start=1):
         label = f"{idx}/{total}"
         workflow = builder(**job)
+        swap_note = _release_on_swap(wan_client, workflow)
+        if swap_note:
+            yield videos, latest, f"{swap_note} — video {label} will be slower"
         yield videos, latest, (
             f"⏳ Video {label} — queued (seed {job['seed']}, "
             f"{job['width']}×{job['height']}, {job['length']} frames)"

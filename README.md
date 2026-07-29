@@ -30,6 +30,7 @@ live under the base directory and are lost when the pod is destroyed.
 | `KREA2_BASE_DIR`           | Base directory for everything (default `/workspace/krea2`)     |
 | `KREA2_SKIP_LAUNCH`        | If set, run setup/downloads/server but skip launching the UI   |
 | `KREA2_DISABLE_V2`         | If set, skip the ~17 GB Krea 2 V2 downloads and hide that tab   |
+| `KREA2_KEEP_MODELS_LOADED` | If set, don't unload models between swaps (see Model swapping)  |
 | `KREA2_DISABLE_WAN`        | If set, skip the ~49 GB Wan 2.2 downloads and hide the Video tab |
 | `KREA2_DISABLE_FLUX`       | If set, skip the ~57 GB Flux 2 downloads and hide the Flux tab  |
 | `KREA2_DISABLE_REACTOR`    | If set, skip the ~1.8 GB ReActor downloads and hide the Face Swap tab |
@@ -62,6 +63,42 @@ license stopped being valid mid-run.
 
 The server lives in `license-validator/` — see its README for issuing keys
 and deploying.
+
+## Model swapping and crash recovery
+
+With Krea 2 V1 (turbo/raw), V2 (turbo mxfp8/raw), Flux and Wan all
+selectable, several multi-gigabyte UNets are in rotation. ComfyUI keeps
+what it has loaded until memory pressure evicts it, so a swap has a window
+where **two full model sets are resident** — and that window is where the
+server gets OOM-killed. When it dies mid-job the websocket drops
+(`Connection to remote host was lost`) and every later job fails with
+`Connection refused`, whichever tab it came from.
+
+Two mechanisms handle this:
+
+- **Unload on swap.** Before submitting, the runner compares the graph's
+  base weights (`unet_name` / `vae_name` / `clip_name`, derived from the
+  workflow itself in `client.model_signature`) against what that ComfyUI
+  instance last loaded. If they differ it calls ComfyUI's `POST /free` and
+  **waits for free VRAM to stop rising** before queueing. The waiting
+  matters: `/free` only sets a flag the prompt worker consumes between
+  jobs, so submitting immediately can win the race and execute with the
+  old models still loaded — exactly the peak this avoids. LoRAs are
+  deliberately *not* part of the signature, since they are patches on top
+  of the base weights; changing prompt, seed, steps or LoRA slots costs no
+  reload. Set `KREA2_KEEP_MODELS_LOADED=1` to disable on a machine with
+  room to spare, where keeping models warm is faster.
+- **Restart if it died anyway.** `comfy.ensure_alive()` runs before every
+  batch: if the API does not answer it restarts ComfyUI (preserving the
+  instance's `--reserve-vram` flags) and reports **the last 20 lines of
+  `comfyui.log`** in the tab's status box. Transport failures are also
+  converted to `ComfyUIError` in `client.py`, so a dead server reads as a
+  status message rather than a Gradio traceback, and the app no longer
+  needs a manual restart to recover.
+
+If a crash persists, `comfyui.log` names the cause: `Killed process` in
+`dmesg -T` means the OOM killer, while a `Segmentation fault` or CUDA
+error in the log points at a custom node instead.
 
 ## Layout
 
