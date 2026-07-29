@@ -35,9 +35,17 @@
     "url": "https://github.com/ClownsharkBatwing/RES4LYF"
   },
   "_note": "SHAs/revisions captured at mirror time. Feed these to bootstrap.py clones and hf_hub_download(revision=...). The mirror and the upstream fallback MUST resolve to the same revision.",
+  "black-forest-labs/FLUX.2-klein-9b-fp8": {
+    "kind": "hf",
+    "sha": "902d9d510b51533e07729f19211414a3648b77d2"
+  },
   "comfyui-krea2edit": {
     "sha": "bdfa8b267fdb13730868d435b277dcfe696ec083",
     "tarball": "comfyui-krea2edit-bdfa8b26.tar.gz",
     "url": "https://github.com/lbouaraba/comfyui-krea2edit"
+  },
+  "edicamargo/qwen_3_8b_fp8mixed_abliterated": {
+    "kind": "hf",
+    "sha": "cdef062908287d72b2f3e6358bc8a1b17b77ad75"
   }
 }

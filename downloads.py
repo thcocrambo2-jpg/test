@@ -32,6 +32,13 @@ from config import (
     HF_MODEL_FILES,
     HF_MODEL_REPO,
     HF_TOKEN,
+    KLEIN_LORA_STACK,
+    KLEIN_LORA_SUBDIR,
+    KLEIN_MODELS,
+    KLEIN_TEXT_ENCODER,
+    KLEIN_TEXT_ENCODER_REPO,
+    KLEIN_VAE,
+    KLEIN_VAE_HF_REPO,
     KREA2_MODELS,
     MODELS_DIR,
     REACTOR_FACEDETECTION_FILES,
@@ -629,6 +636,48 @@ def download_flux_models() -> None:
             log.error("Skipping Flux LoRA %s: %s", filename, exc)
 
 
+def download_klein_models() -> None:
+    """Fetch the Klein Edit tab's UNet, text encoder, VAE and LoRAs (~19 GB).
+
+    Self-sufficient on purpose: the VAE is the same file the Flux 2 tab
+    downloads, but "klein" can be the only enabled feature, so this fetches
+    it rather than assuming the flux group already did. Downloads key on
+    the destination path, so when both are on whichever runs first fetches
+    it and the other logs a cache hit.
+
+    Every item is independent — a missing file disables or degrades only
+    this tab, which names what it is waiting for, and the next run retries.
+    """
+    try:
+        fetch_repackaged_file(KLEIN_VAE_HF_REPO, f"vae/{KLEIN_VAE}")
+    except Exception as exc:
+        log.error("Klein VAE %s unavailable (%s) — the Klein Edit tab will "
+                  "refuse to run until a later run fetches it.",
+                  KLEIN_VAE, exc)
+    try:
+        fetch_hf_file_to(KLEIN_TEXT_ENCODER_REPO, KLEIN_TEXT_ENCODER,
+                         MODELS_DIR / "text_encoders" / KLEIN_TEXT_ENCODER)
+    except Exception as exc:
+        log.error("Klein text encoder %s unavailable (%s) — the Klein Edit "
+                  "tab will refuse to run until a later run fetches it.",
+                  KLEIN_TEXT_ENCODER, exc)
+    for entry in KLEIN_MODELS:
+        try:
+            fetch_hf_file_to(entry["hf_repo"], entry["hf_path"],
+                             MODELS_DIR / "diffusion_models" / entry["file"])
+        except Exception as exc:
+            log.error("Skipping Klein model %s: %s — that dropdown choice "
+                      "will refuse to run until a later run fetches it.",
+                      entry["name"], exc)
+    for filename, _strength, _enabled, version_id in KLEIN_LORA_STACK:
+        try:
+            fetch_civitai_file(version_id, filename,
+                               subdir=f"loras/{KLEIN_LORA_SUBDIR}")
+        except Exception as exc:
+            # One missing LoRA only empties one slot in the Klein stack.
+            log.error("Skipping Klein LoRA %s: %s", filename, exc)
+
+
 # Asset group → the function that fetches it. Iteration order is download
 # order, so the cheap shared pieces land before the tens of gigabytes.
 ASSET_GROUPS = {
@@ -637,13 +686,14 @@ ASSET_GROUPS = {
     "edit_lora": download_edit_lora,
     "v2": download_v2_models,
     "flux": download_flux_models,
+    "klein": download_klein_models,
     "wan": download_wan_models,
     "reactor": download_reactor_models,
 }
 
 # Groups that pull at least one file from CivitAI, which is the only
 # source here that usually needs a token.
-CIVITAI_GROUPS = {"krea2", "v2", "flux"}
+CIVITAI_GROUPS = {"krea2", "v2", "flux", "klein"}
 
 
 def download_everything() -> None:

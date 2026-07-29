@@ -75,6 +75,7 @@ FEATURES = (
             needs=("text_encoder", "krea2")),
     Feature("faceswap", "🎭 Face Swap (ReActor)", needs=("reactor",)),
     Feature("flux", "🌊 Flux 2", needs=("flux",)),
+    Feature("klein", "🧩 Klein Edit", needs=("klein",)),
     Feature("wan", "🎬 Video (Wan 2.2)", needs=("wan",)),
     # Runs whatever graph is pasted into it, so it has no assets of its
     # own — it is only useful alongside the tabs whose models it names.

@@ -2,8 +2,8 @@
 
 Tabs: single / simple-batch generation, Krea 2 V2, instruction-based
 editing (upload an image, describe the change), inpainting (paint a mask
-over an uploaded image), ReActor face swap, Flux 2 generation, Wan 2.2
-video, JSON batch jobs, and an output gallery.
+over an uploaded image), ReActor face swap, Flux 2 generation, Flux 2
+Klein 9B editing, Wan 2.2 video, JSON batch jobs, and an output gallery.
 
 Every one of them is a feature in features.py and is only built when that
 feature is on — a tab that is off is never constructed, so its handlers
@@ -43,6 +43,16 @@ from config import (
     DEFAULT_RESOLUTION,
     FREE_ON_SWAP,
     FLUX_MODELS,
+    KLEIN_DEFAULT_CUSTOM_SIZE,
+    KLEIN_DEFAULT_MEGAPIXELS,
+    KLEIN_DEFAULTS,
+    KLEIN_LORA_SUBDIR,
+    KLEIN_OUTPUT_CUSTOM,
+    KLEIN_OUTPUT_MODES,
+    KLEIN_OUTPUT_SAME,
+    KLEIN_REFERENCE_MEGAPIXELS,
+    KLEIN_SCHEDULERS,
+    KLEIN_WARN_PIXELS,
     KREA2_MODELS,
     OUTPUT_DIR,
     REACTOR_DEFAULT_DETECTOR,
@@ -99,6 +109,18 @@ from workflow_flux import (
     list_flux_lora_files,
     resolve_flux_lora,
     resolve_flux_model,
+)
+from workflow_klein import (
+    build_klein_edit_workflow,
+    default_lora_slots as klein_default_lora_slots,
+    list_lora_files as list_klein_lora_files,
+    model_available as klein_model_available,
+    model_defaults as klein_model_defaults,
+    model_names as klein_model_names,
+    resolve_lora as resolve_klein_lora,
+    resolve_model as klein_resolve_model,
+    resolve_output_size as klein_resolve_output_size,
+    status as klein_status,
 )
 from workflow_krea2_v2 import (
     build_v2_workflow,
@@ -398,6 +420,140 @@ def generate_flux(prompt, seed, randomize, steps, guidance, resolution,
         yield images, status, base_seed
 
 
+# ── Klein Edit (DesiMuseAI FLUX.2 Klein 9B graph) ────────────────────────────
+# Self-contained like the V2 tab: its own model, encoder, LoRA folder and
+# defaults, all from the source workflow. Nothing here reads DEFAULTS,
+# MODEL_CHOICES or the Flux constants, so tuning another tab never moves it.
+
+KLEIN_LORA_SLOTS = klein_default_lora_slots()
+KLEIN_LORA_CHOICES = ["None"] + list_klein_lora_files()
+KLEIN_MODEL_CHOICES = klein_model_names()
+_k_steps, _k_cfg, _k_guidance = klein_model_defaults(klein_resolve_model(None))
+
+
+def _klein_model_info_text(entry) -> str:
+    """One-line summary shown under the Klein Model dropdown."""
+    steps, cfg, guidance = klein_model_defaults(entry)
+    info = (f"defaults: {steps} steps, CFG {cfg:g}, guidance {guidance:g} · "
+            f"`{entry['file']}`")
+    if not klein_model_available(entry):
+        info += " · ⚠️ **not downloaded yet** — restart the app to fetch it"
+    return info
+
+
+def klein_model_changed(model_name):
+    """Klein Model dropdown → that model's steps / CFG / guidance defaults."""
+    entry = klein_resolve_model(model_name)
+    steps, cfg, guidance = klein_model_defaults(entry)
+    return (gr.Slider(value=steps), gr.Slider(value=cfg),
+            gr.Slider(value=guidance),
+            gr.Markdown(value=_klein_model_info_text(entry)))
+
+
+def _resolve_klein_lora_slots(*slots) -> list:
+    """Flat (enabled, name, weight) × N UI values → (file, strength) pairs.
+
+    Mirrors the source workflow's Power Lora Loader, exactly as the V2 tab
+    does: a row contributes only while its checkbox is on, and the order is
+    preserved because LoRA application is not commutative.
+    """
+    loras = []
+    for enabled, name, weight in zip(slots[::3], slots[1::3], slots[2::3]):
+        if not enabled:
+            continue
+        lora_file = resolve_klein_lora(name)
+        if lora_file:
+            loras.append((lora_file, float(weight)))
+    return loras
+
+
+def _klein_size_note(width: int, height: int) -> str:
+    """The '→ W×H' line, with a warning once the render gets expensive."""
+    note = f"→ **{width} × {height}** ({width * height / 1e6:.2f} MP)"
+    if width * height > KLEIN_WARN_PIXELS:
+        note += ("  ⚠️ that is a large render — expect minutes per image and "
+                 "a real chance of an out-of-memory kill. Switch the mode to "
+                 "**scale** or **custom** to render smaller.")
+    return note
+
+
+def klein_size_preview(image, mode, megapixels, custom_width, custom_height):
+    """Recompute that line whenever an input that feeds it changes."""
+    if image is None and mode != KLEIN_OUTPUT_CUSTOM:
+        return gr.Markdown(value="→ upload image 1 to see the output size.")
+    source = image.size if image is not None else KLEIN_DEFAULT_CUSTOM_SIZE
+    width, height = klein_resolve_output_size(
+        mode, source, megapixels, (custom_width, custom_height))
+    return gr.Markdown(value=_klein_size_note(width, height))
+
+
+def generate_klein_edit(image, use_image2, image2, prompt, seed, randomize,
+                        model, steps, cfg, guidance, sampler, scheduler,
+                        reference_mp, output_mode, output_mp, custom_width,
+                        custom_height, batch_count, *lora_slots):
+    """Klein Edit tab: the DesiMuseAI FLUX.2 Klein 9B editing graph.
+
+    One or two source images are attached to the conditioning as reference
+    latents, so the prompt describes the change rather than the whole
+    picture — and with two images it should name them ("the person from
+    image 1 wearing the hat from image 2"), which is how the source
+    workflow's own note puts it.
+    """
+    if image is None:
+        yield [], "❌ Upload image 1 first.", 0
+        return
+    ready, message = klein_status()
+    if not ready:
+        yield [], message, 0
+        return
+    entry = klein_resolve_model(model)
+    if not klein_model_available(entry):
+        yield [], (f"❌ Model “{entry['name']}” is not downloaded yet — "
+                   "restart the app so the download step can fetch it."), 0
+        return
+    if not str(prompt or "").strip():
+        yield [], "❌ Describe the edit you want.", 0
+        return
+    if use_image2 and image2 is None:
+        yield [], ("❌ Input image 2 is enabled but empty — upload it, or "
+                   "switch the toggle off."), 0
+        return
+
+    image = image.convert("RGB")
+    width, height = klein_resolve_output_size(
+        output_mode, image.size, output_mp, (custom_width, custom_height))
+    base_seed = random.randint(0, 2**32 - 1) if randomize else int(seed)
+    tag = uuid.uuid4().hex[:8]
+    try:
+        image_name = client.upload_image(_png_bytes(image), f"klein_{tag}.png")
+        image2_name = None
+        if use_image2:
+            image2_name = client.upload_image(
+                _png_bytes(image2.convert("RGB")), f"klein_{tag}_b.png")
+    except Exception as exc:
+        yield [], f"❌ Uploading the image to ComfyUI failed: {exc}", base_seed
+        return
+
+    jobs = [{
+        "prompt": prompt, "image_name": image_name,
+        "image2_name": image2_name, "seed": base_seed + i,
+        "width": width, "height": height, "steps": int(steps),
+        "cfg": float(cfg), "guidance": float(guidance), "sampler": sampler,
+        "scheduler": scheduler, "reference_megapixels": float(reference_mp),
+        "loras": _resolve_klein_lora_slots(*lora_slots),
+        "unet_file": entry["file"],
+    } for i in range(int(batch_count))]
+    for images, status in _run_jobs(jobs, builder=build_klein_edit_workflow,
+                                    prefix="KleinEdit"):
+        yield images, status, base_seed
+
+
+def refresh_klein_lora_choices():
+    """Re-scan loras/klein/ for this tab's dropdowns."""
+    choices = ["None"] + list_klein_lora_files()
+    return [gr.Dropdown(choices=choices) for _ in range(len(KLEIN_LORA_SLOTS))]
+
+
 # ── Krea 2 V2 (DesiMuseAI graph) ─────────────────────────────────────────────
 # This tab is deliberately self-contained: its own model, VAE, LoRA stack,
 # sampler and defaults, all taken from the source workflow. Nothing here
@@ -555,8 +711,13 @@ def _v2_lora_stack():
     return cbs, dds, ws
 
 
-def _v2_lora_inputs(cbs, dds, ws) -> list:
-    """Interleave the V2 slot triples for the handler's *lora_slots tail."""
+def _lora_triples(cbs, dds, ws) -> list:
+    """Interleave (enable, name, weight) slot triples for a *lora_slots tail.
+
+    Used by both Power-Lora-Loader tabs (Krea 2 V2 and Klein Edit), whose
+    rows carry a per-row on/off checkbox — the plain two-value _lora_inputs
+    is for the tabs whose slots do not.
+    """
     return [c for triple in zip(cbs, dds, ws) for c in triple]
 
 
@@ -1154,10 +1315,43 @@ def _flux_lora_stack():
     return dds, ws
 
 
+def _klein_lora_stack():
+    """The Klein workflow's three LoRA rows, with the toggles it ships with.
+
+    Fixed to the source workflow's stack rather than config.DEFAULT_LORAS,
+    and each row carries an Enable checkbox because that is what rgthree's
+    Power Lora Loader exposes — the same shape as _v2_lora_stack, over a
+    different folder. Returns (checkboxes, dropdowns, weights) in slot order.
+    """
+    gr.Markdown(
+        f"### 🎭 LoRA stack — model + CLIP (`loras/{KLEIN_LORA_SUBDIR}/`)\n"
+        "The workflow's stack, in its original order, strengths and on/off "
+        "states. Each strength applies to the model *and* the text encoder."
+    )
+    cbs, dds, ws = [], [], []
+    for index, (on, name, strength) in enumerate(KLEIN_LORA_SLOTS):
+        with gr.Row():
+            cbs.append(gr.Checkbox(
+                value=on, label="On", scale=0, min_width=70,
+                interactive=name in KLEIN_LORA_CHOICES,
+            ))
+            dds.append(gr.Dropdown(
+                choices=KLEIN_LORA_CHOICES,
+                value=name if name in KLEIN_LORA_CHOICES else "None",
+                label=f"LoRA {index + 1}", scale=3,
+            ))
+            ws.append(gr.Slider(0.0, 2.0, value=strength, step=0.01,
+                                label="Strength", scale=1))
+    gr.Button("🔄 Rescan Klein LoRA folder", size="sm").click(
+        fn=refresh_klein_lora_choices, outputs=dds)
+    return cbs, dds, ws
+
+
 with gr.Blocks(title="Krea 2 on RunPod") as ui:
     gr.Markdown(
         "# ⚡ Krea 2"
         + (" + Flux 2" if features.enabled("flux") else "")
+        + (" + Klein Edit" if features.enabled("klein") else "")
         + (" + Wan 2.2 Video" if features.enabled("wan") else "")
         + " — ComfyUI on RunPod\n"
         f"{len(MODEL_CHOICES)} Krea model(s) · {GPU_COUNT} GPU(s) detected · "
@@ -1432,7 +1626,7 @@ with gr.Blocks(title="Krea 2 on RunPod") as ui:
                             v2_cutoff_step, v2_total_steps,
                             v2_cutoff_strength, v2_shift_strength,
                             v2_sharpen, v2_grain, v2_batch,
-                            *_v2_lora_inputs(v2_cbs, v2_dds, v2_ws)],
+                            *_lora_triples(v2_cbs, v2_dds, v2_ws)],
                     outputs=[v2_gallery, v2_status_box, v2_seed_out],
                     concurrency_id="comfy",
                 )
@@ -1795,6 +1989,156 @@ with gr.Blocks(title="Krea 2 on RunPod") as ui:
                             flux_model_dd, flux_batch,
                             *_lora_inputs(flux_lora_dds, flux_lora_ws)],
                     outputs=[flux_gallery, flux_status, flux_seed_out],
+                    concurrency_id="comfy",
+                )
+
+        if features.enabled("klein"):
+            with gr.Tab("🧩 Klein Edit"):
+                gr.Markdown(
+                    "The **DesiMuseAI FLUX.2 Klein 9B Edit** graph, "
+                    "reproduced as-is. Upload an image and describe the "
+                    "change — the source is scaled to "
+                    f"{KLEIN_REFERENCE_MEGAPIXELS:g} MP, encoded and attached "
+                    "to the conditioning as a **reference latent**, so the "
+                    "model edits what it is shown. Enable **input image 2** "
+                    "to combine two sources; when you do, say which is which "
+                    "in the prompt (*“the person from image 1 wearing the hat "
+                    "from image 2”*). Klein 9B is ~9.4 GB, so it loads and "
+                    "swaps far faster than Flux 2 Dev.\n\n"
+                    f"{klein_status()[1]}"
+                )
+                with gr.Row():
+                    with gr.Column(scale=2):
+                        klein_image = gr.Image(
+                            label="Input image 1 (paste with Ctrl+V)",
+                            type="pil", sources=["upload", "clipboard"],
+                        )
+                        _recent_picker(klein_image)
+                        klein_use_image2 = gr.Checkbox(
+                            label="➕ Enable input image 2", value=False,
+                            info="Bypassed in the source workflow, so it "
+                                 "starts off here too.",
+                        )
+                        klein_image2 = gr.Image(
+                            label="Input image 2", type="pil", visible=False,
+                            sources=["upload", "clipboard"],
+                        )
+                        klein_use_image2.change(
+                            fn=lambda on: gr.Image(visible=bool(on)),
+                            inputs=klein_use_image2, outputs=klein_image2,
+                        )
+                        klein_prompt = gr.Textbox(
+                            label="Edit prompt", lines=4,
+                            placeholder="The source workflow ships this box "
+                                        "empty — describe your edit here.",
+                        )
+                        klein_model_dd = gr.Dropdown(
+                            choices=KLEIN_MODEL_CHOICES,
+                            value=KLEIN_MODEL_CHOICES[0], label="Model",
+                        )
+                        klein_model_info = gr.Markdown(
+                            _klein_model_info_text(klein_resolve_model(None))
+                        )
+                        with gr.Row():
+                            klein_steps = gr.Slider(
+                                1, 50, value=_k_steps, step=1, label="Steps"
+                            )
+                            klein_cfg = gr.Slider(
+                                0.5, 8.0, value=_k_cfg, step=0.1, label="CFG"
+                            )
+                            klein_guidance = gr.Slider(
+                                0.0, 10.0, value=_k_guidance, step=0.1,
+                                label="Guidance",
+                            )
+                        klein_model_dd.change(
+                            fn=klein_model_changed, inputs=klein_model_dd,
+                            outputs=[klein_steps, klein_cfg, klein_guidance,
+                                     klein_model_info],
+                        )
+                        with gr.Row():
+                            klein_sampler = gr.Dropdown(
+                                choices=SAMPLERS,
+                                value=KLEIN_DEFAULTS["sampler_name"],
+                                label="Sampler",
+                            )
+                            klein_scheduler = gr.Dropdown(
+                                choices=KLEIN_SCHEDULERS,
+                                value=KLEIN_DEFAULTS["scheduler"],
+                                label="Scheduler",
+                            )
+                        klein_reference_mp = gr.Slider(
+                            0.25, 4.0, value=KLEIN_REFERENCE_MEGAPIXELS,
+                            step=0.05,
+                            label="Reference size (MP) — what the model looks at",
+                        )
+                        gr.Markdown("#### 🖼️ Output resolution")
+                        klein_output_mode = gr.Dropdown(
+                            choices=KLEIN_OUTPUT_MODES, value=KLEIN_OUTPUT_SAME,
+                            label="Mode",
+                        )
+                        with gr.Row():
+                            klein_output_mp = gr.Slider(
+                                0.25, 4.0, value=KLEIN_DEFAULT_MEGAPIXELS,
+                                step=0.05, label="Megapixels (scale mode)",
+                            )
+                            klein_custom_w = gr.Number(
+                                label="Width (custom mode)",
+                                value=KLEIN_DEFAULT_CUSTOM_SIZE[0],
+                                precision=0,
+                            )
+                            klein_custom_h = gr.Number(
+                                label="Height (custom mode)",
+                                value=KLEIN_DEFAULT_CUSTOM_SIZE[1],
+                                precision=0,
+                            )
+                        klein_size_out = gr.Markdown(
+                            "→ upload image 1 to see the output size."
+                        )
+                        _klein_size_inputs = [klein_image, klein_output_mode,
+                                              klein_output_mp, klein_custom_w,
+                                              klein_custom_h]
+                        for _component in _klein_size_inputs:
+                            _component.change(
+                                fn=klein_size_preview,
+                                inputs=_klein_size_inputs,
+                                outputs=klein_size_out,
+                            )
+                        with gr.Row():
+                            klein_seed = gr.Number(
+                                label="Seed", value=42, precision=0
+                            )
+                            klein_random = gr.Checkbox(
+                                label="🎲 Random seed", value=True
+                            )
+                            klein_batch = gr.Slider(
+                                1, 20, value=1, step=1, label="Batch count"
+                            )
+                        klein_cbs, klein_dds, klein_ws = _klein_lora_stack()
+                        klein_btn = gr.Button(
+                            "🧩 Edit", variant="primary", size="lg"
+                        )
+                    with gr.Column(scale=3):
+                        klein_gallery = gr.Gallery(
+                            label="Output", columns=2, height=600
+                        )
+                        klein_status_box = gr.Textbox(
+                            label="Status", interactive=False
+                        )
+                        klein_seed_out = gr.Number(
+                            label="Base seed used", interactive=False,
+                            precision=0,
+                        )
+                klein_btn.click(
+                    fn=generate_klein_edit,
+                    inputs=[klein_image, klein_use_image2, klein_image2,
+                            klein_prompt, klein_seed, klein_random,
+                            klein_model_dd, klein_steps, klein_cfg,
+                            klein_guidance, klein_sampler, klein_scheduler,
+                            klein_reference_mp, klein_output_mode,
+                            klein_output_mp, klein_custom_w, klein_custom_h,
+                            klein_batch,
+                            *_lora_triples(klein_cbs, klein_dds, klein_ws)],
+                    outputs=[klein_gallery, klein_status_box, klein_seed_out],
                     concurrency_id="comfy",
                 )
 

@@ -10,6 +10,7 @@ LoRA lists and (optional) access tokens. In section order:
     Krea 2 V2           the DesiMuseAI pipeline, self-contained
     Wan 2.2             image-to-video (+ the parallel-instance knobs)
     Flux 2              text-to-image
+    Klein Edit          Flux 2 Klein 9B image editing, self-contained
     ReActor             face swap
     CivitAI LoRAs       shared LoRA lists, resolutions, samplers
     Licensing           seat check + access tokens
@@ -524,6 +525,116 @@ FLUX_MODELS = [
 FLUX_LORA_SUBDIR = "flux2"
 FLUX_CIVITAI_LORAS = [
     # (1234567, "some_flux2_lora.safetensors"),
+]
+
+# ── Flux 2 Klein 9B Edit ──────────────────────────────────────────────────────
+# The Klein Edit tab is the DesiMuseAI "FLUX.2 KLEIN 9B EDIT v1.3" workflow
+# ported node-for-node (workflow_klein.py). It edits images rather than
+# generating them: one or two sources are VAE-encoded and attached to the
+# conditioning as ReferenceLatents, so the model works from what it is shown
+# and the prompt describes the change ("the person from image 1 wearing the
+# hat from image 2").
+#
+# It shares nothing with the Flux 2 tab but the VAE file. Klein 9B is a much
+# smaller model — 9.4 GB against Flux 2 Dev's 35.5 GB — with its own Qwen3-8B
+# text encoder, so the two never appear in each other's dropdowns and running
+# this tab does not require the ~57 GB the Flux tab needs. Off by default
+# (feature key "klein"); KREA2_FEATURES="klein" fetches its ~19 GB and shows
+# the tab.
+KLEIN_TEXT_ENCODER = "qwen_3_8b_fp8mixed_abliterated.safetensors"   # ~9.2 GB
+KLEIN_TEXT_ENCODER_REPO = "edicamargo/qwen_3_8b_fp8mixed_abliterated"
+# The same file the Flux 2 tab uses, from the same repo. Aliased rather than
+# copied so there is one source of truth for the name, and fetched by this
+# group as well because "klein" can be the only feature that is on —
+# downloads key on the destination path, so whichever asks first fetches it
+# and the other logs a cache hit.
+KLEIN_VAE = FLUX_VAE
+KLEIN_VAE_HF_REPO = FLUX_HF_REPO
+
+# Selectable Klein models. Same scheme as the other registries, with one
+# difference: hf_repo is per-entry and hf_path is a plain repo path (Black
+# Forest Labs does not use Comfy-Org's split_files/ layout), so add an entry,
+# restart, and it appears in the tab's Model dropdown.
+#
+# The workflow's companion note also lists GGUF quants for smaller GPUs.
+# Those are NOT a registry entry away: they load through UnetLoaderGGUF from
+# a custom node pack rather than UNETLoader, so they would need a builder
+# branch and a node-pack install — deliberately out of scope here.
+KLEIN_MODELS = [
+    {
+        "name": "Flux 2 Klein 9B fp8 (workflow default)",
+        "file": "flux-2-klein-9b-fp8.safetensors",       # ~9.4 GB
+        "hf_repo": "black-forest-labs/FLUX.2-klein-9b-fp8",
+        "hf_path": "flux-2-klein-9b-fp8.safetensors",
+    },
+]
+
+# KSamplerAdvanced settings, straight from the workflow. steps, cfg and
+# guidance are deliberately absent: they belong to the model (KLEIN_DEFAULTS
+# below, overridable per registry entry) and would otherwise be a second
+# source of truth for the same three numbers. What is left spells "run the
+# whole schedule in one pass", which is what makes KSamplerAdvanced behave
+# like the plain KSampler the other tabs build.
+KLEIN_SAMPLER_DEFAULTS = {
+    "add_noise": "enable",
+    "start_at_step": 0,
+    "end_at_step": 10000,
+    "return_with_leftover_noise": "disable",
+}
+
+# The knobs the tab exposes, at the workflow's values. cfg 1.0 with a
+# ConditioningZeroOut negative is the distilled-Flux idiom: FluxGuidance
+# steers prompt adherence instead, which is why both numbers are here.
+KLEIN_DEFAULTS = {
+    "steps": 8,
+    "cfg": 1.0,
+    "guidance": 4.0,
+    "sampler_name": "euler",
+    "scheduler": "normal",
+}
+# Sampler names come from the shared SAMPLERS list below; schedulers are
+# core ComfyUI's, listed here rather than shared because the V2 tab's are
+# RES4LYF's and the two sets have nothing to do with each other.
+KLEIN_SCHEDULERS = ["normal", "simple", "karras", "beta", "sgm_uniform",
+                    "ddim_uniform"]
+
+# ImageScaleToTotalPixels on each source image before it is encoded as a
+# reference latent. This is the workflow's own value and is independent of
+# the *output* size — the reference is what the model looks at, the output
+# latent is what it paints into.
+KLEIN_REFERENCE_MEGAPIXELS = 1.0
+KLEIN_SCALE_METHOD = "lanczos"
+KLEIN_RESOLUTION_STEPS = 1
+
+# The source workflow's three output-resolution groups, of which only the
+# first is live as shipped (the other two are bypassed). "Same as image 1"
+# means exactly that — a 12 MP phone photo asks for a 12 MP render — so the
+# tab warns above KLEIN_WARN_PIXELS and clamps each side at KLEIN_MAX_SIDE
+# rather than letting a paste turn into an OOM kill.
+KLEIN_OUTPUT_SAME = "Same as image 1 (workflow default)"
+KLEIN_OUTPUT_SCALED = "Scale image 1 to megapixels"
+KLEIN_OUTPUT_CUSTOM = "Custom width × height"
+KLEIN_OUTPUT_MODES = [KLEIN_OUTPUT_SAME, KLEIN_OUTPUT_SCALED,
+                      KLEIN_OUTPUT_CUSTOM]
+KLEIN_DEFAULT_MEGAPIXELS = 1.0
+KLEIN_DEFAULT_CUSTOM_SIZE = (1024, 1024)
+KLEIN_MAX_SIDE = 4096
+KLEIN_WARN_PIXELS = 4_000_000
+
+# Klein LoRAs live in their own subfolder (loras/klein/) for the same reason
+# the Flux ones do: the architectures are incompatible, so a Klein LoRA in
+# the Krea 2 dropdown is a job that cannot run. list_lora_files() globs
+# loras/ without recursing, so nothing here leaks into the other tabs.
+#
+# The stack is the workflow's, in its order, at its strengths and on/off
+# states — entries are (filename, strength, enabled_by_default,
+# civitai_version_id), the same shape as V2_LORA_STACK. Each strength
+# applies to the model and the CLIP alike (rgthree "Single Strength").
+KLEIN_LORA_SUBDIR = "klein"
+KLEIN_LORA_STACK = [
+    ("klein_snofs_v1_4.safetensors", 1.0, True, 2960556),
+    ("ultra_real_v4.safetensors", 1.0, True, 2846977),
+    ("realistic_klein_v3.safetensors", 1.0, True, 2876634),
 ]
 
 # ── ReActor face swap ─────────────────────────────────────────────────────────

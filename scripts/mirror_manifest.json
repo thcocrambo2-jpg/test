@@ -342,6 +342,47 @@
       },
       "enabled": false,
       "note": "~12.2 GB UNet, commented out in config.py KREA2_MODELS. Enable with --include-disabled or flip this flag."
+    },
+    {
+      "repo": "encoders",
+      "local": "text_encoders/qwen_3_8b_fp8mixed_abliterated.safetensors",
+      "path_in_repo": "text_encoders/qwen_3_8b_fp8mixed_abliterated.safetensors",
+      "source": {
+        "kind": "hf",
+        "repo": "edicamargo/qwen_3_8b_fp8mixed_abliterated",
+        "path": "qwen_3_8b_fp8mixed_abliterated.safetensors"
+      },
+      "note": "~9.2 GB Qwen3-8B encoder for the Klein Edit tab - a single-account repo, the category most likely to vanish"
+    },
+    {
+      "repo": "loras",
+      "local": "loras/klein/klein_snofs_v1_4.safetensors",
+      "path_in_repo": "loras/klein/klein_snofs_v1_4.safetensors",
+      "source": {
+        "kind": "civitai",
+        "version": 2960556,
+        "subdir": "loras/klein"
+      }
+    },
+    {
+      "repo": "loras",
+      "local": "loras/klein/ultra_real_v4.safetensors",
+      "path_in_repo": "loras/klein/ultra_real_v4.safetensors",
+      "source": {
+        "kind": "civitai",
+        "version": 2846977,
+        "subdir": "loras/klein"
+      }
+    },
+    {
+      "repo": "loras",
+      "local": "loras/klein/realistic_klein_v3.safetensors",
+      "path_in_repo": "loras/klein/realistic_klein_v3.safetensors",
+      "source": {
+        "kind": "civitai",
+        "version": 2876634,
+        "subdir": "loras/klein"
+      }
     }
   ],
   "node_packs": [
@@ -375,6 +416,8 @@
     "wangkanai/wan21-vae": "hf",
     "huihui-ai/Huihui-Qwen3-VL-4B-Instruct-abliterated": "hf",
     "AdamCodd/vit-base-nsfw-detector": "hf",
+    "black-forest-labs/FLUX.2-klein-9b-fp8": "hf",
+    "edicamargo/qwen_3_8b_fp8mixed_abliterated": "hf",
     "https://github.com/comfyanonymous/ComfyUI.git": "git"
   },
   "scan_ignore_ids": [
