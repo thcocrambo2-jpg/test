@@ -659,9 +659,14 @@ LICENSE_KEY = os.environ.get("KREA2_LICENSE_KEY") or None
 # enough that a pod cut off from the server does not run indefinitely.
 LICENSE_GRACE_SECONDS = float(os.environ.get("KREA2_LICENSE_GRACE", 1800))
 
-# Optional — Comfy-Org/Krea-2 is a public repo; only needed for gated repos.
+# Optional. The mirror repos (see mirror.py) are public, so a customer pod
+# pulls every mirrored weight anonymously; this is only needed for gated
+# upstream repos. Keep it *unset* rather than wrong — a stale token turns
+# an anonymous download into a 401, which reads as "the mirror is missing
+# files" when the real problem is the credential.
 HF_TOKEN = os.environ.get("HF_TOKEN") or None
-# Needed for most CivitAI downloads (create one at civitai.com → account settings).
+# Only needed when a download falls through to CivitAI — i.e. when the
+# mirror could not serve it. A healthy mirrored pod never uses this.
 CIVITAI_TOKEN = os.environ.get("CIVITAI_TOKEN") or None
 
 for _dir in (TEMP_DIR, MODELS_DIR, OUTPUT_DIR):

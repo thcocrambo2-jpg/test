@@ -6,6 +6,7 @@
     "local/path_in_repo are relative to MODELS_DIR and the repo root.",
     "source.kind: civitai | hf | hf_dataset | url | dir | abliterated_merge | local"
   ],
+  "mirror_public": true,
   "repos": {
     "loras": {
       "name": "krea2-loras",
@@ -370,6 +371,10 @@
     "Comfy-Org/Wan_2.2_ComfyUI_Repackaged": "hf",
     "Comfy-Org/flux2-dev": "hf",
     "Gourieff/ReActor": "hf-dataset",
+    "conradlocke/krea2-identity-edit": "hf",
+    "wangkanai/wan21-vae": "hf",
+    "huihui-ai/Huihui-Qwen3-VL-4B-Instruct-abliterated": "hf",
+    "AdamCodd/vit-base-nsfw-detector": "hf",
     "https://github.com/comfyanonymous/ComfyUI.git": "git"
   },
   "scan_ignore_ids": [

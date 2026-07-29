@@ -562,6 +562,12 @@ def main() -> int:
     args = parse_args()
     manifest = load_manifest()
     repos = repo_table(manifest)
+    # Visibility is a property of the mirror, not of how you invoked the
+    # script — the app reads the same flag to decide whether it needs a
+    # token. Keeping both off one key stops a --public-less re-run from
+    # quietly creating a private repo the customer pods cannot read.
+    if manifest.get("mirror_public"):
+        args.public = True
 
     missing = audit(manifest)
     if missing:

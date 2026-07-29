@@ -51,6 +51,21 @@ def main() -> None:
     # rather than having frozen a default at import.
     log.info("Features — %s", features.summary())
 
+    # Where weights will come from. Worth saying out loud: when the mirror
+    # cannot be reached every download quietly falls through to upstream,
+    # so the app keeps working and nothing looks wrong until the day an
+    # upstream file has actually vanished.
+    import mirror
+    from config import HF_TOKEN
+    log.info("Assets — %s", mirror.describe())
+    if mirror.MIRROR_ENABLED and not mirror.MIRROR_PUBLIC and not HF_TOKEN:
+        log.warning(
+            "HF_TOKEN is not set and the mirror repos are private, so every "
+            "download will fall back to its original upstream source — the "
+            "un-mirrored behaviour. Set HF_TOKEN to a token with read "
+            "access to %s.", mirror.MIRROR_USER,
+        )
+
     # 3-4 · Clone ComfyUI (idempotent) and install all requirements.
     bootstrap.install_comfyui()
     bootstrap.install_custom_nodes()

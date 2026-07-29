@@ -15,6 +15,7 @@ import requests
 from huggingface_hub import hf_hub_download, snapshot_download
 
 import features
+import mirror
 from config import (
     ABLITERATED_ENCODER_FILE,
     ABLITERATED_ENCODER_REPO,
@@ -71,11 +72,74 @@ def _with_retries(fn, desc: str):
             time.sleep(wait)
 
 
+def from_mirror(dest: Path, relpath: str) -> bool:
+    """Try YOUR Hugging Face mirror for `relpath`. True if dest now exists.
+
+    Never raises. A mirror miss — deleted file, expired token, HF outage —
+    must degrade to the upstream fallback rather than abort a download that
+    upstream could still satisfy. That is the whole point of having two
+    sources; a mirror that can take the app down with it is not redundancy.
+
+    The mirror itself is not pinned to a revision: it is your repo, only
+    ever appended to, and pinning it would mean re-pinning after every
+    upload. Upstream *is* pinned, because that is the one you do not
+    control.
+    """
+    loc = mirror.location(relpath)
+    if not loc:
+        return False
+    repo, path_in_repo = loc
+    try:
+        got = _with_retries(
+            lambda: hf_hub_download(
+                repo_id=repo, filename=path_in_repo,
+                local_dir=MODELS_DIR, token=mirror.token(),
+            ),
+            desc=f"{relpath} (mirror)",
+        )
+        src = Path(got)
+        if src.resolve() != dest.resolve():
+            # Alias case: the mirror stores one canonical filename and
+            # config.py asked for the other spelling of the same blob.
+            dest.parent.mkdir(parents=True, exist_ok=True)
+            src.replace(dest)
+        log.info("✓ %s (mirror: %s)", relpath, repo)
+        return True
+    except Exception as exc:
+        log.warning("Mirror %s could not serve %s (%s) — falling back to "
+                    "upstream.", repo, path_in_repo, exc)
+        return False
+
+
+def dir_from_mirror(local_prefix: str) -> bool:
+    """Same, for a whole folder (buffalo_l, the NSFW detector)."""
+    loc = mirror.location(local_prefix)
+    if not loc:
+        return False
+    repo, path_in_repo = loc
+    try:
+        _with_retries(
+            lambda: snapshot_download(
+                repo_id=repo, local_dir=MODELS_DIR, token=mirror.token(),
+                allow_patterns=[f"{path_in_repo}/*"],
+            ),
+            desc=f"{local_prefix} (mirror)",
+        )
+        log.info("✓ %s (mirror: %s)", local_prefix, repo)
+        return True
+    except Exception as exc:
+        log.warning("Mirror %s could not serve %s (%s) — falling back to "
+                    "upstream.", repo, local_prefix, exc)
+        return False
+
+
 def fetch_hf_file(relpath: str) -> None:
     """Download one Comfy-Org/Krea-2 file into MODELS_DIR, keeping its subfolder."""
     dest = MODELS_DIR / relpath
     if dest.exists():
         log.info("✓ %s (cached)", relpath)
+        return
+    if from_mirror(dest, relpath):
         return
     log.info("↓ %s ...", relpath)
     _with_retries(
@@ -84,6 +148,7 @@ def fetch_hf_file(relpath: str) -> None:
             filename=relpath,
             local_dir=MODELS_DIR,
             token=HF_TOKEN,
+            revision=mirror.revision(HF_MODEL_REPO),
         ),
         desc=relpath,
     )
@@ -91,9 +156,15 @@ def fetch_hf_file(relpath: str) -> None:
 
 def fetch_abliterated_encoder() -> None:
     """Download the abliterated Qwen3-VL shards and merge them into one file."""
-    dest = MODELS_DIR / "text_encoders" / ABLITERATED_ENCODER_FILE
+    relpath = f"text_encoders/{ABLITERATED_ENCODER_FILE}"
+    dest = MODELS_DIR / relpath
     if dest.exists():
         log.info("✓ %s (cached)", ABLITERATED_ENCODER_FILE)
+        return
+    # The mirror stores the *merged* file, so a hit here skips the shard
+    # download and the merge below entirely — several minutes and a large
+    # transient disk+RAM spike on every cold pod.
+    if from_mirror(dest, relpath):
         return
     log.info("↓ %s (from %s) ...", ABLITERATED_ENCODER_FILE, ABLITERATED_ENCODER_REPO)
     snap = _with_retries(
@@ -120,9 +191,12 @@ def fetch_abliterated_encoder() -> None:
 
 def fetch_edit_lora() -> None:
     """Download the Krea 2 Identity Edit LoRA into the loras folder."""
-    dest = MODELS_DIR / "loras" / EDIT_LORA_FILE
+    relpath = f"loras/{EDIT_LORA_FILE}"
+    dest = MODELS_DIR / relpath
     if dest.exists():
         log.info("✓ %s (cached)", EDIT_LORA_FILE)
+        return
+    if from_mirror(dest, relpath):
         return
     log.info("↓ %s (from %s) ...", EDIT_LORA_FILE, EDIT_LORA_REPO)
     _with_retries(
@@ -131,6 +205,7 @@ def fetch_edit_lora() -> None:
             filename=EDIT_LORA_FILE,
             local_dir=MODELS_DIR / "loras",
             token=HF_TOKEN,
+            revision=mirror.revision(EDIT_LORA_REPO),
         ),
         desc=EDIT_LORA_FILE,
     )
@@ -147,6 +222,8 @@ def fetch_repackaged_file(repo: str, relpath: str) -> None:
     if dest.exists():
         log.info("✓ %s (cached)", relpath)
         return
+    if from_mirror(dest, relpath):
+        return
     log.info("↓ %s (from %s) ...", relpath, repo)
 
     def _download():
@@ -155,6 +232,7 @@ def fetch_repackaged_file(repo: str, relpath: str) -> None:
             filename=f"split_files/{relpath}",
             local_dir=MODELS_DIR,
             token=HF_TOKEN,
+            revision=mirror.revision(repo),
         )
         dest.parent.mkdir(parents=True, exist_ok=True)
         Path(path).rename(dest)
@@ -169,6 +247,11 @@ def fetch_civitai_file(version_id: int, filename: str,
     dest.parent.mkdir(parents=True, exist_ok=True)
     if dest.exists():
         log.info("✓ %s (cached)", filename)
+        return
+    # CivitAI is the source most likely to have deleted the file by now,
+    # so the mirror matters more here than anywhere else — and it needs no
+    # CIVITAI_TOKEN.
+    if from_mirror(dest, f"{subdir}/{filename}"):
         return
 
     def _download():
@@ -222,12 +305,15 @@ def fetch_dataset_file(repo: str, relpath: str, dest: Path) -> None:
     if dest.exists():
         log.info("✓ %s (cached)", dest.name)
         return
+    if from_mirror(dest, dest.relative_to(MODELS_DIR).as_posix()):
+        return
     log.info("↓ %s (from %s) ...", relpath, repo)
 
     def _download():
         path = hf_hub_download(
             repo_id=repo, filename=relpath, repo_type="dataset",
             local_dir=MODELS_DIR, token=HF_TOKEN,
+            revision=mirror.revision(repo),
         )
         dest.parent.mkdir(parents=True, exist_ok=True)
         Path(path).rename(dest)
@@ -246,6 +332,10 @@ def fetch_url_file(url: str, dest: Path) -> None:
         log.info("✓ %s (cached)", dest.name)
         return
     dest.parent.mkdir(parents=True, exist_ok=True)
+    # Both of these are GitHub *release* assets on effectively abandoned
+    # repos, which is exactly the kind of URL that 404s one day.
+    if from_mirror(dest, dest.relative_to(MODELS_DIR).as_posix()):
+        return
 
     def _download():
         part = dest.with_suffix(dest.suffix + ".part")
@@ -287,6 +377,10 @@ def fetch_insightface_pack() -> None:
     if (dest_dir / "det_10g.onnx").exists():
         log.info("✓ %s (cached)", REACTOR_INSIGHTFACE_PACK)
         return
+    # The mirror holds the ONNX files already unpacked, so a hit skips the
+    # zip download, the flattening workaround and the temp disk it needs.
+    if dir_from_mirror(dest_dir.relative_to(MODELS_DIR).as_posix()):
+        return
     zip_path = MODELS_DIR / "insightface" / f"{REACTOR_INSIGHTFACE_PACK}.zip"
     fetch_dataset_file(REACTOR_HF_REPO, REACTOR_INSIGHTFACE_ZIP, zip_path)
     dest_dir.mkdir(parents=True, exist_ok=True)
@@ -315,10 +409,13 @@ def fetch_nsfw_detector() -> None:
     if (dest / "config.json").exists():
         log.info("✓ %s (cached)", REACTOR_NSFW_REPO)
         return
+    if dir_from_mirror(REACTOR_NSFW_DIR):
+        return
     log.info("↓ %s (from %s) ...", REACTOR_NSFW_DIR, REACTOR_NSFW_REPO)
     _with_retries(
         lambda: snapshot_download(
             repo_id=REACTOR_NSFW_REPO, local_dir=dest, token=HF_TOKEN,
+            revision=mirror.revision(REACTOR_NSFW_REPO),
             ignore_patterns=["*.h5", "*.msgpack", "*.onnx"],
         ),
         desc=REACTOR_NSFW_REPO,
@@ -335,11 +432,14 @@ def fetch_hf_file_to(repo: str, relpath: str, dest: Path) -> None:
     if dest.exists():
         log.info("✓ %s (cached)", dest.name)
         return
+    if from_mirror(dest, dest.relative_to(MODELS_DIR).as_posix()):
+        return
     log.info("↓ %s (from %s) ...", relpath, repo)
 
     def _download():
         path = hf_hub_download(repo_id=repo, filename=relpath,
-                               local_dir=MODELS_DIR, token=HF_TOKEN)
+                               local_dir=MODELS_DIR, token=HF_TOKEN,
+                               revision=mirror.revision(repo))
         dest.parent.mkdir(parents=True, exist_ok=True)
         Path(path).rename(dest)
 

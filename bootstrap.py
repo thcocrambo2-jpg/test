@@ -10,8 +10,11 @@ standard PyTorch base image's torch / transformers / safetensors / requests.
 import shutil
 import subprocess
 import sys
+import tarfile
+from pathlib import Path
 
 import features
+import mirror
 from config import (
     COMFY_DIR,
     FROZEN,
@@ -84,15 +87,79 @@ def run_cmd(cmd: list, cwd=None, desc: str | None = None) -> None:
         )
 
 
+def clone_pinned(url: str, dest, name: str, desc: str) -> None:
+    """Clone `url` at the revision PINS.json records for `name`.
+
+    An unpinned `git clone --depth 1` means "whatever is on main today",
+    which is how a pod that worked yesterday breaks with no change on your
+    side — ComfyUI moves constantly and RES4LYF renames node parameters.
+    Pinning is what makes two pods byte-identical.
+
+    Falls back to shallow-cloning HEAD when there is no pin, because an
+    unpinned checkout still beats no app at all; the log says which you got.
+    """
+    sha = mirror.node_pin(name).get("sha")
+    if not sha:
+        log.warning("No pin recorded for %s — cloning HEAD, which may not "
+                    "be the revision this release was tested against.", name)
+        run_cmd(["git", "clone", "--depth", "1", url, dest], desc=desc)
+        return
+    # Not --depth 1: a shallow clone of main cannot check out an arbitrary
+    # older commit, which is exactly what a pin usually is.
+    run_cmd(["git", "clone", url, dest], desc=desc)
+    run_cmd(["git", "-C", dest, "checkout", "--quiet", sha],
+            desc=f"Pinning {name} to {sha[:8]}")
+
+
+def node_pack_from_mirror(dirname: str, dest) -> bool:
+    """Install a custom-node pack from the mirror's pinned tarball.
+
+    Preferred over cloning because the tarball IS the pin — it was packed
+    from the commit that was verified working, so there is no window where
+    a rename upstream and a stale pin disagree. Cloning stays the fallback.
+    """
+    pin = mirror.node_pin(dirname)
+    tarball, repo = pin.get("tarball"), mirror.repo_id("nodes")
+    if not (mirror.MIRROR_ENABLED and tarball and repo):
+        return False
+    try:
+        from huggingface_hub import hf_hub_download
+
+        path = hf_hub_download(repo_id=repo, filename=tarball,
+                               token=mirror.token())
+        dest.parent.mkdir(parents=True, exist_ok=True)
+        with tarfile.open(path) as tf:
+            try:
+                # Refuses absolute paths and ../ escapes; a mirror is still
+                # a remote archive being unpacked into ComfyUI's tree.
+                tf.extractall(dest.parent, filter="data")
+            except TypeError:
+                tf.extractall(dest.parent)      # Python < 3.12
+        if dest.exists():
+            log.info("Installed %s from mirror tarball (%s)",
+                     dirname, (pin.get("sha") or "")[:8])
+            return True
+        log.warning("Mirror tarball for %s did not contain %s — cloning "
+                    "instead.", dirname, dest.name)
+        return False
+    except Exception as exc:
+        log.warning("Mirror has no usable tarball for %s (%s) — cloning "
+                    "from GitHub.", dirname, exc)
+        return False
+
+
+def install_node_pack(dirname: str, url: str, dest, desc: str) -> None:
+    """Mirror tarball first, pinned clone second. Raises if both fail."""
+    if not node_pack_from_mirror(dirname, dest):
+        clone_pinned(url, dest, dirname, desc)
+
+
 def install_comfyui() -> None:
-    """Clone current ComfyUI (idempotent) and install its requirements."""
+    """Clone ComfyUI at its pinned revision (idempotent) and install reqs."""
     if (COMFY_DIR / "main.py").exists():
         log.info("ComfyUI already present at %s — skipping clone", COMFY_DIR)
     else:
-        run_cmd(
-            ["git", "clone", "--depth", "1", COMFYUI_REPO, COMFY_DIR],
-            desc="Cloning ComfyUI",
-        )
+        clone_pinned(COMFYUI_REPO, COMFY_DIR, "ComfyUI", "Cloning ComfyUI")
     # ComfyUI's requirements always install — they belong to the subprocess,
     # not to us. The app's own (gradio, huggingface_hub, ...) are compiled
     # into the binary by build.sh, so re-installing them on someone else's
@@ -121,10 +188,8 @@ def install_custom_nodes() -> None:
     if dest.exists():
         log.info("Krea2Edit nodes already present at %s — skipping clone", dest)
         return
-    run_cmd(
-        ["git", "clone", "--depth", "1", KREA2EDIT_NODES_REPO, dest],
-        desc="Cloning ComfyUI-Krea2Edit nodes",
-    )
+    install_node_pack("comfyui-krea2edit", KREA2EDIT_NODES_REPO, dest,
+                      "Cloning ComfyUI-Krea2Edit nodes")
 
 
 def install_v2_nodes() -> None:
@@ -147,8 +212,7 @@ def install_v2_nodes() -> None:
             log.info("%s already present at %s — skipping clone", dirname, dest)
         else:
             try:
-                run_cmd(["git", "clone", "--depth", "1", repo, dest],
-                        desc=f"Cloning {dirname}")
+                install_node_pack(dirname, repo, dest, f"Cloning {dirname}")
             except RuntimeError as exc:
                 log.error("Could not clone %s (%s) — the Krea 2 V2 tab will "
                           "refuse to run until it is installed.", dirname, exc)
