@@ -1,4 +1,8 @@
 {
+  "AdamCodd/vit-base-nsfw-detector": {
+    "kind": "hf",
+    "sha": "8587de998f441aac03fdd57a85d2e4cb808c7d64"
+  },
   "Comfy-Org/Krea-2": {
     "kind": "hf",
     "sha": "952f49d49653cb42e7d6cf7cbfad74738073ec7d"
@@ -16,13 +20,13 @@
     "url": "https://github.com/comfyanonymous/ComfyUI.git"
   },
   "ComfyUI-RBG-SmartSeedVariance": {
-    "sha": "318ce57d13620a78f2cc71453488e028515f2a2a",
-    "tarball": "ComfyUI-RBG-SmartSeedVariance-318ce57d.tar.gz",
+    "sha": "e651b7bef55a5376343dcb1c0edb79f0142c985e",
+    "tarball": "ComfyUI-RBG-SmartSeedVariance-e651b7be.tar.gz",
     "url": "https://github.com/RamonGuthrie/ComfyUI-RBG-SmartSeedVariance"
   },
   "ComfyUI-post-processing-nodes": {
-    "sha": "c49a05254795403648f2c1774b6f5ea39f96e7d5",
-    "tarball": "ComfyUI-post-processing-nodes-c49a0525.tar.gz",
+    "sha": "e651b7bef55a5376343dcb1c0edb79f0142c985e",
+    "tarball": "ComfyUI-post-processing-nodes-e651b7be.tar.gz",
     "url": "https://github.com/EllangoK/ComfyUI-post-processing-nodes"
   },
   "Gourieff/ReActor": {
@@ -30,8 +34,8 @@
     "sha": "218401e38fb00476b38f319c043b2f85d4db5b87"
   },
   "RES4LYF": {
-    "sha": "022c873c6d198c67b3312a1804336533a050df18",
-    "tarball": "RES4LYF-022c873c.tar.gz",
+    "sha": "e651b7bef55a5376343dcb1c0edb79f0142c985e",
+    "tarball": "RES4LYF-e651b7be.tar.gz",
     "url": "https://github.com/ClownsharkBatwing/RES4LYF"
   },
   "_note": "SHAs/revisions captured at mirror time. Feed these to bootstrap.py clones and hf_hub_download(revision=...). The mirror and the upstream fallback MUST resolve to the same revision.",
@@ -39,13 +43,20 @@
     "kind": "hf",
     "sha": "902d9d510b51533e07729f19211414a3648b77d2"
   },
-  "comfyui-krea2edit": {
-    "sha": "bdfa8b267fdb13730868d435b277dcfe696ec083",
-    "tarball": "comfyui-krea2edit-bdfa8b26.tar.gz",
-    "url": "https://github.com/lbouaraba/comfyui-krea2edit"
+  "conradlocke/krea2-identity-edit": {
+    "kind": "hf",
+    "sha": "2686ea3601417448f9649f6e74ca7103d446da96"
   },
   "edicamargo/qwen_3_8b_fp8mixed_abliterated": {
     "kind": "hf",
     "sha": "cdef062908287d72b2f3e6358bc8a1b17b77ad75"
+  },
+  "huihui-ai/Huihui-Qwen3-VL-4B-Instruct-abliterated": {
+    "kind": "hf",
+    "sha": "ce72a7c22aacb493fb94478de3bfbe834c61844a"
+  },
+  "wangkanai/wan21-vae": {
+    "kind": "hf",
+    "sha": "c8df74e1c6566116f0c060a2d0136847ccc49b6f"
   }
 }
