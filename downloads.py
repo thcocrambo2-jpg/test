@@ -42,6 +42,13 @@ from config import (
     REACTOR_NSFW_DIR,
     REACTOR_NSFW_REPO,
     TEXT_ENCODER_FILE,
+    V2_ENABLED,
+    V2_LORA_STACK,
+    V2_UNET_FILE,
+    V2_UNET_HF_PATH,
+    V2_VAE_FILE,
+    V2_VAE_HF_PATH,
+    V2_VAE_HF_REPO,
     WAN_ENABLED,
     WAN_HF_FILES,
     WAN_HF_REPO,
@@ -322,6 +329,58 @@ def fetch_nsfw_detector() -> None:
     )
 
 
+def fetch_hf_file_to(repo: str, relpath: str, dest: Path) -> None:
+    """Download one file from a HF *model* repo to an exact local path.
+
+    fetch_hf_file mirrors the repo's layout under MODELS_DIR, which only
+    works when that layout already matches ComfyUI's. The V2 VAE lives at
+    vae/wan/ upstream and has to land in vae/, so it is placed explicitly.
+    """
+    if dest.exists():
+        log.info("✓ %s (cached)", dest.name)
+        return
+    log.info("↓ %s (from %s) ...", relpath, repo)
+
+    def _download():
+        path = hf_hub_download(repo_id=repo, filename=relpath,
+                               local_dir=MODELS_DIR, token=HF_TOKEN)
+        dest.parent.mkdir(parents=True, exist_ok=True)
+        Path(path).rename(dest)
+
+    _with_retries(_download, desc=relpath)
+
+
+def download_v2_models() -> None:
+    """Fetch the Krea 2 V2 tab's UNet, VAE and LoRA stack (~17 GB).
+
+    Every item is independent: a missing file disables or degrades only the
+    V2 tab, which names what it is waiting for, and the next run retries it.
+    LoRAs already fetched elsewhere (the HF turbo LoRA) carry no version id
+    and are skipped here.
+    """
+    try:
+        fetch_hf_file(V2_UNET_HF_PATH)
+    except Exception as exc:
+        log.error("Krea 2 V2 model %s unavailable (%s) — the V2 tab will "
+                  "refuse to run until a later run fetches it.",
+                  V2_UNET_FILE, exc)
+    try:
+        fetch_hf_file_to(V2_VAE_HF_REPO, V2_VAE_HF_PATH,
+                         MODELS_DIR / "vae" / V2_VAE_FILE)
+    except Exception as exc:
+        log.error("Krea 2 V2 VAE %s unavailable (%s) — the V2 tab will "
+                  "refuse to run until a later run fetches it.",
+                  V2_VAE_FILE, exc)
+    for filename, _strength, _enabled, version_id in V2_LORA_STACK:
+        if version_id is None:
+            continue  # comes from Hugging Face with the other style LoRAs
+        try:
+            fetch_civitai_file(version_id, filename)
+        except Exception as exc:
+            # One missing LoRA only empties one slot in the V2 stack.
+            log.error("Skipping Krea 2 V2 LoRA %s: %s", filename, exc)
+
+
 def download_reactor_models() -> None:
     """Fetch everything the Face Swap tab needs, before ComfyUI starts.
 
@@ -432,6 +491,8 @@ def download_everything() -> None:
                                    subdir=f"loras/{FLUX_LORA_SUBDIR}")
             except Exception as exc:
                 log.error("Skipping Flux LoRA %s: %s", filename, exc)
+    if V2_ENABLED:
+        download_v2_models()
     if REACTOR_ENABLED:
         download_reactor_models()
     if CIVITAI_LORAS and not CIVITAI_TOKEN:

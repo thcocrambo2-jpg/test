@@ -44,6 +44,21 @@ from config import (
     RESOLUTION_PRESETS,
     SAMPLERS,
     TEMP_DIR,
+    V2_ASPECT_RATIOS,
+    V2_DEFAULT_ASPECT,
+    V2_DEFAULT_MEGAPIXELS,
+    V2_DEFAULT_MULTIPLE,
+    V2_DEFAULT_NEGATIVE,
+    V2_ENABLED,
+    V2_SAMPLER_DEFAULTS,
+    V2_SAMPLER_MODES,
+    V2_SAMPLER_NAMES,
+    V2_SCHEDULERS,
+    V2_UNET_FILE,
+    V2_VARIANCE_DEFAULTS,
+    V2_VARIANCE_MODEL_TYPES,
+    V2_VARIANCE_PRESETS,
+    V2_VARIANCE_SCHEDULES,
     WAN_5B_DEFAULTS,
     WAN_5B_FPS,
     WAN_DEFAULT_NEGATIVE,
@@ -78,6 +93,12 @@ from workflow_flux import (
     list_flux_lora_files,
     resolve_flux_lora,
     resolve_flux_model,
+)
+from workflow_krea2_v2 import (
+    build_v2_workflow,
+    default_lora_slots as v2_default_lora_slots,
+    resolve_size as v2_resolve_size,
+    status as v2_status,
 )
 from workflow_reactor import (
     build_faceswap_workflow,
@@ -322,6 +343,128 @@ def generate_flux(prompt, seed, randomize, steps, guidance, resolution,
     for images, status in _run_jobs(jobs, builder=build_flux_workflow,
                                     prefix="Flux2"):
         yield images, status, base_seed
+
+
+# ── Krea 2 V2 (DesiMuseAI graph) ─────────────────────────────────────────────
+# This tab is deliberately self-contained: its own model, VAE, LoRA stack,
+# sampler and defaults, all taken from the source workflow. Nothing here
+# reads DEFAULTS, MODEL_CHOICES or LORA_CHOICES, so tuning the Single tab
+# never moves it.
+
+V2_LORA_SLOTS = v2_default_lora_slots()
+V2_LORA_CHOICES = ["None"] + list_lora_files()
+
+
+def _resolve_v2_lora_slots(*slots) -> list:
+    """Flat (enabled, name, weight) × N UI values → (file, strength) pairs.
+
+    Mirrors the source workflow's Power Lora Loader: a row contributes only
+    while its checkbox is on, and order is preserved because LoRA
+    application is not commutative.
+    """
+    loras = []
+    for enabled, name, weight in zip(slots[::3], slots[1::3], slots[2::3]):
+        if not enabled:
+            continue
+        lora_file = resolve_lora_name(name)
+        if lora_file:
+            loras.append((lora_file, float(weight)))
+    return loras
+
+
+def _v2_size_text(aspect, megapixels, multiple) -> str:
+    """'this resolves to W×H' line under the resolution controls."""
+    width, height = v2_resolve_size(aspect, megapixels, multiple)
+    return f"→ **{width} × {height}** ({width * height / 1e6:.2f} MP actual)"
+
+
+def v2_size_preview(aspect, megapixels, multiple):
+    """Recompute that line when any of the three controls changes."""
+    return gr.Markdown(value=_v2_size_text(aspect, megapixels, multiple))
+
+
+def generate_v2(prompt, negative, seed, randomize, aspect, megapixels,
+                multiple, eta, sampler_name, scheduler, steps, denoise, cfg,
+                sampler_mode, bongmath, variance_preset, fine_tune_variance,
+                variance_model_type, variance_schedule, cutoff_step,
+                total_steps, cutoff_strength, shift_strength, sharpen,
+                film_grain, batch_count, *lora_slots):
+    """Krea 2 V2 tab: the DesiMuseAI turbo/raw text-to-image graph."""
+    ready, message = v2_status()
+    if not ready:
+        yield [], message, 0
+        return
+    base_seed = random.randint(0, 2**32 - 1) if randomize else int(seed)
+    width, height = v2_resolve_size(aspect, megapixels, multiple)
+    loras = _resolve_v2_lora_slots(*lora_slots)
+    sampler_settings = {
+        "eta": float(eta), "sampler_name": sampler_name,
+        "scheduler": scheduler, "steps": int(steps),
+        "denoise": float(denoise), "cfg": float(cfg),
+        "sampler_mode": sampler_mode, "bongmath": bool(bongmath),
+    }
+    variance_settings = {
+        "variance_preset": variance_preset,
+        "fine_tune_variance": int(fine_tune_variance),
+        "model_type": variance_model_type,
+        "variance_schedule": variance_schedule,
+        "cutoff_step": int(cutoff_step), "total_steps": int(total_steps),
+        "cutoff_strength": float(cutoff_strength),
+        "shift_strength": int(shift_strength),
+    }
+    jobs = [{
+        "prompt": prompt, "negative": negative or "", "seed": base_seed + i,
+        "width": width, "height": height, "loras": loras,
+        "sampler_settings": sampler_settings,
+        "variance_settings": variance_settings,
+        "sharpen": bool(sharpen), "film_grain": bool(film_grain),
+    } for i in range(int(batch_count))]
+    for images, status in _run_jobs(jobs, builder=build_v2_workflow,
+                                    prefix="Krea2V2"):
+        yield images, status, base_seed
+
+
+def refresh_v2_lora_choices():
+    """Re-scan the LoRA folder for this tab's dropdowns."""
+    choices = ["None"] + list_lora_files()
+    return [gr.Dropdown(choices=choices) for _ in range(len(V2_LORA_SLOTS))]
+
+
+def _v2_lora_stack():
+    """The workflow's LoRA rows, each with the on/off toggle it ships with.
+
+    Unlike _lora_stack these rows are fixed to the source workflow's stack
+    rather than config.DEFAULT_LORAS, and each carries an Enable checkbox
+    because that is what rgthree's Power Lora Loader exposes. Returns
+    (checkboxes, dropdowns, weights) in slot order.
+    """
+    gr.Markdown(
+        "### 🎭 LoRA stack — model + CLIP\n"
+        "The workflow's stack, in its original order, strengths and on/off "
+        "states. Each strength applies to the model *and* the text encoder."
+    )
+    cbs, dds, ws = [], [], []
+    for index, (on, name, strength) in enumerate(V2_LORA_SLOTS):
+        with gr.Row():
+            cbs.append(gr.Checkbox(
+                value=on, label="On", scale=0, min_width=70,
+                interactive=name in V2_LORA_CHOICES,
+            ))
+            dds.append(gr.Dropdown(
+                choices=V2_LORA_CHOICES,
+                value=name if name in V2_LORA_CHOICES else "None",
+                label=f"LoRA {index + 1}", scale=3,
+            ))
+            ws.append(gr.Slider(0.0, 2.0, value=strength, step=0.01,
+                                label="Strength", scale=1))
+    gr.Button("🔄 Rescan LoRA folder", size="sm").click(
+        fn=refresh_v2_lora_choices, outputs=dds)
+    return cbs, dds, ws
+
+
+def _v2_lora_inputs(cbs, dds, ws) -> list:
+    """Interleave the V2 slot triples for the handler's *lora_slots tail."""
+    return [c for triple in zip(cbs, dds, ws) for c in triple]
 
 
 def _prepare_inpaint_inputs(editor_value, grow_px: int, blur_px: int):
@@ -972,6 +1115,198 @@ with gr.Blocks(title="Krea 2 on RunPod") as ui:
                         *_lora_inputs(lora_dds, lora_ws)],
                 outputs=[gallery, status_box, seed_out],
             )
+
+        if V2_ENABLED:
+            with gr.Tab("🔶 Krea 2 V2"):
+                _v2_message = v2_status()[1]
+                gr.Markdown(
+                    "The **DesiMuseAI KREA 2 TURBO/RAW** graph, reproduced "
+                    f"as-is: `{V2_UNET_FILE}` with the Wan 2.1 VAE, an 11-LoRA "
+                    "model+CLIP stack, RES4LYF's **ClownsharKSampler** "
+                    "(`linear/euler` + `bong_tangent`, eta 0.5, bongmath on) "
+                    "and **RBG Smart Seed Variance** on the positive prompt. "
+                    "Every default below is the workflow's own — this tab "
+                    "shares nothing with the Single tab.\n\n"
+                    f"{_v2_message}"
+                )
+                with gr.Row():
+                    with gr.Column(scale=2):
+                        v2_prompt = gr.Textbox(
+                            label="Positive Prompt", lines=6,
+                            placeholder="The source workflow ships this box "
+                                        "empty — describe your image here.",
+                        )
+                        v2_negative = gr.Textbox(
+                            label="Negatives", lines=6,
+                            value=V2_DEFAULT_NEGATIVE,
+                        )
+                        gr.Markdown("### 📐 Resolution")
+                        with gr.Row():
+                            v2_aspect = gr.Dropdown(
+                                choices=list(V2_ASPECT_RATIOS),
+                                value=V2_DEFAULT_ASPECT, label="Aspect ratio",
+                            )
+                            v2_megapixels = gr.Slider(
+                                0.5, 4.0, value=V2_DEFAULT_MEGAPIXELS,
+                                step=0.1, label="Megapixels",
+                            )
+                            v2_multiple = gr.Slider(
+                                8, 64, value=V2_DEFAULT_MULTIPLE, step=8,
+                                label="Multiple of",
+                            )
+                        v2_size_info = gr.Markdown(_v2_size_text(
+                            V2_DEFAULT_ASPECT, V2_DEFAULT_MEGAPIXELS,
+                            V2_DEFAULT_MULTIPLE,
+                        ))
+                        for _control in (v2_aspect, v2_megapixels, v2_multiple):
+                            _control.change(
+                                fn=v2_size_preview,
+                                inputs=[v2_aspect, v2_megapixels, v2_multiple],
+                                outputs=v2_size_info,
+                            )
+                        with gr.Row():
+                            v2_seed = gr.Number(label="Seed", value=370102505887178,
+                                                precision=0)
+                            v2_randomize = gr.Checkbox(
+                                label="🎲 Random seed", value=True
+                            )
+                            v2_batch = gr.Slider(1, 20, value=1, step=1,
+                                                 label="Batch count")
+                        v2_cbs, v2_dds, v2_ws = _v2_lora_stack()
+                        v2_generate_btn = gr.Button(
+                            "🚀 Generate", variant="primary", size="lg"
+                        )
+                    with gr.Column(scale=3):
+                        v2_gallery = gr.Gallery(label="Output", columns=2,
+                                                height=600)
+                        v2_status_box = gr.Textbox(label="Status",
+                                                   interactive=False)
+                        v2_seed_out = gr.Number(label="Base seed used",
+                                                interactive=False, precision=0)
+                        with gr.Accordion("⚙️ ClownsharKSampler", open=True):
+                            with gr.Row():
+                                v2_steps = gr.Slider(
+                                    1, 100, value=V2_SAMPLER_DEFAULTS["steps"],
+                                    step=1, label="Steps",
+                                )
+                                v2_cfg = gr.Slider(
+                                    0.0, 20.0, value=V2_SAMPLER_DEFAULTS["cfg"],
+                                    step=0.1, label="CFG",
+                                )
+                            with gr.Row():
+                                v2_sampler_name = gr.Dropdown(
+                                    choices=V2_SAMPLER_NAMES,
+                                    value=V2_SAMPLER_DEFAULTS["sampler_name"],
+                                    label="Sampler", allow_custom_value=True,
+                                )
+                                v2_scheduler = gr.Dropdown(
+                                    choices=V2_SCHEDULERS,
+                                    value=V2_SAMPLER_DEFAULTS["scheduler"],
+                                    label="Scheduler", allow_custom_value=True,
+                                )
+                            gr.Markdown(
+                                "RES4LYF builds its sampler/scheduler lists at "
+                                "load time, so both accept free text — the "
+                                "listed values are the workflow's plus the "
+                                "node's own defaults."
+                            )
+                            with gr.Row():
+                                v2_eta = gr.Slider(
+                                    0.0, 2.0, value=V2_SAMPLER_DEFAULTS["eta"],
+                                    step=0.01, label="Eta",
+                                )
+                                v2_denoise = gr.Slider(
+                                    0.0, 1.0,
+                                    value=V2_SAMPLER_DEFAULTS["denoise"],
+                                    step=0.01, label="Denoise",
+                                )
+                            with gr.Row():
+                                v2_sampler_mode = gr.Dropdown(
+                                    choices=V2_SAMPLER_MODES,
+                                    value=V2_SAMPLER_DEFAULTS["sampler_mode"],
+                                    label="Sampler mode",
+                                )
+                                v2_bongmath = gr.Checkbox(
+                                    label="bongmath",
+                                    value=V2_SAMPLER_DEFAULTS["bongmath"],
+                                )
+                        with gr.Accordion("🌱 Smart Seed Variance", open=False):
+                            gr.Markdown(
+                                "Perturbs the positive conditioning per seed, "
+                                "so a batch varies without drifting off-prompt."
+                            )
+                            with gr.Row():
+                                v2_variance_preset = gr.Dropdown(
+                                    choices=V2_VARIANCE_PRESETS,
+                                    value=V2_VARIANCE_DEFAULTS["variance_preset"],
+                                    label="Preset",
+                                )
+                                v2_fine_tune = gr.Slider(
+                                    0, 100,
+                                    value=V2_VARIANCE_DEFAULTS["fine_tune_variance"],
+                                    step=1, label="Fine tune",
+                                )
+                            v2_variance_model = gr.Dropdown(
+                                choices=V2_VARIANCE_MODEL_TYPES,
+                                value=V2_VARIANCE_DEFAULTS["model_type"],
+                                label="Model type",
+                            )
+                            with gr.Row():
+                                v2_variance_schedule = gr.Dropdown(
+                                    choices=V2_VARIANCE_SCHEDULES,
+                                    value=V2_VARIANCE_DEFAULTS["variance_schedule"],
+                                    label="Schedule",
+                                )
+                                v2_shift_strength = gr.Slider(
+                                    0, 200,
+                                    value=V2_VARIANCE_DEFAULTS["shift_strength"],
+                                    step=1, label="Shift strength",
+                                )
+                            with gr.Row():
+                                v2_cutoff_step = gr.Slider(
+                                    0, 100,
+                                    value=V2_VARIANCE_DEFAULTS["cutoff_step"],
+                                    step=1, label="Cutoff step",
+                                )
+                                v2_total_steps = gr.Slider(
+                                    1, 100,
+                                    value=V2_VARIANCE_DEFAULTS["total_steps"],
+                                    step=1, label="Total steps",
+                                )
+                                v2_cutoff_strength = gr.Slider(
+                                    0.0, 1.0,
+                                    value=V2_VARIANCE_DEFAULTS["cutoff_strength"],
+                                    step=0.1, label="Cutoff strength",
+                                )
+                        with gr.Accordion("🎞️ Post-processing", open=False):
+                            gr.Markdown(
+                                "Both are **bypassed in the source workflow**, "
+                                "so both start off and the tab reproduces it "
+                                "exactly as shipped. Sharpen runs first, then "
+                                "grain."
+                            )
+                            v2_sharpen = gr.Checkbox(
+                                label="Sharpen (radius 1, sigma 0.35, alpha 1)",
+                                value=False,
+                            )
+                            v2_grain = gr.Checkbox(
+                                label="Film grain (intensity 0.05, scale 1)",
+                                value=False,
+                            )
+                v2_generate_btn.click(
+                    fn=generate_v2,
+                    inputs=[v2_prompt, v2_negative, v2_seed, v2_randomize,
+                            v2_aspect, v2_megapixels, v2_multiple,
+                            v2_eta, v2_sampler_name, v2_scheduler, v2_steps,
+                            v2_denoise, v2_cfg, v2_sampler_mode, v2_bongmath,
+                            v2_variance_preset, v2_fine_tune,
+                            v2_variance_model, v2_variance_schedule,
+                            v2_cutoff_step, v2_total_steps,
+                            v2_cutoff_strength, v2_shift_strength,
+                            v2_sharpen, v2_grain, v2_batch,
+                            *_v2_lora_inputs(v2_cbs, v2_dds, v2_ws)],
+                    outputs=[v2_gallery, v2_status_box, v2_seed_out],
+                )
 
         with gr.Tab("✨ Edit (Instruction)"):
             gr.Markdown(

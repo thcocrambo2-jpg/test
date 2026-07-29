@@ -139,6 +139,174 @@ HF_LORA_FILES = [
     # "loras/krea2_vintagetarot.safetensors",
 ]
 
+# ── Krea 2 V2 (DesiMuseAI turbo/raw text-to-image) ────────────────────────────
+# A second, self-contained text-to-image pipeline: the DesiMuseAI
+# "KREA 2 TURBO/RAW" workflow, reproduced node-for-node in its own tab. It
+# deliberately shares nothing with the tabs above except the text encoder —
+# its own UNet quant, its own VAE, its own LoRA stack and its own defaults,
+# so tuning one never moves the other.
+#
+# Three things make it different from the Single tab:
+#   • RES4LYF's ClownsharKSampler_Beta replaces KSampler (eta/bongmath and
+#     the bong_tangent scheduler have no core equivalent),
+#   • an RBG Smart Seed Variance node sits between the positive prompt and
+#     the sampler, perturbing the conditioning per seed,
+#   • LoRAs apply to the model *and* the CLIP (the source workflow uses
+#     rgthree's Power Lora Loader in "Single Strength" mode), unlike the
+#     LoraLoaderModelOnly chain the other Krea tabs build.
+# Set KREA2_DISABLE_V2=1 to skip its ~17 GB of downloads and hide the tab.
+V2_ENABLED = not os.environ.get("KREA2_DISABLE_V2")
+
+# mxfp8 quant of Krea 2 Turbo, from the same official repo as the models
+# above. Named separately from KREA2_MODELS on purpose — this tab pins one
+# model rather than offering the registry dropdown, exactly as the source
+# workflow's Load Diffusion Model node does.
+V2_UNET_FILE = "krea2_turbo_mxfp8.safetensors"                   # ~13.5 GB
+V2_UNET_HF_PATH = f"diffusion_models/{V2_UNET_FILE}"
+
+# The workflow's companion guide recommends the Wan 2.1 VAE over the stock
+# Qwen image VAE for this pipeline. Different repo, and it is stored under
+# vae/wan/ upstream, so it is fetched explicitly rather than through the
+# HF_MODEL_FILES list.
+V2_VAE_FILE = "wan21-vae.safetensors"                            # ~254 MB
+V2_VAE_HF_REPO = "wangkanai/wan21-vae"
+V2_VAE_HF_PATH = f"vae/wan/{V2_VAE_FILE}"
+
+# Custom node packs this tab needs. Cloned at bootstrap like Krea2Edit;
+# each one is optional in the sense that a failed clone disables only this
+# tab. RES4LYF and RBG change the image and have no core equivalent;
+# post-processing supplies FilmGrain for the optional grain toggle.
+V2_NODE_REPOS = [
+    # (custom_nodes dir, git URL, a node class that proves it loaded)
+    ("RES4LYF", "https://github.com/ClownsharkBatwing/RES4LYF",
+     "ClownsharKSampler_Beta"),
+    ("ComfyUI-RBG-SmartSeedVariance",
+     "https://github.com/RamonGuthrie/ComfyUI-RBG-SmartSeedVariance",
+     "RBG_Smart_Seed_Variance"),
+    ("ComfyUI-post-processing-nodes",
+     "https://github.com/EllangoK/ComfyUI-post-processing-nodes",
+     "FilmGrain"),
+]
+
+# The workflow's LoRA stack, in its original order and with its original
+# strengths and on/off states. Entries are
+# (filename, strength, enabled_by_default, civitai_version_id) — the
+# version id is None for LoRAs already fetched from Hugging Face.
+# Every strength applies to the model and the CLIP alike (Single Strength).
+V2_LORA_STACK = [
+    ("krea2_turbo_lora_rank_64_bf16.safetensors", 0.6, False, None),
+    ("krea2filterbypass3.safetensors", 0.93, True, 3067151),
+    ("krea2_Enhancer.safetensors", 0.4, True, 3065628),
+    ("Krea2-realism-V2.safetensors", 0.3, True, 3090634),
+    # The companion guide links version 3109006 for this LoRA family; the
+    # workflow names the file v3.1. If CivitAI serves a different revision
+    # the graph still runs — only the filename on disk has to match.
+    ("realism_engine_krea2_v3.1.safetensors", 0.6, True, 3109006),
+    ("RealisticSnapshotKrea2.safetensors", 0.8, True, 3084537),
+    ("purelens_krea2.safetensors", 0.6, True, 3114242),
+    ("lenovo_krea2.safetensors", 0.5, True, 3075606),
+    ("MysticXXX_KREA2_v3.safetensors", 1.0, False, 3116175),
+    ("KNPV4.1_pre.safetensors", 1.0, False, 3085473),
+    ("snofs_krea_v1.safetensors", 1.0, False, 3104629),
+]
+
+# ClownsharKSampler_Beta settings, straight from the workflow. Only the
+# seed is not fixed (the source node is set to randomize).
+V2_SAMPLER_DEFAULTS = {
+    "eta": 0.5,
+    "sampler_name": "linear/euler",
+    "scheduler": "bong_tangent",
+    "steps": 10,
+    "steps_to_run": -1,
+    "denoise": 1.0,
+    "cfg": 1.0,
+    "sampler_mode": "standard",
+    "bongmath": True,
+}
+# RES4LYF builds these lists at import time from its own tables, so they
+# cannot be enumerated here. The dropdowns accept free text — these are the
+# values the workflow ships with plus the node's own defaults.
+V2_SAMPLER_NAMES = ["linear/euler", "res_2m", "res_3m", "deis_2m", "euler"]
+V2_SCHEDULERS = ["bong_tangent", "beta57", "normal", "karras", "simple"]
+V2_SAMPLER_MODES = ["standard", "unsample", "resample"]
+
+# RBG Smart Seed Variance settings, straight from the workflow. The combo
+# strings carry emoji and must match the node's option lists character for
+# character, or ComfyUI rejects the prompt.
+V2_VARIANCE_DEFAULTS = {
+    "variance_preset": "🌱 Subtle",
+    "fine_tune_variance": 50,
+    "model_type": "📸 Krea2 (SingleStream)",
+    "fade_curve": "Instant",
+    "noise_injection": "Beginning Steps",
+    "protect_mode": "🚫 None",
+    "protect_regions": "",
+    "direction_shift": "🚫 None",
+    "shift_strength": 100,
+    "variance_schedule": "constant",
+    "cutoff_step": 8,
+    "total_steps": 20,
+    "cutoff_strength": 0.0,
+    "vibe_blend": 0.5,
+}
+V2_VARIANCE_PRESETS = ["❌ Disabled", "🌱 Subtle", "🌿 Balanced", "🪴 Creative",
+                       "🌳 Bold", "🌴 Wild", "⚙️ Custom"]
+V2_VARIANCE_MODEL_TYPES = [
+    "⚡ Z-Image Turbo", "📸 Krea2 (SingleStream)", "🖼️ Qwen-Image",
+    "🔮 Flux (Dev/Schnell)", "🎨 Chroma HD", "🧧 ERNIE-Image",
+    "🔮 Ideogram 4.0", "🖌️ SDXL", "🎬 Wan2.2", "⚙️ Other",
+]
+V2_VARIANCE_SCHEDULES = ["constant", "decreasing", "step_cutoff",
+                         "tiered_release", "hard_lock"]
+
+# Post-processing. Both nodes are bypassed (mode 4) in the source workflow,
+# so both toggles start off and the tab reproduces it exactly as shipped.
+V2_SHARPEN_DEFAULTS = {"sharpen_radius": 1, "sigma": 0.35, "alpha": 1.0}
+V2_FILMGRAIN_DEFAULTS = {"intensity": 0.05, "scale": 1.0, "temperature": 0.0,
+                         "vignette": 0.0}
+
+# The workflow sizes its latent with a ResolutionSelector feeding
+# EmptyLatentImage. That is pure integer plumbing, so the same arithmetic
+# runs in Python here (megapixels × 1024², the core ComfyUI convention) and
+# the tab shows the width/height it resolved to. 3:4 at 1.5 MP snapped to
+# /8 gives the workflow's 1088×1448.
+V2_ASPECT_RATIOS = {
+    "1:1 (Square)": (1, 1),
+    "3:4 (Portrait Standard)": (3, 4),
+    "2:3 (Portrait)": (2, 3),
+    "9:16 (Portrait Tall)": (9, 16),
+    "4:3 (Landscape Standard)": (4, 3),
+    "3:2 (Landscape)": (3, 2),
+    "16:9 (Landscape Wide)": (16, 9),
+}
+V2_DEFAULT_ASPECT = "3:4 (Portrait Standard)"
+V2_DEFAULT_MEGAPIXELS = 1.5
+V2_DEFAULT_MULTIPLE = 8
+
+# The workflow's Negatives node, verbatim.
+V2_DEFAULT_NEGATIVE = (
+    "This low quality greyscale unfinished sketch is inaccurate and flawed. "
+    "The image is very blurred and lacks detail with excessive chromatic "
+    "aberrations and artifacts. The image is overly saturated with excessive "
+    "bloom. It has a toony aesthetic with bold outlines and flat colors.\n\n"
+    "Fake, unreal, wrong anatomy, big eyes, bad anatomy, extra limbs, "
+    "missing fingers, fused fingers, poorly drawn hands, poorly drawn face, "
+    "mutated hands, long neck, extra arms, extra legs, extra fingers, "
+    "disfigured, malformed limbs, missing limbs, skinny, fat, jpeg artifacts, "
+    "watermark, signature, text, logo, exaggerated features, unnatural skin "
+    "tone, bokeh, deformed, lowres, out of frame, aliasing, blurry "
+    "background, doll-like skin, plastic texture, uncanny valley, incorrect "
+    "proportions, duplicate body parts, unnatural poses, poor anatomical "
+    "proportions, pubic hair, digital art, drawing, cartoon, large breasts, "
+    "huge breasts, faded colors, pastel tones, beigesthetic, flat lighting, "
+    "overexposed whites, AI glow, plastic skin, skincare-ad look, studio "
+    "lighting, cartoon or 3D style, text watermark or logos, cleft chin, "
+    "indented chin, smooth groin, Barbie-doll anatomy, blurred genitalia, "
+    "aged, wrinkles, massive breasts, 28G, airbrushed, plastic skin, clothes, "
+    "bra, underwear, iPhone, smartphone, wide angle distortion, tattoos, "
+    "piercings, excessive cum."
+)
+
 # ── Wan 2.2 image-to-video ────────────────────────────────────────────────────
 # Two model families, switchable per-job in the Video tab:
 #   • I2V A14B — two 14B "experts" (a high-noise model for the early

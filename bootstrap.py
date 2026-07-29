@@ -21,6 +21,8 @@ from config import (
     REACTOR_LOCAL_NODES,
     REACTOR_NODES_DIR,
     REACTOR_NODES_REPO,
+    V2_ENABLED,
+    V2_NODE_REPOS,
     log,
 )
 
@@ -119,6 +121,43 @@ def install_custom_nodes() -> None:
         ["git", "clone", "--depth", "1", KREA2EDIT_NODES_REPO, dest],
         desc="Cloning ComfyUI-Krea2Edit nodes",
     )
+
+
+def install_v2_nodes() -> None:
+    """Clone the node packs the Krea 2 V2 tab needs, plus their requirements.
+
+    RES4LYF (ClownsharKSampler_Beta) and RBG Smart Seed Variance both change
+    the image and have no core equivalent; the post-processing pack supplies
+    FilmGrain for that tab's optional grain toggle.
+
+    Nothing here is fatal, and each pack is independent: a failed clone or a
+    failed requirements install leaves the V2 tab reporting which node is
+    missing and every other tab untouched — the same contract install_reactor
+    follows. app.py verifies afterwards that each class actually registered.
+    """
+    if not V2_ENABLED:
+        return
+    for dirname, repo, _class_type in V2_NODE_REPOS:
+        dest = COMFY_DIR / "custom_nodes" / dirname
+        if dest.exists():
+            log.info("%s already present at %s — skipping clone", dirname, dest)
+        else:
+            try:
+                run_cmd(["git", "clone", "--depth", "1", repo, dest],
+                        desc=f"Cloning {dirname}")
+            except RuntimeError as exc:
+                log.error("Could not clone %s (%s) — the Krea 2 V2 tab will "
+                          "refuse to run until it is installed.", dirname, exc)
+                continue
+        reqs = dest / "requirements.txt"
+        if not reqs.exists():
+            continue
+        try:
+            run_cmd([runtime_python(), "-m", "pip", "install", "-q", "-r", reqs],
+                    desc=f"Installing {dirname} requirements")
+        except RuntimeError as exc:
+            log.error("%s requirements failed to install (%s) — the pack may "
+                      "not load in ComfyUI.", dirname, exc)
 
 
 def _can_import(module: str) -> bool:

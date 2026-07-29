@@ -26,6 +26,8 @@ from config import (
     REACTOR_ENABLED,
     REACTOR_NODES_DIR,
     TEMP_DIR,
+    V2_ENABLED,
+    V2_NODE_REPOS,
     WAN_COMFY_LOG,
     WAN_COMFY_PORT,
     WAN_PARALLEL,
@@ -44,6 +46,7 @@ def main() -> None:
     # 3-4 · Clone ComfyUI (idempotent) and install all requirements.
     bootstrap.install_comfyui()
     bootstrap.install_custom_nodes()
+    bootstrap.install_v2_nodes()
     bootstrap.install_reactor()
     bootstrap.link_model_dirs()
     log.info("Environment ready (Python %s)", sys.version.split()[0])
@@ -84,6 +87,14 @@ def main() -> None:
             "ReActorFaceSwap", REACTOR_NODES_DIR,
             COMFY_DIR / "custom_nodes" / REACTOR_NODES_DIR,
         )
+    if V2_ENABLED:
+        # Same reasoning for the Krea 2 V2 packs — two of these nodes have
+        # no core equivalent, so a silent import failure would only show up
+        # as "node not found" on the first generation.
+        for dirname, _repo, class_type in V2_NODE_REPOS:
+            comfy.verify_custom_node(
+                class_type, dirname, COMFY_DIR / "custom_nodes" / dirname,
+            )
 
     # 7 · Gradio UI (importing ui pulls in the workflow builder + API client).
     import workflow

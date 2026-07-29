@@ -29,6 +29,7 @@ live under the base directory and are lost when the pod is destroyed.
 | `CIVITAI_TOKEN`            | CivitAI API token — needed for most CivitAI LoRA downloads      |
 | `KREA2_BASE_DIR`           | Base directory for everything (default `/workspace/krea2`)     |
 | `KREA2_SKIP_LAUNCH`        | If set, run setup/downloads/server but skip launching the UI   |
+| `KREA2_DISABLE_V2`         | If set, skip the ~17 GB Krea 2 V2 downloads and hide that tab   |
 | `KREA2_DISABLE_WAN`        | If set, skip the ~49 GB Wan 2.2 downloads and hide the Video tab |
 | `KREA2_DISABLE_FLUX`       | If set, skip the ~57 GB Flux 2 downloads and hide the Flux tab  |
 | `KREA2_DISABLE_REACTOR`    | If set, skip the ~1.8 GB ReActor downloads and hide the Face Swap tab |
@@ -73,6 +74,7 @@ and deploying.
 - `downloads.py` — HF / CivitAI model + LoRA downloads (resume + retries)
 - `comfy.py` — GPU detection + ComfyUI server start/wait (1–2 instances)
 - `workflow.py` — Krea 2 workflow builders, text-to-image + inpainting + instruction edit (ComfyUI API format)
+- `workflow_krea2_v2.py` — Krea 2 V2 builder (the DesiMuseAI turbo/raw graph)
 - `workflow_wan.py` — Wan 2.2 image-to-video workflow builder (two-expert A14B)
 - `workflow_reactor.py` — ReActor face-swap workflow builder + availability checks
 - `client.py` — ComfyUI HTTP/websocket client (queue, progress, image upload)
@@ -254,6 +256,87 @@ cd /test/dist && python3 -m http.server 7860
 The artifact is a **Linux** binary — it will not run on Windows; downloading is
 only for redistribution. Whoever receives it needs `chmod +x krea2app` first,
 since the executable bit does not survive most transfers.
+
+## Krea 2 V2 (DesiMuseAI graph)
+
+The **🔶 Krea 2 V2** tab is the DesiMuseAI *KREA 2 TURBO/RAW* workflow ported
+node-for-node into this app. It is a second text-to-image pipeline rather than
+a variation of the first: its own model (`krea2_turbo_mxfp8.safetensors`,
+~13.5 GB), its own VAE (`wan21-vae.safetensors` from `wangkanai/wan21-vae`,
+which that workflow's guide recommends over the stock Qwen VAE), its own
+11-slot LoRA stack and its own defaults. Nothing it does moves the Single tab,
+and vice versa. Set `KREA2_DISABLE_V2=1` to skip the ~17 GB of downloads and
+hide the tab.
+
+Three things differ from the tabs above, and they are why this needs its own
+builder (`workflow_krea2_v2.py`) rather than a flag on `build_workflow`:
+
+- **`ClownsharKSampler_Beta`** (RES4LYF) replaces `KSampler`. `eta`,
+  `bongmath` and the `bong_tangent` scheduler have no core equivalent. It
+  ships at `linear/euler` + `bong_tangent`, eta 0.5, 10 steps, CFG 1.0.
+- **`RBG_Smart_Seed_Variance`** sits between the positive prompt and the
+  sampler, perturbing the conditioning per seed so a batch varies without
+  drifting off-prompt. Its combo values carry emoji (`🌱 Subtle`,
+  `📸 Krea2 (SingleStream)`) and must match the node's option lists character
+  for character or ComfyUI rejects the prompt.
+- **LoRAs apply to the model *and* the CLIP.** The source uses rgthree's
+  Power Lora Loader in "Single Strength" mode, so the chain here is
+  `LoraLoader`, not the `LoraLoaderModelOnly` the other Krea tabs build.
+  Each row keeps its own **On** checkbox, which is that node's per-row toggle.
+
+### What was translated rather than copied
+
+The app submits **API-format** graphs, so purely visual nodes have no
+counterpart and are dropped: rgthree's *Fast Bypasser* (a UI toggle whose
+output goes nowhere), *Label* and *MarkdownNote*. Two more are translated,
+which changes no pixels:
+
+| Source node | Here | Why |
+| --- | --- | --- |
+| Power Lora Loader (rgthree) | `LoraLoader` chain | identical math; on/off becomes the row's checkbox |
+| ResolutionSelector → PrimitiveInt → EmptyLatentImage | `resolve_size()` in Python | integer plumbing; the tab shows the W×H it resolved to |
+| WAS `Image Save` | `SaveImage` | the app finds outputs through ComfyUI's history, and WAS writes its own dated tree the Gallery tab would not see |
+
+`ImageSharpen` and `FilmGrain` are **bypassed (`mode: 4`) in the source
+workflow**, so both start off and the tab reproduces it as shipped —
+`VAEDecode` straight to `SaveImage`. The Post-processing accordion turns them
+on per job, in that order.
+
+Resolution follows the source's aspect + megapixel scheme rather than a preset
+list. Megapixels count as 1024² (ComfyUI's own convention, as in
+`ImageScaleToTotalPixels`) and each side rounds to the nearest `multiple`, so
+the workflow's 3:4 at 1.5 MP with multiple 8 resolves to **1088×1448**.
+
+### Node packs
+
+Bootstrap clones three packs for this tab, and `app.py` verifies each class
+actually registered after ComfyUI starts:
+
+| Pack | Node | Needed for |
+| --- | --- | --- |
+| [RES4LYF](https://github.com/ClownsharkBatwing/RES4LYF) | `ClownsharKSampler_Beta` | the sampler — required |
+| [ComfyUI-RBG-SmartSeedVariance](https://github.com/RamonGuthrie/ComfyUI-RBG-SmartSeedVariance) | `RBG_Smart_Seed_Variance` | conditioning variance — required |
+| [ComfyUI-post-processing-nodes](https://github.com/EllangoK/ComfyUI-post-processing-nodes) | `FilmGrain` | the optional grain toggle only |
+
+A failed clone disables this tab and nothing else, the same contract the Wan,
+Flux and ReActor installs follow.
+
+### LoRA stack
+
+All eleven rows from the source workflow are present in its order, with its
+strengths and its on/off states — seven on by default. They download from
+CivitAI (`CIVITAI_TOKEN` needed for most) into the shared `loras/` folder.
+A row whose file did not download starts disabled and is named in the status
+line under the tab header, so a missing LoRA never submits an unresolvable
+`lora_name`.
+
+Two filenames are worth knowing about: the companion guide links CivitAI
+version `3109006` for the realism-engine family while the workflow names the
+file `realism_engine_krea2_v3.1.safetensors`, and `krea2_Enhancer.safetensors`
+is saved with the workflow's capitalisation rather than the guide's. Both are
+in `V2_LORA_STACK` in `config.py` — the graph only cares that the name on disk
+matches the name in the slot, so adjust the version id there if CivitAI serves
+a revision you did not expect.
 
 ## Instruction editing (Edit tab)
 
