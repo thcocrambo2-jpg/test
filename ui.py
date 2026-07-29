@@ -1,11 +1,15 @@
 """Gradio UI.
 
-Tabs: single / simple-batch generation, instruction-based editing (upload
-an image, describe the change), inpainting (paint a mask over an uploaded
-image), ReActor face swap, Flux 2 generation, Wan 2.2 video, JSON batch
-jobs, and an output gallery — the last four appear only when their
-feature is enabled. Written for Gradio 6 (theme/css now belong to
-launch(), gr.File hands the handler a plain file path).
+Tabs: single / simple-batch generation, Krea 2 V2, instruction-based
+editing (upload an image, describe the change), inpainting (paint a mask
+over an uploaded image), ReActor face swap, Flux 2 generation, Wan 2.2
+video, JSON batch jobs, and an output gallery.
+
+Every one of them is a feature in features.py and is only built when that
+feature is on — a tab that is off is never constructed, so its handlers
+are never registered on Gradio's HTTP API either. Written for Gradio 6
+(theme/css now belong to launch(), gr.File hands the handler a plain file
+path).
 
 Some hosts' networks break Gradio's *.gradio.live share tunnel (the link
 504s even though the app is healthy), so after launching we probe the
@@ -29,6 +33,7 @@ import gradio as gr
 import requests
 from PIL import Image, ImageChops, ImageFilter
 
+import features
 from client import ComfyUIError, client, model_signature, wan_client
 from comfy import GPU_COUNT, ensure_alive as comfy_ensure_alive
 from config import (
@@ -36,14 +41,12 @@ from config import (
     COMFY_PORT,
     DEFAULT_LORAS,
     DEFAULT_RESOLUTION,
-    FLUX_ENABLED,
     FREE_ON_SWAP,
     FLUX_MODELS,
     KREA2_MODELS,
     OUTPUT_DIR,
     REACTOR_DEFAULT_DETECTOR,
     REACTOR_DETECTORS,
-    REACTOR_ENABLED,
     RESOLUTION_PRESETS,
     SAMPLERS,
     TEMP_DIR,
@@ -52,7 +55,6 @@ from config import (
     V2_DEFAULT_MEGAPIXELS,
     V2_DEFAULT_MULTIPLE,
     V2_DEFAULT_NEGATIVE,
-    V2_ENABLED,
     V2_SAMPLER_DEFAULTS,
     V2_SAMPLER_MODES,
     V2_SAMPLER_NAMES,
@@ -66,7 +68,6 @@ from config import (
     WAN_5B_FPS,
     WAN_DEFAULT_NEGATIVE,
     WAN_DEFAULT_RESOLUTION,
-    WAN_ENABLED,
     WAN_FPS,
     WAN_MAX_SECONDS,
     WAN_MODE_DEFAULTS,
@@ -1156,74 +1157,75 @@ def _flux_lora_stack():
 with gr.Blocks(title="Krea 2 on RunPod") as ui:
     gr.Markdown(
         "# ⚡ Krea 2"
-        + (" + Flux 2" if FLUX_ENABLED else "")
-        + (" + Wan 2.2 Video" if WAN_ENABLED else "")
+        + (" + Flux 2" if features.enabled("flux") else "")
+        + (" + Wan 2.2 Video" if features.enabled("wan") else "")
         + " — ComfyUI on RunPod\n"
         f"{len(MODEL_CHOICES)} Krea model(s) · {GPU_COUNT} GPU(s) detected · "
         f"native ComfyUI multi-GPU placement · "
         f"outputs saved to `{OUTPUT_DIR}`"
     )
     with gr.Tabs():
-        with gr.Tab("Single / Simple Batch"):
-            with gr.Row():
-                with gr.Column(scale=2):
-                    prompt_box = gr.Textbox(
-                        label="Prompt", lines=5,
-                        value="A photorealistic golden-hour portrait, natural "
-                              "skin texture, shallow depth of field",
-                    )
-                    negative_box = gr.Textbox(
-                        label="Negative prompt (only used when CFG > 1)", lines=2
-                    )
-                    model_dd, model_info = _model_selector()
-                    with gr.Row():
-                        steps_slider = gr.Slider(
-                            1, 60, value=DEFAULTS["steps"], step=1, label="Steps"
+        if features.enabled("single"):
+            with gr.Tab("Single / Simple Batch"):
+                with gr.Row():
+                    with gr.Column(scale=2):
+                        prompt_box = gr.Textbox(
+                            label="Prompt", lines=5,
+                            value="A photorealistic golden-hour portrait, natural "
+                                  "skin texture, shallow depth of field",
                         )
-                        cfg_slider = gr.Slider(
-                            0.5, 8.0, value=DEFAULTS["cfg"], step=0.1, label="CFG"
+                        negative_box = gr.Textbox(
+                            label="Negative prompt (only used when CFG > 1)", lines=2
                         )
-                    model_dd.change(
-                        fn=krea_model_changed,
-                        inputs=[model_dd, prompt_box],
-                        outputs=[steps_slider, cfg_slider, model_info,
-                                 prompt_box],
-                    )
-                    with gr.Row():
-                        resolution_dd = gr.Dropdown(
-                            choices=list(RESOLUTION_PRESETS),
-                            value=DEFAULT_RESOLUTION, label="Resolution",
+                        model_dd, model_info = _model_selector()
+                        with gr.Row():
+                            steps_slider = gr.Slider(
+                                1, 60, value=DEFAULTS["steps"], step=1, label="Steps"
+                            )
+                            cfg_slider = gr.Slider(
+                                0.5, 8.0, value=DEFAULTS["cfg"], step=0.1, label="CFG"
+                            )
+                        model_dd.change(
+                            fn=krea_model_changed,
+                            inputs=[model_dd, prompt_box],
+                            outputs=[steps_slider, cfg_slider, model_info,
+                                     prompt_box],
                         )
-                        sampler_dd = gr.Dropdown(
-                            choices=SAMPLERS, value=SAMPLERS[0], label="Sampler"
+                        with gr.Row():
+                            resolution_dd = gr.Dropdown(
+                                choices=list(RESOLUTION_PRESETS),
+                                value=DEFAULT_RESOLUTION, label="Resolution",
+                            )
+                            sampler_dd = gr.Dropdown(
+                                choices=SAMPLERS, value=SAMPLERS[0], label="Sampler"
+                            )
+                        with gr.Row():
+                            seed_box = gr.Number(label="Seed", value=42, precision=0)
+                            randomize_cb = gr.Checkbox(label="🎲 Random seed", value=True)
+                            batch_slider = gr.Slider(
+                                1, 20, value=1, step=1, label="Batch count"
+                            )
+                        lora_dds, lora_ws = _lora_stack()
+                        generate_btn = gr.Button(
+                            "🚀 Generate", variant="primary", size="lg"
                         )
-                    with gr.Row():
-                        seed_box = gr.Number(label="Seed", value=42, precision=0)
-                        randomize_cb = gr.Checkbox(label="🎲 Random seed", value=True)
-                        batch_slider = gr.Slider(
-                            1, 20, value=1, step=1, label="Batch count"
+                    with gr.Column(scale=3):
+                        gallery = gr.Gallery(label="Output", columns=2, height=600)
+                        status_box = gr.Textbox(label="Status", interactive=False)
+                        seed_out = gr.Number(
+                            label="Base seed used", interactive=False, precision=0
                         )
-                    lora_dds, lora_ws = _lora_stack()
-                    generate_btn = gr.Button(
-                        "🚀 Generate", variant="primary", size="lg"
-                    )
-                with gr.Column(scale=3):
-                    gallery = gr.Gallery(label="Output", columns=2, height=600)
-                    status_box = gr.Textbox(label="Status", interactive=False)
-                    seed_out = gr.Number(
-                        label="Base seed used", interactive=False, precision=0
-                    )
-            generate_btn.click(
-                fn=generate_single,
-                inputs=[prompt_box, negative_box, seed_box, randomize_cb,
-                        steps_slider, cfg_slider, resolution_dd, sampler_dd,
-                        model_dd, batch_slider,
-                        *_lora_inputs(lora_dds, lora_ws)],
-                outputs=[gallery, status_box, seed_out],
-                concurrency_id="comfy",
-            )
+                generate_btn.click(
+                    fn=generate_single,
+                    inputs=[prompt_box, negative_box, seed_box, randomize_cb,
+                            steps_slider, cfg_slider, resolution_dd, sampler_dd,
+                            model_dd, batch_slider,
+                            *_lora_inputs(lora_dds, lora_ws)],
+                    outputs=[gallery, status_box, seed_out],
+                    concurrency_id="comfy",
+                )
 
-        if V2_ENABLED:
+        if features.enabled("v2"):
             with gr.Tab("🔶 Krea 2 V2"):
                 _v2_message = v2_status()[1]
                 gr.Markdown(
@@ -1435,188 +1437,190 @@ with gr.Blocks(title="Krea 2 on RunPod") as ui:
                     concurrency_id="comfy",
                 )
 
-        with gr.Tab("✨ Edit (Instruction)"):
-            gr.Markdown(
-                "Upload an image and **describe the change** — no painting "
-                "needed. The Identity Edit LoRA lets the model see the "
-                "source image, so it can recolor, add or replace objects, "
-                "restyle, or re-stage a person in a new scene while keeping "
-                "their identity. Defaults (8–12 steps, CFG 1.0) suit most "
-                "edits; removals work better with ~20 steps and CFG ≈ 3."
-                + ("" if edit_lora_available() else
-                   "\n\n⚠️ **The Identity Edit LoRA is not downloaded yet** "
-                   "(~1.9 GB) — restart the app to fetch it; this tab will "
-                   "refuse to run until then.")
-            )
-            with gr.Row():
-                with gr.Column(scale=2):
-                    edit_image = gr.Image(
-                        label="Source image (paste with Ctrl+V)", type="pil",
-                        sources=["upload", "clipboard"],
-                    )
-                    _recent_picker(edit_image)
-                    edit_prompt = gr.Textbox(
-                        label="Edit instruction",
-                        value="Remove all her clothes completely, make her fully nude. Keep the exact same face, facial features, expression, skin tone, hairstyle, body pose, hands position, and background. Do not change the face at all.          remove clothes exposing her naked average natural shaped tits. dont change her face",
-                        placeholder="make the jacket red · this person "
-                                    "walking a dog on a beach at sunset",
-                        lines=3,
-                    )
-                    edit_negative = gr.Textbox(
-                        label="Negative prompt (only used when CFG > 1)", lines=2
-                    )
-                    edit_model_dd, edit_model_info = _model_selector()
-                    with gr.Row():
-                        edit_steps = gr.Slider(
-                            1, 60, value=DEFAULTS["steps"], step=1, label="Steps"
+        if features.enabled("edit"):
+            with gr.Tab("✨ Edit (Instruction)"):
+                gr.Markdown(
+                    "Upload an image and **describe the change** — no painting "
+                    "needed. The Identity Edit LoRA lets the model see the "
+                    "source image, so it can recolor, add or replace objects, "
+                    "restyle, or re-stage a person in a new scene while keeping "
+                    "their identity. Defaults (8–12 steps, CFG 1.0) suit most "
+                    "edits; removals work better with ~20 steps and CFG ≈ 3."
+                    + ("" if edit_lora_available() else
+                       "\n\n⚠️ **The Identity Edit LoRA is not downloaded yet** "
+                       "(~1.9 GB) — restart the app to fetch it; this tab will "
+                       "refuse to run until then.")
+                )
+                with gr.Row():
+                    with gr.Column(scale=2):
+                        edit_image = gr.Image(
+                            label="Source image (paste with Ctrl+V)", type="pil",
+                            sources=["upload", "clipboard"],
                         )
-                        edit_cfg = gr.Slider(
-                            0.5, 8.0, value=DEFAULTS["cfg"], step=0.1, label="CFG"
+                        _recent_picker(edit_image)
+                        edit_prompt = gr.Textbox(
+                            label="Edit instruction",
+                            value="Remove all her clothes completely, make her fully nude. Keep the exact same face, facial features, expression, skin tone, hairstyle, body pose, hands position, and background. Do not change the face at all.          remove clothes exposing her naked average natural shaped tits. dont change her face",
+                            placeholder="make the jacket red · this person "
+                                        "walking a dog on a beach at sunset",
+                            lines=3,
                         )
-                    edit_model_dd.change(
-                        fn=krea_model_changed,
-                        inputs=[edit_model_dd, edit_prompt],
-                        outputs=[edit_steps, edit_cfg, edit_model_info,
-                                 edit_prompt],
-                    )
-                    with gr.Row():
-                        edit_grounding = gr.Slider(
-                            512, 1536, value=1152, step=64,
-                            label="Grounding (low = stronger edit, "
-                                  "high = keep likeness)",
+                        edit_negative = gr.Textbox(
+                            label="Negative prompt (only used when CFG > 1)", lines=2
                         )
-                        edit_sampler = gr.Dropdown(
-                            choices=SAMPLERS, value=SAMPLERS[0], label="Sampler"
+                        edit_model_dd, edit_model_info = _model_selector()
+                        with gr.Row():
+                            edit_steps = gr.Slider(
+                                1, 60, value=DEFAULTS["steps"], step=1, label="Steps"
+                            )
+                            edit_cfg = gr.Slider(
+                                0.5, 8.0, value=DEFAULTS["cfg"], step=0.1, label="CFG"
+                            )
+                        edit_model_dd.change(
+                            fn=krea_model_changed,
+                            inputs=[edit_model_dd, edit_prompt],
+                            outputs=[edit_steps, edit_cfg, edit_model_info,
+                                     edit_prompt],
                         )
-                    with gr.Row():
-                        edit_seed = gr.Number(label="Seed", value=42, precision=0)
-                        edit_random = gr.Checkbox(
-                            label="🎲 Random seed", value=True
+                        with gr.Row():
+                            edit_grounding = gr.Slider(
+                                512, 1536, value=1152, step=64,
+                                label="Grounding (low = stronger edit, "
+                                      "high = keep likeness)",
+                            )
+                            edit_sampler = gr.Dropdown(
+                                choices=SAMPLERS, value=SAMPLERS[0], label="Sampler"
+                            )
+                        with gr.Row():
+                            edit_seed = gr.Number(label="Seed", value=42, precision=0)
+                            edit_random = gr.Checkbox(
+                                label="🎲 Random seed", value=True
+                            )
+                            edit_batch = gr.Slider(
+                                1, 20, value=1, step=1, label="Batch count"
+                            )
+                        edit_lora_dds, edit_lora_ws = _lora_stack()
+                        edit_btn = gr.Button("✨ Edit", variant="primary", size="lg")
+                    with gr.Column(scale=3):
+                        edit_gallery = gr.Gallery(label="Output", columns=2, height=600)
+                        edit_status = gr.Textbox(label="Status", interactive=False)
+                        edit_seed_out = gr.Number(
+                            label="Base seed used", interactive=False, precision=0
                         )
-                        edit_batch = gr.Slider(
-                            1, 20, value=1, step=1, label="Batch count"
-                        )
-                    edit_lora_dds, edit_lora_ws = _lora_stack()
-                    edit_btn = gr.Button("✨ Edit", variant="primary", size="lg")
-                with gr.Column(scale=3):
-                    edit_gallery = gr.Gallery(label="Output", columns=2, height=600)
-                    edit_status = gr.Textbox(label="Status", interactive=False)
-                    edit_seed_out = gr.Number(
-                        label="Base seed used", interactive=False, precision=0
-                    )
-            edit_btn.click(
-                fn=generate_edit,
-                inputs=[edit_image, edit_prompt, edit_negative, edit_seed,
-                        edit_random, edit_steps, edit_cfg, edit_sampler,
-                        edit_grounding, edit_model_dd, edit_batch,
-                        *_lora_inputs(edit_lora_dds, edit_lora_ws)],
-                outputs=[edit_gallery, edit_status, edit_seed_out],
-                concurrency_id="comfy",
-            )
+                edit_btn.click(
+                    fn=generate_edit,
+                    inputs=[edit_image, edit_prompt, edit_negative, edit_seed,
+                            edit_random, edit_steps, edit_cfg, edit_sampler,
+                            edit_grounding, edit_model_dd, edit_batch,
+                            *_lora_inputs(edit_lora_dds, edit_lora_ws)],
+                    outputs=[edit_gallery, edit_status, edit_seed_out],
+                    concurrency_id="comfy",
+                )
 
-        with gr.Tab("Inpaint / Img2Img"):
-            gr.Markdown(
-                "Upload an image, **paint over the region to replace**, and "
-                "describe what should appear there — unpainted pixels are "
-                "kept from the original. Paint **nothing** to re-imagine the "
-                "whole image (img2img); in that mode lower **Denoise** "
-                "(≈0.5–0.8) to control how much of the original survives."
-            )
-            with gr.Row():
-                with gr.Column(scale=2):
-                    inpaint_editor = gr.ImageEditor(
-                        label="Image — paint the region to replace "
-                              "(paste with Ctrl+V)",
-                        type="pil",
-                        sources=["upload", "clipboard"],
-                        brush=gr.Brush(colors=["#FF3366"], color_mode="fixed"),
-                        # fixed_canvas defaults to False, which sizes the
-                        # canvas to the uploaded image: a 12 MP phone photo
-                        # then allocates a 4032×3024 RGBA canvas *plus* a
-                        # paint layer, the browser tab runs out of memory and
-                        # the page reloads (gradio#8556). Pinning the canvas
-                        # makes Gradio rescale the upload to fit it instead.
-                        # 1536 is a deliberate cap: _prepare_inpaint_inputs
-                        # would downscale to 2048 anyway, and Krea 2 inpaints
-                        # comfortably at this size.
-                        canvas_size=(1536, 1536),
-                        fixed_canvas=True,
-                        # Default is lossy webp. Unmasked pixels are composited
-                        # back from this image, so keep it lossless.
-                        format="png",
-                    )
-                    inpaint_prompt = gr.Textbox(
-                        label="Prompt (describes the masked region)", lines=3
-                    )
-                    inpaint_negative = gr.Textbox(
-                        label="Negative prompt (only used when CFG > 1)", lines=2
-                    )
-                    inpaint_model_dd, inpaint_model_info = _model_selector()
-                    with gr.Row():
-                        inpaint_steps = gr.Slider(
-                            1, 60, value=DEFAULTS["steps"], step=1, label="Steps"
+        if features.enabled("inpaint"):
+            with gr.Tab("Inpaint / Img2Img"):
+                gr.Markdown(
+                    "Upload an image, **paint over the region to replace**, and "
+                    "describe what should appear there — unpainted pixels are "
+                    "kept from the original. Paint **nothing** to re-imagine the "
+                    "whole image (img2img); in that mode lower **Denoise** "
+                    "(≈0.5–0.8) to control how much of the original survives."
+                )
+                with gr.Row():
+                    with gr.Column(scale=2):
+                        inpaint_editor = gr.ImageEditor(
+                            label="Image — paint the region to replace "
+                                  "(paste with Ctrl+V)",
+                            type="pil",
+                            sources=["upload", "clipboard"],
+                            brush=gr.Brush(colors=["#FF3366"], color_mode="fixed"),
+                            # fixed_canvas defaults to False, which sizes the
+                            # canvas to the uploaded image: a 12 MP phone photo
+                            # then allocates a 4032×3024 RGBA canvas *plus* a
+                            # paint layer, the browser tab runs out of memory and
+                            # the page reloads (gradio#8556). Pinning the canvas
+                            # makes Gradio rescale the upload to fit it instead.
+                            # 1536 is a deliberate cap: _prepare_inpaint_inputs
+                            # would downscale to 2048 anyway, and Krea 2 inpaints
+                            # comfortably at this size.
+                            canvas_size=(1536, 1536),
+                            fixed_canvas=True,
+                            # Default is lossy webp. Unmasked pixels are composited
+                            # back from this image, so keep it lossless.
+                            format="png",
                         )
-                        inpaint_cfg = gr.Slider(
-                            0.5, 8.0, value=DEFAULTS["cfg"], step=0.1, label="CFG"
+                        inpaint_prompt = gr.Textbox(
+                            label="Prompt (describes the masked region)", lines=3
                         )
-                    inpaint_model_dd.change(
-                        fn=krea_model_changed,
-                        inputs=[inpaint_model_dd, inpaint_prompt],
-                        outputs=[inpaint_steps, inpaint_cfg,
-                                 inpaint_model_info, inpaint_prompt],
-                    )
-                    with gr.Row():
-                        inpaint_denoise = gr.Slider(
-                            0.1, 1.0, value=1.0, step=0.05,
-                            label="Denoise (1 = replace fully)",
+                        inpaint_negative = gr.Textbox(
+                            label="Negative prompt (only used when CFG > 1)", lines=2
                         )
-                        inpaint_sampler = gr.Dropdown(
-                            choices=SAMPLERS, value=SAMPLERS[0], label="Sampler"
+                        inpaint_model_dd, inpaint_model_info = _model_selector()
+                        with gr.Row():
+                            inpaint_steps = gr.Slider(
+                                1, 60, value=DEFAULTS["steps"], step=1, label="Steps"
+                            )
+                            inpaint_cfg = gr.Slider(
+                                0.5, 8.0, value=DEFAULTS["cfg"], step=0.1, label="CFG"
+                            )
+                        inpaint_model_dd.change(
+                            fn=krea_model_changed,
+                            inputs=[inpaint_model_dd, inpaint_prompt],
+                            outputs=[inpaint_steps, inpaint_cfg,
+                                     inpaint_model_info, inpaint_prompt],
                         )
-                    with gr.Row():
-                        inpaint_grow = gr.Slider(
-                            0, 32, value=8, step=1, label="Grow mask (px)"
+                        with gr.Row():
+                            inpaint_denoise = gr.Slider(
+                                0.1, 1.0, value=1.0, step=0.05,
+                                label="Denoise (1 = replace fully)",
+                            )
+                            inpaint_sampler = gr.Dropdown(
+                                choices=SAMPLERS, value=SAMPLERS[0], label="Sampler"
+                            )
+                        with gr.Row():
+                            inpaint_grow = gr.Slider(
+                                0, 32, value=8, step=1, label="Grow mask (px)"
+                            )
+                            inpaint_blur = gr.Slider(
+                                0, 32, value=8, step=1, label="Blur mask edge (px)"
+                            )
+                        with gr.Row():
+                            inpaint_seed = gr.Number(
+                                label="Seed", value=42, precision=0
+                            )
+                            inpaint_random = gr.Checkbox(
+                                label="🎲 Random seed", value=True
+                            )
+                            inpaint_batch = gr.Slider(
+                                1, 20, value=1, step=1, label="Batch count"
+                            )
+                        inpaint_lora_dds, inpaint_lora_ws = _lora_stack()
+                        inpaint_btn = gr.Button(
+                            "🖌️ Inpaint", variant="primary", size="lg"
                         )
-                        inpaint_blur = gr.Slider(
-                            0, 32, value=8, step=1, label="Blur mask edge (px)"
+                    with gr.Column(scale=3):
+                        inpaint_gallery = gr.Gallery(
+                            label="Output", columns=2, height=600
                         )
-                    with gr.Row():
-                        inpaint_seed = gr.Number(
-                            label="Seed", value=42, precision=0
+                        inpaint_status = gr.Textbox(
+                            label="Status", interactive=False
                         )
-                        inpaint_random = gr.Checkbox(
-                            label="🎲 Random seed", value=True
+                        inpaint_seed_out = gr.Number(
+                            label="Base seed used", interactive=False, precision=0
                         )
-                        inpaint_batch = gr.Slider(
-                            1, 20, value=1, step=1, label="Batch count"
-                        )
-                    inpaint_lora_dds, inpaint_lora_ws = _lora_stack()
-                    inpaint_btn = gr.Button(
-                        "🖌️ Inpaint", variant="primary", size="lg"
-                    )
-                with gr.Column(scale=3):
-                    inpaint_gallery = gr.Gallery(
-                        label="Output", columns=2, height=600
-                    )
-                    inpaint_status = gr.Textbox(
-                        label="Status", interactive=False
-                    )
-                    inpaint_seed_out = gr.Number(
-                        label="Base seed used", interactive=False, precision=0
-                    )
-            inpaint_btn.click(
-                fn=generate_inpaint,
-                inputs=[inpaint_editor, inpaint_prompt, inpaint_negative,
-                        inpaint_seed, inpaint_random, inpaint_steps,
-                        inpaint_cfg, inpaint_denoise, inpaint_sampler,
-                        inpaint_grow, inpaint_blur, inpaint_model_dd,
-                        inpaint_batch,
-                        *_lora_inputs(inpaint_lora_dds, inpaint_lora_ws)],
-                outputs=[inpaint_gallery, inpaint_status, inpaint_seed_out],
-                concurrency_id="comfy",
-            )
+                inpaint_btn.click(
+                    fn=generate_inpaint,
+                    inputs=[inpaint_editor, inpaint_prompt, inpaint_negative,
+                            inpaint_seed, inpaint_random, inpaint_steps,
+                            inpaint_cfg, inpaint_denoise, inpaint_sampler,
+                            inpaint_grow, inpaint_blur, inpaint_model_dd,
+                            inpaint_batch,
+                            *_lora_inputs(inpaint_lora_dds, inpaint_lora_ws)],
+                    outputs=[inpaint_gallery, inpaint_status, inpaint_seed_out],
+                    concurrency_id="comfy",
+                )
 
-        if REACTOR_ENABLED:
+        if features.enabled("faceswap"):
             with gr.Tab("🎭 Face Swap (ReActor)"):
                 _swap_ready, _swap_problem = reactor_status()
                 gr.Markdown(
@@ -1704,7 +1708,7 @@ with gr.Blocks(title="Krea 2 on RunPod") as ui:
                     concurrency_id="comfy",
                 )
 
-        if FLUX_ENABLED:
+        if features.enabled("flux"):
             with gr.Tab("🌊 Flux 2"):
                 gr.Markdown(
                     "Text-to-image with **Flux 2 Dev** (32B). The model is "
@@ -1794,7 +1798,7 @@ with gr.Blocks(title="Krea 2 on RunPod") as ui:
                     concurrency_id="comfy",
                 )
 
-        if WAN_ENABLED:
+        if features.enabled("wan"):
             with gr.Tab("🎬 Video (Wan 2.2)"):
                 _wan_defaults = WAN_MODE_DEFAULTS[WAN_VARIANT]
                 _wan_mode_choices = ["Turbo (Lightning, 4 steps)",
@@ -1925,62 +1929,64 @@ with gr.Blocks(title="Krea 2 on RunPod") as ui:
                     concurrency_id="wan" if WAN_PARALLEL else "comfy",
                 )
 
-        with gr.Tab("JSON Advanced Batch"):
-            gr.Markdown(
-                "Submit a list of jobs, e.g.\n"
-                '```json\n'
-                '[{"prompt": "a cat", "steps": 8, "resolution": "1216x832",\n'
-                '  "loras": {"krea2_darkbrush": 1.0}},\n'
-                ' {"prompt": "a dog", "seed": 7, "model": "FinePn"}]\n'
-                '```\n'
-                'The optional `"model"` picks a registered Krea 2 model by '
-                'name, filename or fragment (steps/CFG default to that '
-                "model's settings; trigger words are **not** auto-added — "
-                "write the full prompt you want)."
-            )
-            with gr.Row():
-                with gr.Column(scale=2):
-                    json_file_in = gr.File(label="Upload JSON file", type="filepath")
-                    json_text_in = gr.Textbox(
-                        label="…or paste a JSON array here", lines=14
-                    )
-                    json_btn = gr.Button(
-                        "🚀 Run JSON batch", variant="primary", size="lg"
-                    )
-                with gr.Column(scale=3):
-                    json_gallery = gr.Gallery(
-                        label="Batch output", columns=2, height=600
-                    )
-                    json_status = gr.Textbox(label="Status", interactive=False)
-            json_btn.click(
-                fn=generate_from_json,
-                inputs=[json_file_in, json_text_in],
-                outputs=[json_gallery, json_status],
-                concurrency_id="comfy",
-            )
-
-        with gr.Tab("Gallery"):
-            with gr.Row():
-                gallery_refresh_btn = gr.Button("🔄 Refresh", size="sm")
-                gallery_zip_btn = gr.Button(
-                    "📦 Zip all for download", size="sm"
+        if features.enabled("json_batch"):
+            with gr.Tab("JSON Advanced Batch"):
+                gr.Markdown(
+                    "Submit a list of jobs, e.g.\n"
+                    '```json\n'
+                    '[{"prompt": "a cat", "steps": 8, "resolution": "1216x832",\n'
+                    '  "loras": {"krea2_darkbrush": 1.0}},\n'
+                    ' {"prompt": "a dog", "seed": 7, "model": "FinePn"}]\n'
+                    '```\n'
+                    'The optional `"model"` picks a registered Krea 2 model by '
+                    'name, filename or fragment (steps/CFG default to that '
+                    "model's settings; trigger words are **not** auto-added — "
+                    "write the full prompt you want)."
                 )
-            gallery_info = gr.Markdown(
-                f"{len(list_output_images())} file(s) in `{OUTPUT_DIR}`"
-            )
-            all_gallery = gr.Gallery(
-                label="All generated images & videos (newest first)",
-                value=list_output_images(), columns=4, height=700,
-            )
-            gallery_zip_file = gr.File(
-                label="Zip of all images", interactive=False
-            )
-            gallery_refresh_btn.click(
-                fn=refresh_gallery, outputs=[all_gallery, gallery_info]
-            )
-            gallery_zip_btn.click(
-                fn=zip_outputs, outputs=[gallery_zip_file, gallery_info]
-            )
+                with gr.Row():
+                    with gr.Column(scale=2):
+                        json_file_in = gr.File(label="Upload JSON file", type="filepath")
+                        json_text_in = gr.Textbox(
+                            label="…or paste a JSON array here", lines=14
+                        )
+                        json_btn = gr.Button(
+                            "🚀 Run JSON batch", variant="primary", size="lg"
+                        )
+                    with gr.Column(scale=3):
+                        json_gallery = gr.Gallery(
+                            label="Batch output", columns=2, height=600
+                        )
+                        json_status = gr.Textbox(label="Status", interactive=False)
+                json_btn.click(
+                    fn=generate_from_json,
+                    inputs=[json_file_in, json_text_in],
+                    outputs=[json_gallery, json_status],
+                    concurrency_id="comfy",
+                )
+
+        if features.enabled("gallery"):
+            with gr.Tab("Gallery"):
+                with gr.Row():
+                    gallery_refresh_btn = gr.Button("🔄 Refresh", size="sm")
+                    gallery_zip_btn = gr.Button(
+                        "📦 Zip all for download", size="sm"
+                    )
+                gallery_info = gr.Markdown(
+                    f"{len(list_output_images())} file(s) in `{OUTPUT_DIR}`"
+                )
+                all_gallery = gr.Gallery(
+                    label="All generated images & videos (newest first)",
+                    value=list_output_images(), columns=4, height=700,
+                )
+                gallery_zip_file = gr.File(
+                    label="Zip of all images", interactive=False
+                )
+                gallery_refresh_btn.click(
+                    fn=refresh_gallery, outputs=[all_gallery, gallery_info]
+                )
+                gallery_zip_btn.click(
+                    fn=zip_outputs, outputs=[gallery_zip_file, gallery_info]
+                )
 
 
 def _probe_url(url: str, deadline_s: int = 45) -> bool:

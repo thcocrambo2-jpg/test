@@ -1,11 +1,13 @@
 """Krea 2 on RunPod — ComfyUI + Gradio. Entry point: python app.py
 
 Startup flow:
-  1. Read configuration (config.py, imported below — also sets up logging).
+  1. Read configuration (config.py, imported below — also sets up logging)
+     and resolve which features are on (features.py).
   2. Take a license seat, or stop.
   3. Clone ComfyUI if it is missing.
   4. Install Python requirements (ComfyUI's + this app's, one resolver pass).
-  5. Download Hugging Face and CivitAI models that are missing.
+  5. Download the Hugging Face and CivitAI models the enabled features
+     need — a feature that is off costs no disk and no download time.
   6. Start the ComfyUI server and wait until its API answers.
   7. Launch the Gradio UI and keep running until interrupted.
 
@@ -19,14 +21,13 @@ import shutil
 import sys
 
 import bootstrap
+import features
 import licensing
 from config import (
     COMFY_DIR,
     KREA_RESERVE_VRAM_GB,
-    REACTOR_ENABLED,
     REACTOR_NODES_DIR,
     TEMP_DIR,
-    V2_ENABLED,
     V2_NODE_REPOS,
     WAN_COMFY_LOG,
     WAN_COMFY_PORT,
@@ -42,6 +43,13 @@ def main() -> None:
     # downloads. licensing uses only the stdlib, so it runs fine here —
     # ahead of the pip install that the modules below wait for.
     licensing.acquire_or_exit()
+
+    # Features are resolved from the environment when features is imported.
+    # This is the point where phase 2 will re-resolve them against the
+    # entitlements the licence server just returned — everything below asks
+    # features.enabled() at call time, so it will pick the answer up here
+    # rather than having frozen a default at import.
+    log.info("Features — %s", features.summary())
 
     # 3-4 · Clone ComfyUI (idempotent) and install all requirements.
     bootstrap.install_comfyui()
@@ -66,12 +74,15 @@ def main() -> None:
     # coexist on one GPU (defaults tuned for a 48 GB A40).
     import comfy
 
+    # A second instance is only worth its VRAM reservation when there is a
+    # Video tab to serve — KREA2_WAN_PARALLEL on its own no longer buys one.
+    wan_parallel = WAN_PARALLEL and features.enabled("wan")
     main_args = (
-        ("--reserve-vram", str(KREA_RESERVE_VRAM_GB)) if WAN_PARALLEL else ()
+        ("--reserve-vram", str(KREA_RESERVE_VRAM_GB)) if wan_parallel else ()
     )
     comfy_process = comfy.start_comfyui(extra_args=main_args)
     comfy.wait_for_comfyui(comfy_process)
-    if WAN_PARALLEL:
+    if wan_parallel:
         wan_process = comfy.start_comfyui(
             port=WAN_COMFY_PORT, log_path=WAN_COMFY_LOG,
             extra_args=("--reserve-vram", str(WAN_RESERVE_VRAM_GB)),
@@ -82,12 +93,12 @@ def main() -> None:
     # Custom nodes register at ComfyUI startup, and a failed import is only
     # reported in comfyui.log — surface it here instead of letting the
     # first face swap fail with a bare "node not found".
-    if REACTOR_ENABLED:
+    if features.enabled("faceswap"):
         comfy.verify_custom_node(
             "ReActorFaceSwap", REACTOR_NODES_DIR,
             COMFY_DIR / "custom_nodes" / REACTOR_NODES_DIR,
         )
-    if V2_ENABLED:
+    if features.enabled("v2"):
         # Same reasoning for the Krea 2 V2 packs — two of these nodes have
         # no core equivalent, so a silent import failure would only show up
         # as "node not found" on the first generation.

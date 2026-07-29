@@ -29,14 +29,58 @@ live under the base directory and are lost when the pod is destroyed.
 | `CIVITAI_TOKEN`            | CivitAI API token — needed for most CivitAI LoRA downloads      |
 | `KREA2_BASE_DIR`           | Base directory for everything (default `/workspace/krea2`)     |
 | `KREA2_SKIP_LAUNCH`        | If set, run setup/downloads/server but skip launching the UI   |
-| `KREA2_DISABLE_V2`         | If set, skip the ~17 GB Krea 2 V2 downloads and hide that tab   |
+| `KREA2_FEATURES`           | Which tabs to switch on (see Features below)                    |
 | `KREA2_KEEP_MODELS_LOADED` | If set, don't unload models between swaps (see Model swapping)  |
-| `KREA2_DISABLE_WAN`        | If set, skip the ~49 GB Wan 2.2 downloads and hide the Video tab |
-| `KREA2_DISABLE_FLUX`       | If set, skip the ~57 GB Flux 2 downloads and hide the Flux tab  |
-| `KREA2_DISABLE_REACTOR`    | If set, skip the ~1.8 GB ReActor downloads and hide the Face Swap tab |
 | `KREA2_WAN_PARALLEL`       | If set, video jobs get their own ComfyUI instance (port 8189)   |
 | `KREA2_MAIN_RESERVE_VRAM`  | Parallel mode: GB the Krea instance leaves free (default 26)   |
 | `KREA2_WAN_RESERVE_VRAM`   | Parallel mode: GB the Wan instance leaves free (default 22)    |
+
+## Features
+
+Every tab is a feature that is switched on or off before the app downloads
+anything. A feature that is off costs nothing: no tab, no custom nodes, no
+weights on disk.
+
+**Three are on by default** — `single`, `v2` and `gallery`. Everything else
+is opt-in, so a pod that sets no variables downloads roughly 45 GB rather
+than the ~150 GB it would take to have everything.
+
+| Key          | Tab                     | Default | Extra download |
+| ------------ | ----------------------- | ------- | -------------- |
+| `single`     | Single / Simple Batch   | **on**  | ~26 GB (Krea 2 base, shared) |
+| `v2`         | 🔶 Krea 2 V2            | **on**  | ~17 GB         |
+| `gallery`    | Gallery                 | **on**  | none           |
+| `edit`       | ✨ Edit (Instruction)   | off     | ~1.9 GB + base |
+| `inpaint`    | Inpaint / Img2Img       | off     | base only      |
+| `faceswap`   | 🎭 Face Swap (ReActor)  | off     | ~1.8 GB        |
+| `flux`       | 🌊 Flux 2               | off     | ~57 GB         |
+| `wan`        | 🎬 Video (Wan 2.2)      | off     | ~49 GB         |
+| `json_batch` | JSON Advanced Batch     | off     | none           |
+
+Set them with one variable, whose tokens are applied left to right:
+
+```bash
+KREA2_FEATURES="wan,flux"     # the three defaults, plus Wan and Flux
+KREA2_FEATURES="-v2"          # the defaults, without Krea 2 V2
+KREA2_FEATURES="none,wan"     # Wan and nothing else
+KREA2_FEATURES="all"          # everything
+```
+
+`none` first is how you spell "exactly this set". For a one-off override in
+a pod template there are also `KREA2_ENABLE_<KEY>` and
+`KREA2_DISABLE_<KEY>` (for example `KREA2_ENABLE_WAN=1`); they are applied
+after the list and win.
+
+Shared weights are handled for you — `edit` and `inpaint` both run the
+Krea 2 base models, so enabling either one fetches them, and enabling all
+three fetches them once.
+
+> **Upgrading from an earlier build:** the old `KREA2_DISABLE_V2` /
+> `_WAN` / `_FLUX` / `_REACTOR` variables assumed everything was on unless
+> you said otherwise. That is now inverted. A pod that relied on the old
+> defaults needs its tabs named explicitly — for example
+> `KREA2_FEATURES="edit,inpaint,faceswap,flux,wan,json_batch"` to get the
+> previous behaviour back. Note the ReActor key is now `faceswap`.
 
 ## Licensing
 
@@ -317,8 +361,9 @@ node-for-node into this app. It is a second text-to-image pipeline rather than
 a variation of the first: its own model registry, its own VAE
 (`wan21-vae.safetensors` from `wangkanai/wan21-vae`, which that workflow's
 guide recommends over the stock Qwen VAE), its own 11-slot LoRA stack and its
-own defaults. Nothing it does moves the Single tab, and vice versa. Set
-`KREA2_DISABLE_V2=1` to skip the ~17 GB of downloads and hide the tab.
+own defaults. Nothing it does moves the Single tab, and vice versa. On by
+default (feature key `v2`); `KREA2_FEATURES="-v2"` skips the ~17 GB of
+downloads and hides the tab.
 
 ### Turbo / Raw
 
@@ -549,7 +594,8 @@ Two things worth knowing:
   treated as optional — `ensure_nsfw_model` looks for exactly `config.json`,
   `model.safetensors` and `preprocessor_config.json` in that directory.
 
-Set `KREA2_DISABLE_REACTOR=1` to skip the downloads and hide the tab.
+Off by default (feature key `faceswap`); `KREA2_FEATURES="faceswap"`
+installs the node pack, fetches the ~1.8 GB of models and shows the tab.
 
 ## Krea 2 model switching
 
@@ -586,7 +632,7 @@ accordion entirely.
 The **🌊 Flux 2** tab does text-to-image with Flux 2 Dev (32B,
 `flux2_dev_fp8mixed`, ~35.5 GB) plus the Mistral-Small text encoder
 (~18 GB) and Flux 2 VAE — ~57 GB of downloads from `Comfy-Org/flux2-dev`;
-set `KREA2_DISABLE_FLUX=1` to skip all of it. Flux 2 is
+off by default, so `KREA2_FEATURES="flux"` is what fetches it. Flux 2 is
 guidance-distilled, so there is no CFG/negative prompt — a **Guidance**
 value (~4) steers it, and sampling uses the official template's
 custom-sampler graph (`Flux2Scheduler` + `BasicGuider` +
@@ -646,7 +692,9 @@ Start with `KREA2_WAN_PARALLEL=1` to give video its own ComfyUI instance on
 port 8189 so quick image jobs don't wait behind a long render — both
 instances then split the GPU via `--reserve-vram` (defaults tuned for a
 48 GB A40; note the two workloads also share compute, so each runs slower
-while overlapping). Set `KREA2_DISABLE_WAN=1` to skip the downloads and
-hide the tab entirely. Make sure the pod volume has room: Krea (~32 GB) +
+while overlapping). The Video tab is off by default —
+`KREA2_FEATURES="wan"` is what fetches the models and shows it, and
+`KREA2_WAN_PARALLEL` only buys a second ComfyUI instance when it is on.
+Make sure the pod volume has room: Krea (~32 GB) +
 Wan (~49 GB) + ComfyUI needs a ≥ 100 GB disk (a 120 GB volume fits with
 ~35 GB left for outputs).

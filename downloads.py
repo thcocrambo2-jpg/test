@@ -14,6 +14,7 @@ from pathlib import Path
 import requests
 from huggingface_hub import hf_hub_download, snapshot_download
 
+import features
 from config import (
     ABLITERATED_ENCODER_FILE,
     ABLITERATED_ENCODER_REPO,
@@ -22,7 +23,6 @@ from config import (
     EDIT_LORA_FILE,
     EDIT_LORA_REPO,
     FLUX_CIVITAI_LORAS,
-    FLUX_ENABLED,
     FLUX_HF_FILES,
     FLUX_HF_REPO,
     FLUX_LORA_SUBDIR,
@@ -33,7 +33,6 @@ from config import (
     HF_TOKEN,
     KREA2_MODELS,
     MODELS_DIR,
-    REACTOR_ENABLED,
     REACTOR_FACEDETECTION_FILES,
     REACTOR_HF_FILES,
     REACTOR_HF_REPO,
@@ -42,13 +41,11 @@ from config import (
     REACTOR_NSFW_DIR,
     REACTOR_NSFW_REPO,
     TEXT_ENCODER_FILE,
-    V2_ENABLED,
     V2_LORA_STACK,
     V2_MODELS,
     V2_VAE_FILE,
     V2_VAE_HF_PATH,
     V2_VAE_HF_REPO,
-    WAN_ENABLED,
     WAN_HF_FILES,
     WAN_HF_REPO,
     log,
@@ -354,8 +351,13 @@ def download_v2_models() -> None:
 
     Every item is independent: a missing file disables or degrades only the
     V2 tab, which names what it is waiting for, and the next run retries it.
-    LoRAs already fetched elsewhere (the HF turbo LoRA) carry no version id
-    and are skipped here.
+
+    Self-sufficient on purpose. Slot 1 of the stack is the Krea 2 turbo
+    LoRA, which also appears in HF_LORA_FILES — but that list belongs to
+    the "krea2" asset group, and V2 can be the only enabled feature, so
+    this fetches it rather than assuming another group already did.
+    fetch_hf_file keys on the destination path, so when both groups are on
+    whichever runs first downloads it and the other logs a cache hit.
     """
     for entry in V2_MODELS:
         # Krea 2 Raw is also in KREA2_MODELS; fetch_hf_file keys on the
@@ -376,10 +378,13 @@ def download_v2_models() -> None:
                   "refuse to run until a later run fetches it.",
                   V2_VAE_FILE, exc)
     for filename, _strength, _enabled, version_id in V2_LORA_STACK:
-        if version_id is None:
-            continue  # comes from Hugging Face with the other style LoRAs
         try:
-            fetch_civitai_file(version_id, filename)
+            if version_id is None:
+                # No CivitAI version id means it comes from the Krea 2 HF
+                # repo — currently just the turbo LoRA in slot 1.
+                fetch_hf_file(f"loras/{filename}")
+            else:
+                fetch_civitai_file(version_id, filename)
         except Exception as exc:
             # One missing LoRA only empties one slot in the V2 stack.
             log.error("Skipping Krea 2 V2 LoRA %s: %s", filename, exc)
@@ -420,8 +425,28 @@ def download_reactor_models() -> None:
                   "download it during the first swap.", exc)
 
 
-def download_everything() -> None:
-    """Fetch base models, registry models, style LoRAs and CivitAI LoRAs."""
+def download_text_encoder() -> None:
+    """Fetch the Qwen3-VL text encoder every Krea 2 pipeline shares.
+
+    The abliterated build is preferred and the stock one is the fallback,
+    so a failure here costs prompt latitude rather than a working tab.
+    """
+    try:
+        fetch_abliterated_encoder()
+    except Exception as exc:
+        log.error(
+            "Abliterated encoder unavailable (%s) — "
+            "falling back to the standard encoder.", exc,
+        )
+        fetch_hf_file(f"text_encoders/{TEXT_ENCODER_FILE}")
+
+
+def download_krea2_models() -> None:
+    """Fetch the Krea 2 base models, VAE and LoRAs (~26 GB).
+
+    Shared by the Single, Edit and Inpaint tabs — whichever of them is on
+    pulls this group in, and it is fetched once however many of them are.
+    """
     for relpath in HF_MODEL_FILES + HF_LORA_FILES:
         fetch_hf_file(relpath)
     for entry in KREA2_MODELS:
@@ -441,72 +466,117 @@ def download_everything() -> None:
                 )
         except Exception as exc:
             log.error("Skipping Krea 2 model %s: %s", entry["name"], exc)
-    try:
-        fetch_abliterated_encoder()
-    except Exception as exc:
-        log.error(
-            "Abliterated encoder unavailable (%s) — "
-            "falling back to the standard encoder.", exc,
-        )
-        fetch_hf_file(f"text_encoders/{TEXT_ENCODER_FILE}")
-    try:
-        fetch_edit_lora()
-    except Exception as exc:
-        # The Edit tab warns when this file is missing; everything else works.
-        log.error("Identity Edit LoRA unavailable (%s) — the Edit tab will "
-                  "stay disabled until it downloads on a later run.", exc)
-    if WAN_ENABLED:
-        for relpath in WAN_HF_FILES:
-            try:
-                fetch_repackaged_file(WAN_HF_REPO, relpath)
-            except Exception as exc:
-                # A missing Wan file only degrades the Video tab; the Krea
-                # tabs must never be affected by it.
-                log.error("Wan 2.2 file %s unavailable (%s) — the Video tab "
-                          "will refuse to run until a later run fetches it.",
-                          relpath, exc)
-    if FLUX_ENABLED:
-        for relpath in FLUX_HF_FILES:
-            try:
-                fetch_repackaged_file(FLUX_HF_REPO, relpath)
-            except Exception as exc:
-                log.error("Flux 2 file %s unavailable (%s) — the Flux tab "
-                          "will refuse to run until a later run fetches it.",
-                          relpath, exc)
-        for entry in FLUX_MODELS:
-            try:
-                if entry.get("hf_path"):
-                    fetch_repackaged_file(FLUX_HF_REPO, entry["hf_path"])
-                elif entry.get("civitai_version"):
-                    fetch_civitai_file(entry["civitai_version"],
-                                       entry["file"],
-                                       subdir="diffusion_models")
-                else:
-                    log.warning(
-                        "Flux model %r has no hf_path/civitai_version — "
-                        "expecting %s to be placed in diffusion_models/ "
-                        "manually.", entry["name"], entry["file"],
-                    )
-            except Exception as exc:
-                log.error("Skipping Flux 2 model %s: %s", entry["name"], exc)
-        for version_id, filename in FLUX_CIVITAI_LORAS:
-            try:
-                fetch_civitai_file(version_id, filename,
-                                   subdir=f"loras/{FLUX_LORA_SUBDIR}")
-            except Exception as exc:
-                log.error("Skipping Flux LoRA %s: %s", filename, exc)
-    if V2_ENABLED:
-        download_v2_models()
-    if REACTOR_ENABLED:
-        download_reactor_models()
-    if CIVITAI_LORAS and not CIVITAI_TOKEN:
-        log.warning(
-            "CIVITAI_LORAS configured but no CIVITAI_TOKEN environment "
-            "variable set — trying anonymously (many downloads will be refused)."
-        )
     for version_id, filename in CIVITAI_LORAS:
         try:
             fetch_civitai_file(version_id, filename)
         except Exception as exc:
             # A missing LoRA must not sink the whole setup.
             log.error("Skipping LoRA %s: %s", filename, exc)
+
+
+def download_edit_lora() -> None:
+    """Fetch the Krea 2 Identity Edit LoRA (~1.9 GB) for the Edit tab."""
+    try:
+        fetch_edit_lora()
+    except Exception as exc:
+        # The Edit tab warns when this file is missing; everything else works.
+        log.error("Identity Edit LoRA unavailable (%s) — the Edit tab will "
+                  "stay disabled until it downloads on a later run.", exc)
+
+
+def download_wan_models() -> None:
+    """Fetch the Wan 2.2 image-to-video models (~49 GB)."""
+    for relpath in WAN_HF_FILES:
+        try:
+            fetch_repackaged_file(WAN_HF_REPO, relpath)
+        except Exception as exc:
+            # A missing Wan file only degrades the Video tab; the Krea
+            # tabs must never be affected by it.
+            log.error("Wan 2.2 file %s unavailable (%s) — the Video tab "
+                      "will refuse to run until a later run fetches it.",
+                      relpath, exc)
+
+
+def download_flux_models() -> None:
+    """Fetch the Flux 2 model, text encoder, VAE and LoRAs (~57 GB)."""
+    for relpath in FLUX_HF_FILES:
+        try:
+            fetch_repackaged_file(FLUX_HF_REPO, relpath)
+        except Exception as exc:
+            log.error("Flux 2 file %s unavailable (%s) — the Flux tab "
+                      "will refuse to run until a later run fetches it.",
+                      relpath, exc)
+    for entry in FLUX_MODELS:
+        try:
+            if entry.get("hf_path"):
+                fetch_repackaged_file(FLUX_HF_REPO, entry["hf_path"])
+            elif entry.get("civitai_version"):
+                fetch_civitai_file(entry["civitai_version"], entry["file"],
+                                   subdir="diffusion_models")
+            else:
+                log.warning(
+                    "Flux model %r has no hf_path/civitai_version — "
+                    "expecting %s to be placed in diffusion_models/ "
+                    "manually.", entry["name"], entry["file"],
+                )
+        except Exception as exc:
+            log.error("Skipping Flux 2 model %s: %s", entry["name"], exc)
+    for version_id, filename in FLUX_CIVITAI_LORAS:
+        try:
+            fetch_civitai_file(version_id, filename,
+                               subdir=f"loras/{FLUX_LORA_SUBDIR}")
+        except Exception as exc:
+            log.error("Skipping Flux LoRA %s: %s", filename, exc)
+
+
+# Asset group → the function that fetches it. Iteration order is download
+# order, so the cheap shared pieces land before the tens of gigabytes.
+ASSET_GROUPS = {
+    "text_encoder": download_text_encoder,
+    "krea2": download_krea2_models,
+    "edit_lora": download_edit_lora,
+    "v2": download_v2_models,
+    "flux": download_flux_models,
+    "wan": download_wan_models,
+    "reactor": download_reactor_models,
+}
+
+# Groups that pull at least one file from CivitAI, which is the only
+# source here that usually needs a token.
+CIVITAI_GROUPS = {"krea2", "v2", "flux"}
+
+
+def download_everything() -> None:
+    """Fetch exactly what the enabled features need, and nothing else.
+
+    Driven by features.assets() rather than a fixed sequence: a feature
+    that is off never reaches its downloader, which is where the flags
+    actually save money — Wan is ~49 GB and Flux ~57 GB.
+    """
+    groups = features.assets()
+    if not groups:
+        log.info("No feature needs any model files — skipping downloads")
+        return
+
+    # A group named in features.py with no downloader here would otherwise
+    # fetch nothing at all and only surface as an empty model dropdown much
+    # later, so say it plainly at the point the two lists disagree.
+    unknown = groups - set(ASSET_GROUPS)
+    if unknown:
+        log.error(
+            "No downloader for asset group(s): %s — the features needing "
+            "them will have no models. features.py and downloads.py "
+            "disagree; this is a bug, not a configuration problem.",
+            ", ".join(sorted(unknown)),
+        )
+
+    log.info("Downloading asset groups: %s", ", ".join(sorted(groups)))
+    if CIVITAI_GROUPS & groups and not CIVITAI_TOKEN:
+        log.warning(
+            "CivitAI LoRAs are configured but no CIVITAI_TOKEN environment "
+            "variable is set — trying anonymously (many downloads will be "
+            "refused)."
+        )
+    for name, fetch in ASSET_GROUPS.items():
+        if name in groups:
+            fetch()

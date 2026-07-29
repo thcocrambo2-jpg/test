@@ -1,7 +1,35 @@
 """Krea 2 on RunPod — configuration.
 
-Everything user-tunable lives in this module: paths, model variant,
-LoRA lists and (optional) access tokens.
+Everything user-tunable lives in this module: paths, model registries,
+LoRA lists and (optional) access tokens. In section order:
+
+    Build mode          FROZEN
+    Disk layout         BASE_DIR and everything under it, ComfyUI's port
+    Model selection     Krea 2 base models, encoder, LoRAs — the
+                        Single / Edit / Inpaint tabs
+    Krea 2 V2           the DesiMuseAI pipeline, self-contained
+    Wan 2.2             image-to-video (+ the parallel-instance knobs)
+    Flux 2              text-to-image
+    ReActor             face swap
+    CivitAI LoRAs       shared LoRA lists, resolutions, samplers
+    Licensing           seat check + access tokens
+
+Which *tabs* exist is not decided here — that is features.py, which owns
+every KREA2_FEATURES / KREA2_ENABLE_* / KREA2_DISABLE_* variable. This
+module only describes what each feature would need if it were on, so it
+stays a plain data module that features.py can import without a cycle.
+
+Every environment variable this module reads, in one place:
+
+    KREA2_BASE_DIR              where models, outputs and logs live
+    KREA2_KEEP_MODELS_LOADED    do not unload between model swaps
+    KREA2_WAN_PARALLEL          second ComfyUI instance for video
+    KREA2_MAIN_RESERVE_VRAM     GB left for Wan by the image instance
+    KREA2_WAN_RESERVE_VRAM      GB left for images by the video instance
+    KREA2_LICENSE_KEY           the customer key (required)
+    KREA2_LICENSE_API           override the licence endpoint (testing)
+    KREA2_LICENSE_GRACE         seconds tolerated with no licence server
+    HF_TOKEN, CIVITAI_TOKEN     download credentials
 """
 
 import logging
@@ -124,6 +152,8 @@ ABLITERATED_ENCODER_FILE = "qwen3vl_4b_abliterated.safetensors"
 # pack feed the source image into the model itself — as in-context VAE
 # latents and through the Qwen3-VL encoder — so edits preserve identity
 # instead of repainting from scratch like plain img2img/inpaint.
+# Off by default (feature key "edit", ~1.9 GB for the LoRA); the node pack
+# is only cloned when it is on, since nothing else uses those two nodes.
 KREA2EDIT_NODES_REPO = "https://github.com/lbouaraba/comfyui-krea2edit"
 EDIT_LORA_REPO = "conradlocke/krea2-identity-edit"
 EDIT_LORA_FILE = "krea2_identity_edit_v1_1.safetensors"  # ~1.83 GB
@@ -164,8 +194,8 @@ HF_LORA_FILES = [
 #   • LoRAs apply to the model *and* the CLIP (the source workflow uses
 #     rgthree's Power Lora Loader in "Single Strength" mode), unlike the
 #     LoraLoaderModelOnly chain the other Krea tabs build.
-# Set KREA2_DISABLE_V2=1 to skip its ~17 GB of downloads and hide the tab.
-V2_ENABLED = not os.environ.get("KREA2_DISABLE_V2")
+# On by default (feature key "v2", ~17 GB); KREA2_FEATURES="-v2" skips
+# the downloads, the three node packs and the tab.
 
 # Variant-level defaults, same scheme as VARIANT_DEFAULTS / FLUX_VARIANT_
 # DEFAULTS: a registry entry picks one with its "variant" field and may
@@ -365,9 +395,8 @@ V2_DEFAULT_NEGATIVE = (
 #     suits the parallel mode well.
 # Both share the UMT5-XXL text encoder (~6.7 GB). Everything comes from
 # the same Comfy-Org repackaged repo — ~49 GB in total on top of the Krea
-# downloads. Set KREA2_DISABLE_WAN=1 to skip all of it (the Video tab
-# disappears and nothing else changes).
-WAN_ENABLED = not os.environ.get("KREA2_DISABLE_WAN")
+# downloads. Off by default (feature key "wan"); KREA2_FEATURES="wan"
+# fetches all of it and shows the Video tab, and nothing else changes.
 WAN_HF_REPO = "Comfy-Org/Wan_2.2_ComfyUI_Repackaged"
 WAN_HIGH_UNET = "wan2.2_i2v_high_noise_14B_fp8_scaled.safetensors"
 WAN_LOW_UNET = "wan2.2_i2v_low_noise_14B_fp8_scaled.safetensors"
@@ -429,7 +458,9 @@ WAN_DEFAULT_NEGATIVE = (
 # render. Each instance is told to leave VRAM for the other via
 # --reserve-vram; on a 48 GB A40 the defaults give Krea ~22 GB and Wan
 # ~26 GB. Without the flag (default) both tabs share one ComfyUI queue —
-# zero OOM risk, but jobs run strictly one after another.
+# zero OOM risk, but jobs run strictly one after another. Only has any
+# effect when the "wan" feature is on: app.py checks both before paying
+# for a second instance.
 WAN_PARALLEL = bool(os.environ.get("KREA2_WAN_PARALLEL"))
 WAN_COMFY_PORT = 8189
 WAN_COMFY_LOG = WORKING_DIR / "comfyui_wan.log"
@@ -442,8 +473,8 @@ WAN_RESERVE_VRAM_GB = float(os.environ.get("KREA2_WAN_RESERVE_VRAM", 22))
 # fp8 model is ~35.5 GB and the Mistral text encoder ~18 GB, so on a 48 GB
 # A40 run Flux WITHOUT KREA2_WAN_PARALLEL (it needs nearly the whole GPU)
 # and expect a slow model swap when switching between Flux and Krea jobs.
-# Set KREA2_DISABLE_FLUX=1 to skip the ~57 GB of downloads and hide the tab.
-FLUX_ENABLED = not os.environ.get("KREA2_DISABLE_FLUX")
+# Off by default (feature key "flux"); KREA2_FEATURES="flux" fetches its
+# ~57 GB and shows the tab.
 FLUX_HF_REPO = "Comfy-Org/flux2-dev"
 FLUX_TEXT_ENCODER = "mistral_3_small_flux2_fp8.safetensors"  # ~18.0 GB
 FLUX_VAE = "flux2-vae.safetensors"                           # ~0.34 GB
@@ -505,9 +536,9 @@ FLUX_CIVITAI_LORAS = [
 # Everything it needs is downloaded up front by downloads.py, *including*
 # the three files ReActor would otherwise fetch during the first swap (the
 # RetinaFace detector, the face-parsing net and the NSFW classifier), so a
-# swap never reaches out to the network. ~1.8 GB in total; set
-# KREA2_DISABLE_REACTOR=1 to skip the downloads and hide the tab.
-REACTOR_ENABLED = not os.environ.get("KREA2_DISABLE_REACTOR")
+# swap never reaches out to the network. ~1.8 GB in total. Off by default
+# (feature key "faceswap"); KREA2_FEATURES="faceswap" installs the node
+# pack, fetches the models and shows the tab.
 REACTOR_NODES_DIR = "ComfyUI-ReActor"
 # The node pack is vendored in deps/, so bootstrap installs it by copying
 # rather than cloning — nothing is fetched from GitHub. The repo URL stays
@@ -636,10 +667,10 @@ CIVITAI_TOKEN = os.environ.get("CIVITAI_TOKEN") or None
 for _dir in (TEMP_DIR, MODELS_DIR, OUTPUT_DIR):
     _dir.mkdir(parents=True, exist_ok=True)
 
+# Which features are on is logged by app.py once features.py has resolved
+# them — this module deliberately does not know, so that importing config
+# from features.py stays acyclic.
 log.info(
-    "Variant: Krea 2 %s · Wan 2.2 I2V %s · models → %s · images → %s",
-    KREA2_VARIANT,
-    ("parallel instance" if WAN_PARALLEL else "shared queue")
-    if WAN_ENABLED else "disabled",
-    MODELS_DIR, OUTPUT_DIR,
+    "Variant: Krea 2 %s · models → %s · images → %s",
+    KREA2_VARIANT, MODELS_DIR, OUTPUT_DIR,
 )

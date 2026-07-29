@@ -11,17 +11,16 @@ import shutil
 import subprocess
 import sys
 
+import features
 from config import (
     COMFY_DIR,
     FROZEN,
     KREA2EDIT_NODES_REPO,
     MODELS_DIR,
     PROJECT_DIR,
-    REACTOR_ENABLED,
     REACTOR_LOCAL_NODES,
     REACTOR_NODES_DIR,
     REACTOR_NODES_REPO,
-    V2_ENABLED,
     V2_NODE_REPOS,
     log,
 )
@@ -112,7 +111,12 @@ def install_custom_nodes() -> None:
     Provides the Krea2EditModelPatch / Krea2EditGroundedEncode nodes the
     instruction-edit workflow needs. Must run before the ComfyUI server
     starts so the nodes register; the pack has no extra Python deps.
+
+    Only the Edit tab uses those two nodes, so this is skipped entirely
+    when that feature is off — it used to run unconditionally.
     """
+    if not features.enabled("edit"):
+        return
     dest = COMFY_DIR / "custom_nodes" / "comfyui-krea2edit"
     if dest.exists():
         log.info("Krea2Edit nodes already present at %s — skipping clone", dest)
@@ -135,7 +139,7 @@ def install_v2_nodes() -> None:
     missing and every other tab untouched — the same contract install_reactor
     follows. app.py verifies afterwards that each class actually registered.
     """
-    if not V2_ENABLED:
+    if not features.enabled("v2"):
         return
     for dirname, repo, _class_type in V2_NODE_REPOS:
         dest = COMFY_DIR / "custom_nodes" / dirname
@@ -267,7 +271,7 @@ def install_reactor() -> None:
     it is absent from its requirements.txt. So nothing here needs a C++
     toolchain: every dependency installs as a wheel.
     """
-    if not REACTOR_ENABLED:
+    if not features.enabled("faceswap"):
         return
     dest = COMFY_DIR / "custom_nodes" / REACTOR_NODES_DIR
     if dest.exists():
@@ -320,7 +324,8 @@ def install_reactor() -> None:
 
 def link_model_dirs() -> None:
     """Point ComfyUI's model folders at MODELS_DIR via symlinks."""
-    names = MODEL_DIRS + (REACTOR_MODEL_DIRS if REACTOR_ENABLED else ())
+    names = MODEL_DIRS + (REACTOR_MODEL_DIRS
+                          if features.enabled("faceswap") else ())
     for name in names:
         src = MODELS_DIR / name
         src.mkdir(parents=True, exist_ok=True)
