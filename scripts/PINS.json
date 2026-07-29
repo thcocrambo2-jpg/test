@@ -1,0 +1,43 @@
+{
+  "Comfy-Org/Krea-2": {
+    "kind": "hf",
+    "sha": "952f49d49653cb42e7d6cf7cbfad74738073ec7d"
+  },
+  "Comfy-Org/Wan_2.2_ComfyUI_Repackaged": {
+    "kind": "hf",
+    "sha": "fb1388adc906ab39ffc26ee40e96b22886b56bc4"
+  },
+  "Comfy-Org/flux2-dev": {
+    "kind": "hf",
+    "sha": "03d6521e6f6a47396b3f951cbea50f7e6c2f482e"
+  },
+  "ComfyUI": {
+    "sha": "e651b7bef55a5376343dcb1c0edb79f0142c985e",
+    "url": "https://github.com/comfyanonymous/ComfyUI.git"
+  },
+  "ComfyUI-RBG-SmartSeedVariance": {
+    "sha": "318ce57d13620a78f2cc71453488e028515f2a2a",
+    "tarball": "ComfyUI-RBG-SmartSeedVariance-318ce57d.tar.gz",
+    "url": "https://github.com/RamonGuthrie/ComfyUI-RBG-SmartSeedVariance"
+  },
+  "ComfyUI-post-processing-nodes": {
+    "sha": "c49a05254795403648f2c1774b6f5ea39f96e7d5",
+    "tarball": "ComfyUI-post-processing-nodes-c49a0525.tar.gz",
+    "url": "https://github.com/EllangoK/ComfyUI-post-processing-nodes"
+  },
+  "Gourieff/ReActor": {
+    "kind": "hf-dataset",
+    "sha": "218401e38fb00476b38f319c043b2f85d4db5b87"
+  },
+  "RES4LYF": {
+    "sha": "022c873c6d198c67b3312a1804336533a050df18",
+    "tarball": "RES4LYF-022c873c.tar.gz",
+    "url": "https://github.com/ClownsharkBatwing/RES4LYF"
+  },
+  "_note": "SHAs/revisions captured at mirror time. Feed these to bootstrap.py clones and hf_hub_download(revision=...). The mirror and the upstream fallback MUST resolve to the same revision.",
+  "comfyui-krea2edit": {
+    "sha": "bdfa8b267fdb13730868d435b277dcfe696ec083",
+    "tarball": "comfyui-krea2edit-bdfa8b26.tar.gz",
+    "url": "https://github.com/lbouaraba/comfyui-krea2edit"
+  }
+}
