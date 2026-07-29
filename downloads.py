@@ -44,8 +44,7 @@ from config import (
     TEXT_ENCODER_FILE,
     V2_ENABLED,
     V2_LORA_STACK,
-    V2_UNET_FILE,
-    V2_UNET_HF_PATH,
+    V2_MODELS,
     V2_VAE_FILE,
     V2_VAE_HF_PATH,
     V2_VAE_HF_REPO,
@@ -358,12 +357,17 @@ def download_v2_models() -> None:
     LoRAs already fetched elsewhere (the HF turbo LoRA) carry no version id
     and are skipped here.
     """
-    try:
-        fetch_hf_file(V2_UNET_HF_PATH)
-    except Exception as exc:
-        log.error("Krea 2 V2 model %s unavailable (%s) — the V2 tab will "
-                  "refuse to run until a later run fetches it.",
-                  V2_UNET_FILE, exc)
+    for entry in V2_MODELS:
+        # Krea 2 Raw is also in KREA2_MODELS; fetch_hf_file keys on the
+        # destination path, so whichever registry asks first downloads it
+        # and the other logs a cache hit. A missing model only greys out
+        # one dropdown choice.
+        try:
+            fetch_hf_file(entry["hf_path"])
+        except Exception as exc:
+            log.error("Krea 2 V2 model %s unavailable (%s) — that dropdown "
+                      "choice will refuse to run until a later run fetches "
+                      "it.", entry["file"], exc)
     try:
         fetch_hf_file_to(V2_VAE_HF_REPO, V2_VAE_HF_PATH,
                          MODELS_DIR / "vae" / V2_VAE_FILE)

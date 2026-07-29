@@ -157,12 +157,47 @@ HF_LORA_FILES = [
 # Set KREA2_DISABLE_V2=1 to skip its ~17 GB of downloads and hide the tab.
 V2_ENABLED = not os.environ.get("KREA2_DISABLE_V2")
 
-# mxfp8 quant of Krea 2 Turbo, from the same official repo as the models
-# above. Named separately from KREA2_MODELS on purpose — this tab pins one
-# model rather than offering the registry dropdown, exactly as the source
-# workflow's Load Diffusion Model node does.
-V2_UNET_FILE = "krea2_turbo_mxfp8.safetensors"                   # ~13.5 GB
-V2_UNET_HF_PATH = f"diffusion_models/{V2_UNET_FILE}"
+# Variant-level defaults, same scheme as VARIANT_DEFAULTS / FLUX_VARIANT_
+# DEFAULTS: a registry entry picks one with its "variant" field and may
+# override any value. `turbo_lora` is the on/off state the Krea 2 Turbo
+# LoRA slot takes when the variant is selected — that LoRA *is* the raw
+# recipe from the source workflow's companion guide (enable it at 0.6,
+# raise steps to 20 and CFG to ~2.5), so the two variants differ by
+# exactly the three things that guide lists.
+V2_VARIANT_DEFAULTS = {
+    "turbo": {"steps": 10, "cfg": 1.0, "turbo_lora": False},
+    "raw": {"steps": 20, "cfg": 2.5, "turbo_lora": True},
+}
+
+# The Krea 2 Turbo LoRA is slot 1 of V2_LORA_STACK below rather than
+# something the builder bolts on. Keeping it a normal, visible slot is what
+# stops it being applied twice when a raw run also has it ticked by hand —
+# the same "never applied silently" rule the trigger words follow.
+V2_TURBO_LORA_FILE = "krea2_turbo_lora_rank_64_bf16.safetensors"
+V2_TURBO_LORA_STRENGTH = 0.6
+
+# Selectable models for the V2 tab. Same fields as KREA2_MODELS
+# (name / file / variant / optional steps, cfg, turbo_lora overrides /
+# hf_path within HF_MODEL_REPO / optional trigger); the first entry is the
+# default and is the model the source workflow ships with.
+#
+# Raw costs no extra disk: krea2_raw_fp8_scaled is already in KREA2_MODELS,
+# and the downloads are keyed on the destination path, so whichever tab
+# asks for it first fetches it and the other finds it cached.
+V2_MODELS = [
+    {
+        "name": "Krea 2 Turbo mxfp8 (workflow default)",
+        "file": "krea2_turbo_mxfp8.safetensors",        # ~13.5 GB
+        "variant": "turbo",
+        "hf_path": "diffusion_models/krea2_turbo_mxfp8.safetensors",
+    },
+    {
+        "name": "Krea 2 Raw fp8",
+        "file": "krea2_raw_fp8_scaled.safetensors",     # ~13.1 GB, shared
+        "variant": "raw",
+        "hf_path": "diffusion_models/krea2_raw_fp8_scaled.safetensors",
+    },
+]
 
 # The workflow's companion guide recommends the Wan 2.1 VAE over the stock
 # Qwen image VAE for this pipeline. Different repo, and it is stored under
@@ -194,7 +229,8 @@ V2_NODE_REPOS = [
 # version id is None for LoRAs already fetched from Hugging Face.
 # Every strength applies to the model and the CLIP alike (Single Strength).
 V2_LORA_STACK = [
-    ("krea2_turbo_lora_rank_64_bf16.safetensors", 0.6, False, None),
+    # Slot 1 — toggled on/off by the Model dropdown (see V2_VARIANT_DEFAULTS).
+    (V2_TURBO_LORA_FILE, V2_TURBO_LORA_STRENGTH, False, None),
     ("krea2filterbypass3.safetensors", 0.93, True, 3067151),
     ("krea2_Enhancer.safetensors", 0.4, True, 3065628),
     ("Krea2-realism-V2.safetensors", 0.3, True, 3090634),
@@ -210,16 +246,16 @@ V2_LORA_STACK = [
     ("snofs_krea_v1.safetensors", 1.0, False, 3104629),
 ]
 
-# ClownsharKSampler_Beta settings, straight from the workflow. Only the
-# seed is not fixed (the source node is set to randomize).
+# ClownsharKSampler_Beta settings, straight from the workflow. These are
+# the knobs both variants share; steps and cfg are deliberately absent
+# because they belong to the model (V2_VARIANT_DEFAULTS) and would
+# otherwise be a second source of truth for the same two numbers.
 V2_SAMPLER_DEFAULTS = {
     "eta": 0.5,
     "sampler_name": "linear/euler",
     "scheduler": "bong_tangent",
-    "steps": 10,
     "steps_to_run": -1,
     "denoise": 1.0,
-    "cfg": 1.0,
     "sampler_mode": "standard",
     "bongmath": True,
 }

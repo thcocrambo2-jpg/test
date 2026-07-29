@@ -54,7 +54,7 @@ from config import (
     V2_SAMPLER_MODES,
     V2_SAMPLER_NAMES,
     V2_SCHEDULERS,
-    V2_UNET_FILE,
+    V2_TURBO_LORA_STRENGTH,
     V2_VARIANCE_DEFAULTS,
     V2_VARIANCE_MODEL_TYPES,
     V2_VARIANCE_PRESETS,
@@ -97,8 +97,14 @@ from workflow_flux import (
 from workflow_krea2_v2 import (
     build_v2_workflow,
     default_lora_slots as v2_default_lora_slots,
+    model_available as v2_model_available,
+    model_defaults as v2_model_defaults,
+    model_names as v2_model_names,
+    resolve_model as v2_resolve_model,
     resolve_size as v2_resolve_size,
     status as v2_status,
+    turbo_lora_available as v2_turbo_lora_available,
+    turbo_lora_slot as v2_turbo_lora_slot,
 )
 from workflow_reactor import (
     build_faceswap_workflow,
@@ -353,6 +359,40 @@ def generate_flux(prompt, seed, randomize, steps, guidance, resolution,
 
 V2_LORA_SLOTS = v2_default_lora_slots()
 V2_LORA_CHOICES = ["None"] + list_lora_files()
+V2_MODEL_CHOICES = v2_model_names()
+V2_TURBO_SLOT = v2_turbo_lora_slot()
+_v2_steps, _v2_cfg, _ = v2_model_defaults(v2_resolve_model(None))
+
+
+def _v2_model_info_text(entry) -> str:
+    """One-line summary shown under the V2 Model dropdown."""
+    steps, cfg, turbo_lora = v2_model_defaults(entry)
+    info = (f"**{entry.get('variant', 'turbo').title()}** · "
+            f"defaults: {steps} steps, CFG {cfg:g} · Turbo LoRA "
+            + ("**on** at " f"{V2_TURBO_LORA_STRENGTH:g}" if turbo_lora
+               else "off"))
+    if not v2_model_available(entry):
+        info += " · ⚠️ **not downloaded yet** — restart the app to fetch it"
+    if turbo_lora and not v2_turbo_lora_available():
+        info += (" · ⚠️ **the Turbo LoRA this variant needs has not "
+                 "downloaded** — raw output will be undistilled")
+    return info
+
+
+def v2_model_changed(model_name):
+    """V2 Model dropdown → its steps/CFG and the Turbo LoRA slot's state.
+
+    The Turbo LoRA is toggled here rather than inside the workflow builder
+    so it stays a visible, editable row: raw mode ticks slot
+    V2_TURBO_SLOT on at its strength, turbo unticks it, and either way
+    whatever is on screen is exactly what gets applied.
+    """
+    entry = v2_resolve_model(model_name)
+    steps, cfg, turbo_lora = v2_model_defaults(entry)
+    return (gr.Slider(value=steps), gr.Slider(value=cfg),
+            gr.Markdown(value=_v2_model_info_text(entry)),
+            gr.Checkbox(value=turbo_lora and v2_turbo_lora_available()),
+            gr.Slider(value=V2_TURBO_LORA_STRENGTH))
 
 
 def _resolve_v2_lora_slots(*slots) -> list:
@@ -383,7 +423,7 @@ def v2_size_preview(aspect, megapixels, multiple):
     return gr.Markdown(value=_v2_size_text(aspect, megapixels, multiple))
 
 
-def generate_v2(prompt, negative, seed, randomize, aspect, megapixels,
+def generate_v2(prompt, negative, seed, randomize, model, aspect, megapixels,
                 multiple, eta, sampler_name, scheduler, steps, denoise, cfg,
                 sampler_mode, bongmath, variance_preset, fine_tune_variance,
                 variance_model_type, variance_schedule, cutoff_step,
@@ -393,6 +433,11 @@ def generate_v2(prompt, negative, seed, randomize, aspect, megapixels,
     ready, message = v2_status()
     if not ready:
         yield [], message, 0
+        return
+    entry = v2_resolve_model(model)
+    if not v2_model_available(entry):
+        yield [], (f"❌ Model “{entry['name']}” is not downloaded yet — "
+                   "restart the app so the download step can fetch it."), 0
         return
     base_seed = random.randint(0, 2**32 - 1) if randomize else int(seed)
     width, height = v2_resolve_size(aspect, megapixels, multiple)
@@ -415,6 +460,7 @@ def generate_v2(prompt, negative, seed, randomize, aspect, megapixels,
     jobs = [{
         "prompt": prompt, "negative": negative or "", "seed": base_seed + i,
         "width": width, "height": height, "loras": loras,
+        "unet_file": entry["file"],
         "sampler_settings": sampler_settings,
         "variance_settings": variance_settings,
         "sharpen": bool(sharpen), "film_grain": bool(film_grain),
@@ -1121,12 +1167,14 @@ with gr.Blocks(title="Krea 2 on RunPod") as ui:
                 _v2_message = v2_status()[1]
                 gr.Markdown(
                     "The **DesiMuseAI KREA 2 TURBO/RAW** graph, reproduced "
-                    f"as-is: `{V2_UNET_FILE}` with the Wan 2.1 VAE, an 11-LoRA "
-                    "model+CLIP stack, RES4LYF's **ClownsharKSampler** "
-                    "(`linear/euler` + `bong_tangent`, eta 0.5, bongmath on) "
-                    "and **RBG Smart Seed Variance** on the positive prompt. "
-                    "Every default below is the workflow's own — this tab "
-                    "shares nothing with the Single tab.\n\n"
+                    "as-is: the mxfp8 or raw Krea 2 model with the Wan 2.1 "
+                    "VAE, an 11-LoRA model+CLIP stack, RES4LYF's "
+                    "**ClownsharKSampler** (`linear/euler` + `bong_tangent`, "
+                    "eta 0.5, bongmath on) and **RBG Smart Seed Variance** on "
+                    "the positive prompt. Picking a model resets Steps/CFG "
+                    "and the Turbo LoRA slot to that variant's defaults — "
+                    "all of it still editable. This tab shares nothing with "
+                    "the Single tab.\n\n"
                     f"{_v2_message}"
                 )
                 with gr.Row():
@@ -1139,6 +1187,13 @@ with gr.Blocks(title="Krea 2 on RunPod") as ui:
                         v2_negative = gr.Textbox(
                             label="Negatives", lines=6,
                             value=V2_DEFAULT_NEGATIVE,
+                        )
+                        v2_model_dd = gr.Dropdown(
+                            choices=V2_MODEL_CHOICES,
+                            value=V2_MODEL_CHOICES[0], label="Model",
+                        )
+                        v2_model_info = gr.Markdown(
+                            _v2_model_info_text(v2_resolve_model(None))
                         )
                         gr.Markdown("### 📐 Resolution")
                         with gr.Row():
@@ -1186,12 +1241,12 @@ with gr.Blocks(title="Krea 2 on RunPod") as ui:
                         with gr.Accordion("⚙️ ClownsharKSampler", open=True):
                             with gr.Row():
                                 v2_steps = gr.Slider(
-                                    1, 100, value=V2_SAMPLER_DEFAULTS["steps"],
-                                    step=1, label="Steps",
+                                    1, 100, value=_v2_steps, step=1,
+                                    label="Steps",
                                 )
                                 v2_cfg = gr.Slider(
-                                    0.0, 20.0, value=V2_SAMPLER_DEFAULTS["cfg"],
-                                    step=0.1, label="CFG",
+                                    0.0, 20.0, value=_v2_cfg, step=0.1,
+                                    label="CFG",
                                 )
                             with gr.Row():
                                 v2_sampler_name = gr.Dropdown(
@@ -1293,9 +1348,19 @@ with gr.Blocks(title="Krea 2 on RunPod") as ui:
                                 label="Film grain (intensity 0.05, scale 1)",
                                 value=False,
                             )
+                # Wired here, not at creation: the Model dropdown lives in
+                # the left column while the sliders it drives are in the
+                # right one, so every component has to exist first.
+                if V2_TURBO_SLOT is not None:
+                    v2_model_dd.change(
+                        fn=v2_model_changed, inputs=v2_model_dd,
+                        outputs=[v2_steps, v2_cfg, v2_model_info,
+                                 v2_cbs[V2_TURBO_SLOT], v2_ws[V2_TURBO_SLOT]],
+                    )
                 v2_generate_btn.click(
                     fn=generate_v2,
                     inputs=[v2_prompt, v2_negative, v2_seed, v2_randomize,
+                            v2_model_dd,
                             v2_aspect, v2_megapixels, v2_multiple,
                             v2_eta, v2_sampler_name, v2_scheduler, v2_steps,
                             v2_denoise, v2_cfg, v2_sampler_mode, v2_bongmath,

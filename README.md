@@ -261,19 +261,49 @@ since the executable bit does not survive most transfers.
 
 The **🔶 Krea 2 V2** tab is the DesiMuseAI *KREA 2 TURBO/RAW* workflow ported
 node-for-node into this app. It is a second text-to-image pipeline rather than
-a variation of the first: its own model (`krea2_turbo_mxfp8.safetensors`,
-~13.5 GB), its own VAE (`wan21-vae.safetensors` from `wangkanai/wan21-vae`,
-which that workflow's guide recommends over the stock Qwen VAE), its own
-11-slot LoRA stack and its own defaults. Nothing it does moves the Single tab,
-and vice versa. Set `KREA2_DISABLE_V2=1` to skip the ~17 GB of downloads and
-hide the tab.
+a variation of the first: its own model registry, its own VAE
+(`wan21-vae.safetensors` from `wangkanai/wan21-vae`, which that workflow's
+guide recommends over the stock Qwen VAE), its own 11-slot LoRA stack and its
+own defaults. Nothing it does moves the Single tab, and vice versa. Set
+`KREA2_DISABLE_V2=1` to skip the ~17 GB of downloads and hide the tab.
+
+### Turbo / Raw
+
+`V2_MODELS` works exactly like `KREA2_MODELS` and `FLUX_MODELS` — a **Model**
+dropdown, and picking one resets that variant's defaults:
+
+| | Turbo (default) | Raw |
+| --- | --- | --- |
+| model | `krea2_turbo_mxfp8.safetensors` (~13.5 GB) | `krea2_raw_fp8_scaled.safetensors` (~13.1 GB) |
+| steps | 10 | 20 |
+| CFG | 1.0 | 2.5 |
+| Turbo LoRA slot | off | **on** at 0.6 |
+| sampler | `linear/euler` + `bong_tangent`, eta 0.5, bongmath on, standard | same |
+
+That is precisely the raw recipe from the source workflow's companion note, so
+the two variants differ by exactly the three things it lists. **Raw costs no
+extra disk** — `krea2_raw_fp8_scaled` is already in `KREA2_MODELS`, and
+downloads are keyed on the destination path, so whichever registry asks for it
+first fetches it and the other logs a cache hit.
+
+The Turbo LoRA is toggled as **slot 1 of the visible LoRA stack**, not bolted
+on inside the workflow builder. That is deliberate: it keeps the row editable
+and, more importantly, makes it impossible to apply the LoRA twice when a raw
+run also has that slot ticked by hand — the same "never applied silently" rule
+the trigger words follow. Steps, CFG and the slot all stay editable after the
+dropdown fires; whatever is on screen is what gets submitted.
+
+Because steps and CFG belong to the model, they are **not** in
+`V2_SAMPLER_DEFAULTS` — that dict holds only the knobs both variants share, so
+the two numbers have one source of truth (`V2_VARIANT_DEFAULTS`).
 
 Three things differ from the tabs above, and they are why this needs its own
 builder (`workflow_krea2_v2.py`) rather than a flag on `build_workflow`:
 
 - **`ClownsharKSampler_Beta`** (RES4LYF) replaces `KSampler`. `eta`,
-  `bongmath` and the `bong_tangent` scheduler have no core equivalent. It
-  ships at `linear/euler` + `bong_tangent`, eta 0.5, 10 steps, CFG 1.0.
+  `bongmath` and the `bong_tangent` scheduler have no core equivalent. Steps
+  and CFG come from the selected variant (see the table above); everything
+  else is shared.
 - **`RBG_Smart_Seed_Variance`** sits between the positive prompt and the
   sampler, perturbing the conditioning per seed so a batch varies without
   drifting off-prompt. Its combo values carry emoji (`🌱 Subtle`,

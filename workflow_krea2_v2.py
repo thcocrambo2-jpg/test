@@ -32,12 +32,14 @@ from config import (
     V2_ASPECT_RATIOS,
     V2_FILMGRAIN_DEFAULTS,
     V2_LORA_STACK,
+    V2_MODELS,
     V2_NODE_REPOS,
     V2_SAMPLER_DEFAULTS,
     V2_SHARPEN_DEFAULTS,
-    V2_UNET_FILE,
+    V2_TURBO_LORA_FILE,
     V2_VAE_FILE,
     V2_VARIANCE_DEFAULTS,
+    V2_VARIANT_DEFAULTS,
     log,
 )
 from workflow import active_text_encoder
@@ -48,9 +50,62 @@ from workflow import active_text_encoder
 REQUIRED_NODES = ("ClownsharKSampler_Beta", "RBG_Smart_Seed_Variance")
 
 
-def model_available() -> bool:
-    """True once the V2 UNet has been downloaded."""
-    return (MODELS_DIR / "diffusion_models" / V2_UNET_FILE).exists()
+def model_names() -> list[str]:
+    """Dropdown labels for every V2 model, in config order."""
+    return [entry["name"] for entry in V2_MODELS]
+
+
+def resolve_model(name) -> dict:
+    """Map a UI model name to its V2_MODELS entry (default: first entry).
+
+    Accepts the registry name, the filename, or a case-insensitive
+    fragment of either — the same forgiving lookup resolve_model_entry
+    does for the Single tab, kept separate because the registries are.
+    """
+    if not name or str(name).strip().lower() in ("", "none", "default"):
+        return V2_MODELS[0]
+    wanted = str(name).strip().lower()
+    for entry in V2_MODELS:
+        if wanted in (entry["name"].lower(), entry["file"].lower()):
+            return entry
+    for entry in V2_MODELS:
+        if wanted in entry["name"].lower() or wanted in entry["file"].lower():
+            return entry
+    log.warning("Krea 2 V2 model %r not in V2_MODELS — using the default "
+                "(%s)", name, V2_MODELS[0]["name"])
+    return V2_MODELS[0]
+
+
+def model_defaults(entry: dict) -> tuple[int, float, bool]:
+    """(steps, cfg, turbo_lora) for an entry: overrides, else the variant."""
+    variant = V2_VARIANT_DEFAULTS.get(entry.get("variant", "turbo"),
+                                      V2_VARIANT_DEFAULTS["turbo"])
+    return (int(entry.get("steps", variant["steps"])),
+            float(entry.get("cfg", variant["cfg"])),
+            bool(entry.get("turbo_lora", variant["turbo_lora"])))
+
+
+def model_available(entry: dict | None = None) -> bool:
+    """True once that entry's UNet has been downloaded (default: the first)."""
+    entry = entry or V2_MODELS[0]
+    return (MODELS_DIR / "diffusion_models" / entry["file"]).exists()
+
+
+def turbo_lora_slot() -> int | None:
+    """Index of the Krea 2 Turbo LoRA in the stack, or None if absent.
+
+    The Model dropdown toggles this one slot, so the index is looked up
+    rather than assumed — reordering V2_LORA_STACK stays safe.
+    """
+    for index, (name, _s, _e, _v) in enumerate(V2_LORA_STACK):
+        if name == V2_TURBO_LORA_FILE:
+            return index
+    return None
+
+
+def turbo_lora_available() -> bool:
+    """True once the Krea 2 Turbo LoRA raw mode switches on has downloaded."""
+    return (MODELS_DIR / "loras" / V2_TURBO_LORA_FILE).exists()
 
 
 def vae_available() -> bool:
@@ -91,21 +146,26 @@ def status() -> tuple[bool, str]:
     files, which is what a user can actually act on.
     """
     problems = []
-    if not model_available():
-        problems.append(f"the model `{V2_UNET_FILE}`")
+    if not any(model_available(entry) for entry in V2_MODELS):
+        problems.append("no V2 model has downloaded")
     if not vae_available():
-        problems.append(f"the VAE `{V2_VAE_FILE}`")
+        problems.append(f"the VAE `{V2_VAE_FILE}` has not downloaded")
     if problems:
-        return False, ("❌ Krea 2 V2 cannot run — "
-                       + " and ".join(problems)
-                       + (" have" if len(problems) > 1 else " has")
-                       + " not downloaded yet. Restart the app so the "
-                         "download step can fetch it.")
+        return False, ("❌ Krea 2 V2 cannot run — " + " and ".join(problems)
+                       + " yet. Restart the app so the download step can "
+                         "fetch it.")
+    notes = []
+    absent = [e["name"] for e in V2_MODELS if not model_available(e)]
+    if absent:
+        notes.append("these models have not downloaded and the dropdown "
+                     "will refuse them: " + ", ".join(f"`{n}`" for n in absent))
     missing = missing_enabled_loras()
     if missing:
-        return True, ("⚠️ Ready, but these LoRAs from the workflow's stack "
-                      "did not download and their slots start off: "
-                      + ", ".join(f"`{m}`" for m in missing))
+        notes.append("these LoRAs from the workflow's stack did not download "
+                     "and their slots start off: "
+                     + ", ".join(f"`{m}`" for m in missing))
+    if notes:
+        return True, "⚠️ Ready, but " + "; ".join(notes)
     packs = ", ".join(f"`{d}`" for d, _r, _c in V2_NODE_REPOS)
     return True, f"✅ Ready. Node packs required: {packs}"
 
@@ -140,6 +200,7 @@ def build_v2_workflow(
     width: int,
     height: int,
     loras=(),
+    unet_file: str | None = None,
     sampler_settings=None,
     variance_settings=None,
     variance_seed: int | None = None,
@@ -151,18 +212,26 @@ def build_v2_workflow(
 
     `loras` is a sequence of (filename, strength) pairs, already resolved
     and filtered to the enabled rows; each strength drives strength_model
-    and strength_clip alike. `sampler_settings` and `variance_settings`
-    override V2_SAMPLER_DEFAULTS / V2_VARIANCE_DEFAULTS key by key.
-    `variance_seed` defaults to the image seed so a reproducible seed
-    reproduces the whole graph, the variance node included.
+    and strength_clip alike. `unet_file` selects the diffusion model
+    (V2_MODELS registry) and supplies the steps/CFG its variant defines,
+    which `sampler_settings` may then override key by key — as it does for
+    V2_SAMPLER_DEFAULTS, and `variance_settings` for
+    V2_VARIANCE_DEFAULTS. The Turbo LoRA raw mode wants is not added here:
+    it is an ordinary slot in `loras`, so a caller that also ticks it by
+    hand cannot end up applying it twice. `variance_seed` defaults to the
+    image seed so a reproducible seed reproduces the whole graph, the
+    variance node included.
     """
-    sampler = {**V2_SAMPLER_DEFAULTS, **(sampler_settings or {})}
+    entry = resolve_model(unet_file)
+    steps, cfg, _turbo_lora = model_defaults(entry)
+    sampler = {**V2_SAMPLER_DEFAULTS, "steps": steps, "cfg": cfg,
+               **(sampler_settings or {})}
     variance = {**V2_VARIANCE_DEFAULTS, **(variance_settings or {})}
 
     wf = {
         "unet": {
             "class_type": "UNETLoader",
-            "inputs": {"unet_name": V2_UNET_FILE, "weight_dtype": "default"},
+            "inputs": {"unet_name": entry["file"], "weight_dtype": "default"},
         },
         "clip": {
             "class_type": "CLIPLoader",
