@@ -23,11 +23,17 @@ class ComfyUIError(RuntimeError):
     """A workflow was rejected or failed during execution."""
 
 
-# Loader nodes whose value names a multi-gigabyte weights file. LoRAs are
-# deliberately absent: they are patches applied on top of these, so
-# including them would make every weight tweak look like a model swap and
-# pay a full reload for nothing.
-_WEIGHT_INPUTS = ("unet_name", "vae_name", "clip_name")
+# The loader inputs big enough to be worth unloading for: diffusion models
+# (13-35 GB) and text encoders (5-18 GB). Two deliberate omissions, both
+# because /free is all-or-nothing — it unloads *everything*, so anything
+# in this tuple can cost a full UNet reload:
+#   • vae_name — VAEs are 0.25-1.4 GB. Krea 2 V1 and V2 use different ones
+#     (qwen_image vs wan21), so including it would dump a 13 GB UNet the
+#     two tabs otherwise share just to swap 254 MB. Leaving both VAEs
+#     resident is far cheaper.
+#   • lora_name — LoRAs are patches on top of these weights, so including
+#     them would make every slider tweak look like a model swap.
+_WEIGHT_INPUTS = ("unet_name", "clip_name")
 
 
 def model_signature(workflow: dict) -> tuple:

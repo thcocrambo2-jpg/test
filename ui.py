@@ -1220,6 +1220,7 @@ with gr.Blocks(title="Krea 2 on RunPod") as ui:
                         model_dd, batch_slider,
                         *_lora_inputs(lora_dds, lora_ws)],
                 outputs=[gallery, status_box, seed_out],
+                concurrency_id="comfy",
             )
 
         if V2_ENABLED:
@@ -1431,6 +1432,7 @@ with gr.Blocks(title="Krea 2 on RunPod") as ui:
                             v2_sharpen, v2_grain, v2_batch,
                             *_v2_lora_inputs(v2_cbs, v2_dds, v2_ws)],
                     outputs=[v2_gallery, v2_status_box, v2_seed_out],
+                    concurrency_id="comfy",
                 )
 
         with gr.Tab("✨ Edit (Instruction)"):
@@ -1509,6 +1511,7 @@ with gr.Blocks(title="Krea 2 on RunPod") as ui:
                         edit_grounding, edit_model_dd, edit_batch,
                         *_lora_inputs(edit_lora_dds, edit_lora_ws)],
                 outputs=[edit_gallery, edit_status, edit_seed_out],
+                concurrency_id="comfy",
             )
 
         with gr.Tab("Inpaint / Img2Img"):
@@ -1610,6 +1613,7 @@ with gr.Blocks(title="Krea 2 on RunPod") as ui:
                         inpaint_batch,
                         *_lora_inputs(inpaint_lora_dds, inpaint_lora_ws)],
                 outputs=[inpaint_gallery, inpaint_status, inpaint_seed_out],
+                concurrency_id="comfy",
             )
 
         if REACTOR_ENABLED:
@@ -1697,6 +1701,7 @@ with gr.Blocks(title="Krea 2 on RunPod") as ui:
                             swap_codeformer_w, swap_input_idx,
                             swap_source_idx],
                     outputs=[swap_gallery, swap_status],
+                    concurrency_id="comfy",
                 )
 
         if FLUX_ENABLED:
@@ -1786,6 +1791,7 @@ with gr.Blocks(title="Krea 2 on RunPod") as ui:
                             flux_model_dd, flux_batch,
                             *_lora_inputs(flux_lora_dds, flux_lora_ws)],
                     outputs=[flux_gallery, flux_status, flux_seed_out],
+                    concurrency_id="comfy",
                 )
 
         if WAN_ENABLED:
@@ -1914,6 +1920,9 @@ with gr.Blocks(title="Krea 2 on RunPod") as ui:
                             wan_batch],
                     outputs=[wan_files_out, wan_video_out, wan_status,
                              wan_seed_out],
+                    # Its own group only when it has its own ComfyUI to
+                    # run on; sharing one instance means sharing the queue.
+                    concurrency_id="wan" if WAN_PARALLEL else "comfy",
                 )
 
         with gr.Tab("JSON Advanced Batch"):
@@ -1947,6 +1956,7 @@ with gr.Blocks(title="Krea 2 on RunPod") as ui:
                 fn=generate_from_json,
                 inputs=[json_file_in, json_text_in],
                 outputs=[json_gallery, json_status],
+                concurrency_id="comfy",
             )
 
         with gr.Tab("Gallery"):

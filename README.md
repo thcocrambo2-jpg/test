@@ -77,17 +77,33 @@ server gets OOM-killed. When it dies mid-job the websocket drops
 Two mechanisms handle this:
 
 - **Unload on swap.** Before submitting, the runner compares the graph's
-  base weights (`unet_name` / `vae_name` / `clip_name`, derived from the
-  workflow itself in `client.model_signature`) against what that ComfyUI
-  instance last loaded. If they differ it calls ComfyUI's `POST /free` and
-  **waits for free VRAM to stop rising** before queueing. The waiting
-  matters: `/free` only sets a flag the prompt worker consumes between
-  jobs, so submitting immediately can win the race and execute with the
-  old models still loaded — exactly the peak this avoids. LoRAs are
-  deliberately *not* part of the signature, since they are patches on top
-  of the base weights; changing prompt, seed, steps or LoRA slots costs no
-  reload. Set `KREA2_KEEP_MODELS_LOADED=1` to disable on a machine with
-  room to spare, where keeping models warm is faster.
+  heavy weights (`unet_name` and `clip_name`, derived from the workflow
+  itself in `client.model_signature`) against what that ComfyUI instance
+  last loaded. If they differ it calls ComfyUI's `POST /free` and **waits
+  for free VRAM to stop rising** before queueing. The waiting matters:
+  `/free` only sets a flag the prompt worker consumes between jobs, so
+  submitting immediately can win the race and execute with the old models
+  still loaded — exactly the peak this avoids.
+
+  Two things are deliberately excluded from the signature, because `/free`
+  is all-or-nothing and anything included can cost a full UNet reload.
+  **LoRAs**, since they are patches on top of the base weights — changing
+  prompt, seed, steps or LoRA slots costs nothing. And **VAEs**, at
+  0.25–1.4 GB: V1 and V2 use different ones (`qwen_image` vs `wan21`), so
+  counting them would dump a 13 GB UNet the two tabs otherwise share just
+  to swap 254 MB. **Point V1 and V2 at the same UNet and switching between
+  the tabs needs no reload at all.**
+
+  Set `KREA2_KEEP_MODELS_LOADED=1` to disable on a machine with room to
+  spare, where keeping models warm is faster.
+- **One job at a time.** Every generation event shares the
+  `concurrency_id="comfy"` group, so a second tab's Generate queues rather
+  than running alongside. They all feed one single-threaded ComfyUI prompt
+  worker anyway, so nothing real is lost — but without it a second handler
+  runs far enough to call `/free` while the first job still holds the
+  models, stalling on the VRAM-settle wait and corrupting the
+  what-is-loaded bookkeeping. Video keeps its own group when
+  `KREA2_WAN_PARALLEL` gives it a separate ComfyUI instance.
 - **Restart if it died anyway.** `comfy.ensure_alive()` runs before every
   batch: if the API does not answer it restarts ComfyUI (preserving the
   instance's `--reserve-vram` flags) and reports **the last 20 lines of
