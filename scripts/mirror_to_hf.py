@@ -3,8 +3,10 @@
 
 Operator tool, not part of the shipped app. The intended run is:
 
-    1. Boot a pod with every feature on:
-           KREA2_FEATURES="krea2 edit v2 flux wan faceswap" python3 app.py
+    1. Boot a pod with every feature on. Features come from the license
+       key, so this needs an operator key issued with everything granted:
+           npm run issue-key -- --name "mirror operator" --features all
+           KREA2_LICENSE_KEY=KREA2-... python3 app.py
        Let it finish downloading, then stop it.
     2. python3 scripts/mirror_to_hf.py --pins-only    # capture pod state
     3. python3 scripts/mirror_to_hf.py --dry-run      # read the checklist

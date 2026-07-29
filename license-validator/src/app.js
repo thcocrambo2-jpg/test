@@ -23,6 +23,7 @@ import express from "express";
 import cors from "cors";
 
 import { collections } from "./db.js";
+import { normalizeFeatures } from "./features.js";
 import {
   STALE_SECONDS,
   HEARTBEAT_SECONDS,
@@ -107,12 +108,19 @@ const cutoffDate = () => new Date(Date.now() - STALE_SECONDS * 1000);
 const countLive = (sessions, license_key) =>
   sessions.countDocuments({ license_key, last_seen: { $gt: cutoffDate() } });
 
+// `features` is the entitlement the client acts on: it is the only thing
+// that decides which tabs get built and which weights get downloaded, so
+// it is sent on every 200 — acquire, where it is applied, and heartbeat,
+// where a change tells a running instance it needs a restart to pick the
+// new set up. null means the document says nothing and the client should
+// use its own defaults.
 function seatPayload(license, inUse) {
   return {
     ok: true,
     license_name: license.name || null,
     seats: license.seats,
     seats_in_use: inUse,
+    features: normalizeFeatures(license.features),
     heartbeat_seconds: HEARTBEAT_SECONDS,
     stale_seconds: STALE_SECONDS,
   };
@@ -325,6 +333,7 @@ app.get(
         seats: license.seats,
         active: license.active !== false,
         expires_at: license.expires_at || null,
+        features: normalizeFeatures(license.features),
         seats_in_use: await sessions.countDocuments({
           license_key: license.key,
           last_seen: { $gt: cutoff },

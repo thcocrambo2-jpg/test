@@ -1,17 +1,25 @@
 // Issue a license key for a customer.
 //
-//   npm run issue-key -- --name "Acme Corp" --seats 2
-//   npm run issue-key -- --name "Trial" --seats 1 --days 30
+//   npm run issue-key -- --name "Acme Corp" --seats 2 --features "wan,flux"
+//   npm run issue-key -- --name "Trial" --seats 1 --days 30 --features all
 //   npm run issue-key -- --name "Acme Corp" --seats 3 --update
+//   npm run issue-key -- --key KREA2-XXXX-XXXX-XXXX --features "single" --update
 //   npm run issue-key -- --key KREA2-XXXX-XXXX-XXXX --revoke
 //
 // The generated key is what the customer puts in KREA2_LICENSE_KEY on
 // their pod. Keys are stored in plain text so you can match a key to a
 // customer while supporting them; the collection is never exposed to
 // clients, which is the point of this service sitting in front of it.
+//
+// --features is the whole entitlement story: the app has no environment
+// variable that can switch a tab on, so this list is what the customer
+// can use. Omitting it on a new key leaves the field unset, and an unset
+// field means the client falls back to its own defaults — fine for a
+// trial, worth being explicit about for anyone paying.
 
 import { randomBytes } from "node:crypto";
 import { collections, ensureIndexes } from "../src/db.js";
+import { FEATURE_KEYS, parseFeatureArg } from "../src/features.js";
 
 function args(argv) {
   const out = {};
@@ -67,7 +75,9 @@ if (opts.revoke || opts.enable) {
 
 if (!opts.name && !opts.key) {
   console.error("usage: npm run issue-key -- --name \"Acme Corp\" --seats 2");
+  console.error("       [--features \"wan,flux\" | all | none]");
   console.error("       [--days 30] [--update] [--key KREA2-...] [--revoke]");
+  console.error(`\nfeatures: ${FEATURE_KEYS.join(", ")}`);
   process.exit(1);
 }
 
@@ -76,10 +86,32 @@ const expires_at = opts.days
   ? new Date(Date.now() + Number.parseInt(opts.days, 10) * 86400_000)
   : null;
 
+// Validated before anything is written, so a typo costs an error message
+// rather than a customer whose Wan tab never appears.
+let features = null;
+if (opts.features !== undefined) {
+  const parsed = parseFeatureArg(opts.features);
+  if (parsed.error) {
+    console.error(parsed.error);
+    process.exit(1);
+  }
+  features = parsed.features;
+}
+
+const featureLabel = (value) =>
+  value === null || value === undefined
+    ? "(unset — the app's defaults apply)"
+    : value.length
+      ? value.join(", ")
+      : "(none)";
+
 if (opts.update) {
   const filter = opts.key ? { key: opts.key } : { name: opts.name };
   const update = { seats, active: true, updated_at: new Date() };
   if (opts.days) update.expires_at = expires_at;
+  // Only when asked: an --update that is really about seats must not
+  // silently wipe an entitlement list someone set earlier.
+  if (features !== null) update.features = features;
   const result = await licenses.findOneAndUpdate(
     filter,
     { $set: update },
@@ -89,7 +121,14 @@ if (opts.update) {
     console.error("no matching license to update");
     process.exit(1);
   }
-  console.log(`updated  ${result.key}  seats=${result.seats}`);
+  console.log(
+    `updated  ${result.key}  seats=${result.seats}  ` +
+      `features=${featureLabel(result.features)}`,
+  );
+  console.log(
+    "\nA running instance keeps the features it started with — the " +
+      "customer must restart the app to pick this up.",
+  );
   process.exit(0);
 }
 
@@ -100,12 +139,16 @@ await licenses.insertOne({
   seats,
   active: true,
   expires_at,
+  // Written even when it is null, so the document shape is the same for
+  // every key and an unset entitlement is visibly a choice.
+  features,
   created_at: new Date(),
 });
 
 console.log(`\n  customer   ${opts.name}`);
 console.log(`  key        ${key}`);
 console.log(`  seats      ${seats}`);
+console.log(`  features   ${featureLabel(features)}`);
 console.log(`  expires    ${expires_at ? expires_at.toISOString() : "never"}`);
 console.log("\nGive the customer this, to set on their RunPod pod:");
 console.log(`\n  KREA2_LICENSE_KEY=${key}\n`);

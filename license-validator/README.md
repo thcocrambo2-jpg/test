@@ -1,11 +1,11 @@
 # license-validator
 
 Seat-limited license server for the Krea 2 app. One customer gets one key;
-the key allows N concurrent running instances. It exists so the Atlas
-connection string stays on a server instead of inside a binary handed to
-customers — extracting a read-write credential from a shipped executable is
-one `strings` invocation, and the damage there is every customer's records,
-not just one bypassed check.
+the key allows N concurrent running instances **and decides which tabs
+they get**. It exists so the Atlas connection string stays on a server
+instead of inside a binary handed to customers — extracting a read-write
+credential from a shipped executable is one `strings` invocation, and the
+damage there is every customer's records, not just one bypassed check.
 
 ## Design
 
@@ -32,6 +32,43 @@ Re-acquiring the same `instance_id` is always free, so a client that
 restarts the app on the same pod reclaims its own seat rather than
 spending a second one. The Python side prefers `RUNPOD_POD_ID` for this
 exact reason.
+
+## Entitlements
+
+A license document's `features` array names the tabs that key grants, and
+it is the only thing that decides them — the app has no environment
+variable that can switch a tab on, so a customer cannot grant themselves
+Wan's ~49 GB by editing their pod template.
+
+```bash
+npm run issue-key -- --name "Acme Corp" --seats 2 --features "single,gallery,wan"
+npm run issue-key -- --key KREA2-XXXX-XXXX-XXXX --features all --update
+```
+
+| Stored value | Client behaviour |
+| --- | --- |
+| `["single","gallery","wan"]` | exactly those tabs |
+| `[]` | nothing — a key that starts but does nothing |
+| field absent or `null` | the app's built-in defaults, with a warning |
+
+The absent case is what keeps keys issued before this existed working. It
+is a fallback, not a mode: "whatever that build defaults to" changes
+between releases, so write the array on anything current.
+
+Two rules worth keeping:
+
+- **`FEATURE_KEYS` in `src/features.js` is used at issue time only**, never
+  to filter what `/v1/acquire` returns. The app and this service deploy
+  separately, so a key granting a tab that shipped before this list was
+  updated must still work. Typos are caught where they are made instead.
+- **`all` and `none` are expanded when the key is written**, not stored as
+  sentinels. Reading a license then never requires knowing what `all` meant
+  on the day it was issued.
+
+`features` rides on every 200 — acquire, where the client applies it, and
+heartbeat, where a change makes a running instance log that it needs a
+restart. It is deliberately not applied live: tabs are built once at
+launch and a newly granted tab has no weights on disk behind it.
 
 ## Endpoints
 
@@ -69,17 +106,21 @@ cd license-validator
 npm install
 cp .env.example .env          # fill in MONGODB_URI
 npm run init-db               # creates indexes — run once per cluster
-npm run issue-key -- --name "Acme Corp" --seats 2
+npm run issue-key -- --name "Acme Corp" --seats 2 --features "single,gallery"
 npm start
 ```
 
 `issue-key` prints the `KREA2_LICENSE_KEY=...` line to hand the customer.
 
 ```bash
-npm run issue-key -- --name "Trial" --seats 1 --days 30   # time-limited
-npm run issue-key -- --name "Acme Corp" --seats 3 --update
+npm run issue-key -- --name "Trial" --seats 1 --days 30 --features all
+npm run issue-key -- --name "Acme Corp" --seats 3 --update   # seats only
+npm run issue-key -- --key KREA2-XXXX-XXXX-XXXX --features "wan,flux" --update
 npm run issue-key -- --key KREA2-XXXX-XXXX-XXXX --revoke
 ```
+
+`--update` only touches `features` when `--features` is passed, so an
+update about seats cannot silently wipe an entitlement list.
 
 ## Deploying to Vercel
 
@@ -125,7 +166,9 @@ would not work anyway — the Gradio share URL is regenerated on every run.
 
 ```js
 { key: "KREA2-XXXX-XXXX-XXXX", name: "Acme Corp", seats: 2,
-  active: true, expires_at: ISODate | null, created_at: ISODate }
+  active: true, expires_at: ISODate | null,
+  features: ["single", "gallery", "wan"] | null,
+  created_at: ISODate }
 ```
 
 `sessions`

@@ -5,49 +5,45 @@ nothing at all: its tab is never constructed (so its handlers are never
 registered on Gradio's HTTP API either), its custom node packs are not
 installed, and its weights are not downloaded.
 
-Defaults are deliberately narrow — only `single`, `v2` and `gallery` are
-on. That is what a bare pod should boot with; everything else is opt-in,
-so nobody pays for Wan's ~49 GB or Flux's ~57 GB without asking. This is
-the opposite of the old KREA2_DISABLE_* scheme, where a pod with no
-environment variables downloaded everything.
+**The license decides, and nothing else.** The set comes from the
+`features` array on the license document, returned by the license server
+in the acquire response. There is no environment variable that can switch
+a tab on or off — a licence one variable away from being bypassed is not
+a licence, and an env override that could only turn things *off* still
+left the download bill and the entitlement disagreeing about what a pod
+was for.
 
-One variable turns things on:
+    features: ["single", "v2", "gallery", "wan"]   exactly those tabs
+    features: []                                   nothing
+    field absent / null                            the defaults below
 
-    KREA2_FEATURES="wan,flux"     defaults, plus Wan and Flux
-    KREA2_FEATURES="-v2"          defaults, without Krea 2 V2
-    KREA2_FEATURES="none,wan"     Wan and nothing else
-    KREA2_FEATURES="all"          everything
+The absent case exists for keys issued before entitlements did. It is a
+fallback, not a mode: it logs a warning, because "whatever this build
+happens to default to" is a moving target and every real key should say
+what it grants.
 
-Tokens are applied left to right, which is what makes `none` first the
-way to spell "exactly this set". Per-feature variables
-(KREA2_ENABLE_WAN / KREA2_DISABLE_WAN) are applied afterwards and win —
-that keeps a one-off override readable in a RunPod template without
-having to restate the whole list.
-
-resolve() is the seam for phase 2. Once entitlements come from the
-license server they are passed here and nothing else has to change,
-because every caller in the app asks through enabled() at call time
-rather than importing a constant — a value that is only known after the
-license check still reaches every consumer.
+Order of operations is why resolve() is called rather than run on import:
+the answer is not known until the license check in app.py has returned,
+which is after most modules have been imported. Every caller in the app
+asks through enabled() at call time, so a value that only exists after
+step 2 still reaches all of them.
 """
 
-import os
 from dataclasses import dataclass
 
 from config import log
-
-ENV_LIST = "KREA2_FEATURES"
 
 
 @dataclass(frozen=True)
 class Feature:
     """One gateable tab.
 
-    key     stable id — used in KREA2_FEATURES, in the license document
-            later, and in the logs. Never change one once it ships; the
-            label is the thing that is safe to reword.
+    key     stable id — used in the license document's `features` array,
+            in the license-validator's FEATURE_KEYS list, and in the logs.
+            Never change one once it ships; the label is the thing that is
+            safe to reword.
     label   the tab title, so ui.py and the startup log agree on naming.
-    default whether it is on when nothing says otherwise.
+    default whether it is on for a license that names no features at all.
     needs   asset groups download_everything must fetch for this tab.
     """
 
@@ -84,102 +80,90 @@ FEATURES = (
 
 BY_KEY = {feature.key: feature for feature in FEATURES}
 
-# Populated by resolve(), which runs on import (below) so that importing
-# this module is enough to read flags — no caller has to remember to
-# initialise it first.
+# Populated by resolve(). Empty until then, which is a state the readers
+# below refuse to answer from rather than guess at — see _state().
 _enabled: dict[str, bool] = {}
+_resolved = False
 
 
-def _env_flag(name: str) -> bool | None:
-    """Tri-state read of a per-feature override: True, False or unset.
+def resolve(entitlements: list[str] | None) -> None:
+    """Work out which features are on from the license, and cache it.
 
-    Unset and empty both mean "no opinion" so that KREA2_ENABLE_WAN= in a
-    template behaves like the variable not being there at all, which is
-    how RunPod renders a field someone cleared.
+    `entitlements` is the license document's `features` array as returned
+    by the license server (licensing.entitlements()). None means the
+    document said nothing, and the registry defaults apply.
+
+    Unknown keys are warned about and ignored rather than rejected: the
+    server and this registry deploy separately, so a key issued for a tab
+    this build does not have yet must not stop the app from starting.
     """
-    raw = os.environ.get(name)
-    if raw is None or not raw.strip():
-        return None
-    return raw.strip().lower() not in ("0", "false", "no", "off")
+    global _resolved
 
-
-def _apply_list(state: dict[str, bool], raw: str) -> None:
-    """Apply the KREA2_FEATURES token list to `state`, left to right."""
-    for token in raw.replace(";", ",").split(","):
-        token = token.strip().lower()
-        if not token:
-            continue
-        if token == "all":
-            state.update({key: True for key in state})
-            continue
-        if token == "none":
-            state.update({key: False for key in state})
-            continue
-        turn_on = True
-        if token[0] in "+-":
-            turn_on = token[0] == "+"
-            token = token[1:].strip()
-        # Tolerate the shapes people actually type for the two-word keys.
-        key = token.replace("-", "_").replace(" ", "_")
-        if key not in state:
-            log.warning(
-                "%s lists unknown feature %r — ignoring it. Known features: %s",
-                ENV_LIST, token, ", ".join(BY_KEY),
-            )
-            continue
-        state[key] = turn_on
-
-
-def resolve(entitlements: dict | None = None) -> None:
-    """Work out which features are on and cache the answer.
-
-    Order, lowest precedence first: the registry defaults, then the
-    KREA2_FEATURES list, then the per-feature variables.
-
-    `entitlements` is unused in phase 1 and exists so that wiring the
-    license server later is a change to this function alone. When it
-    arrives it goes *above* the env layer for turning things on and below
-    it for turning them off: env must be able to switch a tab off (a
-    customer trimming their own pod is harmless) but never on, or the
-    licence is one environment variable away from being bypassed.
-    """
-    state = {feature.key: feature.default for feature in FEATURES}
-
-    raw_list = os.environ.get(ENV_LIST)
-    if raw_list:
-        _apply_list(state, raw_list)
-
-    for key in state:
-        override = _env_flag(f"KREA2_ENABLE_{key.upper()}")
-        if override is not None:
-            state[key] = override
-        if _env_flag(f"KREA2_DISABLE_{key.upper()}"):
-            state[key] = False
+    if entitlements is None:
+        state = {feature.key: feature.default for feature in FEATURES}
+        log.warning(
+            "This license does not list any features — falling back to the "
+            "built-in defaults (%s). Set a `features` array on the license "
+            "to control this.",
+            ", ".join(key for key, on in state.items() if on),
+        )
+    else:
+        state = {feature.key: False for feature in FEATURES}
+        for raw in entitlements:
+            key = str(raw).strip().lower().replace("-", "_").replace(" ", "_")
+            if not key:
+                continue
+            if key not in state:
+                log.warning(
+                    "This license grants unknown feature %r — ignoring it. "
+                    "This build knows: %s", raw, ", ".join(BY_KEY),
+                )
+                continue
+            state[key] = True
 
     _enabled.clear()
     _enabled.update(state)
+    _resolved = True
+
+
+def _state() -> dict[str, bool]:
+    """The resolved flags, or a loud failure if nothing resolved them.
+
+    Raising beats returning "everything off": the symptom of the latter is
+    a pod that boots, downloads nothing and shows an empty UI, which reads
+    as a licensing problem and is really a call-order bug in app.py.
+    """
+    if not _resolved:
+        raise RuntimeError(
+            "features.resolve() has not been called — the license "
+            "entitlements are not known yet. app.py must call it straight "
+            "after licensing.acquire_or_exit()."
+        )
+    return _enabled
 
 
 def enabled(key: str) -> bool:
     """True if `key` is switched on. Unknown keys are off, and say so.
 
-    Call this rather than caching the result in a module constant: phase 2
-    resolves entitlements after the license check, i.e. after most modules
-    have already been imported, and a constant captured at import time
-    would still be holding the default.
+    Call this rather than caching the result in a module constant:
+    entitlements are resolved after the license check, i.e. after most
+    modules have already been imported, and a constant captured at import
+    time would still be holding a default.
     """
+    state = _state()
     if key not in BY_KEY:
         log.warning("Unknown feature %r treated as disabled", key)
         return False
-    return _enabled.get(key, False)
+    return state.get(key, False)
 
 
 def assets() -> frozenset[str]:
     """The union of asset groups the enabled features need downloaded."""
+    state = _state()
     return frozenset(
         group
         for feature in FEATURES
-        if _enabled.get(feature.key)
+        if state.get(feature.key)
         for group in feature.needs
     )
 
@@ -191,15 +175,14 @@ def needs(group: str) -> bool:
 
 def enabled_keys() -> tuple[str, ...]:
     """Enabled feature keys, in registry order."""
-    return tuple(f.key for f in FEATURES if _enabled.get(f.key))
+    state = _state()
+    return tuple(f.key for f in FEATURES if state.get(f.key))
 
 
 def summary() -> str:
     """One line naming what is on and what is off, for the startup log."""
-    on = [f.key for f in FEATURES if _enabled.get(f.key)]
-    off = [f.key for f in FEATURES if not _enabled.get(f.key)]
+    state = _state()
+    on = [f.key for f in FEATURES if state.get(f.key)]
+    off = [f.key for f in FEATURES if not state.get(f.key)]
     return (f"on: {', '.join(on) or '(nothing)'}"
             f" · off: {', '.join(off) or '(nothing)'}")
-
-
-resolve()

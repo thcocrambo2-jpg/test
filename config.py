@@ -15,10 +15,11 @@ LoRA lists and (optional) access tokens. In section order:
     CivitAI LoRAs       shared LoRA lists, resolutions, samplers
     Licensing           seat check + access tokens
 
-Which *tabs* exist is not decided here — that is features.py, which owns
-every KREA2_FEATURES / KREA2_ENABLE_* / KREA2_DISABLE_* variable. This
-module only describes what each feature would need if it were on, so it
-stays a plain data module that features.py can import without a cycle.
+Which *tabs* exist is not decided here — that is features.py, and the
+answer comes from the license key rather than from anything in this file
+or the environment. This module only describes what each feature would
+need if it were on, so it stays a plain data module that features.py can
+import without a cycle.
 
 Every environment variable this module reads, in one place:
 
@@ -195,8 +196,8 @@ HF_LORA_FILES = [
 #   • LoRAs apply to the model *and* the CLIP (the source workflow uses
 #     rgthree's Power Lora Loader in "Single Strength" mode), unlike the
 #     LoraLoaderModelOnly chain the other Krea tabs build.
-# On by default (feature key "v2", ~17 GB); KREA2_FEATURES="-v2" skips
-# the downloads, the three node packs and the tab.
+# On by default (feature key "v2", ~17 GB); a license that does not grant
+# "v2" skips the downloads, the three node packs and the tab.
 
 # Variant-level defaults, same scheme as VARIANT_DEFAULTS / FLUX_VARIANT_
 # DEFAULTS: a registry entry picks one with its "variant" field and may
@@ -396,7 +397,7 @@ V2_DEFAULT_NEGATIVE = (
 #     suits the parallel mode well.
 # Both share the UMT5-XXL text encoder (~6.7 GB). Everything comes from
 # the same Comfy-Org repackaged repo — ~49 GB in total on top of the Krea
-# downloads. Off by default (feature key "wan"); KREA2_FEATURES="wan"
+# downloads. Off by default (feature key "wan"); a license granting "wan"
 # fetches all of it and shows the Video tab, and nothing else changes.
 WAN_HF_REPO = "Comfy-Org/Wan_2.2_ComfyUI_Repackaged"
 WAN_HIGH_UNET = "wan2.2_i2v_high_noise_14B_fp8_scaled.safetensors"
@@ -474,8 +475,8 @@ WAN_RESERVE_VRAM_GB = float(os.environ.get("KREA2_WAN_RESERVE_VRAM", 22))
 # fp8 model is ~35.5 GB and the Mistral text encoder ~18 GB, so on a 48 GB
 # A40 run Flux WITHOUT KREA2_WAN_PARALLEL (it needs nearly the whole GPU)
 # and expect a slow model swap when switching between Flux and Krea jobs.
-# Off by default (feature key "flux"); KREA2_FEATURES="flux" fetches its
-# ~57 GB and shows the tab.
+# Off by default (feature key "flux"); a license granting "flux" fetches
+# its ~57 GB and shows the tab.
 FLUX_HF_REPO = "Comfy-Org/flux2-dev"
 FLUX_TEXT_ENCODER = "mistral_3_small_flux2_fp8.safetensors"  # ~18.0 GB
 FLUX_VAE = "flux2-vae.safetensors"                           # ~0.34 GB
@@ -539,8 +540,8 @@ FLUX_CIVITAI_LORAS = [
 # smaller model — 9.4 GB against Flux 2 Dev's 35.5 GB — with its own Qwen3-8B
 # text encoder, so the two never appear in each other's dropdowns and running
 # this tab does not require the ~57 GB the Flux tab needs. Off by default
-# (feature key "klein"); KREA2_FEATURES="klein" fetches its ~19 GB and shows
-# the tab.
+# (feature key "klein"); a license granting "klein" fetches its ~19 GB and
+# shows the tab.
 KLEIN_TEXT_ENCODER = "qwen_3_8b_fp8mixed_abliterated.safetensors"   # ~9.2 GB
 KLEIN_TEXT_ENCODER_REPO = "edicamargo/qwen_3_8b_fp8mixed_abliterated"
 # The same file the Flux 2 tab uses, from the same repo. Aliased rather than
@@ -648,8 +649,8 @@ KLEIN_LORA_STACK = [
 # the three files ReActor would otherwise fetch during the first swap (the
 # RetinaFace detector, the face-parsing net and the NSFW classifier), so a
 # swap never reaches out to the network. ~1.8 GB in total. Off by default
-# (feature key "faceswap"); KREA2_FEATURES="faceswap" installs the node
-# pack, fetches the models and shows the tab.
+# (feature key "faceswap"); a license granting "faceswap" installs the
+# node pack, fetches the models and shows the tab.
 REACTOR_NODES_DIR = "ComfyUI-ReActor"
 # The node pack is vendored in deps/, so bootstrap installs it by copying
 # rather than cloning — nothing is fetched from GitHub. The repo URL stays

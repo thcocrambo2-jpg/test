@@ -4,6 +4,11 @@ One customer key allows N concurrent running instances. The seat is taken
 at startup, kept alive by a background heartbeat, and given back on a
 clean exit.
 
+The acquire response also carries the key's *entitlements* — which tabs
+this customer has paid for. They are read here and handed to features.py
+by app.py; this module deliberately knows nothing about what any feature
+key means, so adding a tab never touches it.
+
 Seats are leases, not a counter: the server only counts a session while
 its last heartbeat is recent, so an instance that dies without releasing
 (SIGKILL, an OOM kill, a hard pod terminate, a network drop at teardown)
@@ -52,6 +57,18 @@ _instance_id = None
 _stop = threading.Event()
 _thread = None
 _released = threading.Event()
+
+# The feature keys this license grants, or None when the license document
+# says nothing and features.py should fall back to its own defaults. Set
+# once, from the acquire response — see entitlements().
+_entitlements = None
+# The last changed value the heartbeat has already complained about, so a
+# customer editing a license mid-run is told once rather than every minute.
+# Its own sentinel rather than None, which already means "the license
+# grants no particular set" — sharing the two would swallow the warning
+# for a license whose features were cleared.
+_UNSET = object()
+_entitlements_notified = _UNSET
 
 
 def _resolve_instance_id() -> str:
@@ -106,6 +123,29 @@ def _meta() -> dict:
     }
 
 
+def _clean_features(value) -> list[str] | None:
+    """The server's `features` field as a list, or None for "no opinion".
+
+    None and a malformed value are treated the same on purpose: the point
+    of the null case is that features.py falls back to its defaults, and a
+    server that answered something unexpected should land there too rather
+    than leaving a customer with no tabs at all.
+    """
+    if not isinstance(value, list):
+        return None
+    return [item.strip() for item in value
+            if isinstance(item, str) and item.strip()]
+
+
+def entitlements() -> list[str] | None:
+    """Feature keys this license grants, or None to use the app defaults.
+
+    Only meaningful after acquire_or_exit() has returned; app.py passes
+    the result straight to features.resolve().
+    """
+    return _entitlements
+
+
 def _fail(message: str, code: int) -> None:
     """Log the reason plainly and stop. Called before anything is installed."""
     log.error("=" * 68)
@@ -122,7 +162,7 @@ def acquire_or_exit() -> None:
     a customer who cannot take a seat should be told in seconds, not after
     ~90 GB of downloads.
     """
-    global _instance_id, _heartbeat_seconds
+    global _instance_id, _heartbeat_seconds, _entitlements
 
     if not LICENSE_KEY:
         _fail(
@@ -147,6 +187,7 @@ def acquire_or_exit() -> None:
 
         if status == 200 and body.get("ok"):
             _heartbeat_seconds = int(body.get("heartbeat_seconds", 60)) or 60
+            _entitlements = _clean_features(body.get("features"))
             log.info(
                 "License OK — %s, seat %d of %d",
                 body.get("license_name") or "licensed",
@@ -214,6 +255,7 @@ def _heartbeat_loop() -> None:
             last_ok = time.time()
             if body.get("reacquired"):
                 log.info("License session re-established")
+            _note_entitlement_change(body)
             continue
 
         if status == 403:
@@ -236,6 +278,37 @@ def _heartbeat_loop() -> None:
             "License server unreachable for %ds — continuing (grace %ds)",
             int(offline), LICENSE_GRACE_SECONDS,
         )
+
+
+def _note_entitlement_change(body: dict) -> None:
+    """Say so when a license's features changed under a running instance.
+
+    Not applied live, and deliberately so: tabs are built once at launch
+    and the weights a feature needs are downloaded before that, so a tab
+    switched on now has no models behind it. A restart is the honest fix,
+    and the alternative — silently ignoring the change — is a support
+    ticket about a paid-for tab that never appeared.
+    """
+    global _entitlements_notified
+
+    if "features" not in body:
+        return                      # older server; nothing to compare against
+
+    def shape(value):
+        if value is _UNSET or value is None:
+            return value
+        return sorted(set(value))
+
+    current = _clean_features(body.get("features"))
+    if shape(current) in (shape(_entitlements), shape(_entitlements_notified)):
+        return
+    _entitlements_notified = current
+    log.warning(
+        "This license's features changed (now: %s; running with: %s) — "
+        "restart the app to apply them.",
+        ", ".join(current) if current else "the app defaults",
+        ", ".join(_entitlements) if _entitlements else "the app defaults",
+    )
 
 
 def _shutdown(message: str, release_seat: bool) -> None:

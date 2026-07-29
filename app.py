@@ -1,9 +1,9 @@
 """Krea 2 on RunPod — ComfyUI + Gradio. Entry point: python app.py
 
 Startup flow:
-  1. Read configuration (config.py, imported below — also sets up logging)
-     and resolve which features are on (features.py).
-  2. Take a license seat, or stop.
+  1. Read configuration (config.py, imported below — also sets up logging).
+  2. Take a license seat, or stop; resolve which tabs the key grants
+     (features.py) from the entitlements it returned.
   3. Clone ComfyUI if it is missing.
   4. Install Python requirements (ComfyUI's + this app's, one resolver pass).
   5. Download the Hugging Face and CivitAI models the enabled features
@@ -44,11 +44,12 @@ def main() -> None:
     # ahead of the pip install that the modules below wait for.
     licensing.acquire_or_exit()
 
-    # Features are resolved from the environment when features is imported.
-    # This is the point where phase 2 will re-resolve them against the
-    # entitlements the licence server just returned — everything below asks
-    # features.enabled() at call time, so it will pick the answer up here
-    # rather than having frozen a default at import.
+    # Which tabs this customer gets comes from the license and nothing
+    # else, so it cannot be known any earlier than this line. Everything
+    # below asks features.enabled() at call time rather than holding a
+    # constant from import, which is what lets an answer that only exists
+    # now reach modules that were imported before it.
+    features.resolve(licensing.entitlements())
     log.info("Features — %s", features.summary())
 
     # Where weights will come from. Worth saying out loud: when the mirror
@@ -123,6 +124,9 @@ def main() -> None:
             )
 
     # 7 · Gradio UI (importing ui pulls in the workflow builder + API client).
+    # ui builds its gr.Blocks at *import* time, so this import is where the
+    # tabs are decided — it must stay below features.resolve() above, which
+    # is the call that knows which ones this license grants.
     import workflow
     from ui import launch_ui
 
