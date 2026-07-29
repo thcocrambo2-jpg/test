@@ -513,6 +513,65 @@ def _pack_reproducible(src: Path, arcname: str, dest: Path) -> None:
     tmp.rename(dest)
 
 
+def add_upstream_revisions(api: HfApi, pins: dict) -> None:
+    """Record the current revision of the repos we deliberately do NOT mirror.
+
+    Those ~185 GB are always fetched from upstream, so a revision is the
+    only thing standing between you and a maintainer replacing the weights
+    under a filename you already ship.
+    """
+    pins["_note"] = ("SHAs/revisions captured at mirror time. Feed these to "
+                     "bootstrap.py clones and hf_hub_download(revision=...). "
+                     "The mirror and the upstream fallback MUST resolve to "
+                     "the same revision, or the fallback silently serves "
+                     "different weights than the mirror.")
+    for repo_id, kind in UPSTREAM_TO_PIN.items():
+        try:
+            info = (api.dataset_info(repo_id) if kind == "hf-dataset"
+                    else api.model_info(repo_id))
+            pins[repo_id] = {"kind": kind, "sha": info.sha}
+        except Exception as exc:
+            log.warning("Could not read revision of %s: %s", repo_id, exc)
+
+
+def write_pins(pins: dict) -> Path:
+    """Write PINS.json into the repo checkout, next to the catalogue.
+
+    Not into the staging dir: this is the file bootstrap.py and
+    downloads.py will read, so it has to be versioned with the code that
+    consumes it. It also records the one thing that cannot be recreated
+    once the pod is destroyed — which commit of each node pack worked.
+    """
+    path = CATALOGUE_PATH.parent / "PINS.json"
+    path.write_text(json.dumps(pins, indent=2, sort_keys=True) + "\n",
+                    encoding="utf-8")
+    log.info("pins → %s  (commit this)", path)
+    return path
+
+
+def capture_pins_only(staging: Path) -> int:
+    """--pins-only: record pod state and stop. No token, no uploads.
+
+    Separated from the migration because the two have very different
+    deadlines. Weights can be re-downloaded whenever; the node-pack SHAs
+    live only in the git checkouts on the running pod, so capturing them
+    must not be able to fail because of an HF credential.
+    """
+    _items, pins = pack_nodes(staging)
+    try:
+        # Anonymous — every repo in UPSTREAM_TO_PIN is public.
+        add_upstream_revisions(HfApi(), pins)
+    except Exception as exc:
+        log.warning("Could not reach Hugging Face for upstream revisions "
+                    "(%s) — node-pack SHAs are still captured.", exc)
+    path = write_pins(pins)
+    print(f"\n  Captured {len([k for k in pins if not k.startswith('_')])} "
+          f"pins → {path}")
+    print("  Commit this before destroying the pod — the node-pack SHAs "
+          "cannot be recovered afterwards.\n")
+    return 0
+
+
 # ── Upload ────────────────────────────────────────────────────────────────────
 def probe_remote(api: HfApi, user: str, items: list[Item]) -> None:
     """Fill in remote_size so the plan can say what will actually upload."""
@@ -610,6 +669,10 @@ def main() -> int:
     ap.add_argument("--no-scan-config", action="store_true",
                     help="do not scan config.py for commented-out CivitAI "
                          "entries (mirror the active lists only)")
+    ap.add_argument("--pins-only", action="store_true",
+                    help="capture node-pack SHAs + upstream revisions to "
+                         "scripts/PINS.json and exit. Needs no HF token. "
+                         "Run this before destroying the pod.")
     ap.add_argument("--only", metavar="KEY", action="append",
                     choices=sorted(REPOS),
                     help="limit to one repo key; repeatable")
@@ -617,6 +680,9 @@ def main() -> int:
                     default=Path(config.BASE_DIR) / "mirror_staging",
                     help="where node tarballs are built")
     args = ap.parse_args()
+
+    if args.pins_only:
+        return capture_pins_only(args.staging)
 
     token = HF_WRITE_TOKEN
     if not token:
@@ -695,25 +761,15 @@ def main() -> int:
             failed.append(it)
 
     # ── Manifests ────────────────────────────────────────────────────────
-    # PINS.json is the deliverable that protects the *unmirrored* 185 GB:
-    # the revisions bootstrap.py and downloads.py should be locked to.
-    pins["_note"] = ("SHAs/revisions captured at mirror time. Feed these to "
-                     "bootstrap.py clones and hf_hub_download(revision=...).")
-    for repo_id, kind in UPSTREAM_TO_PIN.items():
-        try:
-            info = (api.dataset_info(repo_id) if kind == "hf-dataset"
-                    else api.model_info(repo_id))
-            pins[repo_id] = {"kind": kind, "sha": info.sha}
-        except Exception as exc:
-            log.warning("Could not read revision of %s: %s", repo_id, exc)
-
+    add_upstream_revisions(api, pins)
+    pins_path = write_pins(pins)
     try:
         ensure_repos(api, user, ["nodes"], not args.public)
         upload_json(api, user, "nodes", "PINS.json", pins)
-        (args.staging / "PINS.json").write_text(
-            json.dumps(pins, indent=2, sort_keys=True))
     except Exception as exc:
-        log.error("Could not publish PINS.json: %s", exc)
+        log.error("Could not publish PINS.json to the mirror (%s) — the "
+                  "local copy at %s is written and is the one that "
+                  "matters.", exc, pins_path)
 
     if any(i.repo_key == "loras" for i in items):
         try:
