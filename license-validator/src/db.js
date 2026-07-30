@@ -40,6 +40,10 @@ export async function collections() {
   return {
     licenses: db.collection("licenses"),
     sessions: db.collection("sessions"),
+    // Catalogue. Both use a string _id (the plan / feature key), so they
+    // need no unique index of their own and a seed run is a plain upsert.
+    plans: db.collection("plans"),
+    features: db.collection("features"),
   };
 }
 
@@ -64,4 +68,8 @@ export async function ensureIndexes() {
     { last_seen: 1 },
     { expireAfterSeconds: SESSION_TTL_SECONDS, name: "session_ttl" },
   );
+  // Only ever queried by the admin listing and the "is this plan still in
+  // use?" check that guards a plan deletion — both rare, but both scan the
+  // whole collection without it.
+  await licenses.createIndex({ plan_id: 1 }, { name: "plan_id" });
 }

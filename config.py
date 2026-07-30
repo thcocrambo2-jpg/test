@@ -154,7 +154,7 @@ ABLITERATED_ENCODER_FILE = "qwen3vl_4b_abliterated.safetensors"
 # pack feed the source image into the model itself — as in-context VAE
 # latents and through the Qwen3-VL encoder — so edits preserve identity
 # instead of repainting from scratch like plain img2img/inpaint.
-# Off by default (feature key "edit", ~1.9 GB for the LoRA); the node pack
+# Off by default (feature key "krea_edit", ~1.9 GB for the LoRA); the node pack
 # is only cloned when it is on, since nothing else uses those two nodes.
 KREA2EDIT_NODES_REPO = "https://github.com/lbouaraba/comfyui-krea2edit"
 EDIT_LORA_REPO = "conradlocke/krea2-identity-edit"
@@ -196,8 +196,8 @@ HF_LORA_FILES = [
 #   • LoRAs apply to the model *and* the CLIP (the source workflow uses
 #     rgthree's Power Lora Loader in "Single Strength" mode), unlike the
 #     LoraLoaderModelOnly chain the other Krea tabs build.
-# On by default (feature key "v2", ~17 GB); a license that does not grant
-# "v2" skips the downloads, the three node packs and the tab.
+# On by default (feature key "krea_v2_t2i", ~17 GB); a license that does not grant
+# "krea_v2_t2i" skips the downloads, the three node packs and the tab.
 
 # Variant-level defaults, same scheme as VARIANT_DEFAULTS / FLUX_VARIANT_
 # DEFAULTS: a registry entry picks one with its "variant" field and may
@@ -397,7 +397,7 @@ V2_DEFAULT_NEGATIVE = (
 #     suits the parallel mode well.
 # Both share the UMT5-XXL text encoder (~6.7 GB). Everything comes from
 # the same Comfy-Org repackaged repo — ~49 GB in total on top of the Krea
-# downloads. Off by default (feature key "wan"); a license granting "wan"
+# downloads. Off by default (feature key "wan_i2v"); a license granting "wan_i2v"
 # fetches all of it and shows the Video tab, and nothing else changes.
 WAN_HF_REPO = "Comfy-Org/Wan_2.2_ComfyUI_Repackaged"
 WAN_HIGH_UNET = "wan2.2_i2v_high_noise_14B_fp8_scaled.safetensors"
@@ -461,7 +461,7 @@ WAN_DEFAULT_NEGATIVE = (
 # --reserve-vram; on a 48 GB A40 the defaults give Krea ~22 GB and Wan
 # ~26 GB. Without the flag (default) both tabs share one ComfyUI queue —
 # zero OOM risk, but jobs run strictly one after another. Only has any
-# effect when the "wan" feature is on: app.py checks both before paying
+# effect when the "wan_i2v" feature is on: app.py checks both before paying
 # for a second instance.
 WAN_PARALLEL = bool(os.environ.get("KREA2_WAN_PARALLEL"))
 WAN_COMFY_PORT = 8189
@@ -475,7 +475,7 @@ WAN_RESERVE_VRAM_GB = float(os.environ.get("KREA2_WAN_RESERVE_VRAM", 22))
 # fp8 model is ~35.5 GB and the Mistral text encoder ~18 GB, so on a 48 GB
 # A40 run Flux WITHOUT KREA2_WAN_PARALLEL (it needs nearly the whole GPU)
 # and expect a slow model swap when switching between Flux and Krea jobs.
-# Off by default (feature key "flux"); a license granting "flux" fetches
+# Off by default (feature key "flux_t2i"); a license granting "flux_t2i" fetches
 # its ~57 GB and shows the tab.
 FLUX_HF_REPO = "Comfy-Org/flux2-dev"
 FLUX_TEXT_ENCODER = "mistral_3_small_flux2_fp8.safetensors"  # ~18.0 GB
@@ -540,13 +540,13 @@ FLUX_CIVITAI_LORAS = [
 # smaller model — 9.4 GB against Flux 2 Dev's 35.5 GB — with its own Qwen3-8B
 # text encoder, so the two never appear in each other's dropdowns and running
 # this tab does not require the ~57 GB the Flux tab needs. Off by default
-# (feature key "klein"); a license granting "klein" fetches its ~19 GB and
+# (feature key "klein_i2i"); a license granting "klein_i2i" fetches its ~19 GB and
 # shows the tab.
 KLEIN_TEXT_ENCODER = "qwen_3_8b_fp8mixed_abliterated.safetensors"   # ~9.2 GB
 KLEIN_TEXT_ENCODER_REPO = "edicamargo/qwen_3_8b_fp8mixed_abliterated"
 # The same file the Flux 2 tab uses, from the same repo. Aliased rather than
 # copied so there is one source of truth for the name, and fetched by this
-# group as well because "klein" can be the only feature that is on —
+# group as well because "klein_i2i" can be the only feature that is on —
 # downloads key on the destination path, so whichever asks first fetches it
 # and the other logs a cache hit.
 KLEIN_VAE = FLUX_VAE

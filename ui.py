@@ -1350,16 +1350,16 @@ def _klein_lora_stack():
 with gr.Blocks(title="Krea 2 on RunPod") as ui:
     gr.Markdown(
         "# ⚡ Krea 2"
-        + (" + Flux 2" if features.enabled("flux") else "")
-        + (" + Klein Edit" if features.enabled("klein") else "")
-        + (" + Wan 2.2 Video" if features.enabled("wan") else "")
+        + (" + Flux 2" if features.enabled("flux_t2i") else "")
+        + (" + Klein Edit" if features.enabled("klein_i2i") else "")
+        + (" + Wan 2.2 Video" if features.enabled("wan_i2v") else "")
         + " — ComfyUI on RunPod\n"
         f"{len(MODEL_CHOICES)} Krea model(s) · {GPU_COUNT} GPU(s) detected · "
         f"native ComfyUI multi-GPU placement · "
         f"outputs saved to `{OUTPUT_DIR}`"
     )
     with gr.Tabs():
-        if features.enabled("single"):
+        if features.enabled("krea_t2i"):
             with gr.Tab("Single / Simple Batch"):
                 with gr.Row():
                     with gr.Column(scale=2):
@@ -1419,7 +1419,7 @@ with gr.Blocks(title="Krea 2 on RunPod") as ui:
                     concurrency_id="comfy",
                 )
 
-        if features.enabled("v2"):
+        if features.enabled("krea_v2_t2i"):
             with gr.Tab("🔶 Krea 2 V2"):
                 _v2_message = v2_status()[1]
                 gr.Markdown(
@@ -1631,7 +1631,7 @@ with gr.Blocks(title="Krea 2 on RunPod") as ui:
                     concurrency_id="comfy",
                 )
 
-        if features.enabled("edit"):
+        if features.enabled("krea_edit"):
             with gr.Tab("✨ Edit (Instruction)"):
                 gr.Markdown(
                     "Upload an image and **describe the change** — no painting "
@@ -1711,7 +1711,7 @@ with gr.Blocks(title="Krea 2 on RunPod") as ui:
                     concurrency_id="comfy",
                 )
 
-        if features.enabled("inpaint"):
+        if features.enabled("krea_inpaint"):
             with gr.Tab("Inpaint / Img2Img"):
                 gr.Markdown(
                     "Upload an image, **paint over the region to replace**, and "
@@ -1902,7 +1902,7 @@ with gr.Blocks(title="Krea 2 on RunPod") as ui:
                     concurrency_id="comfy",
                 )
 
-        if features.enabled("flux"):
+        if features.enabled("flux_t2i"):
             with gr.Tab("🌊 Flux 2"):
                 gr.Markdown(
                     "Text-to-image with **Flux 2 Dev** (32B). The model is "
@@ -1992,7 +1992,7 @@ with gr.Blocks(title="Krea 2 on RunPod") as ui:
                     concurrency_id="comfy",
                 )
 
-        if features.enabled("klein"):
+        if features.enabled("klein_i2i"):
             with gr.Tab("🧩 Klein Edit"):
                 gr.Markdown(
                     "The **DesiMuseAI FLUX.2 Klein 9B Edit** graph, "
@@ -2142,7 +2142,7 @@ with gr.Blocks(title="Krea 2 on RunPod") as ui:
                     concurrency_id="comfy",
                 )
 
-        if features.enabled("wan"):
+        if features.enabled("wan_i2v"):
             with gr.Tab("🎬 Video (Wan 2.2)"):
                 _wan_defaults = WAN_MODE_DEFAULTS[WAN_VARIANT]
                 _wan_mode_choices = ["Turbo (Lightning, 4 steps)",

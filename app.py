@@ -92,7 +92,7 @@ def main() -> None:
 
     # A second instance is only worth its VRAM reservation when there is a
     # Video tab to serve — KREA2_WAN_PARALLEL on its own no longer buys one.
-    wan_parallel = WAN_PARALLEL and features.enabled("wan")
+    wan_parallel = WAN_PARALLEL and features.enabled("wan_i2v")
     main_args = (
         ("--reserve-vram", str(KREA_RESERVE_VRAM_GB)) if wan_parallel else ()
     )
@@ -114,7 +114,7 @@ def main() -> None:
             "ReActorFaceSwap", REACTOR_NODES_DIR,
             COMFY_DIR / "custom_nodes" / REACTOR_NODES_DIR,
         )
-    if features.enabled("v2"):
+    if features.enabled("krea_v2_t2i"):
         # Same reasoning for the Krea 2 V2 packs — two of these nodes have
         # no core equivalent, so a silent import failure would only show up
         # as "node not found" on the first generation.

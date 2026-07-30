@@ -41,48 +41,60 @@ anything. A feature that is off costs nothing: no tab, no custom nodes, no
 weights on disk.
 
 **Which tabs a pod gets is decided by its license key, and by nothing
-else.** There is no environment variable for this — the entitlement lives
-in the `features` array on the license document, the app reads it from the
-acquire response, and a customer cannot switch a tab on by editing their
-pod template. Set it when you issue the key:
+else.** There is no environment variable for this — the license names a
+**plan**, the license server resolves that to a feature list, the app
+reads it from the acquire response, and a customer cannot switch a tab on
+by editing their pod template. Set it when you issue the key:
 
 ```bash
-npm run issue-key -- --name "Acme Corp" --seats 2 --features "single,gallery,wan"
+npm run issue-key -- --name "Acme Corp" --plan pro --seats 2
 ```
 
-| Key          | Tab                     | Extra download |
-| ------------ | ----------------------- | -------------- |
-| `single`     | Single / Simple Batch   | ~26 GB (Krea 2 base, shared) |
-| `v2`         | 🔶 Krea 2 V2            | ~17 GB         |
-| `gallery`    | Gallery                 | none           |
-| `edit`       | ✨ Edit (Instruction)   | ~1.9 GB + base |
-| `inpaint`    | Inpaint / Img2Img       | base only      |
-| `faceswap`   | 🎭 Face Swap (ReActor)  | ~1.8 GB        |
-| `flux`       | 🌊 Flux 2               | ~57 GB         |
-| `klein`      | 🧩 Klein Edit           | ~19 GB         |
-| `wan`        | 🎬 Video (Wan 2.2)      | ~49 GB         |
-| `json_batch` | JSON Advanced Batch     | none           |
+| Key            | Tab                     | Extra download |
+| -------------- | ----------------------- | -------------- |
+| `krea_t2i`     | Single / Simple Batch   | ~26 GB (Krea 2 base, shared) |
+| `krea_v2_t2i`  | 🔶 Krea 2 V2            | ~17 GB         |
+| `gallery`      | Gallery                 | none           |
+| `krea_edit`    | ✨ Edit (Instruction)   | ~1.9 GB + base |
+| `krea_inpaint` | Inpaint / Img2Img       | base only      |
+| `faceswap`     | 🎭 Face Swap (ReActor)  | ~1.8 GB        |
+| `flux_t2i`     | 🌊 Flux 2               | ~57 GB         |
+| `klein_i2i`    | 🧩 Klein Edit           | ~19 GB         |
+| `wan_i2v`      | 🎬 Video (Wan 2.2)      | ~49 GB         |
+| `json_batch`   | JSON Advanced Batch     | none           |
 
-Shared weights are handled for you — `edit` and `inpaint` both run the
-Krea 2 base models, so granting either one fetches them, and granting all
-three fetches them once.
+The four shipped plans stack: `starter` (19/mo) is the first three keys,
+`creator` (39) adds the editing set, `pro` (59) adds Flux 2 and Klein, and
+`studio` (89) adds video and JSON batch. `license-validator/README.md` has
+the full table and how to change it.
 
-A license whose `features` field is **absent or null** falls back to the
-built-in defaults (`single`, `v2` and `gallery`) and logs a warning saying
-so. That exists for keys issued before entitlements did; grant features
-explicitly on anything current, because "the build's defaults" is a moving
+Shared weights are handled for you — `krea_edit` and `krea_inpaint` both
+run the Krea 2 base models, so granting either one fetches them, and
+granting all three fetches them once.
+
+Keys are permanent and names are not: a key is compiled into every shipped
+binary, so renaming one drops that tab for anyone on an older build — the
+client warns and ignores it. The seven model-bound keys were renamed to
+`<model>_<task>` before any key was issued, which is the only window in
+which that is free. There is no alias map for the old names.
+
+A license with **no plan and no features** falls back to the built-in
+defaults (`krea_t2i`, `krea_v2_t2i` and `gallery`) and logs a warning
+saying so. That exists for keys issued before entitlements did; put
+anything current on a plan, because "the build's defaults" is a moving
 target across releases.
 
-Changing a key's features takes effect on the customer's **next start**.
-A running instance notices within a heartbeat and logs that a restart is
-needed, but does not apply it — the tabs are built once at launch and the
-weights a newly granted tab needs were never downloaded.
+Changing what a key grants takes effect on the customer's **next start** —
+whether you changed the license or the plan it sits on. A running instance
+notices within a heartbeat and logs that a restart is needed, but does not
+apply it: the tabs are built once at launch and the weights a newly
+granted tab needs were never downloaded.
 
 > **Upgrading from an earlier build:** `KREA2_FEATURES`,
 > `KREA2_ENABLE_<KEY>` and `KREA2_DISABLE_<KEY>` are gone and are ignored
-> if still set. Whatever those variables used to say has to be written
-> onto the license key instead:
-> `npm run issue-key -- --key KREA2-XXXX-XXXX-XXXX --features "single,v2,gallery,wan" --update`
+> if still set. Whatever those variables used to say belongs on the
+> license instead:
+> `npm run issue-key -- --key KREA2-XXXX-XXXX-XXXX --plan studio --update`
 
 ## Licensing
 
@@ -640,7 +652,7 @@ accordion entirely.
 The **🌊 Flux 2** tab does text-to-image with Flux 2 Dev (32B,
 `flux2_dev_fp8mixed`, ~35.5 GB) plus the Mistral-Small text encoder
 (~18 GB) and Flux 2 VAE — ~57 GB of downloads from `Comfy-Org/flux2-dev`,
-fetched only for a license granting feature key `flux`. Flux 2 is
+fetched only for a license granting feature key `flux_t2i`. Flux 2 is
 guidance-distilled, so there is no CFG/negative prompt — a **Guidance**
 value (~4) steers it, and sampling uses the official template's
 custom-sampler graph (`Flux2Scheduler` + `BasicGuider` +
@@ -779,7 +791,7 @@ Start with `KREA2_WAN_PARALLEL=1` to give video its own ComfyUI instance on
 port 8189 so quick image jobs don't wait behind a long render — both
 instances then split the GPU via `--reserve-vram` (defaults tuned for a
 48 GB A40; note the two workloads also share compute, so each runs slower
-while overlapping). The Video tab needs feature key `wan` on the license —
+while overlapping). The Video tab needs feature key `wan_i2v` on the license —
 that is what fetches the models and shows it, and `KREA2_WAN_PARALLEL`
 only buys a second ComfyUI instance when it is granted.
 Make sure the pod volume has room: Krea (~32 GB) +

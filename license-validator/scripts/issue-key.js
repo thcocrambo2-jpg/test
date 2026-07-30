@@ -1,9 +1,9 @@
 // Issue a license key for a customer.
 //
-//   npm run issue-key -- --name "Acme Corp" --seats 2 --features "wan,flux"
-//   npm run issue-key -- --name "Trial" --seats 1 --days 30 --features all
-//   npm run issue-key -- --name "Acme Corp" --seats 3 --update
-//   npm run issue-key -- --key KREA2-XXXX-XXXX-XXXX --features "single" --update
+//   npm run issue-key -- --name "Acme Corp" --plan pro --seats 2
+//   npm run issue-key -- --name "Trial" --plan creator --seats 1 --days 30
+//   npm run issue-key -- --key KREA2-XXXX-XXXX-XXXX --plan studio --update
+//   npm run issue-key -- --key KREA2-XXXX-XXXX-XXXX --features-extra "wan_i2v" --update
 //   npm run issue-key -- --key KREA2-XXXX-XXXX-XXXX --revoke
 //
 // The generated key is what the customer puts in KREA2_LICENSE_KEY on
@@ -11,15 +11,22 @@
 // customer while supporting them; the collection is never exposed to
 // clients, which is the point of this service sitting in front of it.
 //
-// --features is the whole entitlement story: the app has no environment
-// variable that can switch a tab on, so this list is what the customer
-// can use. Omitting it on a new key leaves the field unset, and an unset
-// field means the client falls back to its own defaults — fine for a
-// trial, worth being explicit about for anyone paying.
+// ── How a key gets its tabs ────────────────────────────────────────────
+//
+// --plan is the normal route. The license stores plan_id and the server
+// resolves the feature list at request time, so editing the plan later
+// moves every customer on it. --features-extra grants a tab on top of the
+// plan, for the one-off deal that does not justify a new tier.
+//
+// --features still works and still wins over the plan, because keys issued
+// before plans existed carry one. Prefer a plan: a license with a literal
+// features array is frozen at the day it was issued and will not follow
+// any pricing change.
 
 import { randomBytes } from "node:crypto";
 import { collections, ensureIndexes } from "../src/db.js";
 import { FEATURE_KEYS, parseFeatureArg } from "../src/features.js";
+import { invalidatePlans, resolveEntitlement } from "../src/plans.js";
 
 function args(argv) {
   const out = {};
@@ -49,24 +56,24 @@ function generateKey() {
   ].join("-");
 }
 
+function die(...lines) {
+  for (const line of lines) console.error(line);
+  process.exit(1);
+}
+
 const opts = args(process.argv.slice(2));
-const { licenses } = await collections();
+const { licenses, plans } = await collections();
 await ensureIndexes();
+invalidatePlans(); // a long-lived shell should not print a stale plan
 
 if (opts.revoke || opts.enable) {
-  if (!opts.key) {
-    console.error("--revoke/--enable needs --key KREA2-...");
-    process.exit(1);
-  }
+  if (!opts.key) die("--revoke/--enable needs --key KREA2-...");
   const active = Boolean(opts.enable);
   const result = await licenses.updateOne(
     { key: opts.key },
     { $set: { active, updated_at: new Date() } },
   );
-  if (!result.matchedCount) {
-    console.error(`no license with key ${opts.key}`);
-    process.exit(1);
-  }
+  if (!result.matchedCount) die(`no license with key ${opts.key}`);
   // Running instances notice on their next heartbeat, so a revoke takes
   // effect in about a minute rather than only blocking the next start.
   console.log(`${active ? "enabled" : "revoked"}  ${opts.key}`);
@@ -74,57 +81,110 @@ if (opts.revoke || opts.enable) {
 }
 
 if (!opts.name && !opts.key) {
-  console.error("usage: npm run issue-key -- --name \"Acme Corp\" --seats 2");
-  console.error("       [--features \"wan,flux\" | all | none]");
-  console.error("       [--days 30] [--update] [--key KREA2-...] [--revoke]");
-  console.error(`\nfeatures: ${FEATURE_KEYS.join(", ")}`);
-  process.exit(1);
+  const known = await plans.find({}).sort({ sort_order: 1 }).toArray();
+  die(
+    'usage: npm run issue-key -- --name "Acme Corp" --plan pro --seats 2',
+    '       [--features-extra "wan_i2v"] [--days 30]',
+    "       [--update] [--key KREA2-...] [--revoke]",
+    "",
+    `plans:    ${known.map((p) => p._id).join(", ") ||
+      "(none — run: npm run seed-catalog)"}`,
+    `features: ${FEATURE_KEYS.join(", ")}`,
+  );
 }
 
 const seats = Number.parseInt(opts.seats, 10) || 1;
 const expires_at = opts.days
-  ? new Date(Date.now() + Number.parseInt(opts.days, 10) * 86400_000)
+  ? new Date(Date.now() + Number.parseInt(opts.days, 10) * 86_400_000)
   : null;
 
-// Validated before anything is written, so a typo costs an error message
-// rather than a customer whose Wan tab never appears.
-let features = null;
-if (opts.features !== undefined) {
-  const parsed = parseFeatureArg(opts.features);
-  if (parsed.error) {
-    console.error(parsed.error);
-    process.exit(1);
-  }
-  features = parsed.features;
+// ── Validate before writing anything ───────────────────────────────────
+
+if (opts.plan !== undefined && opts.features !== undefined) {
+  die(
+    "--plan and --features together are ambiguous: a literal features " +
+      "array overrides the plan, so the plan would have no effect.",
+    "Use --plan on its own, or --plan with --features-extra to add to it.",
+  );
 }
 
-const featureLabel = (value) =>
-  value === null || value === undefined
-    ? "(unset — the app's defaults apply)"
-    : value.length
-      ? value.join(", ")
-      : "(none)";
+let plan_id;
+if (opts.plan !== undefined) {
+  if (opts.plan === true) die("--plan needs a value, e.g. --plan pro");
+  const plan = await plans.findOne({ _id: String(opts.plan).trim() });
+  if (!plan) {
+    const known = await plans.find({}).sort({ sort_order: 1 }).toArray();
+    die(
+      `no plan "${opts.plan}"`,
+      known.length
+        ? `known plans: ${known.map((p) => p._id).join(", ")}`
+        : "the plans collection is empty — run: npm run seed-catalog",
+    );
+  }
+  plan_id = plan._id;
+}
+
+function parseOrDie(raw, flag) {
+  const parsed = parseFeatureArg(raw);
+  if (parsed.error) die(`${flag}: ${parsed.error}`);
+  return parsed.features;
+}
+
+const features =
+  opts.features === undefined ? null : parseOrDie(opts.features, "--features");
+const features_extra =
+  opts["features-extra"] === undefined
+    ? null
+    : parseOrDie(opts["features-extra"], "--features-extra");
+
+/** Print what the customer will actually get, resolved the way the server does. */
+async function report(license) {
+  invalidatePlans();
+  let resolved;
+  try {
+    resolved = await resolveEntitlement(license);
+  } catch (err) {
+    console.error(`\n  WARNING  ${err.message}`);
+    return;
+  }
+  const label = resolved.features
+    ? resolved.features.join(", ") || "(none)"
+    : "(unset — the app's built-in defaults apply)";
+  console.log(`  plan       ${resolved.plan_name || plan_id || "(none)"}`);
+  console.log(`  features   ${label}`);
+  console.log(`  from       ${resolved.source}`);
+}
+
+// ── Update ─────────────────────────────────────────────────────────────
 
 if (opts.update) {
   const filter = opts.key ? { key: opts.key } : { name: opts.name };
   const update = { seats, active: true, updated_at: new Date() };
   if (opts.days) update.expires_at = expires_at;
-  // Only when asked: an --update that is really about seats must not
-  // silently wipe an entitlement list someone set earlier.
+  // Each only when asked: an --update that is really about seats must not
+  // silently wipe an entitlement someone set earlier.
   if (features !== null) update.features = features;
+  if (features_extra !== null) update.features_extra = features_extra;
+  if (plan_id !== undefined) {
+    update.plan_id = plan_id;
+    // Loudly, because it is the one destructive thing here. A leftover
+    // literal array would keep winning and the new plan would do nothing —
+    // a silent no-op is the worst possible outcome of "put them on Pro".
+    update.features = null;
+    console.log(
+      `clearing this license's literal features array so plan ` +
+        `"${plan_id}" takes effect`,
+    );
+  }
   const result = await licenses.findOneAndUpdate(
     filter,
     { $set: update },
     { returnDocument: "after" },
   );
-  if (!result) {
-    console.error("no matching license to update");
-    process.exit(1);
-  }
-  console.log(
-    `updated  ${result.key}  seats=${result.seats}  ` +
-      `features=${featureLabel(result.features)}`,
-  );
+  if (!result) die("no matching license to update");
+
+  console.log(`\nupdated  ${result.key}  seats=${result.seats}`);
+  await report(result);
   console.log(
     "\nA running instance keeps the features it started with — the " +
       "customer must restart the app to pick this up.",
@@ -132,24 +192,35 @@ if (opts.update) {
   process.exit(0);
 }
 
+// ── Create ─────────────────────────────────────────────────────────────
+
 const key = opts.key && opts.key !== true ? opts.key : generateKey();
-await licenses.insertOne({
+const doc = {
   key,
   name: opts.name === true ? null : opts.name,
   seats,
   active: true,
   expires_at,
-  // Written even when it is null, so the document shape is the same for
-  // every key and an unset entitlement is visibly a choice.
+  // All three written even when null, so the document shape is the same
+  // for every key and an unset entitlement is visibly a choice.
+  plan_id: plan_id ?? null,
   features,
+  features_extra,
   created_at: new Date(),
-});
+};
+await licenses.insertOne(doc);
 
 console.log(`\n  customer   ${opts.name}`);
 console.log(`  key        ${key}`);
 console.log(`  seats      ${seats}`);
-console.log(`  features   ${featureLabel(features)}`);
+await report(doc);
 console.log(`  expires    ${expires_at ? expires_at.toISOString() : "never"}`);
+if (plan_id === undefined && features === null) {
+  console.log(
+    "\n  WARNING  no --plan and no --features: this key falls back to the " +
+      "\n           app's built-in defaults, which change between releases.",
+  );
+}
 console.log("\nGive the customer this, to set on their RunPod pod:");
 console.log(`\n  KREA2_LICENSE_KEY=${key}\n`);
 process.exit(0);

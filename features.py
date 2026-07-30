@@ -13,9 +13,13 @@ a licence, and an env override that could only turn things *off* still
 left the download bill and the entitlement disagreeing about what a pod
 was for.
 
-    features: ["single", "v2", "gallery", "wan"]   exactly those tabs
+    features: ["krea_t2i", "gallery", "wan_i2v"]   exactly those tabs
     features: []                                   nothing
     field absent / null                            the defaults below
+
+The server resolves that array from the license's plan before sending it,
+so what arrives here is always a flat list of keys. This module knows
+nothing about plans, prices or tiers, and should not learn.
 
 The absent case exists for keys issued before entitlements did. It is a
 fallback, not a mode: it logs a warning, because "whatever this build
@@ -39,12 +43,20 @@ class Feature:
     """One gateable tab.
 
     key     stable id — used in the license document's `features` array,
-            in the license-validator's FEATURE_KEYS list, and in the logs.
-            Never change one once it ships; the label is the thing that is
-            safe to reword.
+            in the license-validator's FEATURE registry, and in the logs.
+            Never change one once it ships: a key is compiled into every
+            binary that has gone out, so renaming one drops that tab for
+            anyone on an older build. The label is the safe thing to
+            reword. There is no alias map — an old key is simply unknown.
     label   the tab title, so ui.py and the startup log agree on naming.
     default whether it is on for a license that names no features at all.
     needs   asset groups download_everything must fetch for this tab.
+
+    `key` and `needs` are separate namespaces that happen to overlap. A key
+    names a *tab*; a group names a *set of weights* several tabs can share,
+    and downloads.py is keyed on the latter. Renaming a tab therefore never
+    touches a download — which is why "krea_v2_t2i" needs the group still
+    called "v2".
     """
 
     key: str
@@ -60,19 +72,19 @@ class Feature:
 # asked for, so enabling Edit on its own still fetches the base models it
 # cannot run without, and enabling both Single and Edit fetches them once.
 FEATURES = (
-    Feature("single", "Single / Simple Batch", default=True,
+    Feature("krea_t2i", "Single / Simple Batch", default=True,
             needs=("text_encoder", "krea2")),
-    Feature("v2", "🔶 Krea 2 V2", default=True,
+    Feature("krea_v2_t2i", "🔶 Krea 2 V2", default=True,
             needs=("text_encoder", "v2")),
     Feature("gallery", "Gallery", default=True),
-    Feature("edit", "✨ Edit (Instruction)",
+    Feature("krea_edit", "✨ Edit (Instruction)",
             needs=("text_encoder", "krea2", "edit_lora")),
-    Feature("inpaint", "Inpaint / Img2Img",
+    Feature("krea_inpaint", "Inpaint / Img2Img",
             needs=("text_encoder", "krea2")),
     Feature("faceswap", "🎭 Face Swap (ReActor)", needs=("reactor",)),
-    Feature("flux", "🌊 Flux 2", needs=("flux",)),
-    Feature("klein", "🧩 Klein Edit", needs=("klein",)),
-    Feature("wan", "🎬 Video (Wan 2.2)", needs=("wan",)),
+    Feature("flux_t2i", "🌊 Flux 2", needs=("flux",)),
+    Feature("klein_i2i", "🧩 Klein Edit", needs=("klein",)),
+    Feature("wan_i2v", "🎬 Video (Wan 2.2)", needs=("wan",)),
     # Runs whatever graph is pasted into it, so it has no assets of its
     # own — it is only useful alongside the tabs whose models it names.
     Feature("json_batch", "JSON Advanced Batch"),

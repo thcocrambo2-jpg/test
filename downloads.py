@@ -640,7 +640,7 @@ def download_klein_models() -> None:
     """Fetch the Klein Edit tab's UNet, text encoder, VAE and LoRAs (~19 GB).
 
     Self-sufficient on purpose: the VAE is the same file the Flux 2 tab
-    downloads, but "klein" can be the only enabled feature, so this fetches
+    downloads, but "klein_i2i" can be the only enabled feature, so this fetches
     it rather than assuming the flux group already did. Downloads key on
     the destination path, so when both are on whichever runs first fetches
     it and the other logs a cache hit.

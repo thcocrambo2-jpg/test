@@ -23,7 +23,8 @@ import express from "express";
 import cors from "cors";
 
 import { collections } from "./db.js";
-import { normalizeFeatures } from "./features.js";
+import { FEATURES } from "./features.js";
+import { allPlans, resolveEntitlement } from "./plans.js";
 import {
   STALE_SECONDS,
   HEARTBEAT_SECONDS,
@@ -114,13 +115,25 @@ const countLive = (sessions, license_key) =>
 // where a change tells a running instance it needs a restart to pick the
 // new set up. null means the document says nothing and the client should
 // use its own defaults.
-function seatPayload(license, inUse) {
+//
+// This is the *only* place plans are resolved. The array below is a flat
+// list of feature keys either way, so the Python client never learns that
+// tiers exist and needs no rebuild for any of it — see plans.js. A license
+// whose plan_id names nothing throws, which wrap() turns into a 503.
+//
+// plan_id / plan_name are additive and currently ignored by the client;
+// they are here so a future build can log "Pro" next to the customer name
+// without another server change.
+async function seatPayload(license, inUse) {
+  const entitlement = await resolveEntitlement(license);
   return {
     ok: true,
     license_name: license.name || null,
     seats: license.seats,
     seats_in_use: inUse,
-    features: normalizeFeatures(license.features),
+    features: entitlement.features,
+    plan_id: entitlement.plan_id,
+    plan_name: entitlement.plan_name,
     heartbeat_seconds: HEARTBEAT_SECONDS,
     stale_seconds: STALE_SECONDS,
   };
@@ -190,7 +203,7 @@ app.post(
       `acquire  key=${license_key} instance=${instance_id} ` +
         `${inUse}/${license.seats}${ownIsLive ? " (renewal)" : ""}`,
     );
-    res.json(seatPayload(license, inUse));
+    res.json(await seatPayload(license, inUse));
   }),
 );
 
@@ -241,10 +254,13 @@ app.post(
         created_at: now,
         meta: sanitizeMeta(null, req),
       });
-      return res.json({ ...seatPayload(license, inUse + 1), reacquired: true });
+      return res.json({
+        ...(await seatPayload(license, inUse + 1)),
+        reacquired: true,
+      });
     }
 
-    res.json(seatPayload(license, await countLive(sessions, license_key)));
+    res.json(await seatPayload(license, await countLive(sessions, license_key)));
   }),
 );
 
@@ -268,6 +284,41 @@ app.post(
         `deleted=${result.deletedCount}`,
     );
     res.json({ ok: true, released: result.deletedCount > 0 });
+  }),
+);
+
+// ── Catalogue ───────────────────────────────────────────────────────────
+//
+// Public, unauthenticated, and safe to be: it is the pricing page's data
+// and nothing here is a secret. Only `is_public` plans are listed, so
+// `admin` and any tier being trialled stay out of it.
+//
+// The feature metadata comes from the code registry rather than the
+// features collection. Both exist — seed-catalog writes the registry into
+// Mongo so it can be read alongside the plans by anything that talks to
+// the database directly — but the registry is the source of truth, and
+// serving it from there means a pricing page can never describe a tab in
+// terms this deployment does not actually know.
+app.get(
+  "/v1/plans",
+  wrap(async (_req, res) => {
+    const plans = await allPlans();
+    res.json({
+      ok: true,
+      plans: [...plans.values()]
+        .filter((plan) => plan.is_public !== false)
+        .map((plan) => ({
+          id: plan._id,
+          name: plan.name,
+          description: plan.description || null,
+          price_monthly: plan.price_monthly ?? null,
+          price_yearly: plan.price_yearly ?? null,
+          currency: plan.currency || "USD",
+          features: plan.features || [],
+          sort_order: plan.sort_order ?? 0,
+        })),
+      features: FEATURES,
+    });
   }),
 );
 
@@ -327,23 +378,59 @@ app.get(
     const cutoff = cutoffDate();
     const all = await licenses.find({}).sort({ created_at: -1 }).toArray();
     const rows = await Promise.all(
-      all.map(async (license) => ({
-        key: license.key,
-        name: license.name || null,
-        seats: license.seats,
-        active: license.active !== false,
-        expires_at: license.expires_at || null,
-        features: normalizeFeatures(license.features),
-        seats_in_use: await sessions.countDocuments({
-          license_key: license.key,
-          last_seen: { $gt: cutoff },
-        }),
-        instances_seen: await sessions.countDocuments({
-          license_key: license.key,
-        }),
-      })),
+      all.map(async (license) => {
+        // Resolved rather than raw: what you want to see here is what the
+        // customer actually gets, which for a license on a plan is not
+        // written on the license at all. Caught per row, because one
+        // license pointing at a deleted plan should cost you that row's
+        // features and not the whole listing.
+        let entitlement = { features: null, plan_id: null, source: "error" };
+        let planError = null;
+        try {
+          entitlement = await resolveEntitlement(license);
+        } catch (err) {
+          planError = err.message;
+        }
+        return {
+          key: license.key,
+          name: license.name || null,
+          seats: license.seats,
+          active: license.active !== false,
+          expires_at: license.expires_at || null,
+          plan_id: entitlement.plan_id ?? license.plan_id ?? null,
+          features: entitlement.features,
+          features_source: entitlement.source,
+          plan_error: planError,
+          seats_in_use: await sessions.countDocuments({
+            license_key: license.key,
+            last_seen: { $gt: cutoff },
+          }),
+          instances_seen: await sessions.countDocuments({
+            license_key: license.key,
+          }),
+        };
+      }),
     );
     res.json({ ok: true, licenses: rows });
+  }),
+);
+
+// Every plan with the number of licenses on it. The count is the guard
+// rail for editing: it tells you how many customers a change to this
+// document is about to move, before you make it.
+app.get(
+  "/v1/admin/plans",
+  requireAdmin,
+  wrap(async (_req, res) => {
+    const { licenses } = await collections();
+    const plans = await allPlans();
+    const rows = await Promise.all(
+      [...plans.values()].map(async (plan) => ({
+        ...plan,
+        licenses: await licenses.countDocuments({ plan_id: plan._id }),
+      })),
+    );
+    res.json({ ok: true, plans: rows, features: FEATURES });
   }),
 );
 

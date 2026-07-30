@@ -182,7 +182,7 @@ def install_custom_nodes() -> None:
     Only the Edit tab uses those two nodes, so this is skipped entirely
     when that feature is off — it used to run unconditionally.
     """
-    if not features.enabled("edit"):
+    if not features.enabled("krea_edit"):
         return
     dest = COMFY_DIR / "custom_nodes" / "comfyui-krea2edit"
     if dest.exists():
@@ -204,7 +204,7 @@ def install_v2_nodes() -> None:
     missing and every other tab untouched — the same contract install_reactor
     follows. app.py verifies afterwards that each class actually registered.
     """
-    if not features.enabled("v2"):
+    if not features.enabled("krea_v2_t2i"):
         return
     for dirname, repo, _class_type in V2_NODE_REPOS:
         dest = COMFY_DIR / "custom_nodes" / dirname
