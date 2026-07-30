@@ -29,13 +29,14 @@ Every environment variable this module reads, in one place:
     KREA2_MAIN_RESERVE_VRAM     GB left for Wan by the image instance
     KREA2_WAN_RESERVE_VRAM      GB left for images by the video instance
     KREA2_LICENSE_KEY           the customer key (required)
-    KREA2_LICENSE_API           override the licence endpoint (testing)
+    KREA2_NODE_TAG              the deployment id the key checks in against
     KREA2_LICENSE_GRACE         seconds tolerated with no licence server
     HF_TOKEN, CIVITAI_TOKEN     download credentials
 """
 
 import logging
 import os
+import re
 from pathlib import Path
 
 logging.basicConfig(
@@ -757,14 +758,28 @@ SAMPLERS = ["er_sde", "euler", "euler_ancestral", "dpmpp_2m", "res_multistep"]
 
 # ── Licensing ─────────────────────────────────────────────────────────────────
 # One customer key allows a fixed number of concurrent running instances.
-# The key is per-customer and set on the pod like the tokens below; the API
-# URL is the same service for everyone, so it is compiled in rather than
-# read from the environment — an endpoint that can be repointed is a
-# licence check that can be answered by any server the customer chooses.
-# The env override exists for testing against a local license-validator.
-LICENSE_API_URL = os.environ.get(
-    "KREA2_LICENSE_API", "https://krea2-license.vercel.app"
-).rstrip("/")
+# The key is per-customer and set on the pod like the tokens below.
+#
+# The endpoint is assembled here from a bare deployment id rather than read
+# as a whole URL, for two reasons. An endpoint that can be repointed is a
+# licence check that can be answered by any server the customer chooses;
+# accepting only the id means the host can never be anything other than a
+# vercel.app subdomain. And the variable is named for what it looks like on
+# a pod — a node tag, sitting among RunPod's own — rather than for what it
+# does, so the licensing path is not the first thing read in the env panel.
+#
+# There is deliberately no fallback. The id is not compiled into the binary,
+# so a pod that does not carry it cannot check out a seat at all.
+_NODE_TAG = (os.environ.get("KREA2_NODE_TAG") or "").strip().lower()
+# One DNS label, nothing more. A dot, a slash, a colon or a port is how a
+# tag would smuggle in a different host, so reject the value outright rather
+# than strip the offending characters and use whatever is left.
+if not re.fullmatch(r"[a-z0-9][a-z0-9-]{6,61}[a-z0-9]", _NODE_TAG):
+    _NODE_TAG = ""
+# Empty when the tag is missing or malformed. licensing.acquire_or_exit()
+# turns that into the stop message; nothing else may call the API without
+# going through it.
+LICENSE_API_URL = f"https://{_NODE_TAG}.vercel.app" if _NODE_TAG else ""
 LICENSE_KEY = os.environ.get("KREA2_LICENSE_KEY") or None
 # How long the app keeps running when the license server is unreachable.
 # Long enough that an outage does not kill a video render mid-way, short

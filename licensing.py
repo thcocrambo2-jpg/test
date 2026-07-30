@@ -172,6 +172,17 @@ def acquire_or_exit() -> None:
             2,
         )
 
+    # Empty when KREA2_NODE_TAG is unset or is not a single DNS label — see
+    # config.py. Both cases are the same fix, and neither is worth spelling
+    # out further here: a customer types the value they were handed.
+    if not LICENSE_API_URL:
+        _fail(
+            "This pod is missing its node tag.\n"
+            "Set KREA2_NODE_TAG in this pod's environment variables to the "
+            "value issued with your license key, then start the app again.",
+            2,
+        )
+
     _instance_id = _resolve_instance_id()
     log.info("Checking license (instance %s) ...", _instance_id)
 

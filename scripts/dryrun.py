@@ -6,7 +6,7 @@ UI — which tabs a license actually grants, how they lay out, what the
 controls do — without a pod, without ~90 GB of downloads and without a
 card that can hold a 35 GB UNet.
 
-    $env:KREA2_LICENSE_KEY="your_license_key";  $env:KREA2_LICENSE_API="https://your-validator-app.com"; .\.venv\Scripts\python.exe scripts\dryrun.py
+    $env:KREA2_LICENSE_KEY="your_license_key";  $env:KREA2_NODE_TAG="your_node_tag"; .\.venv\Scripts\python.exe scripts\dryrun.py
 
     python scripts/dryrun.py                        # tabs from your license
     python scripts/dryrun.py --features "single,klein"   # offline, no server

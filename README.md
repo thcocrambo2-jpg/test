@@ -25,6 +25,7 @@ live under the base directory and are lost when the pod is destroyed.
 | Variable                   | Purpose                                                         |
 | -------------------------- | --------------------------------------------------------------- |
 | `KREA2_LICENSE_KEY`        | **Required.** Customer license key (see Licensing below)        |
+| `KREA2_NODE_TAG`           | **Required.** Node tag issued alongside the license key         |
 | `HF_TOKEN`                 | Hugging Face token — only needed for gated repos                |
 | `CIVITAI_TOKEN`            | CivitAI API token — needed for most CivitAI LoRA downloads      |
 | `KREA2_BASE_DIR`           | Base directory for everything (default `/workspace/krea2`)     |
@@ -100,7 +101,10 @@ granted tab needs were never downloaded.
 
 The app takes a **license seat** before it does anything else and will not
 start without one. Set `KREA2_LICENSE_KEY` on the pod to the key you were
-given; one key allows a fixed number of instances running at the same time.
+given, and `KREA2_NODE_TAG` to the node tag issued with it; one key allows
+a fixed number of instances running at the same time. Both are required —
+the tag names the deployment the key checks in against, and there is no
+built-in default, so a pod missing either one stops at startup.
 
 The same check returns the key's **entitlements** — the tabs it grants
 (see Features above). They are applied immediately after the seat is
@@ -120,9 +124,9 @@ If the license server becomes unreachable *while* the app is running it
 keeps going for `KREA2_LICENSE_GRACE` seconds (default 1800) so an outage
 does not kill a long video render.
 
-Exit codes: `2` no key set, `3` key rejected (invalid, revoked, expired,
-or all seats in use), `4` license server unreachable at startup, `5` the
-license stopped being valid mid-run.
+Exit codes: `2` no key or no node tag set, `3` key rejected (invalid,
+revoked, expired, or all seats in use), `4` license server unreachable at
+startup, `5` the license stopped being valid mid-run.
 
 The server lives in `license-validator/` — see its README for issuing keys
 and deploying.

@@ -260,8 +260,18 @@ Three things to know:
   file's word for it.
 
 The production URL (`<project>.vercel.app`) is stable across redeploys —
-it only changes if you rename or delete the project — so it is safe to
-compile into the client.
+it only changes if you rename or delete the project.
+
+The client does not hold that URL. It reads the subdomain alone from
+`KREA2_NODE_TAG` on the pod and rebuilds `https://<tag>.vercel.app` itself
+(`config.py`), so hand the customer the bare label — no scheme, no
+`.vercel.app` — alongside their key. The label must be plain
+`[a-z0-9-]`, 8–63 characters; anything with a dot or slash in it is
+rejected at startup rather than used, which is what keeps the tag from
+repointing the licence check at a server the customer controls.
+
+Renaming the Vercel project therefore means reissuing the tag to every
+pod, not just redeploying.
 
 ## CORS
 
