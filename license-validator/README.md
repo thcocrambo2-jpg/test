@@ -107,6 +107,13 @@ nothing", not "no opinion" — it overrides a plan like any other array.
 - **`all` and `none` are expanded when the key is written**, not stored as
   sentinels. Reading a license then never requires knowing what `all` meant
   on the day it was issued.
+- **`plan_name` and `expires_at` on the payload are labels.** The app's own
+  header shows the tier and the date next to the brand, and the pricing
+  page marks the tier as "Your plan" — nothing branches on either. Expiry
+  is enforced here, in `licenseProblem()`, on every acquire and every
+  heartbeat, so a client that ignores the date (any build before this field
+  existed) is no less bounded by it. `null` means the key never expires,
+  and the header then shows no date rather than "expires never".
 
 `features` rides on every 200 — acquire, where the client applies it, and
 heartbeat, where a change makes a running instance log that it needs a

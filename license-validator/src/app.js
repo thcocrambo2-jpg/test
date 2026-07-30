@@ -121,9 +121,13 @@ const countLive = (sessions, license_key) =>
 // tiers exist and needs no rebuild for any of it — see plans.js. A license
 // whose plan_id names nothing throws, which wrap() turns into a 503.
 //
-// plan_id / plan_name are additive and currently ignored by the client;
-// they are here so a future build can log "Pro" next to the customer name
-// without another server change.
+// plan_id / plan_name / expires_at are labels: the app bar shows the tier
+// and the date, and the pricing page marks the tier the customer is on.
+// Nothing is enforced by them being read — expiry is checked here, in
+// licenseProblem(), on every acquire and every heartbeat, so a client that
+// ignores the date (an older build does) is no less bounded by it. Sending
+// null for a perpetual key is deliberate: the client renders no date, and
+// "no expiry" is exactly what it should show.
 async function seatPayload(license, inUse) {
   const entitlement = await resolveEntitlement(license);
   return {
@@ -134,6 +138,7 @@ async function seatPayload(license, inUse) {
     features: entitlement.features,
     plan_id: entitlement.plan_id,
     plan_name: entitlement.plan_name,
+    expires_at: license.expires_at || null,
     heartbeat_seconds: HEARTBEAT_SECONDS,
     stale_seconds: STALE_SECONDS,
   };

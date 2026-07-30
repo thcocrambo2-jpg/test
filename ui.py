@@ -11,6 +11,15 @@ are never registered on Gradio's HTTP API either. Written for Gradio 6
 (theme/css now belong to launch(), gr.File hands the handler a plain file
 path).
 
+Alongside the tabs there is one other view: the pricing panel, which is
+the plan catalogue read from the licence server (plans.py) and rendered by
+theme.pricing_html. "Plans & pricing" hides the tabs and shows it, Back
+reverses that — one page, two views, rather than a Gradio route, which can
+only be declared outside the `with gr.Blocks()` block and would mean a
+second page carrying its own copy of this app's chrome. It is information
+only — no entitlement and no purchase happens there — and it is always
+built, whatever the licence grants.
+
 The look of all of it lives in theme.py: the palette and Gradio theme
 tokens, the CSS, the application header and the two bits of page JS. This
 module only names things — `elem_classes="kx-..."` on a column, a status
@@ -40,6 +49,8 @@ import requests
 from PIL import Image, ImageChops, ImageFilter
 
 import features
+import licensing
+import plans
 import theme
 from client import ComfyUIError, client, model_signature, wan_client
 from comfy import GPU_COUNT, ensure_alive as comfy_ensure_alive
@@ -1358,23 +1369,6 @@ def _klein_lora_stack():
     return cbs, dds, ws
 
 
-# Generation engines, in tab order, for the header's chips. Only the ones
-# this license turned on are listed — the same question the tabs below ask,
-# asked once for the header (the old title concatenated these by hand).
-_ENGINE_NAMES = (
-    ("krea_t2i", "Krea 2"),
-    ("krea_v2_t2i", "Krea 2 V2"),
-    ("flux_t2i", "Flux 2"),
-    ("klein_i2i", "Klein Edit"),
-    ("wan_i2v", "Wan 2.2 Video"),
-)
-
-
-def _enabled_engines() -> list[str]:
-    """Display names of the enabled generation engines, in tab order."""
-    return [name for key, name in _ENGINE_NAMES if features.enabled(key)]
-
-
 def _tab_intro(text: str):
     """A tab's opening paragraph, as a callout rather than loose body copy.
 
@@ -1411,15 +1405,68 @@ def _status_box():
                       elem_classes="kx-status")
 
 
-with gr.Blocks(title="Krea 2 on RunPod") as ui:
-    gr.HTML(
-        theme.header_html(
-            engines=_enabled_engines(), model_count=len(MODEL_CHOICES),
-            gpu_count=GPU_COUNT, output_dir=OUTPUT_DIR,
-        ),
-        elem_id="kx-header", container=False, padding=False,
+def _pricing_body(force: bool = False) -> str:
+    """The pricing panel's markup, over a catalogue fresh enough to show.
+
+    Called when the panel is opened, never at import time, and both halves
+    of that matter. ui.py builds its Blocks while the pod is still
+    starting, so a licence server that is slow or unreachable must not be
+    able to hold startup up; and a customer who never opens the panel
+    never causes the request at all.
+
+    plans.catalogue() reports failure rather than raising, so the unhappy
+    paths — no node tag, server down, empty catalogue — all arrive here as
+    a Catalogue carrying `error` and render as a panel saying so.
+    """
+    plan_id, plan_name = licensing.plan()
+    return theme.pricing_html(
+        plans.catalogue(force=force),
+        current_plan_id=plan_id, current_plan_name=plan_name,
     )
-    with gr.Tabs():
+
+
+def _open_pricing():
+    """Swap the tabs for the pricing panel, filling it on the way in.
+
+    Fetching here rather than at page load is what keeps the licence
+    server off the startup path — see _pricing_body.
+    """
+    return (gr.update(visible=False),      # the header's "Plans & pricing"
+            gr.update(visible=False),      #   button, and the tabs
+            gr.update(visible=False),      # the footer, whose hint is
+            gr.update(visible=True),       #   about running a tab
+            _pricing_body())
+
+
+def _close_pricing():
+    """Put the tabs back. The panel keeps its markup for the next open."""
+    return (gr.update(visible=True), gr.update(visible=True),
+            gr.update(visible=True), gr.update(visible=False))
+
+
+with gr.Blocks(title="Krea 2 on RunPod") as ui:
+    # The application bar: brand and licence on the left, the way into the
+    # pricing panel on the right. A Row rather than one gr.HTML because that
+    # way in has to be a real Gradio button — the panel is this same page
+    # with the tabs hidden, so there is no URL for a link to point at (see
+    # the block after the footer) — and it belongs next to the licence it is
+    # about rather than in a strip of its own below.
+    #
+    # licensing answers both of these before ui is imported (app.py takes
+    # the seat first), and answers None for both on a dry run with
+    # --features, which the header renders as a licence naming no plan.
+    with gr.Row(elem_id="kx-header"):
+        gr.HTML(
+            theme.header_html(
+                plan_name=licensing.plan()[1],     # (id, name) — name only
+                expires_at=licensing.expires_at(),
+            ),
+            elem_classes="kx-headline", container=False, padding=False,
+        )
+        pricing_open_btn = gr.Button("💳 Plans & pricing", size="sm",
+                                     elem_classes="kx-navbtn", scale=0)
+
+    with gr.Tabs() as main_tabs:
         if features.enabled("krea_t2i"):
             with gr.Tab("Single / Simple Batch"):
                 with gr.Row():
@@ -2380,9 +2427,43 @@ with gr.Blocks(title="Krea 2 on RunPod") as ui:
                 )
 
     # Outside the Tabs: one line under every tab, carrying the Ctrl+Enter
-    # hint (theme.JS binds it) — a shortcut nobody would find otherwise.
-    gr.HTML(theme.FOOTER_HTML, elem_id="kx-footer", container=False,
-            padding=False)
+    # hint (theme.JS binds it) — a shortcut nobody would find otherwise —
+    # and the model/GPU counts and output path, which used to sit in the
+    # header until it was cut back to the licence.
+    footer = gr.HTML(
+        theme.footer_html(model_count=len(MODEL_CHOICES), gpu_count=GPU_COUNT,
+                          output_dir=OUTPUT_DIR),
+        elem_id="kx-footer", container=False, padding=False,
+    )
+
+    # ----------------------------------------------------------- pricing panel
+    # The plan catalogue, as a view of this same page: opening it hides the
+    # tabs and the footer, and the Back button puts them back. Not a tenth
+    # tab, because it belongs to no generation flow and reads the same for
+    # every licence; and not a gr.Blocks route, because Gradio only allows
+    # those outside the Blocks context, which would mean a second page with
+    # its own header and its own copy of this app's chrome.
+    #
+    # Deliberately not behind a features.enabled() check: what a tier costs
+    # is not something a tier can be sold the right to read, and a customer
+    # deciding whether to upgrade is exactly the one whose licence does not
+    # grant the thing they are reading about.
+    with gr.Column(visible=False) as pricing_view:
+        with gr.Row(elem_classes="kx-navrow"):
+            pricing_back_btn = gr.Button("← Back to the app", size="sm")
+            pricing_refresh = gr.Button("🔄 Refresh plans", size="sm")
+        # Empty until opened — _open_pricing fills it, so nothing here
+        # touches the licence server while the pod is still booting.
+        pricing_body = gr.HTML(container=False, padding=False)
+
+    _pricing_views = [pricing_open_btn, main_tabs, footer, pricing_view]
+    pricing_open_btn.click(fn=_open_pricing,
+                           outputs=[*_pricing_views, pricing_body])
+    pricing_back_btn.click(fn=_close_pricing, outputs=_pricing_views)
+    # force=True skips plans.TTL_SECONDS — the button exists for the minute
+    # after a price is edited on the server.
+    pricing_refresh.click(fn=lambda: _pricing_body(force=True),
+                          outputs=pricing_body)
 
 
 def _probe_url(url: str, deadline_s: int = 45) -> bool:

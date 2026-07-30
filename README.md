@@ -131,6 +131,34 @@ startup, `5` the license stopped being valid mid-run.
 The server lives in `license-validator/` — see its README for issuing keys
 and deploying.
 
+### The pricing page
+
+`/pricing` is a page of its own next to the tabs: every public plan, what
+it costs, and the tabs it includes, with the customer's own tier marked.
+It is reachable from the **Plans & pricing** button in the app bar, next to
+the plan and expiry that bar already shows.
+
+The data is the license server's own catalogue — `plans.py` reads
+`GET /v1/plans` at page load and caches it for five minutes, so a price or
+a feature list edited in Atlas shows up without redeploying the app or
+restarting the pod. **Reading it changes nothing.** Which tabs a pod
+builds still comes only from the flat `features` array in the acquire
+response, so a catalogue that is stale, empty or unreachable costs the
+page its cards and nothing else — it renders a panel saying so, with a
+Refresh button, and every tab keeps working.
+
+The tier marked "Your plan" comes from `plan_id` on the acquire response.
+A license that lists its features directly instead of naming a plan has
+none, which is normal — the page then marks nothing and says so, and the
+app bar calls it a "Custom licence".
+
+The bar's expiry pill comes from `expires_at` on the same response
+(`licensing.expires_at()`), and it is **display only** — the server refuses
+an expired key at acquire and stops answering its heartbeat, so nothing in
+the app reads that date to decide anything, and a pod with a wrong clock
+cannot lock a customer out of a valid key. A key with no end date, and a
+license server too old to send the field, both render no pill at all.
+
 ## Model swapping and crash recovery
 
 With Krea 2 V1 (turbo/raw), V2 (turbo mxfp8/raw), Flux and Wan all
@@ -188,6 +216,7 @@ error in the log points at a custom node instead.
 - `deps/ComfyUI-ReActor` — vendored ReActor node pack, copied into `custom_nodes` at bootstrap
 - `app.py` — entry point; orchestrates the startup flow
 - `licensing.py` — license seat acquire / heartbeat / release (stdlib only)
+- `plans.py` — the public plan catalogue behind the `/pricing` page, read from the license server (stdlib only, read-only)
 - `license-validator/` — the Node/Express + MongoDB license server
 - `config.py` — paths, Krea 2 model registry, LoRA lists, Wan 2.2 settings, tokens, presets
 - `bootstrap.py` — clone ComfyUI + install requirements
@@ -199,8 +228,8 @@ error in the log points at a custom node instead.
 - `workflow_wan.py` — Wan 2.2 image-to-video workflow builder (two-expert A14B)
 - `workflow_reactor.py` — ReActor face-swap workflow builder + availability checks
 - `client.py` — ComfyUI HTTP/websocket client (queue, progress, image upload)
-- `ui.py` — Gradio UI (single/batch, edit, inpaint, face swap, flux, klein edit, video, JSON batch, gallery tabs) and launch logic
-- `theme.py` — the UI's look: Gradio theme tokens, CSS, application header, page JS (see below)
+- `ui.py` — Gradio UI (single/batch, edit, inpaint, face swap, flux, klein edit, video, JSON batch, gallery tabs), the `/pricing` page, and launch logic
+- `theme.py` — the UI's look: Gradio theme tokens, CSS, application header, pricing markup, page JS (see below)
 - `build.sh` — compiles the app into a single distributable binary (see below)
 
 ### UI theme
@@ -222,7 +251,8 @@ Beyond the palette the UI adds:
 
 | | |
 |---|---|
-| Sticky application header | brand, the engines this license granted, model/GPU counts, and the output path (click it to copy) |
+| Sticky application header | brand, the plan this license is on, when it expires (amber inside the last week), and the **Plans & pricing** button. Nothing else: the engine chips, counts and output path that used to be here were all true and none of them was read |
+| Footer | the `Ctrl`+`Enter` hint, model/GPU counts, and the output path (click it to copy) |
 | Segmented tab bar | Gradio's own overflow menu still handles tabs that do not fit |
 | One control card per tab | Gradio's per-field frames are flattened, so a 30-control tab reads as one form instead of thirty boxes |
 | Sticky primary action | Generate / Edit / Swap stays reachable in columns that run past two screens |

@@ -22,6 +22,8 @@ Two rules hold the design together:
     check rather than a hunt through the file.
 """
 
+from datetime import datetime, timezone
+
 import gradio as gr
 
 # --------------------------------------------------------------------------
@@ -417,11 +419,19 @@ CSS = f"""
 /* Full-bleed and sticky: the negative side margins cancel the container's
    padding so the bar reaches both edges, and the !important overrides are
    Gradio's own .block chrome (it wraps every component, gr.HTML included,
-   in a rounded bordered card). */
+   in a rounded bordered card).
+   The bar is a gr.Row, not a single gr.HTML, because the Plans & pricing
+   button in it has to be a real Gradio control — it opens a view of this
+   same page, which no link can do. The rules below put the markup block and
+   that button back on one line. */
 #kx-header {{
   position: sticky;
   top: 0;
   z-index: 40;
+  display: flex;
+  align-items: center;
+  gap: 8px 16px;
+  flex-wrap: nowrap;
   /* width:auto is load-bearing: Gradio puts width:100% on every block, so
      the negative margins would slide the bar sideways instead of widening
      it to the full page. */
@@ -435,6 +445,11 @@ CSS = f"""
   backdrop-filter: saturate(160%) blur(16px);
   -webkit-backdrop-filter: saturate(160%) blur(16px);
 }}
+
+/* The header's static half (brand + licence pills) takes the room; the
+   button keeps its own width instead of being stretched by the Row. */
+#kx-header > .kx-headline {{ flex: 1 1 auto; min-width: 0; }}
+#kx-header .kx-navbtn {{ flex: none !important; width: auto !important; }}
 
 /* Shared by the header and the footer. Both are gr.HTML, whose content
    Gradio nests two divs deep, so the flex row has to be our own element
@@ -484,14 +499,17 @@ CSS = f"""
   color: var(--kx-muted);
 }}
 
-#kx-header .kx-stats {{
+/* The right-hand pills — the licence in the header, the counts and the
+   output path in the footer. */
+.kx-stats {{
   display: flex;
   align-items: center;
   gap: 7px;
   flex-wrap: wrap;
 }}
 
-/* Engine chips + stat pills share one look; the difference is the accent. */
+/* The plan chip, the stat pills and the path pill share one look; the
+   difference is the accent (current plan) or the amber (expiring soon). */
 .kx-pill {{
   display: inline-flex;
   align-items: center;
@@ -516,21 +534,25 @@ CSS = f"""
 }}
 .dark .kx-pill-accent {{ color: #b9bcfb; }}
 
-.kx-pill-live {{ gap: 7px; }}
-
-.kx-dot {{
-  width: 7px;
-  height: 7px;
-  border-radius: 50%;
-  background: var(--kx-ok);
-  box-shadow: 0 0 0 3px {OK}26;
-  animation: kx-pulse 2.4s ease-in-out infinite;
+/* An expiry inside the last week. Amber and not red on purpose: the key
+   still works, and it is the customer's supplier who renews it, so this is
+   a heads-up and not a failure. */
+.kx-pill-warn {{
+  border-color: var(--kx-warn-border);
+  background: var(--kx-warn-soft);
+  color: var(--kx-warn);
 }}
 
-@keyframes kx-pulse {{
-  0%, 100% {{ opacity: 1; }}
-  50%      {{ opacity: .45; }}
+/* The row holding the pricing panel's own buttons — Back and Refresh.
+   Right-aligned and out of the way: it is chrome, not a control any
+   generation flow needs. Gradio stretches a Row's children, so the buttons
+   are pinned to their own width here rather than spanning the page. */
+.kx-navrow {{
+  justify-content: flex-end !important;
+  gap: 8px;
+  margin-bottom: 10px !important;
 }}
+.kx-navrow > * {{ flex: none !important; width: auto !important; }}
 
 /* The output path. Clicking copies it — see the JS below. */
 .kx-path {{
@@ -751,6 +773,179 @@ CSS = f"""
   .kx-cta {{ position: static; }}
 }}
 
+/* --------------------------------------------------------------- pricing */
+/* The /pricing route. Read-only, no controls at all, so it is one HTML
+   block (see pricing_html) laid out with a real grid instead of a nest of
+   Gradio rows. auto-fit + minmax lets the column count follow the width, so
+   four tiers on a desktop and one on a phone need no breakpoint here. */
+.kx-pricing {{ max-width: 1180px; margin: 0 auto; }}
+
+.kx-pricing-head {{ margin-bottom: 20px; }}
+
+.kx-pricing-head h2 {{
+  margin: 0 0 6px !important;
+  font-size: 1.35rem !important;
+  font-weight: 700 !important;
+  letter-spacing: -.01em;
+  color: var(--kx-text) !important;
+}}
+
+.kx-pricing-head p {{
+  margin: 0 !important;
+  max-width: 68ch;
+  font-size: .85rem !important;
+  line-height: 1.65;
+  color: var(--kx-muted) !important;
+}}
+
+.kx-plan-grid {{
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
+  gap: 16px;
+  align-items: start;
+}}
+
+.kx-plan {{
+  display: flex;
+  flex-direction: column;
+  padding: 20px;
+  border: 1px solid var(--kx-border);
+  border-radius: 16px;
+  background: var(--kx-surface);
+  box-shadow: var(--kx-shadow-sm);
+}}
+
+/* The tier this licence is actually on. An accent ring rather than the
+   usual scale-up: these cards sit in a grid whose tops are aligned, and
+   lifting one breaks that alignment to say something the badge already
+   says in words. */
+.kx-plan-current {{
+  border-color: var(--kx-accent);
+  box-shadow: 0 0 0 1px var(--kx-accent), var(--kx-shadow-md);
+}}
+
+.kx-plan-head {{
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}}
+
+.kx-plan-head h3 {{
+  margin: 0 !important;
+  font-size: 1rem !important;
+  font-weight: 650 !important;
+  color: var(--kx-text) !important;
+}}
+
+.kx-plan-badge {{
+  flex: none;
+  padding: 3px 9px;
+  border-radius: 999px;
+  background: var(--kx-accent-soft);
+  color: var(--kx-accent);
+  font-size: .65rem;
+  font-weight: 700;
+  letter-spacing: .06em;
+  text-transform: uppercase;
+}}
+.dark .kx-plan-badge {{ color: #b9bcfb; }}
+
+/* The floor is two lines (1.55 line-height × 2) so a one-line description
+   still pushes the price down to where the two-line cards put theirs, and
+   the row of prices reads straight across. Only a floor: a description long
+   enough to wrap further still gets the room, it just takes its card's
+   price with it. */
+.kx-plan-desc {{
+  margin: 6px 0 0 !important;
+  min-height: 3.1em;
+  font-size: .8rem !important;
+  line-height: 1.55;
+  color: var(--kx-muted) !important;
+}}
+
+.kx-plan-price {{
+  margin: 14px 0 0 !important;
+  display: flex;
+  align-items: baseline;
+  gap: 4px;
+}}
+.kx-plan-price b {{
+  font-size: 1.75rem;
+  font-weight: 700;
+  letter-spacing: -.02em;
+  color: var(--kx-text);
+}}
+.kx-plan-price span {{ font-size: .8rem; color: var(--kx-faint); }}
+.kx-plan-poa {{
+  font-size: .9rem !important;
+  font-weight: 600;
+  color: var(--kx-muted) !important;
+}}
+
+.kx-plan-yearly {{
+  margin: 3px 0 0 !important;
+  font-size: .74rem !important;
+  color: var(--kx-faint) !important;
+}}
+
+/* The feature list is the page — a customer reads it to find out what a
+   tier actually gets them — so it gets the room, and the rule above it
+   separates it from the price without a second card. */
+.kx-plan-feats {{
+  margin: 16px 0 0 !important;
+  padding: 16px 0 0 !important;
+  border-top: 1px solid var(--kx-border-soft);
+  list-style: none;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}}
+
+.kx-plan-feats li {{
+  display: flex;
+  align-items: flex-start;
+  gap: 9px;
+  margin: 0 !important;
+}}
+
+.kx-tick {{
+  flex: none;
+  width: 16px;
+  height: 16px;
+  margin-top: 1px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 50%;
+  background: var(--kx-accent-soft);
+  color: var(--kx-accent);
+  font-size: .6rem;
+  font-weight: 700;
+}}
+.dark .kx-tick {{ color: #b9bcfb; }}
+
+.kx-feat {{ display: flex; flex-direction: column; gap: 1px; min-width: 0; }}
+.kx-feat b {{ font-size: .78rem; font-weight: 600; color: var(--kx-text); }}
+/* <i> for the one-line description, restyled upright: it is the semantic
+   "different voice" tag and keeps the markup one element per row. */
+.kx-feat i {{
+  font-style: normal;
+  font-size: .72rem;
+  line-height: 1.5;
+  color: var(--kx-faint);
+}}
+
+.kx-plan-empty {{ font-size: .78rem; color: var(--kx-faint); }}
+
+.kx-pricing-foot {{
+  margin: 20px 0 0 !important;
+  max-width: 76ch;
+  font-size: .74rem !important;
+  line-height: 1.6;
+  color: var(--kx-faint) !important;
+}}
+
 /* ---------------------------------------------------------------- footer */
 #kx-footer {{
   margin-top: 22px !important;
@@ -899,7 +1094,7 @@ CSS = f"""
 /* Under ~1000px Gradio already stacks rows; make the sticky bits behave and
    let the header wrap instead of squeezing. */
 @media (max-width: 1000px) {{
-  #kx-header {{ position: static; }}
+  #kx-header {{ position: static; flex-wrap: wrap; }}
   #kx-header .kx-bar {{ align-items: flex-start; }}
   .kx-panel {{ padding: 14px !important; }}
 }}
@@ -910,8 +1105,7 @@ CSS = f"""
 }}
 
 @media (prefers-reduced-motion: reduce) {{
-  .gradio-container *,
-  .kx-dot {{
+  .gradio-container * {{
     animation-duration: .001ms !important;
     animation-iteration-count: 1 !important;
     transition-duration: .001ms !important;
@@ -968,8 +1162,9 @@ JS = """
     }
   });
 
-  // Click the output-path pill to copy it. The pod's disk is ephemeral, so
-  // this path gets typed into scp/rsync often enough to be worth a click.
+  // Click the output-path pill in the footer to copy it. The pod's disk is
+  // ephemeral, so this path gets typed into scp/rsync often enough to be
+  // worth a click.
   document.addEventListener("click", async (event) => {
     const pill = event.target.closest(".kx-path");
     if (!pill) return;
@@ -1002,32 +1197,101 @@ def _escape(text) -> str:
             .replace(">", "&gt;").replace('"', "&quot;"))
 
 
-def header_html(engines, model_count: int, gpu_count: int, output_dir) -> str:
-    """The application bar.
+def _plan_pill(plan_name) -> str:
+    """The tier this license sits on, or what to say when it names none."""
+    if not plan_name:
+        # A license can list its features directly instead of naming a
+        # tier — an ordinary case, and one worth naming rather than leaving
+        # the bar looking as though the plan failed to load.
+        return ('<span class="kx-pill" title="This licence grants its tabs '
+                'directly rather than through a plan">Custom licence</span>')
+    label = str(plan_name).strip()
+    if not label.lower().endswith(("plan", "tier")):
+        label += " plan"
+    return ('<span class="kx-pill kx-pill-accent" title="The plan this '
+            f'licence is on">{_escape(label)}</span>')
 
-    `engines` is the list of engine names this license turned on, in tab
-    order; it replaces the old "Krea 2 + Flux 2 + ..." title, which grew a
-    term every time a feature shipped. The counts and the output path are
-    the same facts the previous header's second line carried.
+
+def _expiry_pill(expires_at) -> str:
+    """"Expires 12 Aug 2026", amber inside the last week, or "" for never.
+
+    `expires_at` is a UTC datetime from licensing.expires_at() and is None
+    for a key with no end date, which renders nothing at all — a bar that
+    says "Expires never" is noise.
     """
-    chips = "".join(
-        f'<span class="kx-pill kx-pill-accent">{_escape(name)}</span>'
-        for name in engines
-    )
-    path = _escape(output_dir)
+    if expires_at is None:
+        return ""
+
+    when = f"{expires_at.day} {expires_at:%b %Y}"
+    days = (expires_at - datetime.now(timezone.utc)).days
+    if days < 0:
+        # Barely reachable: the server refuses to start an expired license
+        # and the heartbeat stops a running one within the minute. It is
+        # here so a skewed clock reads as a warning and not as a date in
+        # the future.
+        return ('<span class="kx-pill kx-pill-warn" title="The licence '
+                f'server will refuse this key">Expired {when}</span>')
+    left = {0: "today", 1: "tomorrow"}.get(days, f"in {days} days")
+    soon = " kx-pill-warn" if days <= 7 else ""
+    return (f'<span class="kx-pill{soon}" title="This licence expires '
+            f'{left}">Expires {when}</span>')
+
+
+def header_html(plan_name=None, expires_at=None) -> str:
+    """The application bar: the brand, and the state of this license.
+
+    Deliberately short on facts. The engine chips, the model and GPU counts
+    and the output path all used to live up here, and each was true but
+    ambient — a bar that carries every fact carries none of them. What is
+    left is the brand plus the two things a customer cannot read off the
+    page itself: which plan they are on and when it runs out. The counts
+    and the path moved to the footer (see footer_html), and the engine
+    chips are gone for good, because the tab strip immediately below is a
+    better list of the engines than a row of pills naming the same ones.
+
+    Both arguments come from licensing and are both routinely None — a key
+    can name no plan and can have no expiry — so neither is required and
+    neither renders a placeholder.
+
+    The way into the pricing panel sits next to this markup as a real
+    Gradio button, not as a link in here: that panel is a view of this same
+    page, so there is no URL for an <a> to point at. See ui.py.
+    """
     return f"""
 <div class="kx-bar">
   <div class="kx-brand">
     <div class="kx-logo">⚡</div>
     <div>
       <h1 class="kx-name">Krea 2</h1>
-      <p class="kx-tagline">ComfyUI generation suite · RunPod
-        · native multi-GPU placement</p>
+      <p class="kx-tagline">ComfyUI generation suite · RunPod</p>
     </div>
   </div>
   <div class="kx-stats">
-    {chips}
-    <span class="kx-pill kx-pill-live"><i class="kx-dot"></i>Live</span>
+    {_plan_pill(plan_name)}
+    {_expiry_pill(expires_at)}
+  </div>
+</div>
+"""
+
+
+def footer_html(model_count: int, gpu_count: int, output_dir) -> str:
+    """The line under the tabs: the keyboard hint and the ambient facts.
+
+    The counts and the output path were in the header until it was cut back
+    to the license (see header_html). They are worth keeping — the path in
+    particular gets typed into scp/rsync often enough to be worth a click
+    to copy — but they are reference material rather than something read on
+    every glance, so they live down here next to the other thing you look
+    up once.
+    """
+    path = _escape(output_dir)
+    return f"""
+<div class="kx-bar">
+  <div class="kx-hint">
+    <kbd>Ctrl</kbd><span>+</span><kbd>Enter</kbd>
+    <span>runs the tab you are on</span>
+  </div>
+  <div class="kx-stats">
     <span class="kx-pill"><b>{model_count}</b> model{'' if model_count == 1 else 's'}</span>
     <span class="kx-pill"><b>{gpu_count}</b> GPU{'' if gpu_count == 1 else 's'}</span>
     <span class="kx-pill kx-path" data-kx-copy="{path}"
@@ -1037,13 +1301,144 @@ def header_html(engines, model_count: int, gpu_count: int, output_dir) -> str:
 """
 
 
-FOOTER_HTML = """
-<div class="kx-bar">
-  <div class="kx-hint">
-    <kbd>Ctrl</kbd><span>+</span><kbd>Enter</kbd>
-    <span>runs the tab you are on</span>
+# --------------------------------------------------------------------------
+# Pricing page markup
+# --------------------------------------------------------------------------
+# Rendered as one HTML block rather than built from Gradio components: it is
+# a read-only card grid with nothing to submit, and a CSS grid lays that out
+# in a way a nest of gr.Row/gr.Column does not. Everything it needs arrives
+# as an argument, so this file still imports nothing but gradio and knows
+# nothing about how the catalogue was fetched.
+
+# Symbols for the currencies the catalogue is likely to quote. Anything else
+# falls back to the code itself ("42 CHF") — correct if less pretty, and
+# better than guessing a symbol for a currency we do not know.
+_SYMBOLS = {"USD": "$", "EUR": "€", "GBP": "£", "INR": "₹"}
+
+
+def _price(amount, currency: str) -> str:
+    """`19` + `USD` → `$19`. Whole numbers lose the trailing `.0`."""
+    if amount is None:
+        return ""
+    symbol = _SYMBOLS.get(currency.upper(), "")
+    figure = f"{amount:,.2f}".rstrip("0").rstrip(".")
+    return f"{symbol}{figure}" if symbol else f"{figure} {currency.upper()}"
+
+
+def _yearly_note(plan) -> str:
+    """The "or $390/year · save $78" line, or "" when there is no yearly price.
+
+    The saving is only shown when it is real: a plan priced at twelve times
+    its monthly rate gets the yearly line without a "save 0" badge after it.
+    """
+    if plan.price_yearly is None:
+        return ""
+    note = f"or {_escape(_price(plan.price_yearly, plan.currency))}/year"
+    if plan.price_monthly:
+        saved = plan.price_monthly * 12 - plan.price_yearly
+        if saved > 0:
+            note += f" · save {_escape(_price(saved, plan.currency))}"
+    return f'<p class="kx-plan-yearly">{note}</p>'
+
+
+def _plan_card(plan, catalogue, is_current: bool) -> str:
+    """One tier: what it is called, what it costs, and every tab it grants.
+
+    The feature list is the point of the page — "the services they get" —
+    so each row carries the registry's own name *and* its description
+    rather than a bare key, and the plan's order is kept as the server
+    sorted it.
+    """
+    rows = "".join(
+        f'<li><span class="kx-tick" aria-hidden="true">✓</span>'
+        f'<span class="kx-feat"><b>{_escape(info.name)}</b>'
+        + (f"<i>{_escape(info.description)}</i>" if info.description else "")
+        + "</span></li>"
+        for info in (catalogue.describe(key) for key in plan.features)
+    )
+    if not rows:
+        # A plan that grants nothing is a real (if odd) document — say so
+        # rather than render an empty card that looks like a load failure.
+        rows = ('<li class="kx-plan-empty">No tabs are included on this '
+                "plan.</li>")
+
+    badge = ('<span class="kx-plan-badge">Your plan</span>'
+             if is_current else "")
+    monthly = _price(plan.price_monthly, plan.currency)
+    price = (f'<p class="kx-plan-price"><b>{_escape(monthly)}</b>'
+             "<span>/month</span></p>") if monthly else (
+        '<p class="kx-plan-price kx-plan-poa">Price on application</p>')
+    description = (f'<p class="kx-plan-desc">{_escape(plan.description)}</p>'
+                   if plan.description else "")
+
+    return f"""
+<article class="kx-plan{' kx-plan-current' if is_current else ''}">
+  <header class="kx-plan-head">
+    <h3>{_escape(plan.name)}</h3>
+    {badge}
+  </header>
+  {description}
+  {price}
+  {_yearly_note(plan)}
+  <ul class="kx-plan-feats">{rows}</ul>
+</article>
+"""
+
+
+def pricing_html(catalogue, current_plan_id=None,
+                 current_plan_name=None) -> str:
+    """The Pricing page body.
+
+    `catalogue` is a plans.Catalogue — taken duck-typed rather than
+    imported so this module keeps depending on nothing but gradio. It is
+    read for `.plans`, `.error` and `.describe(key)`.
+
+    `current_plan_id` / `current_plan_name` come from licensing.plan() and
+    are both None whenever the licence names no plan or the server did not
+    say. That is an ordinary case, not an error: the page then simply
+    marks nothing, which is why neither is required to render.
+    """
+    if catalogue.error:
+        # .kx-note-warn, not -error: the plans could not be read, which
+        # says nothing about whether this pod is licensed. It is running,
+        # so it plainly is.
+        return f"""
+<div class="kx-pricing">
+  <div class="kx-note kx-note-warn">
+    <p><strong>The plan list is not available right now.</strong>
+       {_escape(catalogue.error)}</p>
+    <p>This does not affect the tabs you already have — they come from
+       your licence key, which was checked when this pod started.</p>
   </div>
-  <div>Krea 2 · ComfyUI on RunPod</div>
+</div>
+"""
+
+    cards = "".join(
+        _plan_card(plan, catalogue, is_current=plan.id == current_plan_id)
+        for plan in catalogue.plans
+    )
+    if current_plan_name:
+        standing = (f"You are on <strong>{_escape(current_plan_name)}</strong>."
+                    " The tabs above the fold are the ones it grants.")
+    else:
+        # Either the licence lists its features directly (a one-off deal
+        # that fits no tier) or the server did not send a plan. Both mean
+        # the same thing to a reader: match the tabs you have to the list.
+        standing = ("Your licence grants its tabs directly rather than "
+                    "through a plan, so none is marked as yours below.")
+
+    return f"""
+<div class="kx-pricing">
+  <header class="kx-pricing-head">
+    <h2>Plans</h2>
+    <p>Every plan runs this same app on your own pod — what changes is which
+       tabs it builds and which weights it downloads. {standing}</p>
+  </header>
+  <div class="kx-plan-grid">{cards}</div>
+  <p class="kx-pricing-foot">Prices are per licence key. How many pods one
+     key may run at once is a property of the key, not of the plan, so it is
+     not listed here — check the seat count you were issued. To change plan,
+     contact your supplier with your licence key.</p>
 </div>
 """
 

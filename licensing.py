@@ -9,6 +9,14 @@ this customer has paid for. They are read here and handed to features.py
 by app.py; this module deliberately knows nothing about what any feature
 key means, so adding a tab never touches it.
 
+It carries the plan those entitlements were resolved from too (see
+plan()), which the app bar and the Pricing page use to say which tier the
+customer is on, and the key's expiry date (see expires_at()), which the
+app bar shows next to it. Both are labels and nothing else: the tabs come
+from the flat `features` array, never from the plan name, and expiry is
+enforced by the server — it refuses the acquire and stops answering the
+heartbeat — never by that date being read here.
+
 Seats are leases, not a counter: the server only counts a session while
 its last heartbeat is recent, so an instance that dies without releasing
 (SIGKILL, an OOM kill, a hard pod terminate, a network drop at teardown)
@@ -34,6 +42,7 @@ import time
 import urllib.error
 import urllib.request
 import uuid
+from datetime import datetime, timezone
 
 from config import (
     LICENSE_API_URL,
@@ -62,6 +71,21 @@ _released = threading.Event()
 # says nothing and features.py should fall back to its own defaults. Set
 # once, from the acquire response — see entitlements().
 _entitlements = None
+# The plan the license sits on, as (id, name); either may be None. Also
+# from the acquire response, and **display only** — the Pricing page marks
+# the current tier with it. What the license actually grants is always the
+# resolved `features` array above, which the server has already flattened
+# out of the plan. Reading a tab's availability off this instead would put
+# the tiering rules back in the client, which is the thing that indirection
+# exists to avoid.
+_plan_id = None
+_plan_name = None
+# When this license stops working, as a UTC datetime, or None for a key
+# with no end date. Display only for the same reason as the plan above:
+# the server checks it on every acquire and every heartbeat, so nothing
+# here has to — and a client clock that is wrong must not be able to lock
+# a customer out of a key that is perfectly valid.
+_expires_at = None
 # The last changed value the heartbeat has already complained about, so a
 # customer editing a license mid-run is told once rather than every minute.
 # Its own sentinel rather than None, which already means "the license
@@ -137,6 +161,29 @@ def _clean_features(value) -> list[str] | None:
             if isinstance(item, str) and item.strip()]
 
 
+def _clean_expiry(value) -> datetime | None:
+    """The server's `expires_at` as a UTC datetime, or None for "no end".
+
+    Every unusable answer lands on None: a key that never expires sends
+    null, and a server too old to send the field sends nothing at all.
+    Both are ordinary, and so is a value that does not parse — the app bar
+    then shows no expiry, which is the same thing it shows for a perpetual
+    key and strictly better than a wrong date.
+    """
+    if not isinstance(value, str) or not value.strip():
+        return None
+    try:
+        # fromisoformat takes what Mongo serialises ("...T00:00:00.000Z")
+        # once the Z is spelled as an offset.
+        parsed = datetime.fromisoformat(value.strip().replace("Z", "+00:00"))
+    except ValueError:
+        log.debug("Could not read the license expiry %r", value)
+        return None
+    if parsed.tzinfo is None:
+        return parsed.replace(tzinfo=timezone.utc)
+    return parsed.astimezone(timezone.utc)
+
+
 def entitlements() -> list[str] | None:
     """Feature keys this license grants, or None to use the app defaults.
 
@@ -144,6 +191,28 @@ def entitlements() -> list[str] | None:
     the result straight to features.resolve().
     """
     return _entitlements
+
+
+def plan() -> tuple[str | None, str | None]:
+    """The (id, name) of the plan this license is on. Display only.
+
+    Both are None for a license that lists its features directly instead
+    of naming a plan, and against a server too old to send them — so a
+    caller must treat "unknown" as a normal answer and simply mark
+    nothing, never as a reason to withhold the page.
+    """
+    return _plan_id, _plan_name
+
+
+def expires_at() -> datetime | None:
+    """When this license expires (UTC), or None when it never does.
+
+    Display only — see plan() and _expires_at. None is a normal answer in
+    three different ways (a perpetual key, a server that does not send the
+    field, a date that did not parse), so a caller shows nothing rather
+    than treating it as missing information.
+    """
+    return _expires_at
 
 
 def _fail(message: str, code: int) -> None:
@@ -163,6 +232,7 @@ def acquire_or_exit() -> None:
     ~90 GB of downloads.
     """
     global _instance_id, _heartbeat_seconds, _entitlements
+    global _plan_id, _plan_name, _expires_at
 
     if not LICENSE_KEY:
         _fail(
@@ -199,10 +269,15 @@ def acquire_or_exit() -> None:
         if status == 200 and body.get("ok"):
             _heartbeat_seconds = int(body.get("heartbeat_seconds", 60)) or 60
             _entitlements = _clean_features(body.get("features"))
+            _plan_id = body.get("plan_id") or None
+            _plan_name = body.get("plan_name") or None
+            _expires_at = _clean_expiry(body.get("expires_at"))
             log.info(
-                "License OK — %s, seat %d of %d",
+                "License OK — %s%s, seat %d of %d, expires %s",
                 body.get("license_name") or "licensed",
+                f" on {_plan_name}" if _plan_name else "",
                 body.get("seats_in_use", 1), body.get("seats", 1),
+                _expires_at.date() if _expires_at else "never",
             )
             _start_heartbeat()
             _install_exit_hooks()
