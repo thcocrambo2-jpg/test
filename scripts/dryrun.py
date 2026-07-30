@@ -123,12 +123,16 @@ def main() -> None:
 
     # Imported last, and only now: ui.py builds its gr.Blocks at import
     # time, so this line is where the tabs are decided.
+    import theme
     import ui
 
     log.info("Starting Gradio on http://127.0.0.1:%d ...", args.port)
+    # theme.launch_kwargs() is what the real launch_ui() passes too, so what
+    # you see here is what a customer sees — the point of the script.
     ui.ui.launch(
         server_name="127.0.0.1", server_port=args.port, share=args.share,
         show_error=True, ssr_mode=False, allowed_paths=[str(OUTPUT_DIR)],
+        **theme.launch_kwargs(),
     )
 
 

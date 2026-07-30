@@ -11,6 +11,12 @@ are never registered on Gradio's HTTP API either. Written for Gradio 6
 (theme/css now belong to launch(), gr.File hands the handler a plain file
 path).
 
+The look of all of it lives in theme.py: the palette and Gradio theme
+tokens, the CSS, the application header and the two bits of page JS. This
+module only names things — `elem_classes="kx-..."` on a column, a status
+box or a heading is a hook theme.CSS styles; none of them affect what a
+control does, so a tab keeps working with the stylesheet stripped out.
+
 Some hosts' networks break Gradio's *.gradio.live share tunnel (the link
 504s even though the app is healthy), so after launching we probe the
 share URL from inside the pod and, if it does not answer, start a
@@ -34,6 +40,7 @@ import requests
 from PIL import Image, ImageChops, ImageFilter
 
 import features
+import theme
 from client import ComfyUIError, client, model_signature, wan_client
 from comfy import GPU_COUNT, ensure_alive as comfy_ensure_alive
 from config import (
@@ -420,7 +427,7 @@ def generate_flux(prompt, seed, randomize, steps, guidance, resolution,
         yield images, status, base_seed
 
 
-# ── Klein Edit (DesiMuseAI FLUX.2 Klein 9B graph) ────────────────────────────
+# ── Klein Edit (Klein advanced FLUX.2 Klein 9B graph) ────────────────────────────
 # Self-contained like the V2 tab: its own model, encoder, LoRA folder and
 # defaults, all from the source workflow. Nothing here reads DEFAULTS,
 # MODEL_CHOICES or the Flux constants, so tuning another tab never moves it.
@@ -491,7 +498,7 @@ def generate_klein_edit(image, use_image2, image2, prompt, seed, randomize,
                         model, steps, cfg, guidance, sampler, scheduler,
                         reference_mp, output_mode, output_mp, custom_width,
                         custom_height, batch_count, *lora_slots):
-    """Klein Edit tab: the DesiMuseAI FLUX.2 Klein 9B editing graph.
+    """Klein Edit tab: the Klein FLUX.2 Klein 9B editing graph.
 
     One or two source images are attached to the conditioning as reference
     latents, so the prompt describes the change rather than the whole
@@ -554,7 +561,7 @@ def refresh_klein_lora_choices():
     return [gr.Dropdown(choices=choices) for _ in range(len(KLEIN_LORA_SLOTS))]
 
 
-# ── Krea 2 V2 (DesiMuseAI graph) ─────────────────────────────────────────────
+# ── Krea 2 V2 (Krea2 advanced graph) ─────────────────────────────────────────────
 # This tab is deliberately self-contained: its own model, VAE, LoRA stack,
 # sampler and defaults, all taken from the source workflow. Nothing here
 # reads DEFAULTS, MODEL_CHOICES or LORA_CHOICES, so tuning the Single tab
@@ -632,7 +639,7 @@ def generate_v2(prompt, negative, seed, randomize, model, aspect, megapixels,
                 variance_model_type, variance_schedule, cutoff_step,
                 total_steps, cutoff_strength, shift_strength, sharpen,
                 film_grain, batch_count, *lora_slots):
-    """Krea 2 V2 tab: the DesiMuseAI turbo/raw text-to-image graph."""
+    """Krea 2 V2 tab: the Krea2 advanced turbo/raw text-to-image graph."""
     ready, message = v2_status()
     if not ready:
         yield [], message, 0
@@ -690,7 +697,8 @@ def _v2_lora_stack():
     gr.Markdown(
         "### 🎭 LoRA stack — model + CLIP\n"
         "The workflow's stack, in its original order, strengths and on/off "
-        "states. Each strength applies to the model *and* the text encoder."
+        "states. Each strength applies to the model *and* the text encoder.",
+        elem_classes="kx-section",
     )
     cbs, dds, ws = [], [], []
     for index, (on, name, strength) in enumerate(V2_LORA_SLOTS):
@@ -1243,7 +1251,8 @@ def _model_selector():
     """
     dropdown = gr.Dropdown(choices=MODEL_CHOICES, value=MODEL_CHOICES[0],
                            label="Model")
-    info = gr.Markdown(_model_info_text(resolve_model_entry(None)))
+    info = gr.Markdown(_model_info_text(resolve_model_entry(None)),
+                       elem_classes="kx-meta")
     return dropdown, info
 
 
@@ -1299,7 +1308,7 @@ def _lora_stack():
     Must be called inside a gr.Blocks context. Returns (dropdowns, weights)
     in slot order; the rescan button refreshes its own tab's dropdowns.
     """
-    gr.Markdown("### 🎭 LoRA stack")
+    gr.Markdown("### 🎭 LoRA stack", elem_classes="kx-section")
     dds, ws = _lora_rows(_default_lora_slots(), LORA_CHOICES)
     gr.Button("🔄 Rescan LoRA folder", size="sm").click(
         fn=refresh_lora_choices, outputs=dds)
@@ -1308,7 +1317,8 @@ def _lora_stack():
 
 def _flux_lora_stack():
     """The same stack for Flux, which has its own folder and choices."""
-    gr.Markdown("### 🎭 Flux LoRA stack (`loras/flux2/`)")
+    gr.Markdown("### 🎭 Flux LoRA stack (`loras/flux2/`)",
+                elem_classes="kx-section")
     dds, ws = _lora_rows([("None", 0.8)] * MAX_LORA_SLOTS, FLUX_LORA_CHOICES)
     gr.Button("🔄 Rescan Flux LoRA folder", size="sm").click(
         fn=refresh_flux_lora_choices, outputs=dds)
@@ -1326,7 +1336,8 @@ def _klein_lora_stack():
     gr.Markdown(
         f"### 🎭 LoRA stack — model + CLIP (`loras/{KLEIN_LORA_SUBDIR}/`)\n"
         "The workflow's stack, in its original order, strengths and on/off "
-        "states. Each strength applies to the model *and* the text encoder."
+        "states. Each strength applies to the model *and* the text encoder.",
+        elem_classes="kx-section",
     )
     cbs, dds, ws = [], [], []
     for index, (on, name, strength) in enumerate(KLEIN_LORA_SLOTS):
@@ -1347,22 +1358,72 @@ def _klein_lora_stack():
     return cbs, dds, ws
 
 
+# Generation engines, in tab order, for the header's chips. Only the ones
+# this license turned on are listed — the same question the tabs below ask,
+# asked once for the header (the old title concatenated these by hand).
+_ENGINE_NAMES = (
+    ("krea_t2i", "Krea 2"),
+    ("krea_v2_t2i", "Krea 2 V2"),
+    ("flux_t2i", "Flux 2"),
+    ("klein_i2i", "Klein Edit"),
+    ("wan_i2v", "Wan 2.2 Video"),
+)
+
+
+def _enabled_engines() -> list[str]:
+    """Display names of the enabled generation engines, in tab order."""
+    return [name for key, name in _ENGINE_NAMES if features.enabled(key)]
+
+
+def _tab_intro(text: str):
+    """A tab's opening paragraph, as a callout rather than loose body copy.
+
+    Purely presentational: same markdown, rendered inside a bordered note
+    so it reads as guidance and not as a control. The status lines the tabs
+    append to their intro already speak in symbols — ❌ for "this tab cannot
+    run", ⚠️ for "it can, but something is missing" — so the note takes its
+    colour from whichever is present instead of leaving both to read as
+    ordinary body copy.
+    """
+    classes = ["kx-note"]
+    if "❌" in text:
+        classes.append("kx-note-error")
+    elif "⚠️" in text:
+        classes.append("kx-note-warn")
+    return gr.Markdown(text, elem_classes=classes)
+
+
+def _cta(label: str):
+    """A tab's primary action button — Generate, Edit, Swap face, ...
+
+    One per tab, styled as the one thing on the screen worth clicking.
+    kx-cta also keeps it pinned to the bottom of the viewport while its
+    control column is on screen, which matters because several of those
+    columns are two screens tall with the LoRA stack open.
+    """
+    return gr.Button(label, variant="primary", size="lg",
+                     elem_classes="kx-cta")
+
+
+def _status_box():
+    """The read-only status line every generation tab reports through."""
+    return gr.Textbox(label="Status", interactive=False,
+                      elem_classes="kx-status")
+
+
 with gr.Blocks(title="Krea 2 on RunPod") as ui:
-    gr.Markdown(
-        "# ⚡ Krea 2"
-        + (" + Flux 2" if features.enabled("flux_t2i") else "")
-        + (" + Klein Edit" if features.enabled("klein_i2i") else "")
-        + (" + Wan 2.2 Video" if features.enabled("wan_i2v") else "")
-        + " — ComfyUI on RunPod\n"
-        f"{len(MODEL_CHOICES)} Krea model(s) · {GPU_COUNT} GPU(s) detected · "
-        f"native ComfyUI multi-GPU placement · "
-        f"outputs saved to `{OUTPUT_DIR}`"
+    gr.HTML(
+        theme.header_html(
+            engines=_enabled_engines(), model_count=len(MODEL_CHOICES),
+            gpu_count=GPU_COUNT, output_dir=OUTPUT_DIR,
+        ),
+        elem_id="kx-header", container=False, padding=False,
     )
     with gr.Tabs():
         if features.enabled("krea_t2i"):
             with gr.Tab("Single / Simple Batch"):
                 with gr.Row():
-                    with gr.Column(scale=2):
+                    with gr.Column(scale=2, elem_classes="kx-panel"):
                         prompt_box = gr.Textbox(
                             label="Prompt", lines=5,
                             value="A photorealistic golden-hour portrait, natural "
@@ -1400,12 +1461,10 @@ with gr.Blocks(title="Krea 2 on RunPod") as ui:
                                 1, 20, value=1, step=1, label="Batch count"
                             )
                         lora_dds, lora_ws = _lora_stack()
-                        generate_btn = gr.Button(
-                            "🚀 Generate", variant="primary", size="lg"
-                        )
-                    with gr.Column(scale=3):
+                        generate_btn = _cta("🚀 Generate")
+                    with gr.Column(scale=3, elem_classes="kx-panel-out"):
                         gallery = gr.Gallery(label="Output", columns=2, height=600)
-                        status_box = gr.Textbox(label="Status", interactive=False)
+                        status_box = _status_box()
                         seed_out = gr.Number(
                             label="Base seed used", interactive=False, precision=0
                         )
@@ -1422,8 +1481,8 @@ with gr.Blocks(title="Krea 2 on RunPod") as ui:
         if features.enabled("krea_v2_t2i"):
             with gr.Tab("🔶 Krea 2 V2"):
                 _v2_message = v2_status()[1]
-                gr.Markdown(
-                    "The **DesiMuseAI KREA 2 TURBO/RAW** graph, reproduced "
+                _tab_intro(
+                    "The **KREA 2 TURBO/RAW** graph, reproduced "
                     "as-is: the mxfp8 or raw Krea 2 model with the Wan 2.1 "
                     "VAE, an 11-LoRA model+CLIP stack, RES4LYF's "
                     "**ClownsharKSampler** (`linear/euler` + `bong_tangent`, "
@@ -1435,7 +1494,7 @@ with gr.Blocks(title="Krea 2 on RunPod") as ui:
                     f"{_v2_message}"
                 )
                 with gr.Row():
-                    with gr.Column(scale=2):
+                    with gr.Column(scale=2, elem_classes="kx-panel"):
                         v2_prompt = gr.Textbox(
                             label="Positive Prompt", lines=6,
                             placeholder="The source workflow ships this box "
@@ -1450,9 +1509,11 @@ with gr.Blocks(title="Krea 2 on RunPod") as ui:
                             value=V2_MODEL_CHOICES[0], label="Model",
                         )
                         v2_model_info = gr.Markdown(
-                            _v2_model_info_text(v2_resolve_model(None))
+                            _v2_model_info_text(v2_resolve_model(None)),
+                            elem_classes="kx-meta",
                         )
-                        gr.Markdown("### 📐 Resolution")
+                        gr.Markdown("### 📐 Resolution",
+                                    elem_classes="kx-section")
                         with gr.Row():
                             v2_aspect = gr.Dropdown(
                                 choices=list(V2_ASPECT_RATIOS),
@@ -1466,10 +1527,13 @@ with gr.Blocks(title="Krea 2 on RunPod") as ui:
                                 8, 64, value=V2_DEFAULT_MULTIPLE, step=8,
                                 label="Multiple of",
                             )
-                        v2_size_info = gr.Markdown(_v2_size_text(
-                            V2_DEFAULT_ASPECT, V2_DEFAULT_MEGAPIXELS,
-                            V2_DEFAULT_MULTIPLE,
-                        ))
+                        v2_size_info = gr.Markdown(
+                            _v2_size_text(
+                                V2_DEFAULT_ASPECT, V2_DEFAULT_MEGAPIXELS,
+                                V2_DEFAULT_MULTIPLE,
+                            ),
+                            elem_classes="kx-meta",
+                        )
                         for _control in (v2_aspect, v2_megapixels, v2_multiple):
                             _control.change(
                                 fn=v2_size_preview,
@@ -1485,14 +1549,11 @@ with gr.Blocks(title="Krea 2 on RunPod") as ui:
                             v2_batch = gr.Slider(1, 20, value=1, step=1,
                                                  label="Batch count")
                         v2_cbs, v2_dds, v2_ws = _v2_lora_stack()
-                        v2_generate_btn = gr.Button(
-                            "🚀 Generate", variant="primary", size="lg"
-                        )
-                    with gr.Column(scale=3):
+                        v2_generate_btn = _cta("🚀 Generate")
+                    with gr.Column(scale=3, elem_classes="kx-panel-out"):
                         v2_gallery = gr.Gallery(label="Output", columns=2,
                                                 height=600)
-                        v2_status_box = gr.Textbox(label="Status",
-                                                   interactive=False)
+                        v2_status_box = _status_box()
                         v2_seed_out = gr.Number(label="Base seed used",
                                                 interactive=False, precision=0)
                         with gr.Accordion("⚙️ ClownsharKSampler", open=True):
@@ -1520,7 +1581,8 @@ with gr.Blocks(title="Krea 2 on RunPod") as ui:
                                 "RES4LYF builds its sampler/scheduler lists at "
                                 "load time, so both accept free text — the "
                                 "listed values are the workflow's plus the "
-                                "node's own defaults."
+                                "node's own defaults.",
+                                elem_classes="kx-fine",
                             )
                             with gr.Row():
                                 v2_eta = gr.Slider(
@@ -1545,7 +1607,8 @@ with gr.Blocks(title="Krea 2 on RunPod") as ui:
                         with gr.Accordion("🌱 Smart Seed Variance", open=False):
                             gr.Markdown(
                                 "Perturbs the positive conditioning per seed, "
-                                "so a batch varies without drifting off-prompt."
+                                "so a batch varies without drifting off-prompt.",
+                                elem_classes="kx-fine",
                             )
                             with gr.Row():
                                 v2_variance_preset = gr.Dropdown(
@@ -1595,7 +1658,8 @@ with gr.Blocks(title="Krea 2 on RunPod") as ui:
                                 "Both are **bypassed in the source workflow**, "
                                 "so both start off and the tab reproduces it "
                                 "exactly as shipped. Sharpen runs first, then "
-                                "grain."
+                                "grain.",
+                                elem_classes="kx-fine",
                             )
                             v2_sharpen = gr.Checkbox(
                                 label="Sharpen (radius 1, sigma 0.35, alpha 1)",
@@ -1633,7 +1697,7 @@ with gr.Blocks(title="Krea 2 on RunPod") as ui:
 
         if features.enabled("krea_edit"):
             with gr.Tab("✨ Edit (Instruction)"):
-                gr.Markdown(
+                _tab_intro(
                     "Upload an image and **describe the change** — no painting "
                     "needed. The Identity Edit LoRA lets the model see the "
                     "source image, so it can recolor, add or replace objects, "
@@ -1646,7 +1710,7 @@ with gr.Blocks(title="Krea 2 on RunPod") as ui:
                        "refuse to run until then.")
                 )
                 with gr.Row():
-                    with gr.Column(scale=2):
+                    with gr.Column(scale=2, elem_classes="kx-panel"):
                         edit_image = gr.Image(
                             label="Source image (paste with Ctrl+V)", type="pil",
                             sources=["upload", "clipboard"],
@@ -1694,10 +1758,10 @@ with gr.Blocks(title="Krea 2 on RunPod") as ui:
                                 1, 20, value=1, step=1, label="Batch count"
                             )
                         edit_lora_dds, edit_lora_ws = _lora_stack()
-                        edit_btn = gr.Button("✨ Edit", variant="primary", size="lg")
-                    with gr.Column(scale=3):
+                        edit_btn = _cta("✨ Edit")
+                    with gr.Column(scale=3, elem_classes="kx-panel-out"):
                         edit_gallery = gr.Gallery(label="Output", columns=2, height=600)
-                        edit_status = gr.Textbox(label="Status", interactive=False)
+                        edit_status = _status_box()
                         edit_seed_out = gr.Number(
                             label="Base seed used", interactive=False, precision=0
                         )
@@ -1713,7 +1777,7 @@ with gr.Blocks(title="Krea 2 on RunPod") as ui:
 
         if features.enabled("krea_inpaint"):
             with gr.Tab("Inpaint / Img2Img"):
-                gr.Markdown(
+                _tab_intro(
                     "Upload an image, **paint over the region to replace**, and "
                     "describe what should appear there — unpainted pixels are "
                     "kept from the original. Paint **nothing** to re-imagine the "
@@ -1721,7 +1785,7 @@ with gr.Blocks(title="Krea 2 on RunPod") as ui:
                     "(≈0.5–0.8) to control how much of the original survives."
                 )
                 with gr.Row():
-                    with gr.Column(scale=2):
+                    with gr.Column(scale=2, elem_classes="kx-panel"):
                         inpaint_editor = gr.ImageEditor(
                             label="Image — paint the region to replace "
                                   "(paste with Ctrl+V)",
@@ -1789,16 +1853,12 @@ with gr.Blocks(title="Krea 2 on RunPod") as ui:
                                 1, 20, value=1, step=1, label="Batch count"
                             )
                         inpaint_lora_dds, inpaint_lora_ws = _lora_stack()
-                        inpaint_btn = gr.Button(
-                            "🖌️ Inpaint", variant="primary", size="lg"
-                        )
-                    with gr.Column(scale=3):
+                        inpaint_btn = _cta("🖌️ Inpaint")
+                    with gr.Column(scale=3, elem_classes="kx-panel-out"):
                         inpaint_gallery = gr.Gallery(
                             label="Output", columns=2, height=600
                         )
-                        inpaint_status = gr.Textbox(
-                            label="Status", interactive=False
-                        )
+                        inpaint_status = _status_box()
                         inpaint_seed_out = gr.Number(
                             label="Base seed used", interactive=False, precision=0
                         )
@@ -1817,7 +1877,7 @@ with gr.Blocks(title="Krea 2 on RunPod") as ui:
         if features.enabled("faceswap"):
             with gr.Tab("🎭 Face Swap (ReActor)"):
                 _swap_ready, _swap_problem = reactor_status()
-                gr.Markdown(
+                _tab_intro(
                     "Take one of your generated images, upload a **reference "
                     "face**, and ReActor replaces the face in place. This is "
                     "not a diffusion pass: no Krea 2 model is loaded, the "
@@ -1835,7 +1895,7 @@ with gr.Blocks(title="Krea 2 on RunPod") as ui:
                     + ("" if _swap_ready else f"\n\n⚠️ {_swap_problem[2:]}")
                 )
                 with gr.Row():
-                    with gr.Column(scale=2):
+                    with gr.Column(scale=2, elem_classes="kx-panel"):
                         swap_base = gr.Image(
                             label="Base image — the face here gets replaced "
                                   "(paste with Ctrl+V)",
@@ -1882,16 +1942,12 @@ with gr.Blocks(title="Krea 2 on RunPod") as ui:
                                 value="0", label="Face index in reference",
                                 info="Left to right. Also accepts 0,1 or 0-2",
                             )
-                        swap_btn = gr.Button(
-                            "🎭 Swap face", variant="primary", size="lg"
-                        )
-                    with gr.Column(scale=3):
+                        swap_btn = _cta("🎭 Swap face")
+                    with gr.Column(scale=3, elem_classes="kx-panel-out"):
                         swap_gallery = gr.Gallery(
                             label="Swapped output", columns=1, height=600
                         )
-                        swap_status = gr.Textbox(
-                            label="Status", interactive=False
-                        )
+                        swap_status = _status_box()
                 swap_btn.click(
                     fn=generate_faceswap,
                     inputs=[swap_base, swap_face, swap_model_dd,
@@ -1904,7 +1960,7 @@ with gr.Blocks(title="Krea 2 on RunPod") as ui:
 
         if features.enabled("flux_t2i"):
             with gr.Tab("🌊 Flux 2"):
-                gr.Markdown(
+                _tab_intro(
                     "Text-to-image with **Flux 2 Dev** (32B). The model is "
                     "guidance-distilled: there is no CFG or negative prompt "
                     "— **Guidance** steers prompt adherence instead "
@@ -1920,7 +1976,7 @@ with gr.Blocks(title="Krea 2 on RunPod") as ui:
                             "this tab will refuse to run until then.")
                 )
                 with gr.Row():
-                    with gr.Column(scale=2):
+                    with gr.Column(scale=2, elem_classes="kx-panel"):
                         flux_prompt = gr.Textbox(
                             label="Prompt", lines=5,
                             value="A photorealistic golden-hour portrait, "
@@ -1932,7 +1988,8 @@ with gr.Blocks(title="Krea 2 on RunPod") as ui:
                             value=FLUX_MODEL_CHOICES[0], label="Model",
                         )
                         flux_model_info = gr.Markdown(
-                            _flux_model_info_text(resolve_flux_model(None))
+                            _flux_model_info_text(resolve_flux_model(None)),
+                            elem_classes="kx-meta",
                         )
                         with gr.Row():
                             flux_steps = gr.Slider(
@@ -1968,16 +2025,12 @@ with gr.Blocks(title="Krea 2 on RunPod") as ui:
                                 1, 20, value=1, step=1, label="Batch count"
                             )
                         flux_lora_dds, flux_lora_ws = _flux_lora_stack()
-                        flux_btn = gr.Button(
-                            "🌊 Generate", variant="primary", size="lg"
-                        )
-                    with gr.Column(scale=3):
+                        flux_btn = _cta("🌊 Generate")
+                    with gr.Column(scale=3, elem_classes="kx-panel-out"):
                         flux_gallery = gr.Gallery(
                             label="Output", columns=2, height=600
                         )
-                        flux_status = gr.Textbox(
-                            label="Status", interactive=False
-                        )
+                        flux_status = _status_box()
                         flux_seed_out = gr.Number(
                             label="Base seed used", interactive=False,
                             precision=0,
@@ -1994,8 +2047,8 @@ with gr.Blocks(title="Krea 2 on RunPod") as ui:
 
         if features.enabled("klein_i2i"):
             with gr.Tab("🧩 Klein Edit"):
-                gr.Markdown(
-                    "The **DesiMuseAI FLUX.2 Klein 9B Edit** graph, "
+                _tab_intro(
+                    "The **FLUX.2 Klein 9B Edit** graph, "
                     "reproduced as-is. Upload an image and describe the "
                     "change — the source is scaled to "
                     f"{KLEIN_REFERENCE_MEGAPIXELS:g} MP, encoded and attached "
@@ -2008,7 +2061,7 @@ with gr.Blocks(title="Krea 2 on RunPod") as ui:
                     f"{klein_status()[1]}"
                 )
                 with gr.Row():
-                    with gr.Column(scale=2):
+                    with gr.Column(scale=2, elem_classes="kx-panel"):
                         klein_image = gr.Image(
                             label="Input image 1 (paste with Ctrl+V)",
                             type="pil", sources=["upload", "clipboard"],
@@ -2037,7 +2090,8 @@ with gr.Blocks(title="Krea 2 on RunPod") as ui:
                             value=KLEIN_MODEL_CHOICES[0], label="Model",
                         )
                         klein_model_info = gr.Markdown(
-                            _klein_model_info_text(klein_resolve_model(None))
+                            _klein_model_info_text(klein_resolve_model(None)),
+                            elem_classes="kx-meta",
                         )
                         with gr.Row():
                             klein_steps = gr.Slider(
@@ -2071,7 +2125,8 @@ with gr.Blocks(title="Krea 2 on RunPod") as ui:
                             step=0.05,
                             label="Reference size (MP) — what the model looks at",
                         )
-                        gr.Markdown("#### 🖼️ Output resolution")
+                        gr.Markdown("#### 🖼️ Output resolution",
+                                    elem_classes="kx-section")
                         klein_output_mode = gr.Dropdown(
                             choices=KLEIN_OUTPUT_MODES, value=KLEIN_OUTPUT_SAME,
                             label="Mode",
@@ -2092,7 +2147,8 @@ with gr.Blocks(title="Krea 2 on RunPod") as ui:
                                 precision=0,
                             )
                         klein_size_out = gr.Markdown(
-                            "→ upload image 1 to see the output size."
+                            "→ upload image 1 to see the output size.",
+                            elem_classes="kx-meta",
                         )
                         _klein_size_inputs = [klein_image, klein_output_mode,
                                               klein_output_mp, klein_custom_w,
@@ -2114,16 +2170,12 @@ with gr.Blocks(title="Krea 2 on RunPod") as ui:
                                 1, 20, value=1, step=1, label="Batch count"
                             )
                         klein_cbs, klein_dds, klein_ws = _klein_lora_stack()
-                        klein_btn = gr.Button(
-                            "🧩 Edit", variant="primary", size="lg"
-                        )
-                    with gr.Column(scale=3):
+                        klein_btn = _cta("🧩 Edit")
+                    with gr.Column(scale=3, elem_classes="kx-panel-out"):
                         klein_gallery = gr.Gallery(
                             label="Output", columns=2, height=600
                         )
-                        klein_status_box = gr.Textbox(
-                            label="Status", interactive=False
-                        )
+                        klein_status_box = _status_box()
                         klein_seed_out = gr.Number(
                             label="Base seed used", interactive=False,
                             precision=0,
@@ -2149,7 +2201,7 @@ with gr.Blocks(title="Krea 2 on RunPod") as ui:
                                      "Raw (20 steps)"]
                 _wan_model_choices = ["14B two-expert (best quality, 16 fps)",
                                       "5B TI2V (lighter, 24 fps)"]
-                gr.Markdown(
+                _tab_intro(
                     "Upload an image and **describe the motion** — Wan 2.2 "
                     "animates it into a clip of up to 5 s. The **14B** "
                     "two-expert model gives the best quality at 16 fps: "
@@ -2172,7 +2224,7 @@ with gr.Blocks(title="Krea 2 on RunPod") as ui:
                        "will refuse to run until then.")
                 )
                 with gr.Row():
-                    with gr.Column(scale=2):
+                    with gr.Column(scale=2, elem_classes="kx-panel"):
                         wan_image = gr.Image(
                             label="Start image (paste with Ctrl+V)",
                             type="pil", sources=["upload", "clipboard"],
@@ -2235,19 +2287,15 @@ with gr.Blocks(title="Krea 2 on RunPod") as ui:
                             wan_batch = gr.Slider(
                                 1, 10, value=1, step=1, label="Batch count"
                             )
-                        wan_btn = gr.Button(
-                            "🎬 Generate video", variant="primary", size="lg"
-                        )
-                    with gr.Column(scale=3):
+                        wan_btn = _cta("🎬 Generate video")
+                    with gr.Column(scale=3, elem_classes="kx-panel-out"):
                         wan_video_out = gr.Video(
                             label="Latest video", autoplay=True
                         )
                         wan_files_out = gr.Files(
                             label="All videos from this run", interactive=False
                         )
-                        wan_status = gr.Textbox(
-                            label="Status", interactive=False
-                        )
+                        wan_status = _status_box()
                         wan_seed_out = gr.Number(
                             label="Base seed used", interactive=False,
                             precision=0,
@@ -2275,7 +2323,7 @@ with gr.Blocks(title="Krea 2 on RunPod") as ui:
 
         if features.enabled("json_batch"):
             with gr.Tab("JSON Advanced Batch"):
-                gr.Markdown(
+                _tab_intro(
                     "Submit a list of jobs, e.g.\n"
                     '```json\n'
                     '[{"prompt": "a cat", "steps": 8, "resolution": "1216x832",\n'
@@ -2288,19 +2336,17 @@ with gr.Blocks(title="Krea 2 on RunPod") as ui:
                     "write the full prompt you want)."
                 )
                 with gr.Row():
-                    with gr.Column(scale=2):
+                    with gr.Column(scale=2, elem_classes="kx-panel"):
                         json_file_in = gr.File(label="Upload JSON file", type="filepath")
                         json_text_in = gr.Textbox(
                             label="…or paste a JSON array here", lines=14
                         )
-                        json_btn = gr.Button(
-                            "🚀 Run JSON batch", variant="primary", size="lg"
-                        )
-                    with gr.Column(scale=3):
+                        json_btn = _cta("🚀 Run JSON batch")
+                    with gr.Column(scale=3, elem_classes="kx-panel-out"):
                         json_gallery = gr.Gallery(
                             label="Batch output", columns=2, height=600
                         )
-                        json_status = gr.Textbox(label="Status", interactive=False)
+                        json_status = _status_box()
                 json_btn.click(
                     fn=generate_from_json,
                     inputs=[json_file_in, json_text_in],
@@ -2316,7 +2362,8 @@ with gr.Blocks(title="Krea 2 on RunPod") as ui:
                         "📦 Zip all for download", size="sm"
                     )
                 gallery_info = gr.Markdown(
-                    f"{len(list_output_images())} file(s) in `{OUTPUT_DIR}`"
+                    f"{len(list_output_images())} file(s) in `{OUTPUT_DIR}`",
+                    elem_classes="kx-meta",
                 )
                 all_gallery = gr.Gallery(
                     label="All generated images & videos (newest first)",
@@ -2331,6 +2378,11 @@ with gr.Blocks(title="Krea 2 on RunPod") as ui:
                 gallery_zip_btn.click(
                     fn=zip_outputs, outputs=[gallery_zip_file, gallery_info]
                 )
+
+    # Outside the Tabs: one line under every tab, carrying the Ctrl+Enter
+    # hint (theme.JS binds it) — a shortcut nobody would find otherwise.
+    gr.HTML(theme.FOOTER_HTML, elem_id="kx-footer", container=False,
+            padding=False)
 
 
 def _probe_url(url: str, deadline_s: int = 45) -> bool:
@@ -2389,6 +2441,7 @@ def launch_ui() -> None:
         # OUTPUT_DIR is outside the cwd, so Gradio needs it whitelisted to
         # serve gallery images (on Kaggle the cwd contained the output dir).
         allowed_paths=[str(OUTPUT_DIR)],
+        **theme.launch_kwargs(),
     )
     tunnel_proc, public_url = None, share_url
     if share_url and _probe_url(share_url):

@@ -194,13 +194,46 @@ error in the log points at a custom node instead.
 - `downloads.py` — HF / CivitAI model + LoRA downloads (resume + retries)
 - `comfy.py` — GPU detection + ComfyUI server start/wait (1–2 instances)
 - `workflow.py` — Krea 2 workflow builders, text-to-image + inpainting + instruction edit (ComfyUI API format)
-- `workflow_krea2_v2.py` — Krea 2 V2 builder (the DesiMuseAI turbo/raw graph)
-- `workflow_klein.py` — Flux 2 Klein 9B edit builder (the DesiMuseAI Klein Edit graph)
+- `workflow_krea2_v2.py` — Krea 2 V2 builder (the Krea2 advanced turbo/raw graph)
+- `workflow_klein.py` — Flux 2 Klein 9B edit builder (the Klein advanced Klein Edit graph)
 - `workflow_wan.py` — Wan 2.2 image-to-video workflow builder (two-expert A14B)
 - `workflow_reactor.py` — ReActor face-swap workflow builder + availability checks
 - `client.py` — ComfyUI HTTP/websocket client (queue, progress, image upload)
 - `ui.py` — Gradio UI (single/batch, edit, inpaint, face swap, flux, klein edit, video, JSON batch, gallery tabs) and launch logic
+- `theme.py` — the UI's look: Gradio theme tokens, CSS, application header, page JS (see below)
 - `build.sh` — compiles the app into a single distributable binary (see below)
+
+### UI theme
+
+`theme.py` owns everything visual and `ui.py` owns behaviour, so the two can
+be worked on independently. `theme.launch_kwargs()` returns the
+`theme`/`css`/`head`/`js` arguments for `launch()` — Gradio 6 takes them
+there rather than on `gr.Blocks` — and both callers use it, so
+`scripts/dryrun.py` shows exactly what a customer sees.
+
+Colours are set as Gradio theme tokens, each with its `*_dark` counterpart,
+and the CSS only refers to them through `var(--...)`. That means light and
+dark come from one palette and cannot drift apart. `ui.py` contributes
+nothing but `elem_classes="kx-…"` hooks (`kx-panel`, `kx-note`, `kx-cta`,
+`kx-section`, `kx-meta`, `kx-status`, `kx-fine`) — no control's behaviour
+depends on the stylesheet, and the app still works with it stripped out.
+
+Beyond the palette the UI adds:
+
+| | |
+|---|---|
+| Sticky application header | brand, the engines this license granted, model/GPU counts, and the output path (click it to copy) |
+| Segmented tab bar | Gradio's own overflow menu still handles tabs that do not fit |
+| One control card per tab | Gradio's per-field frames are flattened, so a 30-control tab reads as one form instead of thirty boxes |
+| Sticky primary action | Generate / Edit / Swap stays reachable in columns that run past two screens |
+| Tab intro callouts | `_tab_intro()` tints the note amber on a ⚠️ (something is missing) and red on a ❌ (the tab cannot run) |
+| `Ctrl`/`Cmd` + `Enter` | runs the tab you are looking at; the footer says so |
+
+Two Gradio internals are worth knowing about if a future Gradio changes the
+look: the tab bar is styled through `.tab-container > button`, and Gradio
+sets `overflow: hidden` on `.gradio-container`, which the CSS relaxes to
+`clip` because otherwise nothing can be `position: sticky`. Both are in the
+`GRADIO INTERNALS` section at the bottom of `theme.py`.
 
 ## Shipping a binary (Nuitka)
 
@@ -378,9 +411,9 @@ The artifact is a **Linux** binary — it will not run on Windows; downloading i
 only for redistribution. Whoever receives it needs `chmod +x krea2app` first,
 since the executable bit does not survive most transfers.
 
-## Krea 2 V2 (DesiMuseAI graph)
+## Krea 2 V2 (Krea2 advanced graph)
 
-The **🔶 Krea 2 V2** tab is the DesiMuseAI *KREA 2 TURBO/RAW* workflow ported
+The **🔶 Krea 2 V2** tab is the Krea2 advanced *KREA 2 TURBO/RAW* workflow ported
 node-for-node into this app. It is a second text-to-image pipeline rather than
 a variation of the first: its own model registry, its own VAE
 (`wan21-vae.safetensors` from `wangkanai/wan21-vae`, which that workflow's
@@ -676,9 +709,9 @@ VRAM note: at ~35 GB the fp8 model wants nearly the whole A40 — run Flux
 alternating Flux and Krea jobs (the two model sets cannot stay resident
 together).
 
-## Klein Edit (DesiMuseAI FLUX.2 Klein 9B graph)
+## Klein Edit (Klein advanced FLUX.2 Klein 9B graph)
 
-The **🧩 Klein Edit** tab is the DesiMuseAI *FLUX.2 KLEIN 9B EDIT v1.3*
+The **🧩 Klein Edit** tab is the Klein *FLUX.2 KLEIN 9B EDIT v1.3*
 workflow ported node-for-node into this app. It **edits** images rather
 than generating them: upload a picture, describe the change, and the
 source is scaled to 1 MP, VAE-encoded and attached to the conditioning as

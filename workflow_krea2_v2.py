@@ -1,4 +1,4 @@
-"""Krea 2 V2 workflow builder — the DesiMuseAI TURBO/RAW graph.
+"""Krea 2 V2 workflow builder.
 
 A node-for-node port of that workflow into ComfyUI API format. It is kept
 apart from workflow.py because almost nothing about it is shared: its own

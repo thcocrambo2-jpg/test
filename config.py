@@ -7,7 +7,7 @@ LoRA lists and (optional) access tokens. In section order:
     Disk layout         BASE_DIR and everything under it, ComfyUI's port
     Model selection     Krea 2 base models, encoder, LoRAs — the
                         Single / Edit / Inpaint tabs
-    Krea 2 V2           the DesiMuseAI pipeline, self-contained
+    Krea 2 V2           the Krea2 advanced pipeline, self-contained
     Wan 2.2             image-to-video (+ the parallel-instance knobs)
     Flux 2              text-to-image
     Klein Edit          Flux 2 Klein 9B image editing, self-contained
@@ -182,8 +182,8 @@ HF_LORA_FILES = [
     # "loras/krea2_vintagetarot.safetensors",
 ]
 
-# ── Krea 2 V2 (DesiMuseAI turbo/raw text-to-image) ────────────────────────────
-# A second, self-contained text-to-image pipeline: the DesiMuseAI
+# ── Krea 2 V2 (Krea2 advanced turbo/raw text-to-image) ────────────────────────────
+# A second, self-contained text-to-image pipeline: the Krea2 advanced
 # "KREA 2 TURBO/RAW" workflow, reproduced node-for-node in its own tab. It
 # deliberately shares nothing with the tabs above except the text encoder —
 # its own UNet quant, its own VAE, its own LoRA stack and its own defaults,
@@ -530,7 +530,7 @@ FLUX_CIVITAI_LORAS = [
 ]
 
 # ── Flux 2 Klein 9B Edit ──────────────────────────────────────────────────────
-# The Klein Edit tab is the DesiMuseAI "FLUX.2 KLEIN 9B EDIT v1.3" workflow
+# The Klein Edit tab is the Klein i2i "FLUX.2 KLEIN 9B EDIT v1.3" workflow
 # ported node-for-node (workflow_klein.py). It edits images rather than
 # generating them: one or two sources are VAE-encoded and attached to the
 # conditioning as ReferenceLatents, so the model works from what it is shown

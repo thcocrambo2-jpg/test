@@ -1,4 +1,4 @@
-"""Flux 2 Klein 9B Edit workflow builder — the DesiMuseAI v1.3 graph.
+"""Flux 2 Klein 9B Edit workflow builder.
 
 A node-for-node port of that workflow into ComfyUI API format. Every node
 it executes is stock ComfyUI, so unlike the Krea 2 V2 tab this one installs
