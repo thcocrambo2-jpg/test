@@ -49,7 +49,7 @@ def main() -> None:
     # below asks features.enabled() at call time rather than holding a
     # constant from import, which is what lets an answer that only exists
     # now reach modules that were imported before it.
-    features.resolve(licensing.entitlements())
+    features.resolve(licensing.entitlements(), licensing.feature_labels())
     log.info("Features — %s", features.summary())
 
     # Where weights will come from. Worth saying out loud: when the mirror
@@ -92,7 +92,7 @@ def main() -> None:
 
     # A second instance is only worth its VRAM reservation when there is a
     # Video tab to serve — KREA2_WAN_PARALLEL on its own no longer buys one.
-    wan_parallel = WAN_PARALLEL and features.enabled("wan_i2v")
+    wan_parallel = WAN_PARALLEL and features.enabled(features.Key.WAN_I2V)
     main_args = (
         ("--reserve-vram", str(KREA_RESERVE_VRAM_GB)) if wan_parallel else ()
     )
@@ -109,12 +109,12 @@ def main() -> None:
     # Custom nodes register at ComfyUI startup, and a failed import is only
     # reported in comfyui.log — surface it here instead of letting the
     # first face swap fail with a bare "node not found".
-    if features.enabled("faceswap"):
+    if features.enabled(features.Key.FACESWAP):
         comfy.verify_custom_node(
             "ReActorFaceSwap", REACTOR_NODES_DIR,
             COMFY_DIR / "custom_nodes" / REACTOR_NODES_DIR,
         )
-    if features.enabled("krea_v2_t2i"):
+    if features.enabled(features.Key.KREA_V2_T2I):
         # Same reasoning for the Krea 2 V2 packs — two of these nodes have
         # no core equivalent, so a silent import failure would only show up
         # as "node not found" on the first generation.

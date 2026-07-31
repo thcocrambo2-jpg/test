@@ -25,7 +25,11 @@
 
 import { randomBytes } from "node:crypto";
 import { collections, ensureIndexes } from "../src/db.js";
-import { FEATURE_KEYS, parseFeatureArg } from "../src/features.js";
+import {
+  featureOrder,
+  invalidateFeatures,
+  parseFeatureArg,
+} from "../src/features.js";
 import { invalidatePlans, resolveEntitlement } from "../src/plans.js";
 
 function args(argv) {
@@ -65,6 +69,12 @@ const opts = args(process.argv.slice(2));
 const { licenses, plans } = await collections();
 await ensureIndexes();
 invalidatePlans(); // a long-lived shell should not print a stale plan
+invalidateFeatures();
+
+// Validated against the collection, not this build's seed list, so a
+// feature added in Atlas can be granted the same day. An un-seeded
+// database falls back to the seed registry — see allFeatures.
+const knownFeatures = await featureOrder();
 
 if (opts.revoke || opts.enable) {
   if (!opts.key) die("--revoke/--enable needs --key KREA2-...");
@@ -89,7 +99,7 @@ if (!opts.name && !opts.key) {
     "",
     `plans:    ${known.map((p) => p._id).join(", ") ||
       "(none — run: npm run seed-catalog)"}`,
-    `features: ${FEATURE_KEYS.join(", ")}`,
+    `features: ${knownFeatures.join(", ")}`,
   );
 }
 
@@ -125,7 +135,7 @@ if (opts.plan !== undefined) {
 }
 
 function parseOrDie(raw, flag) {
-  const parsed = parseFeatureArg(raw);
+  const parsed = parseFeatureArg(raw, knownFeatures);
   if (parsed.error) die(`${flag}: ${parsed.error}`);
   return parsed.features;
 }

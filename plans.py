@@ -58,12 +58,16 @@ class Plan:
 
 @dataclass(frozen=True)
 class FeatureInfo:
-    """What a feature key is called in prose, from the server's registry.
+    """What a feature key is called in prose, from the server's catalogue.
 
-    The server serves this from its code registry rather than its Mongo
-    copy, so it can never describe a tab in terms that deployment does not
-    know. Keys the app has and the server does not are handled by the
-    caller — see `Catalogue.describe`.
+    Served from the licence server's features collection, which is the
+    source of truth for naming — so a tab reworded in Atlas reads that way
+    on this page without anything being rebuilt. The same collection names
+    the app's tabs, via `feature_info` on the acquire response; this is
+    the prose half of it (`name`), not the terse tab label.
+
+    Keys the server does not describe are handled by the caller — see
+    `Catalogue.describe`.
     """
 
     key: str

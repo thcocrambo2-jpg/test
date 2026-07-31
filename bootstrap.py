@@ -182,7 +182,7 @@ def install_custom_nodes() -> None:
     Only the Edit tab uses those two nodes, so this is skipped entirely
     when that feature is off — it used to run unconditionally.
     """
-    if not features.enabled("krea_edit"):
+    if not features.enabled(features.Key.KREA_EDIT):
         return
     dest = COMFY_DIR / "custom_nodes" / "comfyui-krea2edit"
     if dest.exists():
@@ -204,7 +204,7 @@ def install_v2_nodes() -> None:
     missing and every other tab untouched — the same contract install_reactor
     follows. app.py verifies afterwards that each class actually registered.
     """
-    if not features.enabled("krea_v2_t2i"):
+    if not features.enabled(features.Key.KREA_V2_T2I):
         return
     for dirname, repo, _class_type in V2_NODE_REPOS:
         dest = COMFY_DIR / "custom_nodes" / dirname
@@ -335,7 +335,7 @@ def install_reactor() -> None:
     it is absent from its requirements.txt. So nothing here needs a C++
     toolchain: every dependency installs as a wheel.
     """
-    if not features.enabled("faceswap"):
+    if not features.enabled(features.Key.FACESWAP):
         return
     dest = COMFY_DIR / "custom_nodes" / REACTOR_NODES_DIR
     if dest.exists():
@@ -389,7 +389,7 @@ def install_reactor() -> None:
 def link_model_dirs() -> None:
     """Point ComfyUI's model folders at MODELS_DIR via symlinks."""
     names = MODEL_DIRS + (REACTOR_MODEL_DIRS
-                          if features.enabled("faceswap") else ())
+                          if features.enabled(features.Key.FACESWAP) else ())
     for name in names:
         src = MODELS_DIR / name
         src.mkdir(parents=True, exist_ok=True)

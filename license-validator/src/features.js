@@ -9,13 +9,27 @@
 //   features: []                                   nothing (a dead key)
 //   field absent / null                            fall through to plan_id
 //
+// ── The database is the source of truth ────────────────────────────────
+//
+// The `features` collection is what the API serves — names, descriptions,
+// categories and tab labels all come from allFeatures() below, the same
+// way plans do. Renaming a tab is therefore an edit in Atlas, not a
+// redeploy, which is the whole point: the two things a customer reads
+// (the pricing page and the tab strip) are now editable in the place the
+// prices already are.
+//
+// FEATURES below is seed data and a fallback, in that order. seed-catalog
+// writes it into the collection, and allFeatures() serves it verbatim if
+// the collection is empty — a deployment that has never been seeded then
+// still answers with sane names instead of blanking every tab title.
+//
 // ── Keys are permanent, names are not ──────────────────────────────────
 //
 // `key` is written into license documents and compiled into every binary
 // that has shipped. Renaming one silently drops that tab for anyone on an
 // older build — the client logs "unknown feature, ignoring" and carries on
-// without it. `name`, `description` and `category` are display-only and
-// safe to reword at any time; that is where naming should be fixed.
+// without it. `name`, `description`, `category` and `tab_label` are
+// display-only and safe to reword at any time, in Atlas or here.
 //
 // There is deliberately no alias map for renamed keys. The one rename this
 // catalogue has had happened before any key was issued, so nothing needed
@@ -23,88 +37,107 @@
 // whoever reads it next. If a key ever has to change after launch, the
 // honest fix is to reissue the affected licenses.
 //
-// This registry mirrors the one in the app's features.py. That file is the
-// source of truth for what a key *means* (which weights it downloads, which
-// tab it builds); this one exists so issue-key and seed-catalog can reject
-// a typo at the moment it is made rather than shipping a customer a key
-// with a tab silently missing.
+// `name` vs `tab_label`: the pricing page wants prose that says what a tab
+// is ("Krea Inpaint — Img2Img"), the tab strip wants something short enough
+// to sit in a row of ten ("Inpaint / Img2Img"). They were separate strings
+// in separate repos before this collection existed; keeping both fields
+// means unifying the source without flattening the two registers into one
+// awkward compromise. tab_label is optional — the client falls back to
+// `name`, then to its own built-in label.
 //
-// Deliberately used at issue time only — never to filter what /v1/acquire
-// returns. The two deploy separately, so an app that ships a new tab before
-// this list is updated must still be able to grant it.
+// Still never used to filter what /v1/acquire returns. The app and this
+// service deploy separately, so a license granting a tab that shipped
+// before this catalogue knew about it must still be able to grant it.
+
+import { collections } from "./db.js";
+
+// Same TTL and the same globalThis trick as plans.js, for the same reason:
+// warm serverless invocations reuse module scope, cold ones do not, so a
+// cold start pays one small query and everything after it pays nothing.
+// An edit in Atlas reaches running instances within this window.
+const FEATURE_TTL_MS = 60_000;
+
+let cache = globalThis.__krea2Features;
+if (!cache) cache = globalThis.__krea2Features = { at: 0, byKey: null };
 
 export const FEATURES = [
   {
     key: "krea_t2i",
-    name: "Single / Simple Batch",
-    description: "Text-to-image generation with Krea 2",
+    name: "Krea2",
+    tab_label: "🎨 Krea2",
+    description: "Create images from text prompts",
     category: "generation",
     sort_order: 10,
   },
   {
     key: "krea_v2_t2i",
-    name: "Krea 2 V2",
-    description: "Advanced Krea 2 V2 pipeline (Turbo / Raw)",
+    name: "Krea2 V2",
+    tab_label: "🔶 Krea2 V2",
+    description: "Better quality and more control over your generations",
     category: "generation",
     sort_order: 20,
   },
   {
     key: "gallery",
     name: "Gallery",
+    tab_label: "🖼️ Gallery",
     description: "View and download everything you have generated",
     category: "tools",
     sort_order: 30,
   },
   {
     key: "krea_edit",
-    name: "Krea Edit — Instruction",
-    description:
-      "Edit an image by describing the change, using Krea 2 " +
-      "(no mask painting)",
+    name: "Krea2 Edit",
+    tab_label: "✨ Krea2 Edit",
+    description: "Change any image just by describing what you want",
     category: "editing",
     sort_order: 40,
   },
   {
     key: "krea_inpaint",
-    name: "Krea Inpaint — Img2Img",
-    description: "Mask-based inpainting and image-to-image with Krea 2",
+    name: "Krea2 Inpaint",
+    tab_label: "🖌️ Krea2 Inpaint",
+    description: "Edit only specific parts of an image",
     category: "editing",
     sort_order: 50,
   },
   {
     key: "faceswap",
-    name: "Face Swap (ReActor)",
-    description: "Fast face swapping using ReActor",
+    name: "Face Swap",
+    tab_label: "🎭 Face Swap",
+    description: "Easily replace faces in any image",
     category: "editing",
     sort_order: 60,
   },
   {
     key: "flux_t2i",
-    name: "Flux 2 — Text to Image",
-    description: "Text-to-image generation with Flux 2 Dev (32B)",
+    name: "Flux2D",
+    tab_label: "🌊 Flux2D",
+    description: "Create high-quality images with Flux 2 Dev",
     category: "generation",
     sort_order: 70,
   },
   {
     key: "klein_i2i",
-    name: "Klein Edit — Image to Image",
-    description:
-      "Image-to-image editing with FLUX.2 Klein 9B, and combining two " +
-      "source images",
+    name: "Klein Edit",
+    tab_label: "🧩 Klein Edit",
+    description: "Edit images or combine two images together",
     category: "editing",
     sort_order: 80,
   },
   {
     key: "wan_i2v",
-    name: "Wan 2.2 Video",
-    description: "Image-to-video generation with Wan 2.2",
+    name: "Wan Video",
+    tab_label: "🎬 Wan Video",
+    description: "Turn your images into short videos",
     category: "video",
     sort_order: 90,
   },
   {
     key: "json_batch",
-    name: "JSON Advanced Batch",
-    description: "Advanced batch generation driven by a pasted JSON graph",
+    name: "Krea2 Batch",
+    tab_label: "📦 Krea2 Batch",
+    description: "Generate many images at once using advanced controls",
     category: "tools",
     sort_order: 100,
   },
@@ -112,21 +145,59 @@ export const FEATURES = [
 
 export const FEATURE_KEYS = FEATURES.map((feature) => feature.key);
 
-const RANK = new Map(FEATURE_KEYS.map((key, index) => [key, index]));
+/**
+ * Every feature, by key, in sort_order — from Mongo, cached like plans.
+ *
+ * Falls back to the seed registry when the collection is empty, which is
+ * the un-seeded deployment: serving nothing there would blank every tab
+ * title and every line of the pricing page, and "we forgot to run
+ * seed-catalog" should not look to a customer like a broken product.
+ *
+ * A collection with rows in it is trusted completely, including rows this
+ * build has never heard of. That is what "the database is the source of
+ * truth" costs and buys: a tab can be renamed, or a new one described,
+ * without shipping anything.
+ */
+export async function allFeatures() {
+  if (cache.byKey && Date.now() - cache.at < FEATURE_TTL_MS) return cache.byKey;
+  const { features } = await collections();
+  const rows = await features.find({}).sort({ sort_order: 1 }).toArray();
+  cache.byKey = rows.length
+    ? new Map(rows.map((row) => [row._id, { ...row, key: row._id }]))
+    : new Map(FEATURES.map((feature) => [feature.key, feature]));
+  cache.at = Date.now();
+  return cache.byKey;
+}
+
+/** Drop the cache, so the next read hits Mongo. For scripts and tests. */
+export function invalidateFeatures() {
+  cache.byKey = null;
+  cache.at = 0;
+}
+
+/** Feature keys in catalogue order — what sortByRegistry ranks against. */
+export async function featureOrder() {
+  return [...(await allFeatures()).keys()];
+}
 
 /**
- * Registry order, with anything unrecognised kept and pushed to the end.
+ * Catalogue order, with anything unrecognised kept and pushed to the end.
  *
  * Sorting rather than filtering is the point: an unknown key is either a
- * tab this list has not caught up with or one the app has retired, and
+ * tab the catalogue has not caught up with or one the app has retired, and
  * neither is this service's call to make. It only decides the order two
  * equivalent entitlements are written in, so they compare equal by eye in
  * the admin listing.
+ *
+ * `order` defaults to the seed registry so the synchronous callers (the
+ * issue-key CLI) keep working without a database round trip; the request
+ * path passes featureOrder() so the ordering follows Atlas too.
  */
-export function sortByRegistry(keys) {
+export function sortByRegistry(keys, order = FEATURE_KEYS) {
+  const rank = new Map(order.map((key, index) => [key, index]));
   return [...keys].sort((a, b) => {
-    const ra = RANK.has(a) ? RANK.get(a) : RANK.size;
-    const rb = RANK.has(b) ? RANK.get(b) : RANK.size;
+    const ra = rank.has(a) ? rank.get(a) : rank.size;
+    const rb = rank.has(b) ? rank.get(b) : rank.size;
     return ra === rb ? a.localeCompare(b) : ra - rb;
   });
 }
@@ -161,19 +232,19 @@ export function normalizeFeatures(value) {
 }
 
 /** Apply one CLI token to the accumulating list. Returns an error, or null. */
-function applyToken(token, out) {
+function applyToken(token, out, known) {
   if (token === "all") {
-    for (const key of FEATURE_KEYS) if (!out.includes(key)) out.push(key);
+    for (const key of known) if (!out.includes(key)) out.push(key);
     return null;
   }
   if (token === "none") {
     out.length = 0;
     return null;
   }
-  if (!FEATURE_KEYS.includes(token)) {
+  if (!known.includes(token)) {
     return (
       `unknown feature ${JSON.stringify(token)}. ` +
-      `Known features: ${FEATURE_KEYS.join(", ")}`
+      `Known features: ${known.join(", ")}`
     );
   }
   if (!out.includes(token)) out.push(token);
@@ -187,9 +258,14 @@ function applyToken(token, out) {
  * license document is always an explicit list and reading one never
  * requires knowing what "all" meant on the day it was issued.
  *
+ * `known` is the catalogue to validate against — issue-key passes the keys
+ * from Mongo, so a feature added in Atlas can be granted the same day
+ * rather than waiting for this file to catch up. It defaults to the seed
+ * registry for any caller that has no database handle.
+ *
  * Returns { features } or { error }.
  */
-export function parseFeatureArg(raw) {
+export function parseFeatureArg(raw, known = FEATURE_KEYS) {
   if (raw === true || raw === undefined) {
     return { error: '--features needs a value, e.g. --features "wan,flux"' };
   }
@@ -197,8 +273,8 @@ export function parseFeatureArg(raw) {
 
   const out = [];
   for (const token of tokens) {
-    const error = applyToken(token, out);
+    const error = applyToken(token, out, known);
     if (error) return { error };
   }
-  return { features: sortByRegistry(out) };
+  return { features: sortByRegistry(out, known) };
 }

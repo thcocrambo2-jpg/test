@@ -23,7 +23,7 @@ import express from "express";
 import cors from "cors";
 
 import { collections } from "./db.js";
-import { FEATURES } from "./features.js";
+import { allFeatures } from "./features.js";
 import { allPlans, resolveEntitlement } from "./plans.js";
 import {
   STALE_SECONDS,
@@ -128,6 +128,13 @@ const countLive = (sessions, license_key) =>
 // ignores the date (an older build does) is no less bounded by it. Sending
 // null for a perpetual key is deliberate: the client renders no date, and
 // "no expiry" is exactly what it should show.
+//
+// `feature_info` is what the client titles its tabs from, and is a sibling
+// of `features` rather than a richer replacement for it on purpose: the
+// entitlement stays a flat array of keys, so a build that predates this
+// field ignores it and behaves exactly as it did. Only the granted keys
+// are sent — the whole catalogue is /v1/plans' job, and this rides every
+// heartbeat, so it is kept to the few short strings the tab strip needs.
 async function seatPayload(license, inUse) {
   const entitlement = await resolveEntitlement(license);
   return {
@@ -136,12 +143,50 @@ async function seatPayload(license, inUse) {
     seats: license.seats,
     seats_in_use: inUse,
     features: entitlement.features,
+    feature_info: await grantedInfo(entitlement.features),
     plan_id: entitlement.plan_id,
     plan_name: entitlement.plan_name,
     expires_at: license.expires_at || null,
     heartbeat_seconds: HEARTBEAT_SECONDS,
     stale_seconds: STALE_SECONDS,
   };
+}
+
+/**
+ * Display strings for the granted keys, by key. Null when `features` is.
+ *
+ * A key the catalogue does not describe is simply left out rather than
+ * given an invented name: the client already turns a bare key into a
+ * readable label, and it is the side that knows what its own tab is
+ * called. Sending a guess from here would override a correct built-in
+ * label with a worse one.
+ *
+ * Never throws. This is the one field on the payload that is purely
+ * cosmetic, and it is the only reason acquire touches the features
+ * collection at all — letting a read failure here 503 a seat request that
+ * is otherwise perfectly good would trade a working pod for a tab title.
+ * The client falls back to its built-in labels on an absent field, which
+ * is exactly the older-server case it already handles.
+ */
+async function grantedInfo(features) {
+  if (!features) return null;
+  let catalogue;
+  try {
+    catalogue = await allFeatures();
+  } catch (err) {
+    console.error("feature catalogue unavailable, sending no labels:", err);
+    return null;
+  }
+  const out = {};
+  for (const key of features) {
+    const row = catalogue.get(key);
+    if (!row) continue;
+    out[key] = {
+      name: row.name || null,
+      tab_label: row.tab_label || null,
+    };
+  }
+  return out;
 }
 
 // ── Acquire ─────────────────────────────────────────────────────────────
@@ -298,16 +343,22 @@ app.post(
 // and nothing here is a secret. Only `is_public` plans are listed, so
 // `admin` and any tier being trialled stay out of it.
 //
-// The feature metadata comes from the code registry rather than the
-// features collection. Both exist — seed-catalog writes the registry into
-// Mongo so it can be read alongside the plans by anything that talks to
-// the database directly — but the registry is the source of truth, and
-// serving it from there means a pricing page can never describe a tab in
-// terms this deployment does not actually know.
+// The feature metadata comes from the features collection, the same place
+// the plans come from — so renaming a tab or rewording what it does is an
+// edit in Atlas, not a redeploy. seed-catalog puts the shipped catalogue
+// there; after that the collection wins, and src/features.js is seed data
+// and the un-seeded fallback (see allFeatures).
+//
+// The cost of that is real and worth naming: a feature row added here by
+// hand will be described on the pricing page whether or not any deployed
+// build has the tab. Nothing breaks — a plan granting a key the app does
+// not know is already ignored with a warning on the client — but the page
+// is only as accurate as the collection, which is the trade taken when the
+// database became the source of truth.
 app.get(
   "/v1/plans",
   wrap(async (_req, res) => {
-    const plans = await allPlans();
+    const [plans, features] = await Promise.all([allPlans(), allFeatures()]);
     res.json({
       ok: true,
       plans: [...plans.values()]
@@ -322,10 +373,22 @@ app.get(
           features: plan.features || [],
           sort_order: plan.sort_order ?? 0,
         })),
-      features: FEATURES,
+      features: [...features.values()].map(featureWire),
     });
   }),
 );
+
+/** One catalogue row as the clients read it — `key`, never Mongo's `_id`. */
+function featureWire(row) {
+  return {
+    key: row.key || row._id,
+    name: row.name || null,
+    tab_label: row.tab_label || null,
+    description: row.description || "",
+    category: row.category || "",
+    sort_order: row.sort_order ?? 0,
+  };
+}
 
 // ── Ops ─────────────────────────────────────────────────────────────────
 
@@ -428,14 +491,18 @@ app.get(
   requireAdmin,
   wrap(async (_req, res) => {
     const { licenses } = await collections();
-    const plans = await allPlans();
+    const [plans, features] = await Promise.all([allPlans(), allFeatures()]);
     const rows = await Promise.all(
       [...plans.values()].map(async (plan) => ({
         ...plan,
         licenses: await licenses.countDocuments({ plan_id: plan._id }),
       })),
     );
-    res.json({ ok: true, plans: rows, features: FEATURES });
+    res.json({
+      ok: true,
+      plans: rows,
+      features: [...features.values()].map(featureWire),
+    });
   }),
 );
 

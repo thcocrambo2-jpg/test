@@ -13,10 +13,12 @@
 // the document would 503 every one of those customers at their next
 // heartbeat. Retiring a plan means moving its licenses off it first.
 //
-// One direction worth being clear about: after seeding, the *collection*
-// is what /v1/acquire reads, so a price or a feature list can be changed
-// in Atlas without a redeploy. That also means a hand edit in Atlas is
-// reverted by the next seed run unless DEFAULT_PLANS is updated to match.
+// One direction worth being clear about: after seeding, the *collections*
+// are what the API reads — plans for prices and entitlements, features for
+// the names on the pricing page and the labels on the app's tabs — so all
+// of it can be changed in Atlas without a redeploy. That also means a hand
+// edit in Atlas is reverted by the next seed run unless DEFAULT_PLANS and
+// FEATURES are updated to match.
 
 import { collections, ensureIndexes } from "../src/db.js";
 import { FEATURES, FEATURE_KEYS } from "../src/features.js";
@@ -75,7 +77,9 @@ async function upsertAll(collection, docs, label) {
 
 // Features carry their key as _id so the collection reads the same way the
 // plans do, and so a plan's features array is a list of foreign keys you
-// can follow by eye in Atlas.
+// can follow by eye in Atlas. This collection is served, not just stored:
+// `name` is what the pricing page shows and `tab_label` is what the app
+// titles the tab with, so a typo here is a typo a customer reads.
 await upsertAll(
   features,
   FEATURES.map(({ key, ...rest }) => ({ _id: key, ...rest })),

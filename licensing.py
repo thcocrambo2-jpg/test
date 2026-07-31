@@ -71,6 +71,11 @@ _released = threading.Event()
 # says nothing and features.py should fall back to its own defaults. Set
 # once, from the acquire response — see entitlements().
 _entitlements = None
+# Tab titles for those keys, by key, from the server's features
+# collection — display only, and empty against a server too old to send
+# them. features.label_for() falls back to the built-in labels, so an
+# empty dict here is an ordinary answer and not a missing one.
+_feature_labels: dict[str, str] = {}
 # The plan the license sits on, as (id, name); either may be None. Also
 # from the acquire response, and **display only** — the Pricing page marks
 # the current tier with it. What the license actually grants is always the
@@ -161,6 +166,37 @@ def _clean_features(value) -> list[str] | None:
             if isinstance(item, str) and item.strip()]
 
 
+def _clean_feature_info(value) -> dict[str, str]:
+    """The server's `feature_info` as {key: tab title}.
+
+    Every unusable shape collapses to an empty dict, which is the same
+    thing an older server sends by sending nothing — features.label_for()
+    then uses the built-in labels and the tabs are named as they were
+    before this field existed. A label that is missing or blank for one
+    key drops just that key for the same reason.
+
+    `tab_label` before `name`: the catalogue carries both because the tab
+    strip wants something short ("Inpaint / Img2Img") where the pricing
+    page wants prose ("Krea Inpaint — Img2Img"). Taking `name` when
+    `tab_label` is unset is what lets a new feature row be described once
+    and still title its tab sensibly.
+    """
+    if not isinstance(value, dict):
+        return {}
+    out: dict[str, str] = {}
+    for key, info in value.items():
+        if not isinstance(key, str) or not key.strip():
+            continue
+        if not isinstance(info, dict):
+            continue
+        for field in ("tab_label", "name"):
+            label = info.get(field)
+            if isinstance(label, str) and label.strip():
+                out[key.strip()] = label.strip()
+                break
+    return out
+
+
 def _clean_expiry(value) -> datetime | None:
     """The server's `expires_at` as a UTC datetime, or None for "no end".
 
@@ -191,6 +227,17 @@ def entitlements() -> list[str] | None:
     the result straight to features.resolve().
     """
     return _entitlements
+
+
+def feature_labels() -> dict[str, str]:
+    """Tab titles for the granted features, by key. Display only.
+
+    Empty is an ordinary answer — a dry run, or a server that does not
+    send them — and features.label_for() handles it by falling back to the
+    registry. app.py passes this to features.resolve() alongside
+    entitlements().
+    """
+    return dict(_feature_labels)
 
 
 def plan() -> tuple[str | None, str | None]:
@@ -231,7 +278,7 @@ def acquire_or_exit() -> None:
     a customer who cannot take a seat should be told in seconds, not after
     ~90 GB of downloads.
     """
-    global _instance_id, _heartbeat_seconds, _entitlements
+    global _instance_id, _heartbeat_seconds, _entitlements, _feature_labels
     global _plan_id, _plan_name, _expires_at
 
     if not LICENSE_KEY:
@@ -269,6 +316,7 @@ def acquire_or_exit() -> None:
         if status == 200 and body.get("ok"):
             _heartbeat_seconds = int(body.get("heartbeat_seconds", 60)) or 60
             _entitlements = _clean_features(body.get("features"))
+            _feature_labels = _clean_feature_info(body.get("feature_info"))
             _plan_id = body.get("plan_id") or None
             _plan_name = body.get("plan_name") or None
             _expires_at = _clean_expiry(body.get("expires_at"))

@@ -1467,8 +1467,8 @@ with gr.Blocks(title="Krea 2 on RunPod") as ui:
                                      elem_classes="kx-navbtn", scale=0)
 
     with gr.Tabs() as main_tabs:
-        if features.enabled("krea_t2i"):
-            with gr.Tab("Single / Simple Batch"):
+        if features.enabled(features.Key.KREA_T2I):
+            with gr.Tab(features.label_for(features.Key.KREA_T2I)):
                 with gr.Row():
                     with gr.Column(scale=2, elem_classes="kx-panel"):
                         prompt_box = gr.Textbox(
@@ -1525,8 +1525,8 @@ with gr.Blocks(title="Krea 2 on RunPod") as ui:
                     concurrency_id="comfy",
                 )
 
-        if features.enabled("krea_v2_t2i"):
-            with gr.Tab("🔶 Krea 2 V2"):
+        if features.enabled(features.Key.KREA_V2_T2I):
+            with gr.Tab(features.label_for(features.Key.KREA_V2_T2I)):
                 _v2_message = v2_status()[1]
                 _tab_intro(
                     "The **KREA 2 TURBO/RAW** graph, reproduced "
@@ -1742,8 +1742,8 @@ with gr.Blocks(title="Krea 2 on RunPod") as ui:
                     concurrency_id="comfy",
                 )
 
-        if features.enabled("krea_edit"):
-            with gr.Tab("✨ Edit (Instruction)"):
+        if features.enabled(features.Key.KREA_EDIT):
+            with gr.Tab(features.label_for(features.Key.KREA_EDIT)):
                 _tab_intro(
                     "Upload an image and **describe the change** — no painting "
                     "needed. The Identity Edit LoRA lets the model see the "
@@ -1822,8 +1822,8 @@ with gr.Blocks(title="Krea 2 on RunPod") as ui:
                     concurrency_id="comfy",
                 )
 
-        if features.enabled("krea_inpaint"):
-            with gr.Tab("Inpaint / Img2Img"):
+        if features.enabled(features.Key.KREA_INPAINT):
+            with gr.Tab(features.label_for(features.Key.KREA_INPAINT)):
                 _tab_intro(
                     "Upload an image, **paint over the region to replace**, and "
                     "describe what should appear there — unpainted pixels are "
@@ -1921,8 +1921,8 @@ with gr.Blocks(title="Krea 2 on RunPod") as ui:
                     concurrency_id="comfy",
                 )
 
-        if features.enabled("faceswap"):
-            with gr.Tab("🎭 Face Swap (ReActor)"):
+        if features.enabled(features.Key.FACESWAP):
+            with gr.Tab(features.label_for(features.Key.FACESWAP)):
                 _swap_ready, _swap_problem = reactor_status()
                 _tab_intro(
                     "Take one of your generated images, upload a **reference "
@@ -2005,8 +2005,8 @@ with gr.Blocks(title="Krea 2 on RunPod") as ui:
                     concurrency_id="comfy",
                 )
 
-        if features.enabled("flux_t2i"):
-            with gr.Tab("🌊 Flux 2"):
+        if features.enabled(features.Key.FLUX_T2I):
+            with gr.Tab(features.label_for(features.Key.FLUX_T2I)):
                 _tab_intro(
                     "Text-to-image with **Flux 2 Dev** (32B). The model is "
                     "guidance-distilled: there is no CFG or negative prompt "
@@ -2092,8 +2092,8 @@ with gr.Blocks(title="Krea 2 on RunPod") as ui:
                     concurrency_id="comfy",
                 )
 
-        if features.enabled("klein_i2i"):
-            with gr.Tab("🧩 Klein Edit"):
+        if features.enabled(features.Key.KLEIN_I2I):
+            with gr.Tab(features.label_for(features.Key.KLEIN_I2I)):
                 _tab_intro(
                     "The **FLUX.2 Klein 9B Edit** graph, "
                     "reproduced as-is. Upload an image and describe the "
@@ -2241,8 +2241,8 @@ with gr.Blocks(title="Krea 2 on RunPod") as ui:
                     concurrency_id="comfy",
                 )
 
-        if features.enabled("wan_i2v"):
-            with gr.Tab("🎬 Video (Wan 2.2)"):
+        if features.enabled(features.Key.WAN_I2V):
+            with gr.Tab(features.label_for(features.Key.WAN_I2V)):
                 _wan_defaults = WAN_MODE_DEFAULTS[WAN_VARIANT]
                 _wan_mode_choices = ["Turbo (Lightning, 4 steps)",
                                      "Raw (20 steps)"]
@@ -2368,8 +2368,8 @@ with gr.Blocks(title="Krea 2 on RunPod") as ui:
                     concurrency_id="wan" if WAN_PARALLEL else "comfy",
                 )
 
-        if features.enabled("json_batch"):
-            with gr.Tab("JSON Advanced Batch"):
+        if features.enabled(features.Key.JSON_BATCH):
+            with gr.Tab(features.label_for(features.Key.JSON_BATCH)):
                 _tab_intro(
                     "Submit a list of jobs, e.g.\n"
                     '```json\n'
@@ -2401,8 +2401,8 @@ with gr.Blocks(title="Krea 2 on RunPod") as ui:
                     concurrency_id="comfy",
                 )
 
-        if features.enabled("gallery"):
-            with gr.Tab("Gallery"):
+        if features.enabled(features.Key.GALLERY):
+            with gr.Tab(features.label_for(features.Key.GALLERY)):
                 with gr.Row():
                     gallery_refresh_btn = gr.Button("🔄 Refresh", size="sm")
                     gallery_zip_btn = gr.Button(

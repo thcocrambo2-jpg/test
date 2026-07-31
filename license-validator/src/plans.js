@@ -35,7 +35,7 @@
 // pay nothing.
 
 import { collections } from "./db.js";
-import { normalizeFeatures, sortByRegistry } from "./features.js";
+import { featureOrder, normalizeFeatures, sortByRegistry } from "./features.js";
 
 // How long a cached copy of the plans collection is trusted. A plan edit
 // reaches running instances after this plus one heartbeat, where the
@@ -99,13 +99,15 @@ export async function getPlan(planId) {
  * your own defaults". Throws MissingPlanError if plan_id names nothing.
  */
 export async function resolveEntitlement(license) {
+  const order = await featureOrder();
+
   // An explicit array wins, including an empty one: `features: []` is a
   // deliberate "this key starts but does nothing", and reading it as
   // "no opinion" would silently re-grant the plan's tabs.
   const explicit = normalizeFeatures(license.features);
   if (explicit !== null) {
     return {
-      features: sortByRegistry(explicit),
+      features: sortByRegistry(explicit, order),
       plan_id: license.plan_id || null,
       plan_name: null,
       source: "license",
@@ -124,7 +126,7 @@ export async function resolveEntitlement(license) {
   const granted = normalizeFeatures(plan.features) || [];
   const extra = normalizeFeatures(license.features_extra) || [];
   return {
-    features: sortByRegistry([...new Set([...granted, ...extra])]),
+    features: sortByRegistry([...new Set([...granted, ...extra])], order),
     plan_id: plan._id,
     plan_name: plan.name || plan._id,
     source: extra.length ? "plan+extra" : "plan",

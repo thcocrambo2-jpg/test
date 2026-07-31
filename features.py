@@ -34,8 +34,43 @@ step 2 still reaches all of them.
 """
 
 from dataclasses import dataclass
+from enum import Enum
 
 from config import log
+
+
+class Key(str, Enum):
+    """The feature keys, as constants rather than loose strings.
+
+    Every one of these is also a wire value — it appears in license
+    documents, in the licence server's catalogue, and in the acquire
+    response — so the *value* is the contract and must never change. The
+    member name is local and can be renamed freely.
+
+    A `str` subclass on purpose, not a bare Enum: the keys arrive from the
+    server as plain strings and land in plain-string dicts, and inheriting
+    from str means `Key.WAN_I2V == "wan_i2v"`, `d["wan_i2v"]` and
+    `d[Key.WAN_I2V]` are all interchangeable. Nothing has to convert at the
+    boundary, and a caller that still passes a literal keeps working.
+
+    `str, Enum` rather than 3.11's StrEnum because build.sh compiles with
+    whatever python3 the pod has; the explicit __str__ is what makes
+    f-strings and log output print "wan_i2v" instead of "Key.WAN_I2V" on
+    every version, which StrEnum would have given for free.
+    """
+
+    KREA_T2I = "krea_t2i"
+    KREA_V2_T2I = "krea_v2_t2i"
+    GALLERY = "gallery"
+    KREA_EDIT = "krea_edit"
+    KREA_INPAINT = "krea_inpaint"
+    FACESWAP = "faceswap"
+    FLUX_T2I = "flux_t2i"
+    KLEIN_I2I = "klein_i2i"
+    WAN_I2V = "wan_i2v"
+    JSON_BATCH = "json_batch"
+
+    __str__ = str.__str__
 
 
 @dataclass(frozen=True)
@@ -48,7 +83,13 @@ class Feature:
             binary that has gone out, so renaming one drops that tab for
             anyone on an older build. The label is the safe thing to
             reword. There is no alias map — an old key is simply unknown.
-    label   the tab title, so ui.py and the startup log agree on naming.
+    label   the tab title *this build ships with*. The server sends one
+            too, from the features collection, and that wins — see
+            label_for(). This is the fallback: what the tab is called on a
+            dry run, against a server too old to send labels, or for a key
+            the catalogue does not describe. Keep it readable rather than
+            treating it as dead weight; it is what a customer sees whenever
+            the network answer is missing.
     default whether it is on for a license that names no features at all.
     needs   asset groups download_everything must fetch for this tab.
 
@@ -59,7 +100,7 @@ class Feature:
     called "v2".
     """
 
-    key: str
+    key: Key
     label: str
     default: bool = False
     needs: tuple[str, ...] = ()
@@ -72,38 +113,59 @@ class Feature:
 # asked for, so enabling Edit on its own still fetches the base models it
 # cannot run without, and enabling both Single and Edit fetches them once.
 FEATURES = (
-    Feature("krea_t2i", "Single / Simple Batch", default=True,
+    Feature(Key.KREA_T2I, "🎨 Krea2", default=True,
             needs=("text_encoder", "krea2")),
-    Feature("krea_v2_t2i", "🔶 Krea 2 V2", default=True,
+    Feature(Key.KREA_V2_T2I, "🔶 Krea2 V2", default=True,
             needs=("text_encoder", "v2")),
-    Feature("gallery", "Gallery", default=True),
-    Feature("krea_edit", "✨ Edit (Instruction)",
+    Feature(Key.GALLERY, "🖼️ Gallery", default=True),
+    Feature(Key.KREA_EDIT, "✨ Krea2 Edit",
             needs=("text_encoder", "krea2", "edit_lora")),
-    Feature("krea_inpaint", "Inpaint / Img2Img",
+    Feature(Key.KREA_INPAINT, "🖌️ Krea2 Inpaint",
             needs=("text_encoder", "krea2")),
-    Feature("faceswap", "🎭 Face Swap (ReActor)", needs=("reactor",)),
-    Feature("flux_t2i", "🌊 Flux 2", needs=("flux",)),
-    Feature("klein_i2i", "🧩 Klein Edit", needs=("klein",)),
-    Feature("wan_i2v", "🎬 Video (Wan 2.2)", needs=("wan",)),
+    Feature(Key.FACESWAP, "🎭 Face Swap", needs=("reactor",)),
+    Feature(Key.FLUX_T2I, "🌊 Flux2D", needs=("flux",)),
+    Feature(Key.KLEIN_I2I, "🧩 Klein Edit", needs=("klein",)),
+    Feature(Key.WAN_I2V, "🎬 Wan Video", needs=("wan",)),
     # Runs whatever graph is pasted into it, so it has no assets of its
     # own — it is only useful alongside the tabs whose models it names.
-    Feature("json_batch", "JSON Advanced Batch"),
+    Feature(Key.JSON_BATCH, "📦 Krea2 Batch"),
 )
 
 BY_KEY = {feature.key: feature for feature in FEATURES}
+
+# Every key in the enum must have a Feature behind it, or enabled() would
+# quietly answer False for a tab that exists — the exact silent-empty-UI
+# failure _state() refuses to allow. Checked at import because it can only
+# ever be broken by editing this file.
+_missing = [key for key in Key if key not in BY_KEY]
+if _missing:
+    raise RuntimeError(
+        f"features.Key has no entry in FEATURES: {', '.join(_missing)}"
+    )
 
 # Populated by resolve(). Empty until then, which is a state the readers
 # below refuse to answer from rather than guess at — see _state().
 _enabled: dict[str, bool] = {}
 _resolved = False
+# Tab titles the server sent, by feature key. Empty on a dry run and
+# against a server too old to send them, which is why every read goes
+# through label_for() and falls back to the registry rather than reading
+# this directly.
+_labels: dict[str, str] = {}
 
 
-def resolve(entitlements: list[str] | None) -> None:
+def resolve(entitlements: list[str] | None,
+            labels: dict[str, str] | None = None) -> None:
     """Work out which features are on from the license, and cache it.
 
     `entitlements` is the license document's `features` array as returned
     by the license server (licensing.entitlements()). None means the
     document said nothing, and the registry defaults apply.
+
+    `labels` is the matching tab titles from the server's features
+    collection (licensing.feature_labels()), which is the source of truth
+    for what a tab is called — see label_for(). Optional because the dry
+    run resolves features without ever contacting the server.
 
     Unknown keys are warned about and ignored rather than rejected: the
     server and this registry deploy separately, so a key issued for a tab
@@ -135,6 +197,16 @@ def resolve(entitlements: list[str] | None) -> None:
 
     _enabled.clear()
     _enabled.update(state)
+
+    # Blank and non-string values are dropped rather than stored, so
+    # label_for() never has to re-check them and a feature row with an
+    # empty name in Atlas falls back to the registry instead of rendering
+    # a nameless tab.
+    _labels.clear()
+    for key, label in (labels or {}).items():
+        if isinstance(label, str) and label.strip():
+            _labels[str(key)] = label.strip()
+
     _resolved = True
 
 
@@ -154,7 +226,7 @@ def _state() -> dict[str, bool]:
     return _enabled
 
 
-def enabled(key: str) -> bool:
+def enabled(key: str | Key) -> bool:
     """True if `key` is switched on. Unknown keys are off, and say so.
 
     Call this rather than caching the result in a module constant:
@@ -167,6 +239,33 @@ def enabled(key: str) -> bool:
         log.warning("Unknown feature %r treated as disabled", key)
         return False
     return state.get(key, False)
+
+
+def label_for(key: str | Key) -> str:
+    """What to title this feature's tab, server first.
+
+    The features collection on the licence server is the source of truth,
+    so a tab can be renamed in Atlas and every pod picks the new name up
+    on its next start with nothing rebuilt. Three things have to keep
+    working when that answer is not there, and all of them land on the
+    registry label:
+
+      * the dry run (`--features`), which never calls the server at all
+      * a server too old to send `feature_info`
+      * a key the catalogue does not describe, which is the same
+        deploy-skew case the rest of this module already tolerates
+
+    Unknown keys are title-cased rather than raising. This is called while
+    the Blocks tree is being built, and a tab with an ugly name beats a UI
+    that will not construct.
+    """
+    label = _labels.get(key)
+    if label:
+        return label
+    known = BY_KEY.get(key)
+    if known is not None:
+        return known.label
+    return key.replace("_", " ").title()
 
 
 def assets() -> frozenset[str]:
@@ -185,7 +284,7 @@ def needs(group: str) -> bool:
     return group in assets()
 
 
-def enabled_keys() -> tuple[str, ...]:
+def enabled_keys() -> tuple[Key, ...]:
     """Enabled feature keys, in registry order."""
     state = _state()
     return tuple(f.key for f in FEATURES if state.get(f.key))
