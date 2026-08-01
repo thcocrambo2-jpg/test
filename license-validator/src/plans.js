@@ -145,6 +145,17 @@ export async function resolveEntitlement(license) {
 // per-deal negotiable — resolving it through the plan would mean an ops
 // edit to `studio` retroactively changed how many pods every studio
 // customer may run.
+//
+// One optional presentation field, read only by the pricing page:
+//
+//   is_popular    marks the recommended tier. The page gives it a "Most
+//                 Popular" flag and a stronger card. At most one plan
+//                 should carry it; if several do, every one of them is
+//                 flagged and the recommendation stops meaning anything.
+//
+// It lives here rather than in the client so the recommended tier can be
+// moved from Atlas without a redeploy — the same reason the feature
+// names moved to the features collection.
 export const DEFAULT_PLANS = [
   {
     _id: "starter",
@@ -173,6 +184,7 @@ export const DEFAULT_PLANS = [
       "faceswap",
     ],
     is_public: true,
+    is_popular: true,
     sort_order: 20,
   },
   {

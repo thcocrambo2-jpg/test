@@ -51,4 +51,12 @@ export const SESSION_TTL_SECONDS = int("SESSION_TTL_SECONDS", 900);
 // Optional. When set, guards /v1/admin/*.
 export const ADMIN_TOKEN = process.env.ADMIN_TOKEN || "";
 
+// Where a customer is sent to change plan — a Telegram link to whoever
+// handles sales. Served on /v1/plans and shown in the pricing page's
+// "contact us" dialog; with it unset the dialog still explains what to do,
+// it just has no link to offer. One value for the deployment rather than a
+// field per plan: the same person handles every tier, and repeating the
+// URL five times in Mongo is five places to forget when it changes.
+export const CONTACT_URL = process.env.CONTACT_URL || "";
+
 export const PORT = int("PORT", 3000);

@@ -54,6 +54,11 @@ class Plan:
     currency: str
     features: tuple[str, ...]
     sort_order: int
+    # Presentation only: flags the recommended tier, which the pricing page
+    # renders with a "Most Popular" flag and a stronger card. Defaulted so
+    # a server too old to send it still parses into a Plan — the page then
+    # simply recommends nothing.
+    is_popular: bool = False
 
 
 @dataclass(frozen=True)
@@ -88,6 +93,11 @@ class Catalogue:
     plans: tuple[Plan, ...] = ()
     features: dict[str, FeatureInfo] = field(default_factory=dict)
     error: str | None = None
+    # Where to send someone who wants to change plan — the admin's Telegram,
+    # set as CONTACT_URL on the licence server. None is ordinary (unset, or
+    # a server too old to send it) and the page's dialog then tells the
+    # customer to get in touch without offering a link.
+    contact_url: str | None = None
 
     def describe(self, key: str) -> FeatureInfo:
         """Prose for a feature key, invented from the key if unregistered.
@@ -155,7 +165,27 @@ def _plan(raw: dict) -> Plan | None:
         currency=str(raw.get("currency") or "USD").strip() or "USD",
         features=features,
         sort_order=int(sort_order) if isinstance(sort_order, int) else 0,
+        is_popular=raw.get("is_popular") is True,
     )
+
+
+def _clean_url(value) -> str | None:
+    """An https URL from the wire, or None for anything else.
+
+    The value ends up in an `href`, and it is set as an environment
+    variable rather than reviewed in a diff, so a `javascript:` or `data:`
+    URL landing there — by typo or otherwise — must not become a live link
+    on a page the customer is looking at.
+
+    https only, not http: the intended value is a t.me link, the page is
+    served over the Gradio share URL's TLS, and a plain-http link from it
+    would be both a downgrade and a mixed-content warning. Anything
+    unusable is dropped entirely — the dialog reads fine without a link.
+    """
+    if not isinstance(value, str):
+        return None
+    url = value.strip()
+    return url if url.lower().startswith("https://") else None
 
 
 def _feature(raw: dict) -> FeatureInfo | None:
@@ -197,9 +227,10 @@ def _fetch() -> Catalogue:
     features = {info.key: info for info in
                 (_feature(raw) for raw in body.get("features") or [])
                 if info is not None}
+    contact = _clean_url(body.get("contact_url"))
 
     if not plans:
-        return Catalogue(features=features,
+        return Catalogue(features=features, contact_url=contact,
                          error="The licence server has no public plans to "
                                "show yet.")
 
@@ -209,7 +240,8 @@ def _fetch() -> Catalogue:
     plans.sort(key=lambda plan: (plan.sort_order, plan.name))
     log.info("Plan catalogue: %d plan(s) — %s", len(plans),
              ", ".join(plan.id for plan in plans))
-    return Catalogue(plans=tuple(plans), features=features)
+    return Catalogue(plans=tuple(plans), features=features,
+                     contact_url=contact)
 
 
 def catalogue(force: bool = False) -> Catalogue:

@@ -366,6 +366,9 @@ CSS = f"""
   --kx-shadow-md: 0 4px 16px -6px rgba(15, 20, 35, .14);
   --kx-shadow-lg: 0 16px 40px -12px rgba(15, 20, 35, .24);
   --kx-scroll-thumb: #ccd2de;
+  /* Pricing figures. Deep amber on white and soft gold on near-black —
+     two values because one warm tone cannot clear 4.5:1 on both. */
+  --kx-price: #9a6206;
 }}
 
 .dark {{
@@ -390,6 +393,7 @@ CSS = f"""
   --kx-shadow-md: 0 4px 16px -6px rgba(0, 0, 0, .5);
   --kx-shadow-lg: 0 16px 40px -12px rgba(0, 0, 0, .6);
   --kx-scroll-thumb: #333b48;
+  --kx-price: #f0c56a;
 }}
 
 /* ---------------------------------------------------------------- shell */
@@ -798,16 +802,27 @@ CSS = f"""
   color: var(--kx-muted) !important;
 }}
 
+/* `align-items` is left at its `stretch` default so every card is as tall
+   as the tallest in its row. The cards are themselves columns, so the
+   extra height lands where the CTA's `margin-top: auto` puts it — as space
+   above the button — and the content above stays top-aligned and reading
+   straight across.
+
+   The padding-top is headroom for the "Most Popular" flag, which is
+   absolutely positioned over its card's top edge and would otherwise be
+   clipped by the panel above. */
 .kx-plan-grid {{
   display: grid;
   grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
   gap: 16px;
-  align-items: start;
+  padding-top: 12px;
 }}
 
 .kx-plan {{
+  position: relative;
   display: flex;
   flex-direction: column;
+  height: 100%;
   padding: 20px;
   border: 1px solid var(--kx-border);
   border-radius: 16px;
@@ -815,10 +830,58 @@ CSS = f"""
   box-shadow: var(--kx-shadow-sm);
 }}
 
+/* The recommended tier (plan.is_popular). Brighter border, a soft accent
+   glow and a hairline along the top edge — enough to read as "start here"
+   at a glance without the scale-up that would break the row's alignment.
+   Deliberately restrained: this is a card among four, not a billboard. */
+.kx-plan-popular {{
+  border-color: {ACCENT}66;
+  box-shadow: 0 0 0 1px {ACCENT}33, 0 10px 30px -14px {ACCENT}59,
+              var(--kx-shadow-md);
+}}
+.dark .kx-plan-popular {{
+  box-shadow: 0 0 0 1px {ACCENT}40, 0 12px 34px -14px {ACCENT}4d,
+              var(--kx-shadow-md);
+}}
+
+/* The accent hairline. A pseudo-element inset to the border radius rather
+   than a border-top, which would square the corners off. */
+.kx-plan-popular::before {{
+  content: "";
+  position: absolute;
+  inset: 0 0 auto;
+  height: 3px;
+  border-radius: 16px 16px 0 0;
+  background: linear-gradient(90deg, var(--kx-accent), var(--kx-accent-alt));
+}}
+
+/* The flag itself, straddling the top edge. */
+.kx-plan-flag {{
+  position: absolute;
+  top: -11px;
+  left: 50%;
+  transform: translateX(-50%);
+  z-index: 1;
+  padding: 4px 12px;
+  border-radius: 999px;
+  background: linear-gradient(135deg, var(--kx-accent), var(--kx-accent-alt));
+  color: #fff;
+  font-size: .62rem;
+  font-weight: 700;
+  letter-spacing: .07em;
+  text-transform: uppercase;
+  white-space: nowrap;
+  box-shadow: 0 4px 12px -4px {ACCENT}80;
+}}
+
 /* The tier this licence is actually on. An accent ring rather than the
    usual scale-up: these cards sit in a grid whose tops are aligned, and
    lifting one breaks that alignment to say something the badge already
-   says in words. */
+   says in words.
+
+   After .kx-plan-popular so that a licence sitting on the recommended tier
+   gets the current-plan ring — which is the more useful of the two facts
+   once you are on it. The flag and the header badge both still show. */
 .kx-plan-current {{
   border-color: var(--kx-accent);
   box-shadow: 0 0 0 1px var(--kx-accent), var(--kx-shadow-md);
@@ -864,27 +927,37 @@ CSS = f"""
   color: var(--kx-muted) !important;
 }}
 
+/* The figure is the thing being compared across four cards, so it gets the
+   size and the only warm colour on the page. Amber as text rather than a
+   filled gold block: on a near-black surface a solid gold panel reads as a
+   promotional sticker, and it would fight the accent that already marks
+   the recommended tier. */
 .kx-plan-price {{
   margin: 14px 0 0 !important;
   display: flex;
   align-items: baseline;
-  gap: 4px;
+  gap: 5px;
 }}
 .kx-plan-price b {{
-  font-size: 1.75rem;
+  font-size: 2.15rem;
   font-weight: 700;
-  letter-spacing: -.02em;
-  color: var(--kx-text);
+  line-height: 1.1;
+  letter-spacing: -.025em;
+  color: var(--kx-price);
 }}
-.kx-plan-price span {{ font-size: .8rem; color: var(--kx-faint); }}
+.kx-plan-price span {{
+  font-size: .82rem;
+  font-weight: 500;
+  color: var(--kx-muted);
+}}
 .kx-plan-poa {{
-  font-size: .9rem !important;
+  font-size: 1.05rem !important;
   font-weight: 600;
   color: var(--kx-muted) !important;
 }}
 
 .kx-plan-yearly {{
-  margin: 3px 0 0 !important;
+  margin: 4px 0 0 !important;
   font-size: .74rem !important;
   color: var(--kx-faint) !important;
 }}
@@ -937,6 +1010,129 @@ CSS = f"""
 }}
 
 .kx-plan-empty {{ font-size: .78rem; color: var(--kx-faint); }}
+
+/* `margin-top: auto` is what makes the equal-height cards work: it eats
+   whatever slack the tallest card in the row created, so every button
+   lands on the same line no matter how many features are listed above it.
+   The 18px top margin is a floor for the card that *is* the tallest, where
+   there is no slack to eat. */
+.kx-plan-cta {{
+  margin-top: auto;
+  padding-top: 18px;
+}}
+
+.kx-plan-btn {{
+  display: block;
+  width: 100%;
+  padding: 10px 14px;
+  border-radius: 10px;
+  border: 1px solid var(--kx-border);
+  background: transparent;
+  color: var(--kx-text);
+  font-size: .82rem;
+  font-weight: 600;
+  text-align: center;
+  text-decoration: none !important;
+  cursor: pointer;
+  transition: background .15s ease, border-color .15s ease, color .15s ease;
+}}
+.kx-plan-btn:hover {{
+  border-color: var(--kx-accent);
+  background: var(--kx-accent-soft);
+  color: var(--kx-text);
+}}
+
+/* The recommended tier's button, filled so the eye lands on it first. */
+.kx-plan-btn-primary {{
+  border-color: transparent;
+  background: linear-gradient(135deg, var(--kx-accent), var(--kx-accent-alt));
+  color: #fff;
+  box-shadow: 0 6px 18px -8px {ACCENT}99;
+}}
+.kx-plan-btn-primary:hover {{
+  border-color: transparent;
+  background: linear-gradient(135deg, var(--kx-accent-alt), var(--kx-accent));
+  color: #fff;
+}}
+
+/* The tier already held. Not a link and not clickable — there is nothing
+   to ask for — so it is a <span> styled as a flat, quiet slab. It keeps
+   the button row aligned across the four cards without pretending to be
+   an action. */
+.kx-plan-btn-current {{
+  border-style: dashed;
+  border-color: var(--kx-accent);
+  background: var(--kx-accent-soft);
+  color: var(--kx-accent);
+  cursor: default;
+}}
+.dark .kx-plan-btn-current {{ color: #b9bcfb; }}
+
+/* --------------------------------------------------- contact dialog */
+/* Opened by the plan buttons, closed by the backdrop or the Close link.
+   Driven by :target rather than JavaScript: this whole page is one HTML
+   string handed to gr.HTML, and Gradio strips <script> out of it, so a
+   CSS-only dialog is the only kind that survives. The cost is a URL hash
+   while it is open, which is invisible on a Gradio share link. */
+.kx-modal {{
+  position: fixed;
+  inset: 0;
+  z-index: 1000;
+  display: none;
+  align-items: center;
+  justify-content: center;
+  padding: 20px;
+  background: rgba(8, 10, 16, .62);
+  backdrop-filter: blur(3px);
+}}
+.kx-modal:target {{ display: flex; }}
+
+/* Covers the viewport behind the card so a click anywhere outside closes
+   it, which is the gesture people try first. */
+.kx-modal-scrim {{
+  position: absolute;
+  inset: 0;
+  cursor: default;
+}}
+
+.kx-modal-card {{
+  position: relative;
+  width: min(420px, 100%);
+  padding: 24px;
+  border: 1px solid var(--kx-border);
+  border-radius: 16px;
+  background: var(--kx-surface);
+  box-shadow: var(--kx-shadow-lg);
+  text-align: center;
+}}
+
+.kx-modal-card h3 {{
+  margin: 0 0 8px !important;
+  font-size: 1.05rem !important;
+  font-weight: 650 !important;
+  color: var(--kx-text) !important;
+}}
+
+.kx-modal-card p {{
+  margin: 0 !important;
+  font-size: .84rem !important;
+  line-height: 1.6;
+  color: var(--kx-muted) !important;
+}}
+
+.kx-modal-actions {{
+  display: flex;
+  flex-direction: column;
+  gap: 9px;
+  margin-top: 18px;
+}}
+
+.kx-modal-close {{
+  font-size: .78rem;
+  color: var(--kx-faint) !important;
+  text-decoration: none !important;
+}}
+.kx-modal-close:hover {{ color: var(--kx-muted) !important; }}
 
 .kx-pricing-foot {{
   margin: 20px 0 0 !important;
@@ -1341,6 +1537,65 @@ def _yearly_note(plan) -> str:
     return f'<p class="kx-plan-yearly">{note}</p>'
 
 
+# The id the contact dialog is opened by. One dialog for the whole page —
+# every card asks the same question — so the buttons all point here.
+_CONTACT_ID = "kx-contact"
+
+
+def _plan_cta(plan, is_current: bool) -> str:
+    """The button at the foot of a card.
+
+    Three states, and only one of them is a link. The tier already held
+    gets a flat non-interactive slab: there is nothing to ask for, and a
+    live button that reopened a "contact us" dialog would be inviting the
+    customer to buy what they have. The rest open the dialog, with the
+    recommended tier's filled so the eye lands there first.
+    """
+    if is_current:
+        return ('<div class="kx-plan-cta"><span class="kx-plan-btn '
+                'kx-plan-btn-current">Current plan</span></div>')
+    primary = " kx-plan-btn-primary" if plan.is_popular else ""
+    return (
+        f'<div class="kx-plan-cta">'
+        f'<a class="kx-plan-btn{primary}" href="#{_CONTACT_ID}">Get Started</a>'
+        f"</div>"
+    )
+
+
+def _contact_modal(contact_url: str | None) -> str:
+    """The "talk to us" dialog every Get Started button opens.
+
+    Rendered once per page and hidden until its id is the URL fragment —
+    see .kx-modal in the stylesheet for why it is CSS-only.
+
+    With no CONTACT_URL set the dialog still opens and still says what to
+    do; it just has no button to offer. That is the honest failure: a link
+    to nowhere would be worse than prose, and this is the state the page
+    ships in until the Telegram URL is configured.
+    """
+    if contact_url:
+        action = (f'<a class="kx-plan-btn kx-plan-btn-primary" '
+                  f'href="{_escape(contact_url)}" target="_blank" '
+                  f'rel="noopener noreferrer">Message us on Telegram</a>')
+    else:
+        action = ""
+    return f"""
+<div class="kx-modal" id="{_CONTACT_ID}">
+  <a class="kx-modal-scrim" href="#" aria-label="Close"></a>
+  <div class="kx-modal-card" role="dialog" aria-modal="true"
+       aria-labelledby="{_CONTACT_ID}-title">
+    <h3 id="{_CONTACT_ID}-title">Contact the admin</h3>
+    <p>Plans are issued by hand against your licence key. Get in touch and
+       we will move you over — your pod keeps running in the meantime.</p>
+    <div class="kx-modal-actions">
+      {action}
+      <a class="kx-modal-close" href="#">Close</a>
+    </div>
+  </div>
+</div>
+"""
+
+
 def _plan_card(plan, catalogue, is_current: bool) -> str:
     """One tier: what it is called, what it costs, and every tab it grants.
 
@@ -1371,8 +1626,17 @@ def _plan_card(plan, catalogue, is_current: bool) -> str:
     description = (f'<p class="kx-plan-desc">{_escape(plan.description)}</p>'
                    if plan.description else "")
 
+    classes = "kx-plan"
+    if plan.is_popular:
+        classes += " kx-plan-popular"
+    if is_current:
+        classes += " kx-plan-current"
+    flag = ('<span class="kx-plan-flag">Most Popular</span>'
+            if plan.is_popular else "")
+
     return f"""
-<article class="kx-plan{' kx-plan-current' if is_current else ''}">
+<article class="{classes}">
+  {flag}
   <header class="kx-plan-head">
     <h3>{_escape(plan.name)}</h3>
     {badge}
@@ -1381,6 +1645,7 @@ def _plan_card(plan, catalogue, is_current: bool) -> str:
   {price}
   {_yearly_note(plan)}
   <ul class="kx-plan-feats">{rows}</ul>
+  {_plan_cta(plan, is_current)}
 </article>
 """
 
@@ -1440,6 +1705,7 @@ def pricing_html(catalogue, current_plan_id=None,
      not listed here — check the seat count you were issued. To change plan,
      contact your supplier with your licence key.</p>
 </div>
+{_contact_modal(getattr(catalogue, "contact_url", None))}
 """
 
 

@@ -29,6 +29,7 @@ import {
   STALE_SECONDS,
   HEARTBEAT_SECONDS,
   ADMIN_TOKEN,
+  CONTACT_URL,
   DB_NAME,
 } from "./config.js";
 
@@ -371,9 +372,11 @@ app.get(
           price_yearly: plan.price_yearly ?? null,
           currency: plan.currency || "USD",
           features: plan.features || [],
+          is_popular: plan.is_popular === true,
           sort_order: plan.sort_order ?? 0,
         })),
       features: [...features.values()].map(featureWire),
+      contact_url: CONTACT_URL || null,
     });
   }),
 );
