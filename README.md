@@ -670,10 +670,24 @@ a dog on a beach") — no mask painting. It uses the community
 pack (auto-cloned into `custom_nodes` at bootstrap). The source image is
 injected both as in-context VAE latents and through the Qwen3-VL text
 encoder, so the model actually sees the image it is editing and preserves
-identity/unchanged regions. The **Grounding** slider trades edit strength
-(lower) against likeness fidelity (higher); style LoRAs can be stacked on
-top just like in the other tabs. Outputs are capped at ~2 MP (the LoRA
-duplicates content above that).
+identity/unchanged regions. Style LoRAs can be stacked on top just like in
+the other tabs. Outputs are capped at ~2 MP (the LoRA duplicates content
+above that).
+
+Two sliders steer it. **Grounding** trades edit strength (lower) against
+likeness fidelity (higher); its range is the LoRA's trained 384–768, and
+running above that is what makes the model emit duplicated "double
+picture" compositions. **Reference fidelity** (`ref_boost`) is how hard the
+edit holds the source: 1.0 is neutral, ~4 gives strong face/body likeness,
+and past ~10 removals stop working — so removals want a lower value along
+with the ~20 steps / CFG ≈ 3 recipe.
+
+The LoRA version and the node-pack version are one unit. `EDIT_LORA_FILE`
+in `config.py` is v1.2, which needs the v1.2 nodes for the FIT reference
+geometry (a source whose aspect ratio differs from the output is fitted,
+not stretched) and for `ref_boost`; conversely the v1.2 nodes default
+`fit_mode` to `fit`, which v1/v1.1 weights were not trained for. The node
+pack is held still by `scripts/PINS.json` — bump both together or neither.
 
 ## Inpainting
 

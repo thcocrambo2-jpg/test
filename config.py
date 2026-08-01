@@ -157,9 +157,15 @@ ABLITERATED_ENCODER_FILE = "qwen3vl_4b_abliterated.safetensors"
 # instead of repainting from scratch like plain img2img/inpaint.
 # Off by default (feature key "krea_edit", ~1.9 GB for the LoRA); the node pack
 # is only cloned when it is on, since nothing else uses those two nodes.
+#
+# Weights and nodes are one unit: v1.2 weights need the v1.2 nodes (they
+# supply the FIT reference geometry and the ref_boost dial that
+# build_edit_workflow wires), and the v1.2 nodes default fit_mode to "fit",
+# which v1/v1.1 weights were not trained for. Bump both together or
+# neither — scripts/PINS.json is what holds the node pack still.
 KREA2EDIT_NODES_REPO = "https://github.com/lbouaraba/comfyui-krea2edit"
 EDIT_LORA_REPO = "conradlocke/krea2-identity-edit"
-EDIT_LORA_FILE = "krea2_identity_edit_v1_1.safetensors"  # ~1.83 GB
+EDIT_LORA_FILE = "krea2_identity_edit_v1_2.safetensors"  # ~1.83 GB
 
 # Diffusion models come from the KREA2_MODELS registry above; only the
 # shared VAE is a fixed download.

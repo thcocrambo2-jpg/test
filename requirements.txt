@@ -7,4 +7,11 @@ gradio>=6
 websocket-client>=1.6
 requests
 huggingface_hub
+# Xet transfer for the Hub. Not optional in practice: without it every
+# download of a Xet-backed repo falls back to single-stream HTTP, which
+# turns a model fetch that takes seconds into one that takes many minutes.
+# It has to be compiled into the binary too — see --include-package in
+# build.sh — because the bundled huggingface_hub resolves imports inside
+# the Nuitka bundle and cannot see a pip-installed copy on the pod.
+hf_xet
 safetensors

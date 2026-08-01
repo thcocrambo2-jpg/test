@@ -903,6 +903,12 @@ def _fit_edit_size(w: int, h: int, max_pixels: int = 2_000_000) -> tuple:
 
     The Identity Edit LoRA bleeds/duplicates content above ~2 MP, so the
     cap is by area rather than the inpaint tab's 2048-px long side.
+
+    The v1.2 nodes' FIT geometry means the *aspect ratio* no longer has to
+    match — a 3:2 source rendered at 1:1 is fitted rather than stretched.
+    The area cap is what is left, and it applies to the source as much as
+    to the output: this tab derives one from the other, and a 12 MP phone
+    photo VAE-encoded as a reference is a needless 12 MP of VRAM.
     """
     scale = min(1.0, (max_pixels / (w * h)) ** 0.5)
     return (max(64, int(w * scale) // 16 * 16),
@@ -910,7 +916,8 @@ def _fit_edit_size(w: int, h: int, max_pixels: int = 2_000_000) -> tuple:
 
 
 def generate_edit(image, prompt, negative, seed, randomize, steps, cfg,
-                  sampler, grounding, model, batch_count, *lora_slots):
+                  sampler, grounding, ref_boost, model, batch_count,
+                  *lora_slots):
     """Edit tab: instruction-based editing. The model sees the source image
     (Identity Edit LoRA dual conditioning), so the prompt describes the
     change to make — no mask, no denoise tuning."""
@@ -943,7 +950,7 @@ def generate_edit(image, prompt, negative, seed, randomize, steps, cfg,
         "prompt": prompt, "negative": negative or "", "seed": base_seed + i,
         "steps": int(steps), "cfg": float(cfg), "width": width,
         "height": height, "sampler": sampler, "image_name": image_name,
-        "grounding_px": int(grounding),
+        "grounding_px": int(grounding), "ref_boost": float(ref_boost),
         "loras": _resolve_lora_slots(*lora_slots),
         "unet_file": entry["file"],
     } for i in range(int(batch_count))]
@@ -2301,7 +2308,9 @@ with gr.Blocks(title="Krea 2 on RunPod") as ui:
                     "source image, so it can recolor, add or replace objects, "
                     "restyle, or re-stage a person in a new scene while keeping "
                     "their identity. Defaults (8–12 steps, CFG 1.0) suit most "
-                    "edits; removals work better with ~20 steps and CFG ≈ 3."
+                    "edits; removals work better with ~20 steps, CFG ≈ 3 and a "
+                    "lower reference fidelity. Fewer steps favour composition, "
+                    "more favour face detail."
                     + ("" if edit_lora_available() else
                        "\n\n⚠️ **The Identity Edit LoRA is not downloaded yet** "
                        "(~1.9 GB) — restart the app to fetch it; this tab will "
@@ -2339,11 +2348,23 @@ with gr.Blocks(title="Krea 2 on RunPod") as ui:
                                      edit_prompt],
                         )
                         with gr.Row():
+                            # 384-768 is the LoRA's trained grounding range.
+                            # The old slider went to 1536 (v1's range) and
+                            # defaulted to 1152 — far above what v1.1/v1.2
+                            # ever saw, which is the documented cause of
+                            # duplicated "double picture" outputs.
                             edit_grounding = gr.Slider(
-                                512, 1536, value=1152, step=64,
+                                384, 768, value=768, step=64,
                                 label="Grounding (low = stronger edit, "
                                       "high = keep likeness)",
                             )
+                            edit_ref_boost = gr.Slider(
+                                0.0, 10.0, value=4.0, step=0.5,
+                                label="Reference fidelity (1 = neutral, "
+                                      "~4 = strong likeness, >10 breaks "
+                                      "removals)",
+                            )
+                        with gr.Row():
                             edit_sampler = gr.Dropdown(
                                 choices=SAMPLERS, value=SAMPLERS[0], label="Sampler"
                             )
@@ -2367,7 +2388,8 @@ with gr.Blocks(title="Krea 2 on RunPod") as ui:
                     fn=generate_edit,
                     inputs=[edit_image, edit_prompt, edit_negative, edit_seed,
                             edit_random, edit_steps, edit_cfg, edit_sampler,
-                            edit_grounding, edit_model_dd, edit_batch,
+                            edit_grounding, edit_ref_boost, edit_model_dd,
+                            edit_batch,
                             *_lora_inputs(edit_lora_dds, edit_lora_ws)],
                     outputs=[edit_gallery, edit_status, edit_seed_out],
                     concurrency_id="comfy",

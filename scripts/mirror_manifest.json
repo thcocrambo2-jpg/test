@@ -244,13 +244,14 @@
     },
     {
       "repo": "assets",
-      "local": "loras/krea2_identity_edit_v1_1.safetensors",
-      "path_in_repo": "loras/krea2_identity_edit_v1_1.safetensors",
+      "local": "loras/krea2_identity_edit_v1_2.safetensors",
+      "path_in_repo": "loras/krea2_identity_edit_v1_2.safetensors",
       "source": {
         "kind": "hf",
         "repo": "conradlocke/krea2-identity-edit",
-        "path": "krea2_identity_edit_v1_1.safetensors"
-      }
+        "path": "krea2_identity_edit_v1_2.safetensors"
+      },
+      "note": "needs the v1.2 nodes (fit geometry + ref_boost)"
     },
     {
       "repo": "assets",

@@ -43,6 +43,11 @@
     "kind": "hf",
     "sha": "902d9d510b51533e07729f19211414a3648b77d2"
   },
+  "comfyui-krea2edit": {
+    "sha": "86f886dac23013d88996e3a2e99093ba44d322fb",
+    "tarball": "comfyui-krea2edit-86f886da.tar.gz",
+    "url": "https://github.com/lbouaraba/comfyui-krea2edit"
+  },
   "conradlocke/krea2-identity-edit": {
     "kind": "hf",
     "sha": "2686ea3601417448f9649f6e74ca7103d446da96"

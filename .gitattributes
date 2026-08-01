@@ -1,0 +1,10 @@
+# Shell scripts run on Linux — the pod for build.sh, the container for
+# scripts/runpod_start.sh — but are edited on Windows, where core.autocrlf
+# rewrites them to CRLF on checkout. A shell script with CRLF fails as
+#
+#     bad interpreter: /usr/bin/env bash^M
+#
+# which names neither the real cause nor, usually, the right file. Pin them
+# to LF everywhere so a checkout, an scp or a `cp -r` into WSL all produce
+# something that runs.
+*.sh text eol=lf
