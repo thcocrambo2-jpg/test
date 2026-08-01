@@ -69,6 +69,7 @@ class Key(str, Enum):
     KLEIN_I2I = "klein_i2i"
     WAN_I2V = "wan_i2v"
     JSON_BATCH = "json_batch"
+    COMMUNITY_PROMPTS = "community_prompts"
 
     __str__ = str.__str__
 
@@ -129,6 +130,11 @@ FEATURES = (
     # Runs whatever graph is pasted into it, so it has no assets of its
     # own — it is only useful alongside the tabs whose models it names.
     Feature(Key.JSON_BATCH, "📦 Krea2 Batch"),
+    # Reads a collection on the licence server, so it needs no weights of
+    # its own either. Like JSON Batch it is only useful next to the tabs
+    # it loads prompts into (Krea2 and Krea2 V2) — the cards for a tab
+    # this licence does not grant still render, they just cannot be used.
+    Feature(Key.COMMUNITY_PROMPTS, "🌟 Prompt Library", default=True),
 )
 
 BY_KEY = {feature.key: feature for feature in FEATURES}

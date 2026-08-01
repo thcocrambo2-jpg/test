@@ -166,10 +166,15 @@ touches a download.
 | `POST` | `/v1/heartbeat` | Keep it. Re-checks the license every call |
 | `POST` | `/v1/release` | Give it back. Idempotent |
 | `GET` | `/v1/plans` | Public catalogue — `is_public` plans + feature metadata |
+| `POST` | `/v1/prompts` | A pod submitting one prompt + its settings. Private on arrival, unless `publish` and the license is `is_admin` |
+| `GET` | `/v1/prompts` | Public library — approved prompts only. `?tab=&source=&q=&skip=&limit=` |
 | `GET` | `/health` | Liveness + DB reachability |
 | `GET` | `/v1/admin/licenses` | Every license with live usage and **resolved** features (needs `ADMIN_TOKEN`) |
 | `GET` | `/v1/admin/plans` | Every plan with the number of licenses on it |
 | `GET` | `/v1/admin/sessions` | Recent sessions, `?license_key=` to filter |
+| `GET` | `/v1/admin/prompts` | The library, `?pending=1` for the review queue. Includes `license_key` |
+| `POST` | `/v1/admin/prompts/review` | `{id, approve}` — publish or reject one prompt |
+| `POST` | `/v1/admin/prompts` | Author an ⭐ official prompt. Public immediately |
 
 `/v1/plans` is unauthenticated on purpose: it is a pricing page's data and
 none of it is secret. Non-public plans are filtered out, so `admin` and any
@@ -181,6 +186,34 @@ can never describe a tab in terms the deployment does not know.
 the same way `/v1/acquire` resolves it — for a license on a plan that is
 not written on the license at all. A row whose plan is missing reports
 `plan_error` instead of taking down the whole listing.
+
+The two `/v1/prompts` routes are the halves of the prompt library and they
+do not mirror each other. The write is authenticated by the license key and
+stores a row that **no client can read**; the read is unauthenticated,
+serves only `is_public: true`, and projects `license_key` away — so who
+submitted a prompt never leaves this service. Pods write to it silently and
+customers are not told it happens, which is why the write answers `200` for
+everything they could not have known was wrong: a duplicate fingerprint, or
+a license that has hit its 200-pending cap. See the app's README for the
+capture and deduplication rules, and `npm run prompts` for moderation.
+
+The write takes one optional flag, `publish`, which asks for the row to be
+created as a public ⭐ official prompt instead of a pending submission. It
+is honoured **only when the license document has `is_admin: true`** —
+`publish` is a request and the record is the grant. A non-admin sending it
+is not rejected; the flag is ignored and the prompt is stored the ordinary
+way. A published row also gets a freshly generated fingerprint rather than
+the one the pod sent, because deduplicating it against an existing
+community row would silently turn "publish this" into a counter bump.
+
+`npm run seed-prompts` writes one starter prompt of each kind — an ⭐
+official one that is live immediately, and a 👥 community one sitting in
+the review queue so there is something there the first time you look.
+`scripts/seed-prompts.js` carries the field-by-field notes; edit
+`SEED_PROMPTS` and re-run to add more. It is idempotent (keyed on
+`fingerprint`) and **never un-approves**: content is `$set`, moderation
+state is `$setOnInsert`, so a prompt you have already ruled on keeps that
+ruling across seed runs.
 
 ### Status codes are the contract
 
@@ -208,9 +241,14 @@ npm install
 cp .env.example .env          # fill in MONGODB_URI
 npm run init-db               # creates indexes — run once per cluster
 npm run seed-catalog          # writes the plans + features collections
+npm run seed-prompts          # writes the starter prompt library (optional)
 npm run issue-key -- --name "Acme Corp" --plan pro --seats 2
 npm start
 ```
+
+All three seed steps are idempotent, so re-running one is safe. Add
+`--dry-run` to `seed-catalog` or `seed-prompts` to see what a run would
+change before it changes it.
 
 `issue-key` prints the `KREA2_LICENSE_KEY=...` line to hand the customer,
 and the resolved feature list underneath it so you can see what they will
@@ -297,8 +335,17 @@ would not work anyway — the Gradio share URL is regenerated on every run.
   plan_id: "pro" | null,              // the normal route
   features: [...] | null,             // literal override; wins over plan_id
   features_extra: ["wan_i2v"] | null, // granted on top of the plan
+  is_admin: false,                    // a role, not an entitlement
   created_at: ISODate }
 ```
+
+`is_admin` grants **no tab and no capability** — what a license can run is
+`features` and nothing else, so marking one admin cannot change what it
+generates. It decides exactly one thing: an ordinary pod captures every new
+prompt into the library silently, an admin pod captures nothing and
+publishes only what its operator ticks the checkbox for. Put it on the keys
+you generate from yourself (`--admin`), or your own testing fills the
+review queue you are the one working through.
 
 `plans` — `_id` is the plan key
 
@@ -333,9 +380,39 @@ small query, warm invocations pay nothing.
   meta: { ip, pod_id, hostname, version, gpu, seen_at } }
 ```
 
+`prompts` — the prompt library
+
+```js
+{ fingerprint: "<64-char sha256>",   // unique; the deduplication key
+  tab: "krea_t2i" | "krea_v2_t2i",
+  source: "community" | "admin",
+  is_public: false,                  // approval flips this; the read filters on it
+  reviewed_at: null,                 // null = still in the queue
+  title: null,                       // admin prompts only
+  prompt: "...", negative: "...",
+  settings: { ... },                 // the whole replay blob, stored verbatim
+  license_key: "KREA2-...",          // never projected to any client
+  seen_count: 3,                     // how many pods sent this same recipe
+  created_at: ISODate, updated_at: ISODate }
+```
+
+`fingerprint` is computed by the pod over the prompt and every setting
+*except* the seed, the randomize toggle and the batch count — see the app's
+README for why. It is the one client-chosen unique key in this database,
+which is why the write validates it is really 64 hex characters: anything
+else would be a row that can never be deduplicated against.
+
+`settings` is stored **verbatim and never interpreted here.** The shape
+belongs to the app's tabs and changes with them, so validating it would
+couple this service to a UI it should know nothing about. It is bounded
+(8 KB) rather than checked, and the client guards every value against what
+its own build offers before applying any of it.
+
 Indexes: unique `key`; `plan_id`; unique `(license_key, instance_id)`;
-`(license_key, last_seen)`; TTL on `last_seen`. `plans` and `features` are
-keyed by their string `_id` and need nothing beyond it.
+`(license_key, last_seen)`; TTL on `last_seen`; unique `fingerprint`;
+`(is_public, tab, created_at)`; `(reviewed_at, created_at)`;
+`(license_key, reviewed_at)`. `plans` and `features` are keyed by their
+string `_id` and need nothing beyond it.
 
 `created_at` on a session row is never overwritten, so the gap between it
 and `last_seen` is how long that instance has been up.
@@ -346,6 +423,12 @@ and `last_seen` is how long that instance has been up.
   the same millisecond can both pass the check. At these seat counts the
   window is negligible and the worst case is one extra seat — not worth a
   locking scheme.
+- **Prompt submissions are trusted as far as their license key.** Any pod
+  with a valid key can write to the library, and the fingerprint it sends
+  is not recomputed here. The worst case is a duplicate row or a junk one,
+  which is what the 200-pending cap per license and the approval step are
+  for — nothing a customer submits is visible to anyone until you approve
+  it.
 - **This stops casual sharing, not a determined customer.** The check runs
   on a machine they control. Patching the binary defeats it, and that is a
   deliberate non-goal. Pair it with a license agreement, and treat

@@ -141,6 +141,22 @@ export const FEATURES = [
     category: "tools",
     sort_order: 100,
   },
+  {
+    key: "community_prompts",
+    name: "Prompt Library",
+    tab_label: "🌟 Prompt Library",
+    description:
+      "Browse ready-made prompts and load one into Krea2 or Krea2 V2 " +
+      "with every setting already dialled in",
+    category: "tools",
+    // 65, between faceswap (60) and flux_t2i (70), so it reads with the
+    // rest of the everyday set rather than trailing the video and batch
+    // tabs. This number is the *only* thing that decides where it appears
+    // in a plan's feature list — /v1/plans sorts each plan's keys by it —
+    // so keep it in step with the collection, or the next seed-catalog run
+    // reverts an edit made in Atlas.
+    sort_order: 65,
+  },
 ];
 
 export const FEATURE_KEYS = FEATURES.map((feature) => feature.key);

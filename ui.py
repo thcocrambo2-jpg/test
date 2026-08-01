@@ -1,15 +1,26 @@
 """Gradio UI.
 
-Tabs: single / simple-batch generation, Krea 2 V2, instruction-based
-editing (upload an image, describe the change), inpainting (paint a mask
-over an uploaded image), ReActor face swap, Flux 2 generation, Flux 2
-Klein 9B editing, Wan 2.2 video, JSON batch jobs, and an output gallery.
+Tabs: single / simple-batch generation, Krea 2 V2, the prompt library,
+instruction-based editing (upload an image, describe the change),
+inpainting (paint a mask over an uploaded image), ReActor face swap,
+Flux 2 generation, Flux 2 Klein 9B editing, Wan 2.2 video, JSON batch
+jobs, and an output gallery.
 
 Every one of them is a feature in features.py and is only built when that
 feature is on — a tab that is off is never constructed, so its handlers
 are never registered on Gradio's HTTP API either. Written for Gradio 6
 (theme/css now belong to launch(), gr.File hands the handler a plain file
 path).
+
+The prompt library is the one tab that reaches into another. Its cards
+come from the licence server (prompts.py) and its Use buttons write a
+whole recipe into the Krea 2 or Krea 2 V2 controls and switch to that
+tab, which is why it is built *after* both of them — those controls are
+ordinary Python locals, and a .click() can only name ones that already
+exist. The same handlers also feed the library: generate_single and
+generate_v2 call prompts.record() with what they were given. That call is
+silent by contract — the customer is never told their prompts are saved,
+so it can neither block generation nor surface a failure.
 
 Alongside the tabs there is one other view: the pricing panel, which is
 the plan catalogue read from the licence server (plans.py) and rendered by
@@ -42,6 +53,7 @@ import time
 import urllib.request
 import uuid
 import zipfile
+from functools import partial
 from pathlib import Path
 
 import gradio as gr
@@ -51,6 +63,7 @@ from PIL import Image, ImageChops, ImageFilter
 import features
 import licensing
 import plans
+import prompts
 import theme
 from client import ComfyUIError, client, model_signature, wan_client
 from comfy import GPU_COUNT, ensure_alive as comfy_ensure_alive
@@ -363,13 +376,49 @@ def _check_model(model):
     return entry, None
 
 
+def _krea_settings(seed, randomize, steps, cfg, resolution, sampler, model,
+                   batch_count, lora_slots) -> dict:
+    """The Krea 2 tab's controls as the prompt library stores them.
+
+    Deliberately the *UI* values, not the resolved job dict: what goes in
+    here comes back out into these same controls on another pod, so the
+    dropdown label is the useful thing to keep and the resolved filename
+    is not. Mirrors the generate_single signature — when that gains a
+    control, this is the other half of the change.
+    """
+    return {
+        "model": model,
+        "steps": int(steps),
+        "cfg": float(cfg),
+        "resolution": resolution,
+        "sampler": sampler,
+        "seed": int(seed or 0),
+        "randomize": bool(randomize),
+        "batch_count": int(batch_count),
+        "loras": [[name, float(weight)]
+                  for name, weight in zip(lora_slots[::2], lora_slots[1::2])],
+    }
+
+
 def generate_single(prompt, negative, seed, randomize, steps, cfg, resolution,
-                    sampler, model, batch_count, *lora_slots):
+                    sampler, model, batch_count, publish, publish_title,
+                    *lora_slots):
     """First tab: run batch_count jobs on sequential seeds."""
     entry, error = _check_model(model)
     if error:
         yield [], error, 0
         return
+    # After the guard, before the work: a click that could never run does
+    # not belong in the library, but one that fails half way through a
+    # batch still had a recipe worth keeping. Returns instantly and
+    # cannot raise, and decides for itself whether this pod captures
+    # automatically or only on `publish` — see prompts.record.
+    prompts.record(
+        prompts.TAB_KREA2, prompt, negative or "",
+        _krea_settings(seed, randomize, steps, cfg, resolution, sampler,
+                       model, batch_count, lora_slots),
+        publish=publish, title=publish_title,
+    )
     base_seed = random.randint(0, 2**32 - 1) if randomize else int(seed)
     width, height = parse_resolution(resolution)
     loras = _resolve_lora_slots(*lora_slots)
@@ -649,7 +698,8 @@ def generate_v2(prompt, negative, seed, randomize, model, aspect, megapixels,
                 sampler_mode, bongmath, variance_preset, fine_tune_variance,
                 variance_model_type, variance_schedule, cutoff_step,
                 total_steps, cutoff_strength, shift_strength, sharpen,
-                film_grain, batch_count, *lora_slots):
+                film_grain, batch_count, publish, publish_title,
+                *lora_slots):
     """Krea 2 V2 tab: the Krea2 advanced turbo/raw text-to-image graph."""
     ready, message = v2_status()
     if not ready:
@@ -678,6 +728,26 @@ def generate_v2(prompt, negative, seed, randomize, model, aspect, megapixels,
         "cutoff_strength": float(cutoff_strength),
         "shift_strength": int(shift_strength),
     }
+    # Both dicts above are already exactly the shape the library wants, so
+    # the settings blob reuses them rather than rebuilding them — the size
+    # is stored as the aspect/megapixels/multiple the controls hold, not
+    # the width/height they resolve to, so a loaded prompt puts the three
+    # sliders back where they were. See _krea_settings.
+    prompts.record(prompts.TAB_KREA2_V2, prompt, negative or "", {
+        "model": model,
+        "aspect": aspect,
+        "megapixels": float(megapixels),
+        "multiple": int(multiple),
+        "seed": int(seed or 0),
+        "randomize": bool(randomize),
+        "batch_count": int(batch_count),
+        "sampler": sampler_settings,
+        "variance": variance_settings,
+        "sharpen": bool(sharpen),
+        "film_grain": bool(film_grain),
+        "loras": [[bool(on), name, float(weight)] for on, name, weight
+                  in zip(lora_slots[::3], lora_slots[1::3], lora_slots[2::3])],
+    }, publish=publish, title=publish_title)
     jobs = [{
         "prompt": prompt, "negative": negative or "", "seed": base_seed + i,
         "width": width, "height": height, "loras": loras,
@@ -1387,6 +1457,34 @@ def _tab_intro(text: str):
     return gr.Markdown(text, elem_classes=classes)
 
 
+def _publish_row():
+    """The admin-only "publish this to the library" controls.
+
+    Returns (checkbox, title) for a generate handler's `publish` and
+    `publish_title` arguments. Both are **built either way and hidden for
+    a customer**, never omitted: a tab's click() input list is fixed at
+    build time, and one that changed shape with the licence would need
+    two versions of every handler signature. Hidden components still send
+    their value, so the handler reads False and "" and captures the way it
+    always did.
+
+    Hidden and not merely disabled, and that is the whole point of it: a
+    customer is never told their prompts are saved, and a greyed-out
+    "publish to the library" box tells them.
+    """
+    admin = licensing.is_admin()
+    with gr.Row(visible=admin):
+        checkbox = gr.Checkbox(
+            label="⭐ Publish this prompt to the library", value=False,
+            scale=0, min_width=280,
+        )
+        title = gr.Textbox(
+            label="Card title (optional)", scale=1,
+            placeholder="Golden hour portrait",
+        )
+    return checkbox, title
+
+
 def _cta(label: str):
     """A tab's primary action button — Generate, Edit, Swap face, ...
 
@@ -1444,6 +1542,322 @@ def _close_pricing():
             gr.update(visible=True), gr.update(visible=False))
 
 
+# ------------------------------------------------------------ prompt library
+# Cards are built from real components rather than one gr.HTML block — the
+# opposite call to the pricing panel, and for the one reason that matters:
+# every card carries a button that has to write values into another tab's
+# controls, and markup cannot do that.
+#
+# The pool is fixed at LIBRARY_CARDS and shown or hidden per page, because
+# a Blocks tree is built once at import and cannot grow a component later.
+LIBRARY_CARDS = 12
+
+# Filter labels → what prompts.library() wants. The dicts are the single
+# source for both, so a radio and its query cannot drift apart.
+_LIB_TABS = {
+    "Everything": None,
+    "🎨 Krea2": prompts.TAB_KREA2,
+    "🔶 Krea2 V2": prompts.TAB_KREA2_V2,
+}
+_LIB_SOURCES = {
+    "All prompts": None,
+    "⭐ Official": "admin",
+    "👥 Community": "community",
+}
+_LIB_TAB_NAMES = {prompts.TAB_KREA2: "Krea2", prompts.TAB_KREA2_V2: "Krea2 V2"}
+
+
+def _sub(settings, key):
+    """A nested settings dict, or an empty one for anything else.
+
+    Not the same check as `or {}`: these blobs are stored verbatim on the
+    licence server and come back as whatever is in Mongo, so a V2 row
+    holding a *string* where `sampler` should be a dict is a shape this
+    has to survive rather than a shape it can assume away. Every reader
+    below then gets .get() on a dict and the card still renders.
+    """
+    value = settings.get(key)
+    return value if isinstance(value, dict) else {}
+
+
+def _rows(settings):
+    """The `loras` list, or an empty one — same reasoning as _sub."""
+    value = settings.get("loras")
+    return value if isinstance(value, list) else []
+
+
+def _pick(value, choices):
+    """Set a dropdown, or leave it alone if this pod has no such choice.
+
+    The whole cross-pod safety story in one function. A prompt is written
+    on someone else's pod, which may have models, LoRA files or a build
+    this one does not — and a Gradio dropdown handed a value outside its
+    `choices` is a broken component, not a wrong one. Leaving the control
+    where it was is always safe and always renders.
+    """
+    return gr.update(value=value) if value in choices else gr.update()
+
+
+def _num(value, lo, hi):
+    """Set a slider/number, clamped into range; no-op for a non-number.
+
+    Ranges are a property of this build, not of the prompt, so a value
+    from a version whose slider went further is clamped rather than
+    dropped — the recipe stays as close as this UI can express it.
+    """
+    try:
+        return gr.update(value=max(lo, min(hi, float(value))))
+    except (TypeError, ValueError):
+        return gr.update()
+
+
+def _lora_updates(rows, count, choices, default_weight=0.8):
+    """(names, weights) updates for a plain LoRA stack, padded to `count`.
+
+    A file this pod does not have becomes "None" *explicitly* rather than
+    being left alone: the slots are being reset to a whole other recipe,
+    and a leftover LoRA from whatever was loaded before would silently
+    join it.
+    """
+    names, weights = [], []
+    for index in range(count):
+        row = rows[index] if index < len(rows) else None
+        name = row[0] if row else None
+        names.append(gr.update(value=name if name in choices else "None"))
+        weight = row[1] if row and len(row) > 1 else default_weight
+        weights.append(_num(weight, 0.0, 2.0))
+    return names, weights
+
+
+def _krea_updates(entry):
+    """A library prompt → updates for every Krea 2 control, in target order."""
+    settings = entry.settings or {}
+    names, weights = _lora_updates(_rows(settings), MAX_LORA_SLOTS,
+                                   LORA_CHOICES)
+    return [
+        gr.update(value=entry.prompt),
+        gr.update(value=entry.negative or ""),
+        _pick(settings.get("model"), MODEL_CHOICES),
+        _num(settings.get("steps"), 1, 60),
+        _num(settings.get("cfg"), 0.5, 8.0),
+        _pick(settings.get("resolution"), list(RESOLUTION_PRESETS)),
+        _pick(settings.get("sampler"), SAMPLERS),
+        _num(settings.get("seed"), 0, 2**32 - 1),
+        gr.update(value=bool(settings.get("randomize", True))),
+        _num(settings.get("batch_count", 1), 1, 20),
+        *names, *weights,
+    ]
+
+
+def _v2_updates(entry):
+    """A library prompt → updates for every Krea 2 V2 control, in order."""
+    settings = entry.settings or {}
+    sampler = _sub(settings, "sampler")
+    variance = _sub(settings, "variance")
+
+    # V2's rows carry an on/off checkbox, so they are triples rather than
+    # the pairs _lora_updates handles. A row naming a file this pod does
+    # not have is switched off as well as blanked — leaving it ticked
+    # would apply "None" at a strength, which reads as a stack that did
+    # not load.
+    rows = _rows(settings)
+    enables, names, weights = [], [], []
+    for index in range(len(V2_LORA_SLOTS)):
+        row = rows[index] if index < len(rows) else None
+        name = row[1] if row and len(row) > 1 else None
+        known = name in V2_LORA_CHOICES
+        enables.append(gr.update(value=bool(row[0]) if row and known else False))
+        names.append(gr.update(value=name if known else "None"))
+        weights.append(_num(row[2] if row and len(row) > 2 else 1.0, 0.0, 2.0))
+
+    return [
+        gr.update(value=entry.prompt),
+        gr.update(value=entry.negative or ""),
+        _pick(settings.get("model"), V2_MODEL_CHOICES),
+        _pick(settings.get("aspect"), list(V2_ASPECT_RATIOS)),
+        _num(settings.get("megapixels"), 0.5, 4.0),
+        _num(settings.get("multiple"), 8, 64),
+        _num(settings.get("seed"), 0, 2**32 - 1),
+        gr.update(value=bool(settings.get("randomize", True))),
+        _num(settings.get("batch_count", 1), 1, 20),
+        _num(sampler.get("eta"), 0.0, 2.0),
+        # Both of these are allow_custom_value dropdowns — RES4LYF builds
+        # its lists at load time, so a name this build does not list is
+        # still a name the node may well accept.
+        gr.update(value=sampler["sampler_name"]) if sampler.get("sampler_name")
+        else gr.update(),
+        gr.update(value=sampler["scheduler"]) if sampler.get("scheduler")
+        else gr.update(),
+        _num(sampler.get("steps"), 1, 100),
+        _num(sampler.get("denoise"), 0.0, 1.0),
+        _num(sampler.get("cfg"), 0.0, 20.0),
+        _pick(sampler.get("sampler_mode"), V2_SAMPLER_MODES),
+        gr.update(value=bool(sampler.get("bongmath", True))),
+        _pick(variance.get("variance_preset"), V2_VARIANCE_PRESETS),
+        _num(variance.get("fine_tune_variance"), 0, 100),
+        _pick(variance.get("model_type"), V2_VARIANCE_MODEL_TYPES),
+        _pick(variance.get("variance_schedule"), V2_VARIANCE_SCHEDULES),
+        _num(variance.get("cutoff_step"), 0, 100),
+        _num(variance.get("total_steps"), 1, 100),
+        _num(variance.get("cutoff_strength"), 0.0, 1.0),
+        _num(variance.get("shift_strength"), 0, 200),
+        gr.update(value=bool(settings.get("sharpen", False))),
+        gr.update(value=bool(settings.get("film_grain", False))),
+        *enables, *names, *weights,
+    ]
+
+
+def _card_chips(entry) -> str:
+    """The one-line settings summary under a card's prompt text."""
+    settings = entry.settings or {}
+    chips = [_LIB_TAB_NAMES.get(entry.tab, entry.tab)]
+    if settings.get("model"):
+        chips.append(str(settings["model"]))
+    if entry.tab == prompts.TAB_KREA2:
+        chips += [f"{settings.get('steps', '?')} steps",
+                  f"CFG {settings.get('cfg', '?')}"]
+        if settings.get("resolution"):
+            chips.append(str(settings["resolution"]))
+        live = [row for row in _rows(settings)
+                if row and row[0] not in (None, "None")]
+    else:
+        sampler = _sub(settings, "sampler")
+        chips += [f"{sampler.get('steps', '?')} steps",
+                  f"CFG {sampler.get('cfg', '?')}"]
+        if settings.get("aspect"):
+            # Just the ratio — the labels read "3:4 (Portrait Standard)".
+            chips.append(str(settings["aspect"]).split(" ")[0])
+        live = [row for row in _rows(settings)
+                if row and len(row) > 2 and row[0]]
+    if live:
+        chips.append(f"{len(live)} LoRA" + ("s" if len(live) > 1 else ""))
+    return " · ".join(f"`{chip}`" for chip in chips)
+
+
+def _card_body(entry) -> str:
+    """One card's markdown: what it is, what it says, what it is set to."""
+    heading = (f"⭐ **{entry.title}**" if entry.title
+               else "⭐ **Official prompt**" if entry.is_official
+               else "👥 **Community prompt**")
+    text = entry.prompt.strip().replace("\n", " ")
+    if len(text) > 260:
+        text = text[:259].rstrip() + "…"
+    return f"{heading}\n\n> {text}\n\n{_card_chips(entry)}"
+
+
+def _card_button(entry):
+    """The Use button for one card — or the reason it cannot be used.
+
+    A card for a tab this licence does not grant still renders, and says
+    plainly why the button is dead. Hiding it would be worse: what the
+    tab you have not bought can do is exactly the thing worth seeing, and
+    it is the same argument the pricing panel makes.
+    """
+    targets = _krea_targets if entry.tab == prompts.TAB_KREA2 else _v2_targets
+    name = _LIB_TAB_NAMES.get(entry.tab, entry.tab)
+    if targets is None:
+        return gr.update(value=f"🔒 Needs {name}", interactive=False)
+    return gr.update(value=f"▶️ Use in {name}", interactive=True)
+
+
+def _library_render(tab_label, source_label, search, page, force=False):
+    """One page of the library → every card, the pager and the state.
+
+    Returns a flat tuple in the order the outputs list is built below:
+    rows state, page state, the info line, prev/next, then the card
+    groups, bodies and buttons.
+    """
+    page = max(0, int(page or 0))
+    result = prompts.library(
+        tab=_LIB_TABS.get(tab_label),
+        source=_LIB_SOURCES.get(source_label),
+        search=(search or "").strip(),
+        skip=page * LIBRARY_CARDS, limit=LIBRARY_CARDS, force=force,
+    )
+    # A filter can shrink the library under a page number that was fine a
+    # moment ago. Landing on an empty page reads as "no prompts", which is
+    # wrong and looks broken — go back to the first one instead.
+    if not result.prompts and result.error is None and page > 0:
+        page = 0
+        result = prompts.library(
+            tab=_LIB_TABS.get(tab_label),
+            source=_LIB_SOURCES.get(source_label),
+            search=(search or "").strip(),
+            skip=0, limit=LIBRARY_CARDS, force=force,
+        )
+
+    rows = list(result.prompts)[:LIBRARY_CARDS]
+    first = page * LIBRARY_CARDS
+
+    if result.error:
+        # Warn, not error: the library being unreadable says nothing about
+        # whether this pod can generate, which it plainly can.
+        info = f"⚠️ {result.error}"
+    elif not rows:
+        info = ("No prompts here yet. Try **Everything** in both filters, or "
+                "clear the search box.")
+    else:
+        info = (f"Showing **{first + 1}–{first + len(rows)}** of "
+                f"**{result.total}**")
+
+    groups, bodies, buttons = [], [], []
+    for slot in range(LIBRARY_CARDS):
+        entry = rows[slot] if slot < len(rows) else None
+        groups.append(gr.update(visible=entry is not None))
+        bodies.append(gr.update(value=_card_body(entry)) if entry
+                      else gr.update())
+        buttons.append(_card_button(entry) if entry else gr.update())
+
+    return (
+        rows, page, info,
+        gr.update(interactive=page > 0),
+        gr.update(interactive=first + len(rows) < result.total),
+        *groups, *bodies, *buttons,
+    )
+
+
+def _library_first(tab_label, source_label, search):
+    """A filter or search changed — always back to page one."""
+    return _library_render(tab_label, source_label, search, 0)
+
+
+def _library_refresh(tab_label, source_label, search, page):
+    """🔄 Refresh — skip the TTL so a just-approved prompt shows up."""
+    return _library_render(tab_label, source_label, search, page, force=True)
+
+
+def _library_prev(tab_label, source_label, search, page):
+    return _library_render(tab_label, source_label, search, int(page or 0) - 1)
+
+
+def _library_next(tab_label, source_label, search, page):
+    return _library_render(tab_label, source_label, search, int(page or 0) + 1)
+
+
+def _use_prompt(slot, rows):
+    """Load card `slot` into its tab, and switch to it.
+
+    Returns updates for *both* generation tabs' controls every time — the
+    outputs list is fixed at build time, so the tab that is not being
+    loaded gets a bare gr.update(), which changes nothing. A card whose
+    tab is not licensed cannot reach here (its button is dead), but it is
+    guarded anyway: `rows` is client state, and this is what happens if
+    it arrives stale.
+    """
+    krea = [gr.update()] * len(_krea_targets or [])
+    v2 = [gr.update()] * len(_v2_targets or [])
+    selected = gr.update()
+
+    entry = rows[slot] if rows and slot < len(rows) else None
+    if entry is not None:
+        if entry.tab == prompts.TAB_KREA2 and _krea_targets:
+            krea, selected = _krea_updates(entry), gr.update(selected="krea2")
+        elif entry.tab == prompts.TAB_KREA2_V2 and _v2_targets:
+            v2, selected = _v2_updates(entry), gr.update(selected="krea2v2")
+
+    return (*krea, *v2, selected)
+
+
 with gr.Blocks(title="Krea 2 on RunPod") as ui:
     # The application bar: brand and licence on the left, the way into the
     # pricing panel on the right. A Row rather than one gr.HTML because that
@@ -1466,9 +1880,20 @@ with gr.Blocks(title="Krea 2 on RunPod") as ui:
         pricing_open_btn = gr.Button("💳 Plans & pricing", size="sm",
                                      elem_classes="kx-navbtn", scale=0)
 
+    # Where the Prompt Library's "Use" button writes to. Both stay None
+    # when the tab they belong to is not licensed, which is what the
+    # library reads to decide whether a card can be loaded at all — see
+    # the tab below.
+    _krea_targets = None
+    _v2_targets = None
+
     with gr.Tabs() as main_tabs:
         if features.enabled(features.Key.KREA_T2I):
-            with gr.Tab(features.label_for(features.Key.KREA_T2I)):
+            # Explicit id so the Prompt Library can select this tab. Tabs
+            # are otherwise numbered by construction order, which shifts
+            # with the licence.
+            with gr.Tab(features.label_for(features.Key.KREA_T2I),
+                        id="krea2"):
                 with gr.Row():
                     with gr.Column(scale=2, elem_classes="kx-panel"):
                         prompt_box = gr.Textbox(
@@ -1508,6 +1933,7 @@ with gr.Blocks(title="Krea 2 on RunPod") as ui:
                                 1, 20, value=1, step=1, label="Batch count"
                             )
                         lora_dds, lora_ws = _lora_stack()
+                        krea_publish, krea_publish_title = _publish_row()
                         generate_btn = _cta("🚀 Generate")
                     with gr.Column(scale=3, elem_classes="kx-panel-out"):
                         gallery = gr.Gallery(label="Output", columns=2, height=600)
@@ -1520,13 +1946,21 @@ with gr.Blocks(title="Krea 2 on RunPod") as ui:
                     inputs=[prompt_box, negative_box, seed_box, randomize_cb,
                             steps_slider, cfg_slider, resolution_dd, sampler_dd,
                             model_dd, batch_slider,
+                            krea_publish, krea_publish_title,
                             *_lora_inputs(lora_dds, lora_ws)],
                     outputs=[gallery, status_box, seed_out],
                     concurrency_id="comfy",
                 )
+                # Same order as _krea_settings writes them, so loading a
+                # prompt is a zip rather than a lookup.
+                _krea_targets = [prompt_box, negative_box, model_dd,
+                                 steps_slider, cfg_slider, resolution_dd,
+                                 sampler_dd, seed_box, randomize_cb,
+                                 batch_slider, *lora_dds, *lora_ws]
 
         if features.enabled(features.Key.KREA_V2_T2I):
-            with gr.Tab(features.label_for(features.Key.KREA_V2_T2I)):
+            with gr.Tab(features.label_for(features.Key.KREA_V2_T2I),
+                        id="krea2v2"):
                 _v2_message = v2_status()[1]
                 _tab_intro(
                     "The **KREA 2 TURBO/RAW** graph, reproduced "
@@ -1596,6 +2030,7 @@ with gr.Blocks(title="Krea 2 on RunPod") as ui:
                             v2_batch = gr.Slider(1, 20, value=1, step=1,
                                                  label="Batch count")
                         v2_cbs, v2_dds, v2_ws = _v2_lora_stack()
+                        v2_publish, v2_publish_title = _publish_row()
                         v2_generate_btn = _cta("🚀 Generate")
                     with gr.Column(scale=3, elem_classes="kx-panel-out"):
                         v2_gallery = gr.Gallery(label="Output", columns=2,
@@ -1737,10 +2172,126 @@ with gr.Blocks(title="Krea 2 on RunPod") as ui:
                             v2_cutoff_step, v2_total_steps,
                             v2_cutoff_strength, v2_shift_strength,
                             v2_sharpen, v2_grain, v2_batch,
+                            v2_publish, v2_publish_title,
                             *_lora_triples(v2_cbs, v2_dds, v2_ws)],
                     outputs=[v2_gallery, v2_status_box, v2_seed_out],
                     concurrency_id="comfy",
                 )
+                _v2_targets = [
+                    v2_prompt, v2_negative, v2_model_dd,
+                    v2_aspect, v2_megapixels, v2_multiple,
+                    v2_seed, v2_randomize, v2_batch,
+                    v2_eta, v2_sampler_name, v2_scheduler, v2_steps,
+                    v2_denoise, v2_cfg, v2_sampler_mode, v2_bongmath,
+                    v2_variance_preset, v2_fine_tune, v2_variance_model,
+                    v2_variance_schedule, v2_cutoff_step, v2_total_steps,
+                    v2_cutoff_strength, v2_shift_strength,
+                    v2_sharpen, v2_grain,
+                    *v2_cbs, *v2_dds, *v2_ws,
+                ]
+
+        # Placed here, below both generation tabs, and that is load-bearing
+        # rather than cosmetic: its Use buttons write into their controls,
+        # and those are ordinary Python locals that only exist for a
+        # .click() declared later in the file. Same reason the V2 model
+        # dropdown is wired at the bottom of its own tab.
+        if features.enabled(features.Key.COMMUNITY_PROMPTS):
+            with gr.Tab(features.label_for(features.Key.COMMUNITY_PROMPTS),
+                        id="prompts") as library_tab:
+                _tab_intro(
+                    "Ready-made prompts for **Krea2** and **Krea2 V2** — "
+                    "⭐ ones we put together, and 👥 ones the community is "
+                    "using. **Use** loads the prompt *and* every setting "
+                    "behind it into that tab, so you can run it as it is or "
+                    "treat it as a starting point.\n\n"
+                    "Anything a prompt asks for that this pod does not have "
+                    "— a model, a LoRA file — is left as it was rather than "
+                    "applied, so a card always loads."
+                )
+                # kx-lib-filters: these are visible cards rather than the
+                # invisible blocks of a control column, so they need the
+                # vertical padding the .form rule strips — see theme.py.
+                with gr.Row(elem_classes="kx-lib-filters"):
+                    lib_tab_filter = gr.Radio(
+                        choices=list(_LIB_TABS), value="Everything",
+                        label="Tab",
+                    )
+                    lib_source_filter = gr.Radio(
+                        choices=list(_LIB_SOURCES), value="All prompts",
+                        label="Source",
+                    )
+                with gr.Row(elem_classes="kx-lib-filters"):
+                    lib_search = gr.Textbox(
+                        label="Search", scale=4, submit_btn=True,
+                        placeholder="portrait, cinematic, anime … "
+                                    "(press Enter)",
+                    )
+                    lib_refresh = gr.Button("🔄 Refresh", size="sm", scale=0)
+                lib_info = gr.Markdown(
+                    "🔄 Refresh to load the prompt library.",
+                    elem_classes="kx-meta",
+                )
+
+                # The page's rows, and which page it is. State rather than
+                # a recomputed fetch, so clicking Use costs nothing and
+                # cannot show a card different from the one clicked.
+                lib_rows = gr.State([])
+                lib_page = gr.State(0)
+
+                # A fixed pool, shown and hidden per page: a Blocks tree is
+                # built once at import and cannot grow a component later,
+                # so "a card per result" is not on the table.
+                lib_cards, lib_bodies, lib_buttons = [], [], []
+                for _start in range(0, LIBRARY_CARDS, 3):
+                    with gr.Row():
+                        for _slot in range(_start, _start + 3):
+                            with gr.Column(visible=False, min_width=260,
+                                           elem_classes="kx-prompt-card"
+                                           ) as _card:
+                                lib_bodies.append(gr.Markdown())
+                                lib_buttons.append(
+                                    gr.Button("▶️ Use", size="sm")
+                                )
+                            lib_cards.append(_card)
+
+                with gr.Row(elem_classes="kx-navrow"):
+                    lib_prev = gr.Button("← Previous", size="sm",
+                                         interactive=False)
+                    lib_next = gr.Button("Next →", size="sm",
+                                         interactive=False)
+
+                _lib_filters = [lib_tab_filter, lib_source_filter, lib_search]
+                _lib_outputs = [lib_rows, lib_page, lib_info, lib_prev,
+                                lib_next, *lib_cards, *lib_bodies,
+                                *lib_buttons]
+
+                # Fetched when the tab is opened, never at build time —
+                # the same rule the pricing panel follows, so a licence
+                # server that is slow cannot hold up pod startup. The 300s
+                # cache in prompts.py absorbs re-opening it.
+                library_tab.select(fn=_library_first, inputs=_lib_filters,
+                                   outputs=_lib_outputs)
+                for _control in (lib_tab_filter, lib_source_filter):
+                    _control.change(fn=_library_first, inputs=_lib_filters,
+                                    outputs=_lib_outputs)
+                lib_search.submit(fn=_library_first, inputs=_lib_filters,
+                                  outputs=_lib_outputs)
+                for _button, _handler in ((lib_refresh, _library_refresh),
+                                          (lib_prev, _library_prev),
+                                          (lib_next, _library_next)):
+                    _button.click(fn=_handler,
+                                  inputs=[*_lib_filters, lib_page],
+                                  outputs=_lib_outputs)
+
+                # Every Use button writes to both tabs' controls, because
+                # the outputs list is fixed at build time; _use_prompt
+                # no-ops the half it is not loading. An unlicensed tab
+                # contributes nothing, and its cards' buttons are dead.
+                _use_outputs = [*(_krea_targets or []), *(_v2_targets or []),
+                                main_tabs]
+                for _slot, _button in enumerate(lib_buttons):
+                    _button.click(fn=partial(_use_prompt, _slot),
+                                  inputs=lib_rows, outputs=_use_outputs)
 
         if features.enabled(features.Key.KREA_EDIT):
             with gr.Tab(features.label_for(features.Key.KREA_EDIT)):

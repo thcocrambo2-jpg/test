@@ -5,6 +5,17 @@
 //   npm run issue-key -- --key KREA2-XXXX-XXXX-XXXX --plan studio --update
 //   npm run issue-key -- --key KREA2-XXXX-XXXX-XXXX --features-extra "wan_i2v" --update
 //   npm run issue-key -- --key KREA2-XXXX-XXXX-XXXX --revoke
+//   npm run issue-key -- --key KREA2-XXXX-XXXX-XXXX --admin --update
+//
+// ── --admin ────────────────────────────────────────────────────────────
+//
+// A role, not an entitlement. It grants no tab and never has — what a key
+// can run is `features` and nothing else, so marking one admin cannot
+// change what it generates. What it changes is the prompt library: an
+// ordinary pod captures every new recipe into it silently, an admin pod
+// captures nothing and publishes only what its operator ticks the box for.
+// Put it on the keys you generate from yourself, or your own testing fills
+// the review queue you are the one working through.
 //
 // The generated key is what the customer puts in KREA2_LICENSE_KEY on
 // their pod. Keys are stored in plain text so you can match a key to a
@@ -94,7 +105,7 @@ if (!opts.name && !opts.key) {
   const known = await plans.find({}).sort({ sort_order: 1 }).toArray();
   die(
     'usage: npm run issue-key -- --name "Acme Corp" --plan pro --seats 2',
-    '       [--features-extra "wan_i2v"] [--days 30]',
+    '       [--features-extra "wan_i2v"] [--days 30] [--admin|--no-admin]',
     "       [--update] [--key KREA2-...] [--revoke]",
     "",
     `plans:    ${known.map((p) => p._id).join(", ") ||
@@ -171,6 +182,11 @@ if (opts.update) {
   const filter = opts.key ? { key: opts.key } : { name: opts.name };
   const update = { seats, active: true, updated_at: new Date() };
   if (opts.days) update.expires_at = expires_at;
+  // Only when one of the two flags is actually passed, for the same
+  // reason as the entitlements below: an --update about seats must not
+  // silently demote an admin key.
+  if (opts.admin) update.is_admin = true;
+  if (opts["no-admin"]) update.is_admin = false;
   // Each only when asked: an --update that is really about seats must not
   // silently wipe an entitlement someone set earlier.
   if (features !== null) update.features = features;
@@ -193,7 +209,10 @@ if (opts.update) {
   );
   if (!result) die("no matching license to update");
 
-  console.log(`\nupdated  ${result.key}  seats=${result.seats}`);
+  console.log(
+    `\nupdated  ${result.key}  seats=${result.seats}` +
+      (result.is_admin === true ? "  (admin)" : ""),
+  );
   await report(result);
   console.log(
     "\nA running instance keeps the features it started with — the " +
@@ -216,6 +235,10 @@ const doc = {
   plan_id: plan_id ?? null,
   features,
   features_extra,
+  // Written even when false, like the three above, so every document has
+  // the same shape and an ordinary key is visibly ordinary rather than
+  // merely missing the field.
+  is_admin: Boolean(opts.admin),
   created_at: new Date(),
 };
 await licenses.insertOne(doc);
@@ -223,6 +246,8 @@ await licenses.insertOne(doc);
 console.log(`\n  customer   ${opts.name}`);
 console.log(`  key        ${key}`);
 console.log(`  seats      ${seats}`);
+console.log(`  admin      ${doc.is_admin ? "yes — prompts are not captured "
+  + "automatically; publish with the checkbox" : "no"}`);
 await report(doc);
 console.log(`  expires    ${expires_at ? expires_at.toISOString() : "never"}`);
 if (plan_id === undefined && features === null) {

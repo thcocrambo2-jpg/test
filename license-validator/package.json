@@ -9,7 +9,9 @@
     "dev": "node --watch server.js",
     "init-db": "node scripts/init-db.js",
     "seed-catalog": "node scripts/seed-catalog.js",
-    "issue-key": "node scripts/issue-key.js"
+    "seed-prompts": "node scripts/seed-prompts.js",
+    "issue-key": "node scripts/issue-key.js",
+    "prompts": "node scripts/add-prompt.js"
   },
   "engines": {
     "node": ">=20"

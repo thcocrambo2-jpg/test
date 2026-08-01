@@ -647,6 +647,26 @@ CSS = f"""
 
 .gradio-container .form > .block {{ padding-top: 0 !important; padding-bottom: 0 !important; }}
 
+/* The Prompt Library's filter row, for exactly the reason .kx-panel-out
+   needs the same rule above: the tab has no control column, so these
+   blocks keep their default card chrome — a border and a background — and
+   the rule above then leaves the "Tab" / "Source" / "Search" label sitting
+   on the card's top edge and the control on its bottom one. Give all four
+   sides a card's padding back.
+
+   Descendant selectors rather than child ones because Gradio nests a
+   .form under the row only when it groups consecutive inputs: the two
+   radios are grouped, the search box next to a button is not, and both
+   have to land. */
+.gradio-container .kx-lib-filters .block {{
+  padding-top: var(--block-padding) !important;
+  padding-bottom: var(--block-padding) !important;
+}}
+
+/* The radio pills wrap onto a second line on a narrow screen; without this
+   they sit flush against the label above them. */
+.kx-lib-filters .wrap {{ gap: 6px; }}
+
 /* Fine print: the notes Gradio needs inside an accordion, sized so they
    support the controls next to them instead of competing with them. */
 .kx-fine p {{
@@ -828,6 +848,59 @@ CSS = f"""
   border-radius: 16px;
   background: var(--kx-surface);
   box-shadow: var(--kx-shadow-sm);
+}}
+
+/* One card in the Prompt Library. Built from real Gradio components, not
+   markup like the plan cards above, because each one carries a button that
+   loads its settings into another tab — so this styles a gr.Column rather
+   than an <article>, and the surface/border/radius are matched to
+   .kx-plan by hand instead of shared.
+
+   The Column is toggled visible per page. `height: 100%` on a flex column
+   with the button pushed down by margin-top:auto is what keeps a row of
+   three cards bottom-aligned when their prompts differ in length. */
+.kx-prompt-card {{
+  padding: 14px 16px;
+  border: 1px solid var(--kx-border);
+  border-radius: 14px;
+  background: var(--kx-surface);
+  box-shadow: var(--kx-shadow-sm);
+}}
+.kx-prompt-card:hover {{
+  border-color: {ACCENT}59;
+  box-shadow: var(--kx-shadow-md);
+}}
+
+/* The prompt itself, as a blockquote. Clamped to six lines: a card is a
+   summary, and the whole text arrives in the tab when Use is pressed. */
+.kx-prompt-card blockquote {{
+  margin: 8px 0;
+  padding-left: 10px;
+  border-left: 2px solid {ACCENT}59;
+  color: var(--kx-muted);
+  font-size: 0.9rem;
+  line-height: 1.5;
+  display: -webkit-box;
+  -webkit-line-clamp: 6;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+}}
+
+/* The settings chips — `8 steps`, `CFG 1.0`, `3:4`. Inline code is what
+   markdown gives us for free, so it is restyled here rather than being
+   built out of spans the Markdown component would escape. */
+.kx-prompt-card code {{
+  padding: 1px 6px;
+  border-radius: 6px;
+  border: 1px solid var(--kx-border);
+  background: var(--kx-sunken);
+  font-size: 0.72rem;
+  white-space: nowrap;
+}}
+
+/* Buttons sit at the bottom of their card whatever the prompt's length. */
+.kx-prompt-card button {{
+  margin-top: auto;
 }}
 
 /* The recommended tier (plan.is_popular). Brighter border, a soft accent
@@ -1700,10 +1773,6 @@ def pricing_html(catalogue, current_plan_id=None,
        tabs it builds and which weights it downloads. {standing}</p>
   </header>
   <div class="kx-plan-grid">{cards}</div>
-  <p class="kx-pricing-foot">Prices are per licence key. How many pods one
-     key may run at once is a property of the key, not of the plan, so it is
-     not listed here — check the seat count you were issued. To change plan,
-     contact your supplier with your licence key.</p>
 </div>
 {_contact_modal(getattr(catalogue, "contact_url", None))}
 """

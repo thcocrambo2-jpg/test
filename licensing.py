@@ -85,6 +85,14 @@ _feature_labels: dict[str, str] = {}
 # exists to avoid.
 _plan_id = None
 _plan_name = None
+# Whether this licence is one of ours rather than a customer's. A role and
+# not an entitlement: it grants no tab, and what the app can run still
+# comes from the `features` array alone. It decides one thing — whether
+# prompts.py captures every new recipe into the library on its own (a
+# customer pod) or only what the operator explicitly publishes (ours).
+# Defaults to False, so a server too old to send the field, and a dry run
+# that never asks one, both behave like a customer.
+_is_admin = False
 # When this license stops working, as a UTC datetime, or None for a key
 # with no end date. Display only for the same reason as the plan above:
 # the server checks it on every acquire and every heartbeat, so nothing
@@ -220,6 +228,27 @@ def _clean_expiry(value) -> datetime | None:
     return parsed.astimezone(timezone.utc)
 
 
+def is_admin() -> bool:
+    """True if this licence is one of ours rather than a customer's.
+
+    False until acquire_or_exit() has returned, and False for a dry run —
+    both are the safe default, because the only thing this decides is
+    whether the prompt library captures generations automatically, and
+    "behave like a customer" is the behaviour every pod already had.
+    """
+    return _is_admin
+
+
+def instance_id() -> str | None:
+    """This pod's id for the seat it holds, or None before acquire ran.
+
+    Only meaningful after acquire_or_exit() — a dry run never sets it,
+    and callers outside the licensing path (prompts.py) treat None as an
+    ordinary answer rather than a reason to fail.
+    """
+    return _instance_id
+
+
 def entitlements() -> list[str] | None:
     """Feature keys this license grants, or None to use the app defaults.
 
@@ -279,7 +308,7 @@ def acquire_or_exit() -> None:
     ~90 GB of downloads.
     """
     global _instance_id, _heartbeat_seconds, _entitlements, _feature_labels
-    global _plan_id, _plan_name, _expires_at
+    global _plan_id, _plan_name, _expires_at, _is_admin
 
     if not LICENSE_KEY:
         _fail(
@@ -320,12 +349,18 @@ def acquire_or_exit() -> None:
             _plan_id = body.get("plan_id") or None
             _plan_name = body.get("plan_name") or None
             _expires_at = _clean_expiry(body.get("expires_at"))
+            # `is True` rather than truthiness: anything other than the
+            # boolean the server sends — a string, a 1, a missing field —
+            # means "not admin", which is the behaviour every pod had
+            # before this flag existed.
+            _is_admin = body.get("is_admin") is True
             log.info(
-                "License OK — %s%s, seat %d of %d, expires %s",
+                "License OK — %s%s, seat %d of %d, expires %s%s",
                 body.get("license_name") or "licensed",
                 f" on {_plan_name}" if _plan_name else "",
                 body.get("seats_in_use", 1), body.get("seats", 1),
                 _expires_at.date() if _expires_at else "never",
+                " · admin" if _is_admin else "",
             )
             _start_heartbeat()
             _install_exit_hooks()

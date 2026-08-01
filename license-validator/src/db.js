@@ -44,6 +44,10 @@ export async function collections() {
     // need no unique index of their own and a seed run is a plain upsert.
     plans: db.collection("plans"),
     features: db.collection("features"),
+    // The prompt library. Unlike the two above this is written by pods, so
+    // it carries a generated _id and is deduplicated on `fingerprint` — see
+    // ensureIndexes.
+    prompts: db.collection("prompts"),
   };
 }
 
@@ -54,7 +58,7 @@ export async function collections() {
  * that restarts reclaims its own row instead of racing itself into two.
  */
 export async function ensureIndexes() {
-  const { licenses, sessions } = await collections();
+  const { licenses, sessions, prompts } = await collections();
   await licenses.createIndex({ key: 1 }, { unique: true, name: "key_unique" });
   await sessions.createIndex(
     { license_key: 1, instance_id: 1 },
@@ -72,4 +76,34 @@ export async function ensureIndexes() {
   // use?" check that guards a plan deletion — both rare, but both scan the
   // whole collection without it.
   await licenses.createIndex({ plan_id: 1 }, { name: "plan_id" });
+
+  // The prompt library. `fingerprint` is the deduplication key and the one
+  // index that is load-bearing rather than an optimisation: the pod already
+  // skips a recipe it has submitted before, but that memory is per-process,
+  // so a restart, a second pod on the same licence, or two customers who
+  // happen to type the same thing all arrive here as a repeat. Unique means
+  // the upsert collapses every one of them into a single document instead
+  // of quietly filling the collection with copies.
+  await prompts.createIndex(
+    { fingerprint: 1 },
+    { unique: true, name: "fingerprint_unique" },
+  );
+  // The public listing: is_public first because it filters out almost
+  // everything, then tab, then newest-first within that.
+  await prompts.createIndex(
+    { is_public: 1, tab: 1, created_at: -1 },
+    { name: "public_tab_recent" },
+  );
+  // The review queue — oldest first, so the backlog is worked from the end
+  // that has been waiting longest.
+  await prompts.createIndex(
+    { reviewed_at: 1, created_at: 1 },
+    { name: "review_queue" },
+  );
+  // Only for moderation: "what else has this licence submitted?", and the
+  // pending-count cap that POST /v1/prompts checks on every write.
+  await prompts.createIndex(
+    { license_key: 1, reviewed_at: 1 },
+    { name: "license_pending" },
+  );
 }
