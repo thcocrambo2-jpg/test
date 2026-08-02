@@ -94,6 +94,18 @@ export const FEATURES = [
     sort_order: 40,
   },
   {
+    key: "krea_v2_edit",
+    name: "Krea2 V2 Edit",
+    tab_label: "🔷 Krea2 V2 Edit",
+    description:
+      "Describe a change to any image, run through the higher-quality " +
+      "Krea2 V2 pipeline",
+    category: "editing",
+    // 45, between krea_edit (40) and krea_inpaint (50), so the two
+    // instruction-edit tabs read together in a plan's feature list.
+    sort_order: 67,
+  },
+  {
     key: "krea_inpaint",
     name: "Krea2 Inpaint",
     tab_label: "🖌️ Krea2 Inpaint",

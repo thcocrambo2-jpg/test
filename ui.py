@@ -1,10 +1,10 @@
 """Gradio UI.
 
 Tabs: single / simple-batch generation, Krea 2 V2, the prompt library,
-instruction-based editing (upload an image, describe the change),
-inpainting (paint a mask over an uploaded image), ReActor face swap,
-Flux 2 generation, Flux 2 Klein 9B editing, Wan 2.2 video, JSON batch
-jobs, and an output gallery.
+instruction-based editing (upload an image, describe the change) on the
+Krea 2 and Krea 2 V2 pipelines, inpainting (paint a mask over an uploaded
+image), ReActor face swap, Flux 2 generation, Flux 2 Klein 9B editing,
+Wan 2.2 video, JSON batch jobs, and an output gallery.
 
 Every one of them is a feature in features.py and is only built when that
 feature is on — a tab that is off is never constructed, so its handlers
@@ -12,15 +12,25 @@ are never registered on Gradio's HTTP API either. Written for Gradio 6
 (theme/css now belong to launch(), gr.File hands the handler a plain file
 path).
 
+Each tab's body is a `_tab_*` builder, and **TAB_ORDER is what decides
+the order they appear in** — one tuple of (feature key, builder, tab id),
+walked by the loop inside the Blocks. Moving an entry moves the tab and
+nothing else has to change; a feature that is off is skipped, so the rest
+close up with no gap. The order is fixed for the build, since the Blocks
+tree is constructed once at import.
+
 The prompt library is the one tab that reaches into another. Its cards
 come from the licence server (prompts.py) and its Use buttons write a
 whole recipe into the Krea 2 or Krea 2 V2 controls and switch to that
-tab, which is why it is built *after* both of them — those controls are
-ordinary Python locals, and a .click() can only name ones that already
-exist. The same handlers also feed the library: generate_single and
-generate_v2 call prompts.record() with what they were given. That call is
-silent by contract — the customer is never told their prompts are saved,
-so it can neither block generation nor surface a failure.
+tab. Those controls belong to two other builders, so the Use wiring is
+declared *after* the loop rather than inside the library's own body —
+Gradio only needs a component to exist before the .click() naming it, not
+before the tab it lives in, and keeping that one .click() out of the body
+is exactly what leaves TAB_ORDER free to be reordered. The same handlers
+also feed the library: generate_single and generate_v2 call
+prompts.record() with what they were given. That call is silent by
+contract — the customer is never told their prompts are saved, so it can
+neither block generation nor surface a failure.
 
 Alongside the tabs there is one other view: the pricing panel, which is
 the plan catalogue read from the licence server (plans.py) and rendered by
@@ -96,6 +106,9 @@ from config import (
     V2_DEFAULT_MEGAPIXELS,
     V2_DEFAULT_MULTIPLE,
     V2_DEFAULT_NEGATIVE,
+    V2_EDIT_DEFAULT_GROUNDING,
+    V2_EDIT_DEFAULT_REF_BOOST,
+    V2_EDIT_FIT_MODES,
     V2_SAMPLER_DEFAULTS,
     V2_SAMPLER_MODES,
     V2_SAMPLER_NAMES,
@@ -164,6 +177,11 @@ from workflow_krea2_v2 import (
     status as v2_status,
     turbo_lora_available as v2_turbo_lora_available,
     turbo_lora_slot as v2_turbo_lora_slot,
+)
+from workflow_krea2_v2_edit import (
+    build_v2_edit_workflow,
+    fit_size as v2_edit_fit_size,
+    status as v2_edit_status,
 )
 from workflow_reactor import (
     build_faceswap_workflow,
@@ -956,6 +974,77 @@ def generate_edit(image, prompt, negative, seed, randomize, steps, cfg,
     } for i in range(int(batch_count))]
     for images, status in _run_jobs(jobs, builder=build_edit_workflow,
                                     prefix="Krea2Edit"):
+        yield images, status, base_seed
+
+
+def generate_v2_edit(image, prompt, negative, seed, randomize, model,
+                     grounding, ref_boost, fit_mode, eta, sampler_name,
+                     scheduler, steps, cfg, sampler_mode, bongmath,
+                     variance_preset, fine_tune_variance,
+                     variance_model_type, variance_schedule, cutoff_step,
+                     total_steps, cutoff_strength, shift_strength,
+                     batch_count, *lora_slots):
+    """Krea 2 V2 Edit tab: instruction editing on the V2 pipeline.
+
+    Same contract as generate_edit — upload an image, describe the change,
+    the size comes from the source — over the V2 model, VAE, LoRA stack,
+    ClownsharKSampler and Smart Seed Variance. There is no Denoise control
+    because the source reaches the model through conditioning rather than
+    the starting latent, so it is pinned at 1.0 in the builder.
+    """
+    if image is None:
+        yield [], "❌ Upload an image first.", 0
+        return
+    ready, message = v2_edit_status()
+    if not ready:
+        yield [], message, 0
+        return
+    entry = v2_resolve_model(model)
+    if not v2_model_available(entry):
+        yield [], (f"❌ Model “{entry['name']}” is not downloaded yet — "
+                   "restart the app so the download step can fetch it."), 0
+        return
+    if not str(prompt or "").strip():
+        yield [], "❌ Describe the change (e.g. “make the jacket red”).", 0
+        return
+    image = image.convert("RGB")
+    width, height = v2_edit_fit_size(*image.size)
+    if (width, height) != image.size:
+        image = image.resize((width, height), Image.LANCZOS)
+    base_seed = random.randint(0, 2**32 - 1) if randomize else int(seed)
+    tag = uuid.uuid4().hex[:8]
+    try:
+        image_name = client.upload_image(_png_bytes(image),
+                                         f"v2edit_{tag}.png")
+    except Exception as exc:
+        yield [], f"❌ Uploading the image to ComfyUI failed: {exc}", base_seed
+        return
+    sampler_settings = {
+        "eta": float(eta), "sampler_name": sampler_name,
+        "scheduler": scheduler, "steps": int(steps), "cfg": float(cfg),
+        "sampler_mode": sampler_mode, "bongmath": bool(bongmath),
+    }
+    variance_settings = {
+        "variance_preset": variance_preset,
+        "fine_tune_variance": int(fine_tune_variance),
+        "model_type": variance_model_type,
+        "variance_schedule": variance_schedule,
+        "cutoff_step": int(cutoff_step), "total_steps": int(total_steps),
+        "cutoff_strength": float(cutoff_strength),
+        "shift_strength": int(shift_strength),
+    }
+    jobs = [{
+        "prompt": prompt, "negative": negative or "", "seed": base_seed + i,
+        "width": width, "height": height, "image_name": image_name,
+        "loras": _resolve_v2_lora_slots(*lora_slots),
+        "unet_file": entry["file"],
+        "grounding_px": int(grounding), "ref_boost": float(ref_boost),
+        "fit_mode": fit_mode,
+        "sampler_settings": sampler_settings,
+        "variance_settings": variance_settings,
+    } for i in range(int(batch_count))]
+    for images, status in _run_jobs(jobs, builder=build_v2_edit_workflow,
+                                    prefix="Krea2V2Edit"):
         yield images, status, base_seed
 
 
@@ -1865,6 +1954,1351 @@ def _use_prompt(slot, rows):
     return (*krea, *v2, selected)
 
 
+
+# ── Tab builders ─────────────────────────────────────────────────────────────
+#
+# One function per tab, each building its own body into whichever
+# gr.Tab context the TAB_ORDER loop below has opened. `tab` is that
+# context object, needed only by the tabs that wire an event on it.
+#
+# A builder returns whatever the rest of the page needs from it — the
+# two generation tabs return the control lists the Prompt Library writes
+# into, the library returns the state and buttons that wiring attaches
+# to, and everything else returns None because nothing outside it cares.
+
+
+def _tab_krea_t2i(tab):
+    """The KREA_T2I tab body."""
+    with gr.Row():
+        with gr.Column(scale=2, elem_classes="kx-panel"):
+            prompt_box = gr.Textbox(
+                label="Prompt", lines=5,
+                value="A photorealistic golden-hour portrait, natural "
+                      "skin texture, shallow depth of field",
+            )
+            negative_box = gr.Textbox(
+                label="Negative prompt (only used when CFG > 1)", lines=2
+            )
+            model_dd, model_info = _model_selector()
+            with gr.Row():
+                steps_slider = gr.Slider(
+                    1, 60, value=DEFAULTS["steps"], step=1, label="Steps"
+                )
+                cfg_slider = gr.Slider(
+                    0.5, 8.0, value=DEFAULTS["cfg"], step=0.1, label="CFG"
+                )
+            model_dd.change(
+                fn=krea_model_changed,
+                inputs=[model_dd, prompt_box],
+                outputs=[steps_slider, cfg_slider, model_info,
+                         prompt_box],
+            )
+            with gr.Row():
+                resolution_dd = gr.Dropdown(
+                    choices=list(RESOLUTION_PRESETS),
+                    value=DEFAULT_RESOLUTION, label="Resolution",
+                )
+                sampler_dd = gr.Dropdown(
+                    choices=SAMPLERS, value=SAMPLERS[0], label="Sampler"
+                )
+            with gr.Row():
+                seed_box = gr.Number(label="Seed", value=42, precision=0)
+                randomize_cb = gr.Checkbox(label="🎲 Random seed", value=True)
+                batch_slider = gr.Slider(
+                    1, 20, value=1, step=1, label="Batch count"
+                )
+            lora_dds, lora_ws = _lora_stack()
+            krea_publish, krea_publish_title = _publish_row()
+            generate_btn = _cta("🚀 Generate")
+        with gr.Column(scale=3, elem_classes="kx-panel-out"):
+            gallery = gr.Gallery(label="Output", columns=2, height=600)
+            status_box = _status_box()
+            seed_out = gr.Number(
+                label="Base seed used", interactive=False, precision=0
+            )
+    generate_btn.click(
+        fn=generate_single,
+        inputs=[prompt_box, negative_box, seed_box, randomize_cb,
+                steps_slider, cfg_slider, resolution_dd, sampler_dd,
+                model_dd, batch_slider,
+                krea_publish, krea_publish_title,
+                *_lora_inputs(lora_dds, lora_ws)],
+        outputs=[gallery, status_box, seed_out],
+        concurrency_id="comfy",
+    )
+    # Same order as _krea_settings writes them, so loading a
+    # prompt is a zip rather than a lookup.
+    _krea_targets = [prompt_box, negative_box, model_dd,
+                     steps_slider, cfg_slider, resolution_dd,
+                     sampler_dd, seed_box, randomize_cb,
+                     batch_slider, *lora_dds, *lora_ws]
+
+    return _krea_targets
+
+
+def _tab_krea_v2_t2i(tab):
+    """The KREA_V2_T2I tab body."""
+    _v2_message = v2_status()[1]
+    _tab_intro(
+        "The **KREA 2 TURBO/RAW** graph, reproduced "
+        "as-is: the mxfp8 or raw Krea 2 model with the Wan 2.1 "
+        "VAE, an 11-LoRA model+CLIP stack, RES4LYF's "
+        "**ClownsharKSampler** (`linear/euler` + `bong_tangent`, "
+        "eta 0.5, bongmath on) and **RBG Smart Seed Variance** on "
+        "the positive prompt. Picking a model resets Steps/CFG "
+        "and the Turbo LoRA slot to that variant's defaults — "
+        "all of it still editable. This tab shares nothing with "
+        "the Single tab.\n\n"
+        f"{_v2_message}"
+    )
+    with gr.Row():
+        with gr.Column(scale=2, elem_classes="kx-panel"):
+            v2_prompt = gr.Textbox(
+                label="Positive Prompt", lines=6,
+                placeholder="The source workflow ships this box "
+                            "empty — describe your image here.",
+            )
+            v2_negative = gr.Textbox(
+                label="Negatives", lines=6,
+                value=V2_DEFAULT_NEGATIVE,
+            )
+            v2_model_dd = gr.Dropdown(
+                choices=V2_MODEL_CHOICES,
+                value=V2_MODEL_CHOICES[0], label="Model",
+            )
+            v2_model_info = gr.Markdown(
+                _v2_model_info_text(v2_resolve_model(None)),
+                elem_classes="kx-meta",
+            )
+            gr.Markdown("### 📐 Resolution",
+                        elem_classes="kx-section")
+            with gr.Row():
+                v2_aspect = gr.Dropdown(
+                    choices=list(V2_ASPECT_RATIOS),
+                    value=V2_DEFAULT_ASPECT, label="Aspect ratio",
+                )
+                v2_megapixels = gr.Slider(
+                    0.5, 4.0, value=V2_DEFAULT_MEGAPIXELS,
+                    step=0.1, label="Megapixels",
+                )
+                v2_multiple = gr.Slider(
+                    8, 64, value=V2_DEFAULT_MULTIPLE, step=8,
+                    label="Multiple of",
+                )
+            v2_size_info = gr.Markdown(
+                _v2_size_text(
+                    V2_DEFAULT_ASPECT, V2_DEFAULT_MEGAPIXELS,
+                    V2_DEFAULT_MULTIPLE,
+                ),
+                elem_classes="kx-meta",
+            )
+            for _control in (v2_aspect, v2_megapixels, v2_multiple):
+                _control.change(
+                    fn=v2_size_preview,
+                    inputs=[v2_aspect, v2_megapixels, v2_multiple],
+                    outputs=v2_size_info,
+                )
+            with gr.Row():
+                v2_seed = gr.Number(label="Seed", value=370102505887178,
+                                    precision=0)
+                v2_randomize = gr.Checkbox(
+                    label="🎲 Random seed", value=True
+                )
+                v2_batch = gr.Slider(1, 20, value=1, step=1,
+                                     label="Batch count")
+            v2_cbs, v2_dds, v2_ws = _v2_lora_stack()
+            v2_publish, v2_publish_title = _publish_row()
+            v2_generate_btn = _cta("🚀 Generate")
+        with gr.Column(scale=3, elem_classes="kx-panel-out"):
+            v2_gallery = gr.Gallery(label="Output", columns=2,
+                                    height=600)
+            v2_status_box = _status_box()
+            v2_seed_out = gr.Number(label="Base seed used",
+                                    interactive=False, precision=0)
+            with gr.Accordion("⚙️ ClownsharKSampler", open=True):
+                with gr.Row():
+                    v2_steps = gr.Slider(
+                        1, 100, value=_v2_steps, step=1,
+                        label="Steps",
+                    )
+                    v2_cfg = gr.Slider(
+                        0.0, 20.0, value=_v2_cfg, step=0.1,
+                        label="CFG",
+                    )
+                with gr.Row():
+                    v2_sampler_name = gr.Dropdown(
+                        choices=V2_SAMPLER_NAMES,
+                        value=V2_SAMPLER_DEFAULTS["sampler_name"],
+                        label="Sampler", allow_custom_value=True,
+                    )
+                    v2_scheduler = gr.Dropdown(
+                        choices=V2_SCHEDULERS,
+                        value=V2_SAMPLER_DEFAULTS["scheduler"],
+                        label="Scheduler", allow_custom_value=True,
+                    )
+                gr.Markdown(
+                    "RES4LYF builds its sampler/scheduler lists at "
+                    "load time, so both accept free text — the "
+                    "listed values are the workflow's plus the "
+                    "node's own defaults.",
+                    elem_classes="kx-fine",
+                )
+                with gr.Row():
+                    v2_eta = gr.Slider(
+                        0.0, 2.0, value=V2_SAMPLER_DEFAULTS["eta"],
+                        step=0.01, label="Eta",
+                    )
+                    v2_denoise = gr.Slider(
+                        0.0, 1.0,
+                        value=V2_SAMPLER_DEFAULTS["denoise"],
+                        step=0.01, label="Denoise",
+                    )
+                with gr.Row():
+                    v2_sampler_mode = gr.Dropdown(
+                        choices=V2_SAMPLER_MODES,
+                        value=V2_SAMPLER_DEFAULTS["sampler_mode"],
+                        label="Sampler mode",
+                    )
+                    v2_bongmath = gr.Checkbox(
+                        label="bongmath",
+                        value=V2_SAMPLER_DEFAULTS["bongmath"],
+                    )
+            with gr.Accordion("🌱 Smart Seed Variance", open=False):
+                gr.Markdown(
+                    "Perturbs the positive conditioning per seed, "
+                    "so a batch varies without drifting off-prompt.",
+                    elem_classes="kx-fine",
+                )
+                with gr.Row():
+                    v2_variance_preset = gr.Dropdown(
+                        choices=V2_VARIANCE_PRESETS,
+                        value=V2_VARIANCE_DEFAULTS["variance_preset"],
+                        label="Preset",
+                    )
+                    v2_fine_tune = gr.Slider(
+                        0, 100,
+                        value=V2_VARIANCE_DEFAULTS["fine_tune_variance"],
+                        step=1, label="Fine tune",
+                    )
+                v2_variance_model = gr.Dropdown(
+                    choices=V2_VARIANCE_MODEL_TYPES,
+                    value=V2_VARIANCE_DEFAULTS["model_type"],
+                    label="Model type",
+                )
+                with gr.Row():
+                    v2_variance_schedule = gr.Dropdown(
+                        choices=V2_VARIANCE_SCHEDULES,
+                        value=V2_VARIANCE_DEFAULTS["variance_schedule"],
+                        label="Schedule",
+                    )
+                    v2_shift_strength = gr.Slider(
+                        0, 200,
+                        value=V2_VARIANCE_DEFAULTS["shift_strength"],
+                        step=1, label="Shift strength",
+                    )
+                with gr.Row():
+                    v2_cutoff_step = gr.Slider(
+                        0, 100,
+                        value=V2_VARIANCE_DEFAULTS["cutoff_step"],
+                        step=1, label="Cutoff step",
+                    )
+                    v2_total_steps = gr.Slider(
+                        1, 100,
+                        value=V2_VARIANCE_DEFAULTS["total_steps"],
+                        step=1, label="Total steps",
+                    )
+                    v2_cutoff_strength = gr.Slider(
+                        0.0, 1.0,
+                        value=V2_VARIANCE_DEFAULTS["cutoff_strength"],
+                        step=0.1, label="Cutoff strength",
+                    )
+            with gr.Accordion("🎞️ Post-processing", open=False):
+                gr.Markdown(
+                    "Both are **bypassed in the source workflow**, "
+                    "so both start off and the tab reproduces it "
+                    "exactly as shipped. Sharpen runs first, then "
+                    "grain.",
+                    elem_classes="kx-fine",
+                )
+                v2_sharpen = gr.Checkbox(
+                    label="Sharpen (radius 1, sigma 0.35, alpha 1)",
+                    value=False,
+                )
+                v2_grain = gr.Checkbox(
+                    label="Film grain (intensity 0.05, scale 1)",
+                    value=False,
+                )
+    # Wired here, not at creation: the Model dropdown lives in
+    # the left column while the sliders it drives are in the
+    # right one, so every component has to exist first.
+    if V2_TURBO_SLOT is not None:
+        v2_model_dd.change(
+            fn=v2_model_changed, inputs=v2_model_dd,
+            outputs=[v2_steps, v2_cfg, v2_model_info,
+                     v2_cbs[V2_TURBO_SLOT], v2_ws[V2_TURBO_SLOT]],
+        )
+    v2_generate_btn.click(
+        fn=generate_v2,
+        inputs=[v2_prompt, v2_negative, v2_seed, v2_randomize,
+                v2_model_dd,
+                v2_aspect, v2_megapixels, v2_multiple,
+                v2_eta, v2_sampler_name, v2_scheduler, v2_steps,
+                v2_denoise, v2_cfg, v2_sampler_mode, v2_bongmath,
+                v2_variance_preset, v2_fine_tune,
+                v2_variance_model, v2_variance_schedule,
+                v2_cutoff_step, v2_total_steps,
+                v2_cutoff_strength, v2_shift_strength,
+                v2_sharpen, v2_grain, v2_batch,
+                v2_publish, v2_publish_title,
+                *_lora_triples(v2_cbs, v2_dds, v2_ws)],
+        outputs=[v2_gallery, v2_status_box, v2_seed_out],
+        concurrency_id="comfy",
+    )
+    _v2_targets = [
+        v2_prompt, v2_negative, v2_model_dd,
+        v2_aspect, v2_megapixels, v2_multiple,
+        v2_seed, v2_randomize, v2_batch,
+        v2_eta, v2_sampler_name, v2_scheduler, v2_steps,
+        v2_denoise, v2_cfg, v2_sampler_mode, v2_bongmath,
+        v2_variance_preset, v2_fine_tune, v2_variance_model,
+        v2_variance_schedule, v2_cutoff_step, v2_total_steps,
+        v2_cutoff_strength, v2_shift_strength,
+        v2_sharpen, v2_grain,
+        *v2_cbs, *v2_dds, *v2_ws,
+    ]
+
+    return _v2_targets
+
+
+def _tab_community_prompts(tab):
+    """The COMMUNITY_PROMPTS tab body."""
+    library_tab = tab
+
+    _tab_intro(
+        "Ready-made prompts for **Krea2** and **Krea2 V2** — "
+        "⭐ ones we put together, and 👥 ones the community is "
+        "using. **Use** loads the prompt *and* every setting "
+        "behind it into that tab, so you can run it as it is or "
+        "treat it as a starting point.\n\n"
+        "Anything a prompt asks for that this pod does not have "
+        "— a model, a LoRA file — is left as it was rather than "
+        "applied, so a card always loads."
+    )
+    # kx-lib-filters: these are visible cards rather than the
+    # invisible blocks of a control column, so they need the
+    # vertical padding the .form rule strips — see theme.py.
+    with gr.Row(elem_classes="kx-lib-filters"):
+        lib_tab_filter = gr.Radio(
+            choices=list(_LIB_TABS), value="Everything",
+            label="Tab",
+        )
+        lib_source_filter = gr.Radio(
+            choices=list(_LIB_SOURCES), value="All prompts",
+            label="Source",
+        )
+    with gr.Row(elem_classes="kx-lib-filters"):
+        lib_search = gr.Textbox(
+            label="Search", scale=4, submit_btn=True,
+            placeholder="portrait, cinematic, anime … "
+                        "(press Enter)",
+        )
+        lib_refresh = gr.Button("🔄 Refresh", size="sm", scale=0)
+    lib_info = gr.Markdown(
+        "🔄 Refresh to load the prompt library.",
+        elem_classes="kx-meta",
+    )
+
+    # The page's rows, and which page it is. State rather than
+    # a recomputed fetch, so clicking Use costs nothing and
+    # cannot show a card different from the one clicked.
+    lib_rows = gr.State([])
+    lib_page = gr.State(0)
+
+    # A fixed pool, shown and hidden per page: a Blocks tree is
+    # built once at import and cannot grow a component later,
+    # so "a card per result" is not on the table.
+    lib_cards, lib_bodies, lib_buttons = [], [], []
+    for _start in range(0, LIBRARY_CARDS, 3):
+        with gr.Row():
+            for _slot in range(_start, _start + 3):
+                with gr.Column(visible=False, min_width=260,
+                               elem_classes="kx-prompt-card"
+                               ) as _card:
+                    lib_bodies.append(gr.Markdown())
+                    lib_buttons.append(
+                        gr.Button("▶️ Use", size="sm")
+                    )
+                lib_cards.append(_card)
+
+    with gr.Row(elem_classes="kx-navrow"):
+        lib_prev = gr.Button("← Previous", size="sm",
+                             interactive=False)
+        lib_next = gr.Button("Next →", size="sm",
+                             interactive=False)
+
+    _lib_filters = [lib_tab_filter, lib_source_filter, lib_search]
+    _lib_outputs = [lib_rows, lib_page, lib_info, lib_prev,
+                    lib_next, *lib_cards, *lib_bodies,
+                    *lib_buttons]
+
+    # Fetched when the tab is opened, never at build time —
+    # the same rule the pricing panel follows, so a licence
+    # server that is slow cannot hold up pod startup. The 300s
+    # cache in prompts.py absorbs re-opening it.
+    library_tab.select(fn=_library_first, inputs=_lib_filters,
+                       outputs=_lib_outputs)
+    for _control in (lib_tab_filter, lib_source_filter):
+        _control.change(fn=_library_first, inputs=_lib_filters,
+                        outputs=_lib_outputs)
+    lib_search.submit(fn=_library_first, inputs=_lib_filters,
+                      outputs=_lib_outputs)
+    for _button, _handler in ((lib_refresh, _library_refresh),
+                              (lib_prev, _library_prev),
+                              (lib_next, _library_next)):
+        _button.click(fn=_handler,
+                      inputs=[*_lib_filters, lib_page],
+                      outputs=_lib_outputs)
+
+    return lib_rows, lib_buttons
+
+
+def _tab_krea_edit(tab):
+    """The KREA_EDIT tab body."""
+    _tab_intro(
+        "Upload an image and **describe the change** — no painting "
+        "needed. The Identity Edit LoRA lets the model see the "
+        "source image, so it can recolor, add or replace objects, "
+        "restyle, or re-stage a person in a new scene while keeping "
+        "their identity. Defaults (8–12 steps, CFG 1.0) suit most "
+        "edits; removals work better with ~20 steps, CFG ≈ 3 and a "
+        "lower reference fidelity. Fewer steps favour composition, "
+        "more favour face detail."
+        + ("" if edit_lora_available() else
+           "\n\n⚠️ **The Identity Edit LoRA is not downloaded yet** "
+           "(~1.9 GB) — restart the app to fetch it; this tab will "
+           "refuse to run until then.")
+    )
+    with gr.Row():
+        with gr.Column(scale=2, elem_classes="kx-panel"):
+            edit_image = gr.Image(
+                label="Source image (paste with Ctrl+V)", type="pil",
+                sources=["upload", "clipboard"],
+            )
+            _recent_picker(edit_image)
+            edit_prompt = gr.Textbox(
+                label="Edit instruction",
+                value="Remove all her clothes completely, make her fully nude. Keep the exact same face, facial features, expression, skin tone, hairstyle, body pose, hands position, and background. Do not change the face at all.          remove clothes exposing her naked average natural shaped tits. dont change her face",
+                placeholder="make the jacket red · this person "
+                            "walking a dog on a beach at sunset",
+                lines=3,
+            )
+            edit_negative = gr.Textbox(
+                label="Negative prompt (only used when CFG > 1)", lines=2
+            )
+            edit_model_dd, edit_model_info = _model_selector()
+            with gr.Row():
+                edit_steps = gr.Slider(
+                    1, 60, value=DEFAULTS["steps"], step=1, label="Steps"
+                )
+                edit_cfg = gr.Slider(
+                    0.5, 8.0, value=DEFAULTS["cfg"], step=0.1, label="CFG"
+                )
+            edit_model_dd.change(
+                fn=krea_model_changed,
+                inputs=[edit_model_dd, edit_prompt],
+                outputs=[edit_steps, edit_cfg, edit_model_info,
+                         edit_prompt],
+            )
+            with gr.Row():
+                # 384-768 is the LoRA's trained grounding range.
+                # The old slider went to 1536 (v1's range) and
+                # defaulted to 1152 — far above what v1.1/v1.2
+                # ever saw, which is the documented cause of
+                # duplicated "double picture" outputs.
+                edit_grounding = gr.Slider(
+                    384, 768, value=768, step=64,
+                    label="Grounding (low = stronger edit, "
+                          "high = keep likeness)",
+                )
+                edit_ref_boost = gr.Slider(
+                    0.0, 10.0, value=4.0, step=0.5,
+                    label="Reference fidelity (1 = neutral, "
+                          "~4 = strong likeness, >10 breaks "
+                          "removals)",
+                )
+            with gr.Row():
+                edit_sampler = gr.Dropdown(
+                    choices=SAMPLERS, value=SAMPLERS[0], label="Sampler"
+                )
+            with gr.Row():
+                edit_seed = gr.Number(label="Seed", value=42, precision=0)
+                edit_random = gr.Checkbox(
+                    label="🎲 Random seed", value=True
+                )
+                edit_batch = gr.Slider(
+                    1, 20, value=1, step=1, label="Batch count"
+                )
+            edit_lora_dds, edit_lora_ws = _lora_stack()
+            edit_btn = _cta("✨ Edit")
+        with gr.Column(scale=3, elem_classes="kx-panel-out"):
+            edit_gallery = gr.Gallery(label="Output", columns=2, height=600)
+            edit_status = _status_box()
+            edit_seed_out = gr.Number(
+                label="Base seed used", interactive=False, precision=0
+            )
+    edit_btn.click(
+        fn=generate_edit,
+        inputs=[edit_image, edit_prompt, edit_negative, edit_seed,
+                edit_random, edit_steps, edit_cfg, edit_sampler,
+                edit_grounding, edit_ref_boost, edit_model_dd,
+                edit_batch,
+                *_lora_inputs(edit_lora_dds, edit_lora_ws)],
+        outputs=[edit_gallery, edit_status, edit_seed_out],
+        concurrency_id="comfy",
+    )
+
+
+def _tab_krea_v2_edit(tab):
+    """The KREA_V2_EDIT tab body."""
+    _tab_intro(
+        "The **✨ Krea2 Edit** recipe on the **🔶 Krea2 V2** "
+        "pipeline: upload an image and describe the change, but "
+        "over the V2 model and Wan 2.1 VAE, the 11-LoRA "
+        "model+CLIP stack, RES4LYF's **ClownsharKSampler** and "
+        "**RBG Smart Seed Variance** — every default taken from "
+        "the V2 tab. The Identity Edit LoRA is applied first at "
+        "1.0 as trained, and the stack below sits on top of it.\n\n"
+        "Output size comes from your image (aspect kept, capped "
+        "at 2 MP), so there is no resolution control; there is no "
+        "Denoise either, because the source reaches the model "
+        "through conditioning rather than the starting latent.\n\n"
+        f"{v2_edit_status()[1]}"
+    )
+    with gr.Row():
+        with gr.Column(scale=2, elem_classes="kx-panel"):
+            v2e_image = gr.Image(
+                label="Source image (paste with Ctrl+V)",
+                type="pil", sources=["upload", "clipboard"],
+            )
+            _recent_picker(v2e_image)
+            v2e_prompt = gr.Textbox(
+                label="Edit instruction", lines=3,
+                placeholder="make the jacket red · this person "
+                            "walking a dog on a beach at sunset",
+            )
+            v2e_negative = gr.Textbox(
+                label="Negatives (only used when CFG > 1)",
+                lines=4, value=V2_DEFAULT_NEGATIVE,
+            )
+            v2e_model_dd = gr.Dropdown(
+                choices=V2_MODEL_CHOICES,
+                value=V2_MODEL_CHOICES[0], label="Model",
+            )
+            v2e_model_info = gr.Markdown(
+                _v2_model_info_text(v2_resolve_model(None)),
+                elem_classes="kx-meta",
+            )
+            with gr.Row():
+                v2e_grounding = gr.Slider(
+                    384, 768, value=V2_EDIT_DEFAULT_GROUNDING,
+                    step=64,
+                    label="Grounding (low = stronger edit, "
+                          "high = keep likeness)",
+                )
+                v2e_ref_boost = gr.Slider(
+                    0.0, 10.0, value=V2_EDIT_DEFAULT_REF_BOOST,
+                    step=0.5,
+                    label="Reference fidelity (1 = neutral, "
+                          "~4 = strong likeness, >10 breaks "
+                          "removals)",
+                )
+            v2e_fit_mode = gr.Dropdown(
+                choices=V2_EDIT_FIT_MODES,
+                value=V2_EDIT_FIT_MODES[0],
+                label="Reference geometry (fit = v1.2; the legacy "
+                      "crop is for older weights)",
+            )
+            with gr.Row():
+                v2e_seed = gr.Number(label="Seed", value=42,
+                                     precision=0)
+                v2e_randomize = gr.Checkbox(
+                    label="🎲 Random seed", value=True
+                )
+                v2e_batch = gr.Slider(1, 20, value=1, step=1,
+                                      label="Batch count")
+            v2e_cbs, v2e_dds, v2e_ws = _v2_lora_stack()
+            v2e_btn = _cta("✨ Edit")
+        with gr.Column(scale=3, elem_classes="kx-panel-out"):
+            v2e_gallery = gr.Gallery(label="Output", columns=2,
+                                     height=600)
+            v2e_status_box = _status_box()
+            v2e_seed_out = gr.Number(label="Base seed used",
+                                     interactive=False,
+                                     precision=0)
+            with gr.Accordion("⚙️ ClownsharKSampler", open=True):
+                with gr.Row():
+                    v2e_steps = gr.Slider(
+                        1, 100, value=_v2_steps, step=1,
+                        label="Steps",
+                    )
+                    v2e_cfg = gr.Slider(
+                        0.0, 20.0, value=_v2_cfg, step=0.1,
+                        label="CFG",
+                    )
+                gr.Markdown(
+                    "The V2 defaults. For **removals**, the Edit "
+                    "LoRA prefers more steps (~20) and CFG ≈ 3 "
+                    "with a lower reference fidelity; fewer steps "
+                    "favour composition, more favour face detail.",
+                    elem_classes="kx-fine",
+                )
+                with gr.Row():
+                    v2e_sampler_name = gr.Dropdown(
+                        choices=V2_SAMPLER_NAMES,
+                        value=V2_SAMPLER_DEFAULTS["sampler_name"],
+                        label="Sampler", allow_custom_value=True,
+                    )
+                    v2e_scheduler = gr.Dropdown(
+                        choices=V2_SCHEDULERS,
+                        value=V2_SAMPLER_DEFAULTS["scheduler"],
+                        label="Scheduler", allow_custom_value=True,
+                    )
+                with gr.Row():
+                    v2e_eta = gr.Slider(
+                        0.0, 2.0, value=V2_SAMPLER_DEFAULTS["eta"],
+                        step=0.01, label="Eta",
+                    )
+                    v2e_sampler_mode = gr.Dropdown(
+                        choices=V2_SAMPLER_MODES,
+                        value=V2_SAMPLER_DEFAULTS["sampler_mode"],
+                        label="Sampler mode",
+                    )
+                v2e_bongmath = gr.Checkbox(
+                    label="bongmath",
+                    value=V2_SAMPLER_DEFAULTS["bongmath"],
+                )
+            with gr.Accordion("🌱 Smart Seed Variance", open=False):
+                gr.Markdown(
+                    "Perturbs the grounded conditioning per seed, "
+                    "so a batch of edits varies without drifting "
+                    "off-instruction. Set the preset to "
+                    "**❌ Disabled** to vary by sampling noise "
+                    "alone.",
+                    elem_classes="kx-fine",
+                )
+                with gr.Row():
+                    v2e_variance_preset = gr.Dropdown(
+                        choices=V2_VARIANCE_PRESETS,
+                        value=V2_VARIANCE_DEFAULTS["variance_preset"],
+                        label="Preset",
+                    )
+                    v2e_fine_tune = gr.Slider(
+                        0, 100,
+                        value=V2_VARIANCE_DEFAULTS["fine_tune_variance"],
+                        step=1, label="Fine tune",
+                    )
+                v2e_variance_model = gr.Dropdown(
+                    choices=V2_VARIANCE_MODEL_TYPES,
+                    value=V2_VARIANCE_DEFAULTS["model_type"],
+                    label="Model type",
+                )
+                with gr.Row():
+                    v2e_variance_schedule = gr.Dropdown(
+                        choices=V2_VARIANCE_SCHEDULES,
+                        value=V2_VARIANCE_DEFAULTS["variance_schedule"],
+                        label="Schedule",
+                    )
+                    v2e_shift_strength = gr.Slider(
+                        0, 200,
+                        value=V2_VARIANCE_DEFAULTS["shift_strength"],
+                        step=1, label="Shift strength",
+                    )
+                with gr.Row():
+                    v2e_cutoff_step = gr.Slider(
+                        0, 100,
+                        value=V2_VARIANCE_DEFAULTS["cutoff_step"],
+                        step=1, label="Cutoff step",
+                    )
+                    v2e_total_steps = gr.Slider(
+                        1, 100,
+                        value=V2_VARIANCE_DEFAULTS["total_steps"],
+                        step=1, label="Total steps",
+                    )
+                    v2e_cutoff_strength = gr.Slider(
+                        0.0, 1.0,
+                        value=V2_VARIANCE_DEFAULTS["cutoff_strength"],
+                        step=0.1, label="Cutoff strength",
+                    )
+    # Wired here for the same reason as the V2 tab: the Model
+    # dropdown is in the left column and the sliders it drives
+    # are in the right one, so both have to exist first.
+    if V2_TURBO_SLOT is not None:
+        v2e_model_dd.change(
+            fn=v2_model_changed, inputs=v2e_model_dd,
+            outputs=[v2e_steps, v2e_cfg, v2e_model_info,
+                     v2e_cbs[V2_TURBO_SLOT],
+                     v2e_ws[V2_TURBO_SLOT]],
+        )
+    v2e_btn.click(
+        fn=generate_v2_edit,
+        inputs=[v2e_image, v2e_prompt, v2e_negative, v2e_seed,
+                v2e_randomize, v2e_model_dd, v2e_grounding,
+                v2e_ref_boost, v2e_fit_mode, v2e_eta,
+                v2e_sampler_name, v2e_scheduler, v2e_steps,
+                v2e_cfg, v2e_sampler_mode, v2e_bongmath,
+                v2e_variance_preset, v2e_fine_tune,
+                v2e_variance_model, v2e_variance_schedule,
+                v2e_cutoff_step, v2e_total_steps,
+                v2e_cutoff_strength, v2e_shift_strength,
+                v2e_batch,
+                *_lora_triples(v2e_cbs, v2e_dds, v2e_ws)],
+        outputs=[v2e_gallery, v2e_status_box, v2e_seed_out],
+        concurrency_id="comfy",
+    )
+
+
+def _tab_krea_inpaint(tab):
+    """The KREA_INPAINT tab body."""
+    _tab_intro(
+        "Upload an image, **paint over the region to replace**, and "
+        "describe what should appear there — unpainted pixels are "
+        "kept from the original. Paint **nothing** to re-imagine the "
+        "whole image (img2img); in that mode lower **Denoise** "
+        "(≈0.5–0.8) to control how much of the original survives."
+    )
+    with gr.Row():
+        with gr.Column(scale=2, elem_classes="kx-panel"):
+            inpaint_editor = gr.ImageEditor(
+                label="Image — paint the region to replace "
+                      "(paste with Ctrl+V)",
+                type="pil",
+                sources=["upload", "clipboard"],
+                brush=gr.Brush(colors=["#FF3366"], color_mode="fixed"),
+                # fixed_canvas defaults to False, which sizes the
+                # canvas to the uploaded image: a 12 MP phone photo
+                # then allocates a 4032×3024 RGBA canvas *plus* a
+                # paint layer, the browser tab runs out of memory and
+                # the page reloads (gradio#8556). Pinning the canvas
+                # makes Gradio rescale the upload to fit it instead.
+                # 1536 is a deliberate cap: _prepare_inpaint_inputs
+                # would downscale to 2048 anyway, and Krea 2 inpaints
+                # comfortably at this size.
+                canvas_size=(1536, 1536),
+                fixed_canvas=True,
+                # Default is lossy webp. Unmasked pixels are composited
+                # back from this image, so keep it lossless.
+                format="png",
+            )
+            inpaint_prompt = gr.Textbox(
+                label="Prompt (describes the masked region)", lines=3
+            )
+            inpaint_negative = gr.Textbox(
+                label="Negative prompt (only used when CFG > 1)", lines=2
+            )
+            inpaint_model_dd, inpaint_model_info = _model_selector()
+            with gr.Row():
+                inpaint_steps = gr.Slider(
+                    1, 60, value=DEFAULTS["steps"], step=1, label="Steps"
+                )
+                inpaint_cfg = gr.Slider(
+                    0.5, 8.0, value=DEFAULTS["cfg"], step=0.1, label="CFG"
+                )
+            inpaint_model_dd.change(
+                fn=krea_model_changed,
+                inputs=[inpaint_model_dd, inpaint_prompt],
+                outputs=[inpaint_steps, inpaint_cfg,
+                         inpaint_model_info, inpaint_prompt],
+            )
+            with gr.Row():
+                inpaint_denoise = gr.Slider(
+                    0.1, 1.0, value=1.0, step=0.05,
+                    label="Denoise (1 = replace fully)",
+                )
+                inpaint_sampler = gr.Dropdown(
+                    choices=SAMPLERS, value=SAMPLERS[0], label="Sampler"
+                )
+            with gr.Row():
+                inpaint_grow = gr.Slider(
+                    0, 32, value=8, step=1, label="Grow mask (px)"
+                )
+                inpaint_blur = gr.Slider(
+                    0, 32, value=8, step=1, label="Blur mask edge (px)"
+                )
+            with gr.Row():
+                inpaint_seed = gr.Number(
+                    label="Seed", value=42, precision=0
+                )
+                inpaint_random = gr.Checkbox(
+                    label="🎲 Random seed", value=True
+                )
+                inpaint_batch = gr.Slider(
+                    1, 20, value=1, step=1, label="Batch count"
+                )
+            inpaint_lora_dds, inpaint_lora_ws = _lora_stack()
+            inpaint_btn = _cta("🖌️ Inpaint")
+        with gr.Column(scale=3, elem_classes="kx-panel-out"):
+            inpaint_gallery = gr.Gallery(
+                label="Output", columns=2, height=600
+            )
+            inpaint_status = _status_box()
+            inpaint_seed_out = gr.Number(
+                label="Base seed used", interactive=False, precision=0
+            )
+    inpaint_btn.click(
+        fn=generate_inpaint,
+        inputs=[inpaint_editor, inpaint_prompt, inpaint_negative,
+                inpaint_seed, inpaint_random, inpaint_steps,
+                inpaint_cfg, inpaint_denoise, inpaint_sampler,
+                inpaint_grow, inpaint_blur, inpaint_model_dd,
+                inpaint_batch,
+                *_lora_inputs(inpaint_lora_dds, inpaint_lora_ws)],
+        outputs=[inpaint_gallery, inpaint_status, inpaint_seed_out],
+        concurrency_id="comfy",
+    )
+
+
+def _tab_faceswap(tab):
+    """The FACESWAP tab body."""
+    _swap_ready, _swap_problem = reactor_status()
+    _tab_intro(
+        "Take one of your generated images, upload a **reference "
+        "face**, and ReActor replaces the face in place. This is "
+        "not a diffusion pass: no Krea 2 model is loaded, the "
+        "swap runs on ONNX in seconds, and the output keeps the "
+        "base image's **exact resolution** — only the face "
+        "region is rewritten. Only the finished swap is saved.\n\n"
+        "Every model is fetched at startup, so a swap makes no "
+        "network calls. Note that this is the **SFW edition** of "
+        "ReActor: it classifies every input image first, and an "
+        "image that trips the filter is dropped — you get a "
+        "blank 512×512 frame instead of a swap, which the status "
+        "box calls out. The check fails *closed*, so if its "
+        "detector model ever goes missing every swap comes back "
+        "blank."
+        + ("" if _swap_ready else f"\n\n⚠️ {_swap_problem[2:]}")
+    )
+    with gr.Row():
+        with gr.Column(scale=2, elem_classes="kx-panel"):
+            swap_base = gr.Image(
+                label="Base image — the face here gets replaced "
+                      "(paste with Ctrl+V)",
+                type="pil", sources=["upload", "clipboard"],
+            )
+            _recent_picker(swap_base)
+            swap_face = gr.Image(
+                label="Reference face — the face to put in "
+                      "(paste with Ctrl+V)",
+                type="pil", sources=["upload", "clipboard"],
+            )
+            with gr.Row():
+                swap_model_dd = gr.Dropdown(
+                    choices=SWAP_MODEL_CHOICES,
+                    value=default_swap_model(),
+                    label="Swap model",
+                )
+                swap_detector_dd = gr.Dropdown(
+                    choices=REACTOR_DETECTORS,
+                    value=REACTOR_DEFAULT_DETECTOR,
+                    label="Face detector",
+                )
+            with gr.Row():
+                swap_restore_dd = gr.Dropdown(
+                    choices=RESTORE_CHOICES,
+                    value=default_restore_model(),
+                    label="Face restoration (optional)",
+                )
+                swap_visibility = gr.Slider(
+                    0.1, 1.0, value=1.0, step=0.05,
+                    label="Restoration visibility",
+                )
+            swap_codeformer_w = gr.Slider(
+                0.0, 1.0, value=0.5, step=0.05,
+                label="CodeFormer weight (0 = stronger cleanup, "
+                      "1 = stay closer to the swap)",
+            )
+            with gr.Row():
+                swap_input_idx = gr.Textbox(
+                    value="0", label="Face index in base image",
+                    info="Left to right. Also accepts 0,1 or 0-2",
+                )
+                swap_source_idx = gr.Textbox(
+                    value="0", label="Face index in reference",
+                    info="Left to right. Also accepts 0,1 or 0-2",
+                )
+            swap_btn = _cta("🎭 Swap face")
+        with gr.Column(scale=3, elem_classes="kx-panel-out"):
+            swap_gallery = gr.Gallery(
+                label="Swapped output", columns=1, height=600
+            )
+            swap_status = _status_box()
+    swap_btn.click(
+        fn=generate_faceswap,
+        inputs=[swap_base, swap_face, swap_model_dd,
+                swap_detector_dd, swap_restore_dd, swap_visibility,
+                swap_codeformer_w, swap_input_idx,
+                swap_source_idx],
+        outputs=[swap_gallery, swap_status],
+        concurrency_id="comfy",
+    )
+
+
+def _tab_flux_t2i(tab):
+    """The FLUX_T2I tab body."""
+    _tab_intro(
+        "Text-to-image with **Flux 2 Dev** (32B). The model is "
+        "guidance-distilled: there is no CFG or negative prompt "
+        "— **Guidance** steers prompt adherence instead "
+        "(~4 is the sweet spot). **Turbo** (default) applies the "
+        "official Turbo LoRA at 8 steps; the Raw entry runs the "
+        "undistilled 20-step schedule. ⚠️ At ~35 GB this model "
+        "wants nearly the whole A40: don't combine it with "
+        "KREA2_WAN_PARALLEL, and expect a slow first job / model "
+        "swap when switching between Flux and Krea."
+        + ("" if flux_model_available(resolve_flux_model(None))
+           else "\n\n⚠️ **The Flux 2 models are not downloaded "
+                "yet** (~57 GB) — restart the app to fetch them; "
+                "this tab will refuse to run until then.")
+    )
+    with gr.Row():
+        with gr.Column(scale=2, elem_classes="kx-panel"):
+            flux_prompt = gr.Textbox(
+                label="Prompt", lines=5,
+                value="A photorealistic golden-hour portrait, "
+                      "natural skin texture, shallow depth of "
+                      "field",
+            )
+            flux_model_dd = gr.Dropdown(
+                choices=FLUX_MODEL_CHOICES,
+                value=FLUX_MODEL_CHOICES[0], label="Model",
+            )
+            flux_model_info = gr.Markdown(
+                _flux_model_info_text(resolve_flux_model(None)),
+                elem_classes="kx-meta",
+            )
+            with gr.Row():
+                flux_steps = gr.Slider(
+                    1, 50, value=_f_steps, step=1, label="Steps"
+                )
+                flux_guidance = gr.Slider(
+                    0.0, 10.0, value=_f_guidance, step=0.1,
+                    label="Guidance",
+                )
+            flux_model_dd.change(
+                fn=flux_model_changed,
+                inputs=[flux_model_dd, flux_prompt],
+                outputs=[flux_steps, flux_guidance,
+                         flux_model_info, flux_prompt],
+            )
+            with gr.Row():
+                flux_resolution = gr.Dropdown(
+                    choices=list(RESOLUTION_PRESETS),
+                    value=DEFAULT_RESOLUTION, label="Resolution",
+                )
+                flux_sampler = gr.Dropdown(
+                    choices=SAMPLERS, value="euler",
+                    label="Sampler",
+                )
+            with gr.Row():
+                flux_seed = gr.Number(
+                    label="Seed", value=42, precision=0
+                )
+                flux_random = gr.Checkbox(
+                    label="🎲 Random seed", value=True
+                )
+                flux_batch = gr.Slider(
+                    1, 20, value=1, step=1, label="Batch count"
+                )
+            flux_lora_dds, flux_lora_ws = _flux_lora_stack()
+            flux_btn = _cta("🌊 Generate")
+        with gr.Column(scale=3, elem_classes="kx-panel-out"):
+            flux_gallery = gr.Gallery(
+                label="Output", columns=2, height=600
+            )
+            flux_status = _status_box()
+            flux_seed_out = gr.Number(
+                label="Base seed used", interactive=False,
+                precision=0,
+            )
+    flux_btn.click(
+        fn=generate_flux,
+        inputs=[flux_prompt, flux_seed, flux_random, flux_steps,
+                flux_guidance, flux_resolution, flux_sampler,
+                flux_model_dd, flux_batch,
+                *_lora_inputs(flux_lora_dds, flux_lora_ws)],
+        outputs=[flux_gallery, flux_status, flux_seed_out],
+        concurrency_id="comfy",
+    )
+
+
+def _tab_klein_i2i(tab):
+    """The KLEIN_I2I tab body."""
+    _tab_intro(
+        "The **FLUX.2 Klein 9B Edit** graph, "
+        "reproduced as-is. Upload an image and describe the "
+        "change — the source is scaled to "
+        f"{KLEIN_REFERENCE_MEGAPIXELS:g} MP, encoded and attached "
+        "to the conditioning as a **reference latent**, so the "
+        "model edits what it is shown. Enable **input image 2** "
+        "to combine two sources; when you do, say which is which "
+        "in the prompt (*“the person from image 1 wearing the hat "
+        "from image 2”*). Klein 9B is ~9.4 GB, so it loads and "
+        "swaps far faster than Flux 2 Dev.\n\n"
+        f"{klein_status()[1]}"
+    )
+    with gr.Row():
+        with gr.Column(scale=2, elem_classes="kx-panel"):
+            klein_image = gr.Image(
+                label="Input image 1 (paste with Ctrl+V)",
+                type="pil", sources=["upload", "clipboard"],
+            )
+            _recent_picker(klein_image)
+            klein_use_image2 = gr.Checkbox(
+                label="➕ Enable input image 2", value=False,
+                info="Bypassed in the source workflow, so it "
+                     "starts off here too.",
+            )
+            klein_image2 = gr.Image(
+                label="Input image 2", type="pil", visible=False,
+                sources=["upload", "clipboard"],
+            )
+            klein_use_image2.change(
+                fn=lambda on: gr.Image(visible=bool(on)),
+                inputs=klein_use_image2, outputs=klein_image2,
+            )
+            klein_prompt = gr.Textbox(
+                label="Edit prompt", lines=4,
+                placeholder="The source workflow ships this box "
+                            "empty — describe your edit here.",
+            )
+            klein_model_dd = gr.Dropdown(
+                choices=KLEIN_MODEL_CHOICES,
+                value=KLEIN_MODEL_CHOICES[0], label="Model",
+            )
+            klein_model_info = gr.Markdown(
+                _klein_model_info_text(klein_resolve_model(None)),
+                elem_classes="kx-meta",
+            )
+            with gr.Row():
+                klein_steps = gr.Slider(
+                    1, 50, value=_k_steps, step=1, label="Steps"
+                )
+                klein_cfg = gr.Slider(
+                    0.5, 8.0, value=_k_cfg, step=0.1, label="CFG"
+                )
+                klein_guidance = gr.Slider(
+                    0.0, 10.0, value=_k_guidance, step=0.1,
+                    label="Guidance",
+                )
+            klein_model_dd.change(
+                fn=klein_model_changed, inputs=klein_model_dd,
+                outputs=[klein_steps, klein_cfg, klein_guidance,
+                         klein_model_info],
+            )
+            with gr.Row():
+                klein_sampler = gr.Dropdown(
+                    choices=SAMPLERS,
+                    value=KLEIN_DEFAULTS["sampler_name"],
+                    label="Sampler",
+                )
+                klein_scheduler = gr.Dropdown(
+                    choices=KLEIN_SCHEDULERS,
+                    value=KLEIN_DEFAULTS["scheduler"],
+                    label="Scheduler",
+                )
+            klein_reference_mp = gr.Slider(
+                0.25, 4.0, value=KLEIN_REFERENCE_MEGAPIXELS,
+                step=0.05,
+                label="Reference size (MP) — what the model looks at",
+            )
+            gr.Markdown("#### 🖼️ Output resolution",
+                        elem_classes="kx-section")
+            klein_output_mode = gr.Dropdown(
+                choices=KLEIN_OUTPUT_MODES, value=KLEIN_OUTPUT_SAME,
+                label="Mode",
+            )
+            with gr.Row():
+                klein_output_mp = gr.Slider(
+                    0.25, 4.0, value=KLEIN_DEFAULT_MEGAPIXELS,
+                    step=0.05, label="Megapixels (scale mode)",
+                )
+                klein_custom_w = gr.Number(
+                    label="Width (custom mode)",
+                    value=KLEIN_DEFAULT_CUSTOM_SIZE[0],
+                    precision=0,
+                )
+                klein_custom_h = gr.Number(
+                    label="Height (custom mode)",
+                    value=KLEIN_DEFAULT_CUSTOM_SIZE[1],
+                    precision=0,
+                )
+            klein_size_out = gr.Markdown(
+                "→ upload image 1 to see the output size.",
+                elem_classes="kx-meta",
+            )
+            _klein_size_inputs = [klein_image, klein_output_mode,
+                                  klein_output_mp, klein_custom_w,
+                                  klein_custom_h]
+            for _component in _klein_size_inputs:
+                _component.change(
+                    fn=klein_size_preview,
+                    inputs=_klein_size_inputs,
+                    outputs=klein_size_out,
+                )
+            with gr.Row():
+                klein_seed = gr.Number(
+                    label="Seed", value=42, precision=0
+                )
+                klein_random = gr.Checkbox(
+                    label="🎲 Random seed", value=True
+                )
+                klein_batch = gr.Slider(
+                    1, 20, value=1, step=1, label="Batch count"
+                )
+            klein_cbs, klein_dds, klein_ws = _klein_lora_stack()
+            klein_btn = _cta("🧩 Edit")
+        with gr.Column(scale=3, elem_classes="kx-panel-out"):
+            klein_gallery = gr.Gallery(
+                label="Output", columns=2, height=600
+            )
+            klein_status_box = _status_box()
+            klein_seed_out = gr.Number(
+                label="Base seed used", interactive=False,
+                precision=0,
+            )
+    klein_btn.click(
+        fn=generate_klein_edit,
+        inputs=[klein_image, klein_use_image2, klein_image2,
+                klein_prompt, klein_seed, klein_random,
+                klein_model_dd, klein_steps, klein_cfg,
+                klein_guidance, klein_sampler, klein_scheduler,
+                klein_reference_mp, klein_output_mode,
+                klein_output_mp, klein_custom_w, klein_custom_h,
+                klein_batch,
+                *_lora_triples(klein_cbs, klein_dds, klein_ws)],
+        outputs=[klein_gallery, klein_status_box, klein_seed_out],
+        concurrency_id="comfy",
+    )
+
+
+def _tab_wan_i2v(tab):
+    """The WAN_I2V tab body."""
+    _wan_defaults = WAN_MODE_DEFAULTS[WAN_VARIANT]
+    _wan_mode_choices = ["Turbo (Lightning, 4 steps)",
+                         "Raw (20 steps)"]
+    _wan_model_choices = ["14B two-expert (best quality, 16 fps)",
+                          "5B TI2V (lighter, 24 fps)"]
+    _tab_intro(
+        "Upload an image and **describe the motion** — Wan 2.2 "
+        "animates it into a clip of up to 5 s. The **14B** "
+        "two-expert model gives the best quality at 16 fps: "
+        "**Turbo** uses the Lightning distillation LoRAs "
+        "(4 steps, CFG 1, ~5× faster); **Raw** is the "
+        "undistilled 20-step schedule — slightly better motion "
+        "and detail, but expect 15–45+ min per clip on an A40. "
+        "The **5B** model is a single lighter model at 24 fps — "
+        "lower quality than 14B, but far less VRAM (best choice "
+        "in parallel mode) and no turbo/raw split. "
+        + ("Videos run on their own ComfyUI instance, so the "
+           "image tabs stay responsive while a clip renders."
+           if WAN_PARALLEL else
+           "Videos share the image tabs' ComfyUI queue: a "
+           "running video delays queued image jobs (start with "
+           "KREA2_WAN_PARALLEL=1 for a separate video instance).")
+        + ("" if wan_models_available() or wan_5b_available() else
+           "\n\n⚠️ **The Wan 2.2 models are not downloaded yet** "
+           "(~49 GB) — restart the app to fetch them; this tab "
+           "will refuse to run until then.")
+    )
+    with gr.Row():
+        with gr.Column(scale=2, elem_classes="kx-panel"):
+            wan_image = gr.Image(
+                label="Start image (paste with Ctrl+V)",
+                type="pil", sources=["upload", "clipboard"],
+            )
+            _recent_picker(wan_image)
+            wan_prompt = gr.Textbox(
+                label="Motion prompt",
+                placeholder="she turns her head and smiles, "
+                            "gentle camera push-in, wind in "
+                            "the hair",
+                lines=3,
+            )
+            wan_negative = gr.Textbox(
+                label="Negative prompt (only used when CFG > 1, "
+                      "i.e. Raw mode)",
+                value=WAN_DEFAULT_NEGATIVE, lines=2,
+            )
+            wan_model = gr.Radio(
+                choices=_wan_model_choices,
+                value=_wan_model_choices[0],
+                label="Model",
+            )
+            wan_mode = gr.Radio(
+                choices=_wan_mode_choices,
+                value=_wan_mode_choices[0 if WAN_VARIANT == "turbo"
+                                        else 1],
+                label="Mode (14B only — the 5B has no Lightning)",
+            )
+            with gr.Row():
+                wan_steps = gr.Slider(
+                    1, 40, value=_wan_defaults["steps"], step=1,
+                    label="Steps",
+                )
+                wan_cfg = gr.Slider(
+                    0.5, 8.0, value=_wan_defaults["cfg"], step=0.1,
+                    label="CFG",
+                )
+            with gr.Row():
+                wan_resolution = gr.Radio(
+                    choices=list(WAN_RESOLUTIONS),
+                    value=WAN_DEFAULT_RESOLUTION,
+                    label="Resolution (keeps the source aspect)",
+                )
+            with gr.Row():
+                wan_seconds = gr.Slider(
+                    1.0, WAN_MAX_SECONDS, value=WAN_MAX_SECONDS,
+                    step=0.25, label="Duration (seconds)",
+                )
+                wan_sampler = gr.Dropdown(
+                    choices=SAMPLERS + ["uni_pc"], value="euler",
+                    label="Sampler",
+                )
+            with gr.Row():
+                wan_seed = gr.Number(
+                    label="Seed", value=42, precision=0
+                )
+                wan_random = gr.Checkbox(
+                    label="🎲 Random seed", value=True
+                )
+                wan_batch = gr.Slider(
+                    1, 10, value=1, step=1, label="Batch count"
+                )
+            wan_btn = _cta("🎬 Generate video")
+        with gr.Column(scale=3, elem_classes="kx-panel-out"):
+            wan_video_out = gr.Video(
+                label="Latest video", autoplay=True
+            )
+            wan_files_out = gr.Files(
+                label="All videos from this run", interactive=False
+            )
+            wan_status = _status_box()
+            wan_seed_out = gr.Number(
+                label="Base seed used", interactive=False,
+                precision=0,
+            )
+    wan_model.change(
+        fn=wan_model_changed, inputs=[wan_model, wan_mode],
+        outputs=[wan_mode, wan_steps, wan_cfg],
+    )
+    wan_mode.change(
+        fn=wan_mode_changed, inputs=[wan_model, wan_mode],
+        outputs=[wan_steps, wan_cfg],
+    )
+    wan_btn.click(
+        fn=generate_wan_video,
+        inputs=[wan_image, wan_prompt, wan_negative, wan_model,
+                wan_mode, wan_seed, wan_random, wan_steps,
+                wan_cfg, wan_resolution, wan_seconds, wan_sampler,
+                wan_batch],
+        outputs=[wan_files_out, wan_video_out, wan_status,
+                 wan_seed_out],
+        # Its own group only when it has its own ComfyUI to
+        # run on; sharing one instance means sharing the queue.
+        concurrency_id="wan" if WAN_PARALLEL else "comfy",
+    )
+
+
+def _tab_json_batch(tab):
+    """The JSON_BATCH tab body."""
+    _tab_intro(
+        "Submit a list of jobs, e.g.\n"
+        '```json\n'
+        '[{"prompt": "a cat", "steps": 8, "resolution": "1216x832",\n'
+        '  "loras": {"krea2_darkbrush": 1.0}},\n'
+        ' {"prompt": "a dog", "seed": 7, "model": "FinePn"}]\n'
+        '```\n'
+        'The optional `"model"` picks a registered Krea 2 model by '
+        'name, filename or fragment (steps/CFG default to that '
+        "model's settings; trigger words are **not** auto-added — "
+        "write the full prompt you want)."
+    )
+    with gr.Row():
+        with gr.Column(scale=2, elem_classes="kx-panel"):
+            json_file_in = gr.File(label="Upload JSON file", type="filepath")
+            json_text_in = gr.Textbox(
+                label="…or paste a JSON array here", lines=14
+            )
+            json_btn = _cta("🚀 Run JSON batch")
+        with gr.Column(scale=3, elem_classes="kx-panel-out"):
+            json_gallery = gr.Gallery(
+                label="Batch output", columns=2, height=600
+            )
+            json_status = _status_box()
+    json_btn.click(
+        fn=generate_from_json,
+        inputs=[json_file_in, json_text_in],
+        outputs=[json_gallery, json_status],
+        concurrency_id="comfy",
+    )
+
+
+def _tab_gallery(tab):
+    """The GALLERY tab body."""
+    with gr.Row():
+        gallery_refresh_btn = gr.Button("🔄 Refresh", size="sm")
+        gallery_zip_btn = gr.Button(
+            "📦 Zip all for download", size="sm"
+        )
+    gallery_info = gr.Markdown(
+        f"{len(list_output_images())} file(s) in `{OUTPUT_DIR}`",
+        elem_classes="kx-meta",
+    )
+    all_gallery = gr.Gallery(
+        label="All generated images & videos (newest first)",
+        value=list_output_images(), columns=4, height=700,
+    )
+    gallery_zip_file = gr.File(
+        label="Zip of all images", interactive=False
+    )
+    gallery_refresh_btn.click(
+        fn=refresh_gallery, outputs=[all_gallery, gallery_info]
+    )
+    gallery_zip_btn.click(
+        fn=zip_outputs, outputs=[gallery_zip_file, gallery_info]
+    )
+
+
+# The tab strip, left to right. This tuple is the only thing that decides
+# the order tabs appear in — moving an entry moves the tab, and nothing
+# else has to change. A feature that is off is skipped, so the rest close
+# up with no gap.
+#
+# `tab_id` is an explicit Gradio id, needed only by a tab something else
+# selects programmatically: without one Gradio numbers tabs by
+# construction order, which shifts with the licence, so the Prompt
+# Library's "switch to that tab" would land on whatever happened to be
+# third that day.
+TAB_ORDER = (
+    # Explicit id so the Prompt Library can select this tab. Tabs
+    # are otherwise numbered by construction order, which shifts
+    # with the licence.
+    (features.Key.KREA_T2I, _tab_krea_t2i, 'krea2'),
+    (features.Key.KREA_V2_T2I, _tab_krea_v2_t2i, 'krea2v2'),
+    # Its Use buttons reach into the two generation tabs, but that is
+    # wired after the loop, so it may sit anywhere in this list.
+    (features.Key.KREA_INPAINT, _tab_krea_inpaint, None),
+    (features.Key.FACESWAP, _tab_faceswap, None),
+    (features.Key.KREA_EDIT, _tab_krea_edit, None),
+    (features.Key.KREA_V2_EDIT, _tab_krea_v2_edit, None),
+    (features.Key.FLUX_T2I, _tab_flux_t2i, None),
+    (features.Key.KLEIN_I2I, _tab_klein_i2i, None),
+    (features.Key.WAN_I2V, _tab_wan_i2v, None),
+    (features.Key.COMMUNITY_PROMPTS, _tab_community_prompts, 'prompts'),
+    (features.Key.GALLERY, _tab_gallery, None),
+    (features.Key.JSON_BATCH, _tab_json_batch, None),
+)
+
+
 with gr.Blocks(title="Krea 2 on RunPod") as ui:
     # The application bar: brand and licence on the left, the way into the
     # pricing panel on the right. A Row rather than one gr.HTML because that
@@ -1887,1117 +3321,38 @@ with gr.Blocks(title="Krea 2 on RunPod") as ui:
         pricing_open_btn = gr.Button("💳 Plans & pricing", size="sm",
                                      elem_classes="kx-navbtn", scale=0)
 
-    # Where the Prompt Library's "Use" button writes to. Both stay None
-    # when the tab they belong to is not licensed, which is what the
-    # library reads to decide whether a card can be loaded at all — see
-    # the tab below.
-    _krea_targets = None
-    _v2_targets = None
-
     with gr.Tabs() as main_tabs:
-        if features.enabled(features.Key.KREA_T2I):
-            # Explicit id so the Prompt Library can select this tab. Tabs
-            # are otherwise numbered by construction order, which shifts
-            # with the licence.
-            with gr.Tab(features.label_for(features.Key.KREA_T2I),
-                        id="krea2"):
-                with gr.Row():
-                    with gr.Column(scale=2, elem_classes="kx-panel"):
-                        prompt_box = gr.Textbox(
-                            label="Prompt", lines=5,
-                            value="A photorealistic golden-hour portrait, natural "
-                                  "skin texture, shallow depth of field",
-                        )
-                        negative_box = gr.Textbox(
-                            label="Negative prompt (only used when CFG > 1)", lines=2
-                        )
-                        model_dd, model_info = _model_selector()
-                        with gr.Row():
-                            steps_slider = gr.Slider(
-                                1, 60, value=DEFAULTS["steps"], step=1, label="Steps"
-                            )
-                            cfg_slider = gr.Slider(
-                                0.5, 8.0, value=DEFAULTS["cfg"], step=0.1, label="CFG"
-                            )
-                        model_dd.change(
-                            fn=krea_model_changed,
-                            inputs=[model_dd, prompt_box],
-                            outputs=[steps_slider, cfg_slider, model_info,
-                                     prompt_box],
-                        )
-                        with gr.Row():
-                            resolution_dd = gr.Dropdown(
-                                choices=list(RESOLUTION_PRESETS),
-                                value=DEFAULT_RESOLUTION, label="Resolution",
-                            )
-                            sampler_dd = gr.Dropdown(
-                                choices=SAMPLERS, value=SAMPLERS[0], label="Sampler"
-                            )
-                        with gr.Row():
-                            seed_box = gr.Number(label="Seed", value=42, precision=0)
-                            randomize_cb = gr.Checkbox(label="🎲 Random seed", value=True)
-                            batch_slider = gr.Slider(
-                                1, 20, value=1, step=1, label="Batch count"
-                            )
-                        lora_dds, lora_ws = _lora_stack()
-                        krea_publish, krea_publish_title = _publish_row()
-                        generate_btn = _cta("🚀 Generate")
-                    with gr.Column(scale=3, elem_classes="kx-panel-out"):
-                        gallery = gr.Gallery(label="Output", columns=2, height=600)
-                        status_box = _status_box()
-                        seed_out = gr.Number(
-                            label="Base seed used", interactive=False, precision=0
-                        )
-                generate_btn.click(
-                    fn=generate_single,
-                    inputs=[prompt_box, negative_box, seed_box, randomize_cb,
-                            steps_slider, cfg_slider, resolution_dd, sampler_dd,
-                            model_dd, batch_slider,
-                            krea_publish, krea_publish_title,
-                            *_lora_inputs(lora_dds, lora_ws)],
-                    outputs=[gallery, status_box, seed_out],
-                    concurrency_id="comfy",
-                )
-                # Same order as _krea_settings writes them, so loading a
-                # prompt is a zip rather than a lookup.
-                _krea_targets = [prompt_box, negative_box, model_dd,
-                                 steps_slider, cfg_slider, resolution_dd,
-                                 sampler_dd, seed_box, randomize_cb,
-                                 batch_slider, *lora_dds, *lora_ws]
+        # Build order is TAB_ORDER's order. Each builder's return value is
+        # kept so the cross-tab wiring below can find it.
+        _exports = {}
+        for _key, _build, _tab_id in TAB_ORDER:
+            if not features.enabled(_key):
+                continue
+            with gr.Tab(features.label_for(_key), id=_tab_id) as _tab:
+                _exports[_key] = _build(_tab)
 
-        if features.enabled(features.Key.KREA_V2_T2I):
-            with gr.Tab(features.label_for(features.Key.KREA_V2_T2I),
-                        id="krea2v2"):
-                _v2_message = v2_status()[1]
-                _tab_intro(
-                    "The **KREA 2 TURBO/RAW** graph, reproduced "
-                    "as-is: the mxfp8 or raw Krea 2 model with the Wan 2.1 "
-                    "VAE, an 11-LoRA model+CLIP stack, RES4LYF's "
-                    "**ClownsharKSampler** (`linear/euler` + `bong_tangent`, "
-                    "eta 0.5, bongmath on) and **RBG Smart Seed Variance** on "
-                    "the positive prompt. Picking a model resets Steps/CFG "
-                    "and the Turbo LoRA slot to that variant's defaults — "
-                    "all of it still editable. This tab shares nothing with "
-                    "the Single tab.\n\n"
-                    f"{_v2_message}"
-                )
-                with gr.Row():
-                    with gr.Column(scale=2, elem_classes="kx-panel"):
-                        v2_prompt = gr.Textbox(
-                            label="Positive Prompt", lines=6,
-                            placeholder="The source workflow ships this box "
-                                        "empty — describe your image here.",
-                        )
-                        v2_negative = gr.Textbox(
-                            label="Negatives", lines=6,
-                            value=V2_DEFAULT_NEGATIVE,
-                        )
-                        v2_model_dd = gr.Dropdown(
-                            choices=V2_MODEL_CHOICES,
-                            value=V2_MODEL_CHOICES[0], label="Model",
-                        )
-                        v2_model_info = gr.Markdown(
-                            _v2_model_info_text(v2_resolve_model(None)),
-                            elem_classes="kx-meta",
-                        )
-                        gr.Markdown("### 📐 Resolution",
-                                    elem_classes="kx-section")
-                        with gr.Row():
-                            v2_aspect = gr.Dropdown(
-                                choices=list(V2_ASPECT_RATIOS),
-                                value=V2_DEFAULT_ASPECT, label="Aspect ratio",
-                            )
-                            v2_megapixels = gr.Slider(
-                                0.5, 4.0, value=V2_DEFAULT_MEGAPIXELS,
-                                step=0.1, label="Megapixels",
-                            )
-                            v2_multiple = gr.Slider(
-                                8, 64, value=V2_DEFAULT_MULTIPLE, step=8,
-                                label="Multiple of",
-                            )
-                        v2_size_info = gr.Markdown(
-                            _v2_size_text(
-                                V2_DEFAULT_ASPECT, V2_DEFAULT_MEGAPIXELS,
-                                V2_DEFAULT_MULTIPLE,
-                            ),
-                            elem_classes="kx-meta",
-                        )
-                        for _control in (v2_aspect, v2_megapixels, v2_multiple):
-                            _control.change(
-                                fn=v2_size_preview,
-                                inputs=[v2_aspect, v2_megapixels, v2_multiple],
-                                outputs=v2_size_info,
-                            )
-                        with gr.Row():
-                            v2_seed = gr.Number(label="Seed", value=370102505887178,
-                                                precision=0)
-                            v2_randomize = gr.Checkbox(
-                                label="🎲 Random seed", value=True
-                            )
-                            v2_batch = gr.Slider(1, 20, value=1, step=1,
-                                                 label="Batch count")
-                        v2_cbs, v2_dds, v2_ws = _v2_lora_stack()
-                        v2_publish, v2_publish_title = _publish_row()
-                        v2_generate_btn = _cta("🚀 Generate")
-                    with gr.Column(scale=3, elem_classes="kx-panel-out"):
-                        v2_gallery = gr.Gallery(label="Output", columns=2,
-                                                height=600)
-                        v2_status_box = _status_box()
-                        v2_seed_out = gr.Number(label="Base seed used",
-                                                interactive=False, precision=0)
-                        with gr.Accordion("⚙️ ClownsharKSampler", open=True):
-                            with gr.Row():
-                                v2_steps = gr.Slider(
-                                    1, 100, value=_v2_steps, step=1,
-                                    label="Steps",
-                                )
-                                v2_cfg = gr.Slider(
-                                    0.0, 20.0, value=_v2_cfg, step=0.1,
-                                    label="CFG",
-                                )
-                            with gr.Row():
-                                v2_sampler_name = gr.Dropdown(
-                                    choices=V2_SAMPLER_NAMES,
-                                    value=V2_SAMPLER_DEFAULTS["sampler_name"],
-                                    label="Sampler", allow_custom_value=True,
-                                )
-                                v2_scheduler = gr.Dropdown(
-                                    choices=V2_SCHEDULERS,
-                                    value=V2_SAMPLER_DEFAULTS["scheduler"],
-                                    label="Scheduler", allow_custom_value=True,
-                                )
-                            gr.Markdown(
-                                "RES4LYF builds its sampler/scheduler lists at "
-                                "load time, so both accept free text — the "
-                                "listed values are the workflow's plus the "
-                                "node's own defaults.",
-                                elem_classes="kx-fine",
-                            )
-                            with gr.Row():
-                                v2_eta = gr.Slider(
-                                    0.0, 2.0, value=V2_SAMPLER_DEFAULTS["eta"],
-                                    step=0.01, label="Eta",
-                                )
-                                v2_denoise = gr.Slider(
-                                    0.0, 1.0,
-                                    value=V2_SAMPLER_DEFAULTS["denoise"],
-                                    step=0.01, label="Denoise",
-                                )
-                            with gr.Row():
-                                v2_sampler_mode = gr.Dropdown(
-                                    choices=V2_SAMPLER_MODES,
-                                    value=V2_SAMPLER_DEFAULTS["sampler_mode"],
-                                    label="Sampler mode",
-                                )
-                                v2_bongmath = gr.Checkbox(
-                                    label="bongmath",
-                                    value=V2_SAMPLER_DEFAULTS["bongmath"],
-                                )
-                        with gr.Accordion("🌱 Smart Seed Variance", open=False):
-                            gr.Markdown(
-                                "Perturbs the positive conditioning per seed, "
-                                "so a batch varies without drifting off-prompt.",
-                                elem_classes="kx-fine",
-                            )
-                            with gr.Row():
-                                v2_variance_preset = gr.Dropdown(
-                                    choices=V2_VARIANCE_PRESETS,
-                                    value=V2_VARIANCE_DEFAULTS["variance_preset"],
-                                    label="Preset",
-                                )
-                                v2_fine_tune = gr.Slider(
-                                    0, 100,
-                                    value=V2_VARIANCE_DEFAULTS["fine_tune_variance"],
-                                    step=1, label="Fine tune",
-                                )
-                            v2_variance_model = gr.Dropdown(
-                                choices=V2_VARIANCE_MODEL_TYPES,
-                                value=V2_VARIANCE_DEFAULTS["model_type"],
-                                label="Model type",
-                            )
-                            with gr.Row():
-                                v2_variance_schedule = gr.Dropdown(
-                                    choices=V2_VARIANCE_SCHEDULES,
-                                    value=V2_VARIANCE_DEFAULTS["variance_schedule"],
-                                    label="Schedule",
-                                )
-                                v2_shift_strength = gr.Slider(
-                                    0, 200,
-                                    value=V2_VARIANCE_DEFAULTS["shift_strength"],
-                                    step=1, label="Shift strength",
-                                )
-                            with gr.Row():
-                                v2_cutoff_step = gr.Slider(
-                                    0, 100,
-                                    value=V2_VARIANCE_DEFAULTS["cutoff_step"],
-                                    step=1, label="Cutoff step",
-                                )
-                                v2_total_steps = gr.Slider(
-                                    1, 100,
-                                    value=V2_VARIANCE_DEFAULTS["total_steps"],
-                                    step=1, label="Total steps",
-                                )
-                                v2_cutoff_strength = gr.Slider(
-                                    0.0, 1.0,
-                                    value=V2_VARIANCE_DEFAULTS["cutoff_strength"],
-                                    step=0.1, label="Cutoff strength",
-                                )
-                        with gr.Accordion("🎞️ Post-processing", open=False):
-                            gr.Markdown(
-                                "Both are **bypassed in the source workflow**, "
-                                "so both start off and the tab reproduces it "
-                                "exactly as shipped. Sharpen runs first, then "
-                                "grain.",
-                                elem_classes="kx-fine",
-                            )
-                            v2_sharpen = gr.Checkbox(
-                                label="Sharpen (radius 1, sigma 0.35, alpha 1)",
-                                value=False,
-                            )
-                            v2_grain = gr.Checkbox(
-                                label="Film grain (intensity 0.05, scale 1)",
-                                value=False,
-                            )
-                # Wired here, not at creation: the Model dropdown lives in
-                # the left column while the sliders it drives are in the
-                # right one, so every component has to exist first.
-                if V2_TURBO_SLOT is not None:
-                    v2_model_dd.change(
-                        fn=v2_model_changed, inputs=v2_model_dd,
-                        outputs=[v2_steps, v2_cfg, v2_model_info,
-                                 v2_cbs[V2_TURBO_SLOT], v2_ws[V2_TURBO_SLOT]],
-                    )
-                v2_generate_btn.click(
-                    fn=generate_v2,
-                    inputs=[v2_prompt, v2_negative, v2_seed, v2_randomize,
-                            v2_model_dd,
-                            v2_aspect, v2_megapixels, v2_multiple,
-                            v2_eta, v2_sampler_name, v2_scheduler, v2_steps,
-                            v2_denoise, v2_cfg, v2_sampler_mode, v2_bongmath,
-                            v2_variance_preset, v2_fine_tune,
-                            v2_variance_model, v2_variance_schedule,
-                            v2_cutoff_step, v2_total_steps,
-                            v2_cutoff_strength, v2_shift_strength,
-                            v2_sharpen, v2_grain, v2_batch,
-                            v2_publish, v2_publish_title,
-                            *_lora_triples(v2_cbs, v2_dds, v2_ws)],
-                    outputs=[v2_gallery, v2_status_box, v2_seed_out],
-                    concurrency_id="comfy",
-                )
-                _v2_targets = [
-                    v2_prompt, v2_negative, v2_model_dd,
-                    v2_aspect, v2_megapixels, v2_multiple,
-                    v2_seed, v2_randomize, v2_batch,
-                    v2_eta, v2_sampler_name, v2_scheduler, v2_steps,
-                    v2_denoise, v2_cfg, v2_sampler_mode, v2_bongmath,
-                    v2_variance_preset, v2_fine_tune, v2_variance_model,
-                    v2_variance_schedule, v2_cutoff_step, v2_total_steps,
-                    v2_cutoff_strength, v2_shift_strength,
-                    v2_sharpen, v2_grain,
-                    *v2_cbs, *v2_dds, *v2_ws,
-                ]
+    # Read at request time by _card_button and _use_prompt, so they must be
+    # module state rather than the builders' locals. Still None when the tab
+    # is not licensed, which is what the library reads to grey a card out.
+    _krea_targets = _exports.get(features.Key.KREA_T2I)
+    _v2_targets = _exports.get(features.Key.KREA_V2_T2I)
 
-        # Placed here, below both generation tabs, and that is load-bearing
-        # rather than cosmetic: its Use buttons write into their controls,
-        # and those are ordinary Python locals that only exist for a
-        # .click() declared later in the file. Same reason the V2 model
-        # dropdown is wired at the bottom of its own tab.
-        if features.enabled(features.Key.COMMUNITY_PROMPTS):
-            with gr.Tab(features.label_for(features.Key.COMMUNITY_PROMPTS),
-                        id="prompts") as library_tab:
-                _tab_intro(
-                    "Ready-made prompts for **Krea2** and **Krea2 V2** — "
-                    "⭐ ones we put together, and 👥 ones the community is "
-                    "using. **Use** loads the prompt *and* every setting "
-                    "behind it into that tab, so you can run it as it is or "
-                    "treat it as a starting point.\n\n"
-                    "Anything a prompt asks for that this pod does not have "
-                    "— a model, a LoRA file — is left as it was rather than "
-                    "applied, so a card always loads."
-                )
-                # kx-lib-filters: these are visible cards rather than the
-                # invisible blocks of a control column, so they need the
-                # vertical padding the .form rule strips — see theme.py.
-                with gr.Row(elem_classes="kx-lib-filters"):
-                    lib_tab_filter = gr.Radio(
-                        choices=list(_LIB_TABS), value="Everything",
-                        label="Tab",
-                    )
-                    lib_source_filter = gr.Radio(
-                        choices=list(_LIB_SOURCES), value="All prompts",
-                        label="Source",
-                    )
-                with gr.Row(elem_classes="kx-lib-filters"):
-                    lib_search = gr.Textbox(
-                        label="Search", scale=4, submit_btn=True,
-                        placeholder="portrait, cinematic, anime … "
-                                    "(press Enter)",
-                    )
-                    lib_refresh = gr.Button("🔄 Refresh", size="sm", scale=0)
-                lib_info = gr.Markdown(
-                    "🔄 Refresh to load the prompt library.",
-                    elem_classes="kx-meta",
-                )
-
-                # The page's rows, and which page it is. State rather than
-                # a recomputed fetch, so clicking Use costs nothing and
-                # cannot show a card different from the one clicked.
-                lib_rows = gr.State([])
-                lib_page = gr.State(0)
-
-                # A fixed pool, shown and hidden per page: a Blocks tree is
-                # built once at import and cannot grow a component later,
-                # so "a card per result" is not on the table.
-                lib_cards, lib_bodies, lib_buttons = [], [], []
-                for _start in range(0, LIBRARY_CARDS, 3):
-                    with gr.Row():
-                        for _slot in range(_start, _start + 3):
-                            with gr.Column(visible=False, min_width=260,
-                                           elem_classes="kx-prompt-card"
-                                           ) as _card:
-                                lib_bodies.append(gr.Markdown())
-                                lib_buttons.append(
-                                    gr.Button("▶️ Use", size="sm")
-                                )
-                            lib_cards.append(_card)
-
-                with gr.Row(elem_classes="kx-navrow"):
-                    lib_prev = gr.Button("← Previous", size="sm",
-                                         interactive=False)
-                    lib_next = gr.Button("Next →", size="sm",
-                                         interactive=False)
-
-                _lib_filters = [lib_tab_filter, lib_source_filter, lib_search]
-                _lib_outputs = [lib_rows, lib_page, lib_info, lib_prev,
-                                lib_next, *lib_cards, *lib_bodies,
-                                *lib_buttons]
-
-                # Fetched when the tab is opened, never at build time —
-                # the same rule the pricing panel follows, so a licence
-                # server that is slow cannot hold up pod startup. The 300s
-                # cache in prompts.py absorbs re-opening it.
-                library_tab.select(fn=_library_first, inputs=_lib_filters,
-                                   outputs=_lib_outputs)
-                for _control in (lib_tab_filter, lib_source_filter):
-                    _control.change(fn=_library_first, inputs=_lib_filters,
-                                    outputs=_lib_outputs)
-                lib_search.submit(fn=_library_first, inputs=_lib_filters,
-                                  outputs=_lib_outputs)
-                for _button, _handler in ((lib_refresh, _library_refresh),
-                                          (lib_prev, _library_prev),
-                                          (lib_next, _library_next)):
-                    _button.click(fn=_handler,
-                                  inputs=[*_lib_filters, lib_page],
-                                  outputs=_lib_outputs)
-
-                # Every Use button writes to both tabs' controls, because
-                # the outputs list is fixed at build time; _use_prompt
-                # no-ops the half it is not loading. An unlicensed tab
-                # contributes nothing, and its cards' buttons are dead.
-                _use_outputs = [*(_krea_targets or []), *(_v2_targets or []),
-                                main_tabs]
-                for _slot, _button in enumerate(lib_buttons):
-                    _button.click(fn=partial(_use_prompt, _slot),
-                                  inputs=lib_rows, outputs=_use_outputs)
-
-        if features.enabled(features.Key.KREA_EDIT):
-            with gr.Tab(features.label_for(features.Key.KREA_EDIT)):
-                _tab_intro(
-                    "Upload an image and **describe the change** — no painting "
-                    "needed. The Identity Edit LoRA lets the model see the "
-                    "source image, so it can recolor, add or replace objects, "
-                    "restyle, or re-stage a person in a new scene while keeping "
-                    "their identity. Defaults (8–12 steps, CFG 1.0) suit most "
-                    "edits; removals work better with ~20 steps, CFG ≈ 3 and a "
-                    "lower reference fidelity. Fewer steps favour composition, "
-                    "more favour face detail."
-                    + ("" if edit_lora_available() else
-                       "\n\n⚠️ **The Identity Edit LoRA is not downloaded yet** "
-                       "(~1.9 GB) — restart the app to fetch it; this tab will "
-                       "refuse to run until then.")
-                )
-                with gr.Row():
-                    with gr.Column(scale=2, elem_classes="kx-panel"):
-                        edit_image = gr.Image(
-                            label="Source image (paste with Ctrl+V)", type="pil",
-                            sources=["upload", "clipboard"],
-                        )
-                        _recent_picker(edit_image)
-                        edit_prompt = gr.Textbox(
-                            label="Edit instruction",
-                            value="Remove all her clothes completely, make her fully nude. Keep the exact same face, facial features, expression, skin tone, hairstyle, body pose, hands position, and background. Do not change the face at all.          remove clothes exposing her naked average natural shaped tits. dont change her face",
-                            placeholder="make the jacket red · this person "
-                                        "walking a dog on a beach at sunset",
-                            lines=3,
-                        )
-                        edit_negative = gr.Textbox(
-                            label="Negative prompt (only used when CFG > 1)", lines=2
-                        )
-                        edit_model_dd, edit_model_info = _model_selector()
-                        with gr.Row():
-                            edit_steps = gr.Slider(
-                                1, 60, value=DEFAULTS["steps"], step=1, label="Steps"
-                            )
-                            edit_cfg = gr.Slider(
-                                0.5, 8.0, value=DEFAULTS["cfg"], step=0.1, label="CFG"
-                            )
-                        edit_model_dd.change(
-                            fn=krea_model_changed,
-                            inputs=[edit_model_dd, edit_prompt],
-                            outputs=[edit_steps, edit_cfg, edit_model_info,
-                                     edit_prompt],
-                        )
-                        with gr.Row():
-                            # 384-768 is the LoRA's trained grounding range.
-                            # The old slider went to 1536 (v1's range) and
-                            # defaulted to 1152 — far above what v1.1/v1.2
-                            # ever saw, which is the documented cause of
-                            # duplicated "double picture" outputs.
-                            edit_grounding = gr.Slider(
-                                384, 768, value=768, step=64,
-                                label="Grounding (low = stronger edit, "
-                                      "high = keep likeness)",
-                            )
-                            edit_ref_boost = gr.Slider(
-                                0.0, 10.0, value=4.0, step=0.5,
-                                label="Reference fidelity (1 = neutral, "
-                                      "~4 = strong likeness, >10 breaks "
-                                      "removals)",
-                            )
-                        with gr.Row():
-                            edit_sampler = gr.Dropdown(
-                                choices=SAMPLERS, value=SAMPLERS[0], label="Sampler"
-                            )
-                        with gr.Row():
-                            edit_seed = gr.Number(label="Seed", value=42, precision=0)
-                            edit_random = gr.Checkbox(
-                                label="🎲 Random seed", value=True
-                            )
-                            edit_batch = gr.Slider(
-                                1, 20, value=1, step=1, label="Batch count"
-                            )
-                        edit_lora_dds, edit_lora_ws = _lora_stack()
-                        edit_btn = _cta("✨ Edit")
-                    with gr.Column(scale=3, elem_classes="kx-panel-out"):
-                        edit_gallery = gr.Gallery(label="Output", columns=2, height=600)
-                        edit_status = _status_box()
-                        edit_seed_out = gr.Number(
-                            label="Base seed used", interactive=False, precision=0
-                        )
-                edit_btn.click(
-                    fn=generate_edit,
-                    inputs=[edit_image, edit_prompt, edit_negative, edit_seed,
-                            edit_random, edit_steps, edit_cfg, edit_sampler,
-                            edit_grounding, edit_ref_boost, edit_model_dd,
-                            edit_batch,
-                            *_lora_inputs(edit_lora_dds, edit_lora_ws)],
-                    outputs=[edit_gallery, edit_status, edit_seed_out],
-                    concurrency_id="comfy",
-                )
-
-        if features.enabled(features.Key.KREA_INPAINT):
-            with gr.Tab(features.label_for(features.Key.KREA_INPAINT)):
-                _tab_intro(
-                    "Upload an image, **paint over the region to replace**, and "
-                    "describe what should appear there — unpainted pixels are "
-                    "kept from the original. Paint **nothing** to re-imagine the "
-                    "whole image (img2img); in that mode lower **Denoise** "
-                    "(≈0.5–0.8) to control how much of the original survives."
-                )
-                with gr.Row():
-                    with gr.Column(scale=2, elem_classes="kx-panel"):
-                        inpaint_editor = gr.ImageEditor(
-                            label="Image — paint the region to replace "
-                                  "(paste with Ctrl+V)",
-                            type="pil",
-                            sources=["upload", "clipboard"],
-                            brush=gr.Brush(colors=["#FF3366"], color_mode="fixed"),
-                            # fixed_canvas defaults to False, which sizes the
-                            # canvas to the uploaded image: a 12 MP phone photo
-                            # then allocates a 4032×3024 RGBA canvas *plus* a
-                            # paint layer, the browser tab runs out of memory and
-                            # the page reloads (gradio#8556). Pinning the canvas
-                            # makes Gradio rescale the upload to fit it instead.
-                            # 1536 is a deliberate cap: _prepare_inpaint_inputs
-                            # would downscale to 2048 anyway, and Krea 2 inpaints
-                            # comfortably at this size.
-                            canvas_size=(1536, 1536),
-                            fixed_canvas=True,
-                            # Default is lossy webp. Unmasked pixels are composited
-                            # back from this image, so keep it lossless.
-                            format="png",
-                        )
-                        inpaint_prompt = gr.Textbox(
-                            label="Prompt (describes the masked region)", lines=3
-                        )
-                        inpaint_negative = gr.Textbox(
-                            label="Negative prompt (only used when CFG > 1)", lines=2
-                        )
-                        inpaint_model_dd, inpaint_model_info = _model_selector()
-                        with gr.Row():
-                            inpaint_steps = gr.Slider(
-                                1, 60, value=DEFAULTS["steps"], step=1, label="Steps"
-                            )
-                            inpaint_cfg = gr.Slider(
-                                0.5, 8.0, value=DEFAULTS["cfg"], step=0.1, label="CFG"
-                            )
-                        inpaint_model_dd.change(
-                            fn=krea_model_changed,
-                            inputs=[inpaint_model_dd, inpaint_prompt],
-                            outputs=[inpaint_steps, inpaint_cfg,
-                                     inpaint_model_info, inpaint_prompt],
-                        )
-                        with gr.Row():
-                            inpaint_denoise = gr.Slider(
-                                0.1, 1.0, value=1.0, step=0.05,
-                                label="Denoise (1 = replace fully)",
-                            )
-                            inpaint_sampler = gr.Dropdown(
-                                choices=SAMPLERS, value=SAMPLERS[0], label="Sampler"
-                            )
-                        with gr.Row():
-                            inpaint_grow = gr.Slider(
-                                0, 32, value=8, step=1, label="Grow mask (px)"
-                            )
-                            inpaint_blur = gr.Slider(
-                                0, 32, value=8, step=1, label="Blur mask edge (px)"
-                            )
-                        with gr.Row():
-                            inpaint_seed = gr.Number(
-                                label="Seed", value=42, precision=0
-                            )
-                            inpaint_random = gr.Checkbox(
-                                label="🎲 Random seed", value=True
-                            )
-                            inpaint_batch = gr.Slider(
-                                1, 20, value=1, step=1, label="Batch count"
-                            )
-                        inpaint_lora_dds, inpaint_lora_ws = _lora_stack()
-                        inpaint_btn = _cta("🖌️ Inpaint")
-                    with gr.Column(scale=3, elem_classes="kx-panel-out"):
-                        inpaint_gallery = gr.Gallery(
-                            label="Output", columns=2, height=600
-                        )
-                        inpaint_status = _status_box()
-                        inpaint_seed_out = gr.Number(
-                            label="Base seed used", interactive=False, precision=0
-                        )
-                inpaint_btn.click(
-                    fn=generate_inpaint,
-                    inputs=[inpaint_editor, inpaint_prompt, inpaint_negative,
-                            inpaint_seed, inpaint_random, inpaint_steps,
-                            inpaint_cfg, inpaint_denoise, inpaint_sampler,
-                            inpaint_grow, inpaint_blur, inpaint_model_dd,
-                            inpaint_batch,
-                            *_lora_inputs(inpaint_lora_dds, inpaint_lora_ws)],
-                    outputs=[inpaint_gallery, inpaint_status, inpaint_seed_out],
-                    concurrency_id="comfy",
-                )
-
-        if features.enabled(features.Key.FACESWAP):
-            with gr.Tab(features.label_for(features.Key.FACESWAP)):
-                _swap_ready, _swap_problem = reactor_status()
-                _tab_intro(
-                    "Take one of your generated images, upload a **reference "
-                    "face**, and ReActor replaces the face in place. This is "
-                    "not a diffusion pass: no Krea 2 model is loaded, the "
-                    "swap runs on ONNX in seconds, and the output keeps the "
-                    "base image's **exact resolution** — only the face "
-                    "region is rewritten. Only the finished swap is saved.\n\n"
-                    "Every model is fetched at startup, so a swap makes no "
-                    "network calls. Note that this is the **SFW edition** of "
-                    "ReActor: it classifies every input image first, and an "
-                    "image that trips the filter is dropped — you get a "
-                    "blank 512×512 frame instead of a swap, which the status "
-                    "box calls out. The check fails *closed*, so if its "
-                    "detector model ever goes missing every swap comes back "
-                    "blank."
-                    + ("" if _swap_ready else f"\n\n⚠️ {_swap_problem[2:]}")
-                )
-                with gr.Row():
-                    with gr.Column(scale=2, elem_classes="kx-panel"):
-                        swap_base = gr.Image(
-                            label="Base image — the face here gets replaced "
-                                  "(paste with Ctrl+V)",
-                            type="pil", sources=["upload", "clipboard"],
-                        )
-                        _recent_picker(swap_base)
-                        swap_face = gr.Image(
-                            label="Reference face — the face to put in "
-                                  "(paste with Ctrl+V)",
-                            type="pil", sources=["upload", "clipboard"],
-                        )
-                        with gr.Row():
-                            swap_model_dd = gr.Dropdown(
-                                choices=SWAP_MODEL_CHOICES,
-                                value=default_swap_model(),
-                                label="Swap model",
-                            )
-                            swap_detector_dd = gr.Dropdown(
-                                choices=REACTOR_DETECTORS,
-                                value=REACTOR_DEFAULT_DETECTOR,
-                                label="Face detector",
-                            )
-                        with gr.Row():
-                            swap_restore_dd = gr.Dropdown(
-                                choices=RESTORE_CHOICES,
-                                value=default_restore_model(),
-                                label="Face restoration (optional)",
-                            )
-                            swap_visibility = gr.Slider(
-                                0.1, 1.0, value=1.0, step=0.05,
-                                label="Restoration visibility",
-                            )
-                        swap_codeformer_w = gr.Slider(
-                            0.0, 1.0, value=0.5, step=0.05,
-                            label="CodeFormer weight (0 = stronger cleanup, "
-                                  "1 = stay closer to the swap)",
-                        )
-                        with gr.Row():
-                            swap_input_idx = gr.Textbox(
-                                value="0", label="Face index in base image",
-                                info="Left to right. Also accepts 0,1 or 0-2",
-                            )
-                            swap_source_idx = gr.Textbox(
-                                value="0", label="Face index in reference",
-                                info="Left to right. Also accepts 0,1 or 0-2",
-                            )
-                        swap_btn = _cta("🎭 Swap face")
-                    with gr.Column(scale=3, elem_classes="kx-panel-out"):
-                        swap_gallery = gr.Gallery(
-                            label="Swapped output", columns=1, height=600
-                        )
-                        swap_status = _status_box()
-                swap_btn.click(
-                    fn=generate_faceswap,
-                    inputs=[swap_base, swap_face, swap_model_dd,
-                            swap_detector_dd, swap_restore_dd, swap_visibility,
-                            swap_codeformer_w, swap_input_idx,
-                            swap_source_idx],
-                    outputs=[swap_gallery, swap_status],
-                    concurrency_id="comfy",
-                )
-
-        if features.enabled(features.Key.FLUX_T2I):
-            with gr.Tab(features.label_for(features.Key.FLUX_T2I)):
-                _tab_intro(
-                    "Text-to-image with **Flux 2 Dev** (32B). The model is "
-                    "guidance-distilled: there is no CFG or negative prompt "
-                    "— **Guidance** steers prompt adherence instead "
-                    "(~4 is the sweet spot). **Turbo** (default) applies the "
-                    "official Turbo LoRA at 8 steps; the Raw entry runs the "
-                    "undistilled 20-step schedule. ⚠️ At ~35 GB this model "
-                    "wants nearly the whole A40: don't combine it with "
-                    "KREA2_WAN_PARALLEL, and expect a slow first job / model "
-                    "swap when switching between Flux and Krea."
-                    + ("" if flux_model_available(resolve_flux_model(None))
-                       else "\n\n⚠️ **The Flux 2 models are not downloaded "
-                            "yet** (~57 GB) — restart the app to fetch them; "
-                            "this tab will refuse to run until then.")
-                )
-                with gr.Row():
-                    with gr.Column(scale=2, elem_classes="kx-panel"):
-                        flux_prompt = gr.Textbox(
-                            label="Prompt", lines=5,
-                            value="A photorealistic golden-hour portrait, "
-                                  "natural skin texture, shallow depth of "
-                                  "field",
-                        )
-                        flux_model_dd = gr.Dropdown(
-                            choices=FLUX_MODEL_CHOICES,
-                            value=FLUX_MODEL_CHOICES[0], label="Model",
-                        )
-                        flux_model_info = gr.Markdown(
-                            _flux_model_info_text(resolve_flux_model(None)),
-                            elem_classes="kx-meta",
-                        )
-                        with gr.Row():
-                            flux_steps = gr.Slider(
-                                1, 50, value=_f_steps, step=1, label="Steps"
-                            )
-                            flux_guidance = gr.Slider(
-                                0.0, 10.0, value=_f_guidance, step=0.1,
-                                label="Guidance",
-                            )
-                        flux_model_dd.change(
-                            fn=flux_model_changed,
-                            inputs=[flux_model_dd, flux_prompt],
-                            outputs=[flux_steps, flux_guidance,
-                                     flux_model_info, flux_prompt],
-                        )
-                        with gr.Row():
-                            flux_resolution = gr.Dropdown(
-                                choices=list(RESOLUTION_PRESETS),
-                                value=DEFAULT_RESOLUTION, label="Resolution",
-                            )
-                            flux_sampler = gr.Dropdown(
-                                choices=SAMPLERS, value="euler",
-                                label="Sampler",
-                            )
-                        with gr.Row():
-                            flux_seed = gr.Number(
-                                label="Seed", value=42, precision=0
-                            )
-                            flux_random = gr.Checkbox(
-                                label="🎲 Random seed", value=True
-                            )
-                            flux_batch = gr.Slider(
-                                1, 20, value=1, step=1, label="Batch count"
-                            )
-                        flux_lora_dds, flux_lora_ws = _flux_lora_stack()
-                        flux_btn = _cta("🌊 Generate")
-                    with gr.Column(scale=3, elem_classes="kx-panel-out"):
-                        flux_gallery = gr.Gallery(
-                            label="Output", columns=2, height=600
-                        )
-                        flux_status = _status_box()
-                        flux_seed_out = gr.Number(
-                            label="Base seed used", interactive=False,
-                            precision=0,
-                        )
-                flux_btn.click(
-                    fn=generate_flux,
-                    inputs=[flux_prompt, flux_seed, flux_random, flux_steps,
-                            flux_guidance, flux_resolution, flux_sampler,
-                            flux_model_dd, flux_batch,
-                            *_lora_inputs(flux_lora_dds, flux_lora_ws)],
-                    outputs=[flux_gallery, flux_status, flux_seed_out],
-                    concurrency_id="comfy",
-                )
-
-        if features.enabled(features.Key.KLEIN_I2I):
-            with gr.Tab(features.label_for(features.Key.KLEIN_I2I)):
-                _tab_intro(
-                    "The **FLUX.2 Klein 9B Edit** graph, "
-                    "reproduced as-is. Upload an image and describe the "
-                    "change — the source is scaled to "
-                    f"{KLEIN_REFERENCE_MEGAPIXELS:g} MP, encoded and attached "
-                    "to the conditioning as a **reference latent**, so the "
-                    "model edits what it is shown. Enable **input image 2** "
-                    "to combine two sources; when you do, say which is which "
-                    "in the prompt (*“the person from image 1 wearing the hat "
-                    "from image 2”*). Klein 9B is ~9.4 GB, so it loads and "
-                    "swaps far faster than Flux 2 Dev.\n\n"
-                    f"{klein_status()[1]}"
-                )
-                with gr.Row():
-                    with gr.Column(scale=2, elem_classes="kx-panel"):
-                        klein_image = gr.Image(
-                            label="Input image 1 (paste with Ctrl+V)",
-                            type="pil", sources=["upload", "clipboard"],
-                        )
-                        _recent_picker(klein_image)
-                        klein_use_image2 = gr.Checkbox(
-                            label="➕ Enable input image 2", value=False,
-                            info="Bypassed in the source workflow, so it "
-                                 "starts off here too.",
-                        )
-                        klein_image2 = gr.Image(
-                            label="Input image 2", type="pil", visible=False,
-                            sources=["upload", "clipboard"],
-                        )
-                        klein_use_image2.change(
-                            fn=lambda on: gr.Image(visible=bool(on)),
-                            inputs=klein_use_image2, outputs=klein_image2,
-                        )
-                        klein_prompt = gr.Textbox(
-                            label="Edit prompt", lines=4,
-                            placeholder="The source workflow ships this box "
-                                        "empty — describe your edit here.",
-                        )
-                        klein_model_dd = gr.Dropdown(
-                            choices=KLEIN_MODEL_CHOICES,
-                            value=KLEIN_MODEL_CHOICES[0], label="Model",
-                        )
-                        klein_model_info = gr.Markdown(
-                            _klein_model_info_text(klein_resolve_model(None)),
-                            elem_classes="kx-meta",
-                        )
-                        with gr.Row():
-                            klein_steps = gr.Slider(
-                                1, 50, value=_k_steps, step=1, label="Steps"
-                            )
-                            klein_cfg = gr.Slider(
-                                0.5, 8.0, value=_k_cfg, step=0.1, label="CFG"
-                            )
-                            klein_guidance = gr.Slider(
-                                0.0, 10.0, value=_k_guidance, step=0.1,
-                                label="Guidance",
-                            )
-                        klein_model_dd.change(
-                            fn=klein_model_changed, inputs=klein_model_dd,
-                            outputs=[klein_steps, klein_cfg, klein_guidance,
-                                     klein_model_info],
-                        )
-                        with gr.Row():
-                            klein_sampler = gr.Dropdown(
-                                choices=SAMPLERS,
-                                value=KLEIN_DEFAULTS["sampler_name"],
-                                label="Sampler",
-                            )
-                            klein_scheduler = gr.Dropdown(
-                                choices=KLEIN_SCHEDULERS,
-                                value=KLEIN_DEFAULTS["scheduler"],
-                                label="Scheduler",
-                            )
-                        klein_reference_mp = gr.Slider(
-                            0.25, 4.0, value=KLEIN_REFERENCE_MEGAPIXELS,
-                            step=0.05,
-                            label="Reference size (MP) — what the model looks at",
-                        )
-                        gr.Markdown("#### 🖼️ Output resolution",
-                                    elem_classes="kx-section")
-                        klein_output_mode = gr.Dropdown(
-                            choices=KLEIN_OUTPUT_MODES, value=KLEIN_OUTPUT_SAME,
-                            label="Mode",
-                        )
-                        with gr.Row():
-                            klein_output_mp = gr.Slider(
-                                0.25, 4.0, value=KLEIN_DEFAULT_MEGAPIXELS,
-                                step=0.05, label="Megapixels (scale mode)",
-                            )
-                            klein_custom_w = gr.Number(
-                                label="Width (custom mode)",
-                                value=KLEIN_DEFAULT_CUSTOM_SIZE[0],
-                                precision=0,
-                            )
-                            klein_custom_h = gr.Number(
-                                label="Height (custom mode)",
-                                value=KLEIN_DEFAULT_CUSTOM_SIZE[1],
-                                precision=0,
-                            )
-                        klein_size_out = gr.Markdown(
-                            "→ upload image 1 to see the output size.",
-                            elem_classes="kx-meta",
-                        )
-                        _klein_size_inputs = [klein_image, klein_output_mode,
-                                              klein_output_mp, klein_custom_w,
-                                              klein_custom_h]
-                        for _component in _klein_size_inputs:
-                            _component.change(
-                                fn=klein_size_preview,
-                                inputs=_klein_size_inputs,
-                                outputs=klein_size_out,
-                            )
-                        with gr.Row():
-                            klein_seed = gr.Number(
-                                label="Seed", value=42, precision=0
-                            )
-                            klein_random = gr.Checkbox(
-                                label="🎲 Random seed", value=True
-                            )
-                            klein_batch = gr.Slider(
-                                1, 20, value=1, step=1, label="Batch count"
-                            )
-                        klein_cbs, klein_dds, klein_ws = _klein_lora_stack()
-                        klein_btn = _cta("🧩 Edit")
-                    with gr.Column(scale=3, elem_classes="kx-panel-out"):
-                        klein_gallery = gr.Gallery(
-                            label="Output", columns=2, height=600
-                        )
-                        klein_status_box = _status_box()
-                        klein_seed_out = gr.Number(
-                            label="Base seed used", interactive=False,
-                            precision=0,
-                        )
-                klein_btn.click(
-                    fn=generate_klein_edit,
-                    inputs=[klein_image, klein_use_image2, klein_image2,
-                            klein_prompt, klein_seed, klein_random,
-                            klein_model_dd, klein_steps, klein_cfg,
-                            klein_guidance, klein_sampler, klein_scheduler,
-                            klein_reference_mp, klein_output_mode,
-                            klein_output_mp, klein_custom_w, klein_custom_h,
-                            klein_batch,
-                            *_lora_triples(klein_cbs, klein_dds, klein_ws)],
-                    outputs=[klein_gallery, klein_status_box, klein_seed_out],
-                    concurrency_id="comfy",
-                )
-
-        if features.enabled(features.Key.WAN_I2V):
-            with gr.Tab(features.label_for(features.Key.WAN_I2V)):
-                _wan_defaults = WAN_MODE_DEFAULTS[WAN_VARIANT]
-                _wan_mode_choices = ["Turbo (Lightning, 4 steps)",
-                                     "Raw (20 steps)"]
-                _wan_model_choices = ["14B two-expert (best quality, 16 fps)",
-                                      "5B TI2V (lighter, 24 fps)"]
-                _tab_intro(
-                    "Upload an image and **describe the motion** — Wan 2.2 "
-                    "animates it into a clip of up to 5 s. The **14B** "
-                    "two-expert model gives the best quality at 16 fps: "
-                    "**Turbo** uses the Lightning distillation LoRAs "
-                    "(4 steps, CFG 1, ~5× faster); **Raw** is the "
-                    "undistilled 20-step schedule — slightly better motion "
-                    "and detail, but expect 15–45+ min per clip on an A40. "
-                    "The **5B** model is a single lighter model at 24 fps — "
-                    "lower quality than 14B, but far less VRAM (best choice "
-                    "in parallel mode) and no turbo/raw split. "
-                    + ("Videos run on their own ComfyUI instance, so the "
-                       "image tabs stay responsive while a clip renders."
-                       if WAN_PARALLEL else
-                       "Videos share the image tabs' ComfyUI queue: a "
-                       "running video delays queued image jobs (start with "
-                       "KREA2_WAN_PARALLEL=1 for a separate video instance).")
-                    + ("" if wan_models_available() or wan_5b_available() else
-                       "\n\n⚠️ **The Wan 2.2 models are not downloaded yet** "
-                       "(~49 GB) — restart the app to fetch them; this tab "
-                       "will refuse to run until then.")
-                )
-                with gr.Row():
-                    with gr.Column(scale=2, elem_classes="kx-panel"):
-                        wan_image = gr.Image(
-                            label="Start image (paste with Ctrl+V)",
-                            type="pil", sources=["upload", "clipboard"],
-                        )
-                        _recent_picker(wan_image)
-                        wan_prompt = gr.Textbox(
-                            label="Motion prompt",
-                            placeholder="she turns her head and smiles, "
-                                        "gentle camera push-in, wind in "
-                                        "the hair",
-                            lines=3,
-                        )
-                        wan_negative = gr.Textbox(
-                            label="Negative prompt (only used when CFG > 1, "
-                                  "i.e. Raw mode)",
-                            value=WAN_DEFAULT_NEGATIVE, lines=2,
-                        )
-                        wan_model = gr.Radio(
-                            choices=_wan_model_choices,
-                            value=_wan_model_choices[0],
-                            label="Model",
-                        )
-                        wan_mode = gr.Radio(
-                            choices=_wan_mode_choices,
-                            value=_wan_mode_choices[0 if WAN_VARIANT == "turbo"
-                                                    else 1],
-                            label="Mode (14B only — the 5B has no Lightning)",
-                        )
-                        with gr.Row():
-                            wan_steps = gr.Slider(
-                                1, 40, value=_wan_defaults["steps"], step=1,
-                                label="Steps",
-                            )
-                            wan_cfg = gr.Slider(
-                                0.5, 8.0, value=_wan_defaults["cfg"], step=0.1,
-                                label="CFG",
-                            )
-                        with gr.Row():
-                            wan_resolution = gr.Radio(
-                                choices=list(WAN_RESOLUTIONS),
-                                value=WAN_DEFAULT_RESOLUTION,
-                                label="Resolution (keeps the source aspect)",
-                            )
-                        with gr.Row():
-                            wan_seconds = gr.Slider(
-                                1.0, WAN_MAX_SECONDS, value=WAN_MAX_SECONDS,
-                                step=0.25, label="Duration (seconds)",
-                            )
-                            wan_sampler = gr.Dropdown(
-                                choices=SAMPLERS + ["uni_pc"], value="euler",
-                                label="Sampler",
-                            )
-                        with gr.Row():
-                            wan_seed = gr.Number(
-                                label="Seed", value=42, precision=0
-                            )
-                            wan_random = gr.Checkbox(
-                                label="🎲 Random seed", value=True
-                            )
-                            wan_batch = gr.Slider(
-                                1, 10, value=1, step=1, label="Batch count"
-                            )
-                        wan_btn = _cta("🎬 Generate video")
-                    with gr.Column(scale=3, elem_classes="kx-panel-out"):
-                        wan_video_out = gr.Video(
-                            label="Latest video", autoplay=True
-                        )
-                        wan_files_out = gr.Files(
-                            label="All videos from this run", interactive=False
-                        )
-                        wan_status = _status_box()
-                        wan_seed_out = gr.Number(
-                            label="Base seed used", interactive=False,
-                            precision=0,
-                        )
-                wan_model.change(
-                    fn=wan_model_changed, inputs=[wan_model, wan_mode],
-                    outputs=[wan_mode, wan_steps, wan_cfg],
-                )
-                wan_mode.change(
-                    fn=wan_mode_changed, inputs=[wan_model, wan_mode],
-                    outputs=[wan_steps, wan_cfg],
-                )
-                wan_btn.click(
-                    fn=generate_wan_video,
-                    inputs=[wan_image, wan_prompt, wan_negative, wan_model,
-                            wan_mode, wan_seed, wan_random, wan_steps,
-                            wan_cfg, wan_resolution, wan_seconds, wan_sampler,
-                            wan_batch],
-                    outputs=[wan_files_out, wan_video_out, wan_status,
-                             wan_seed_out],
-                    # Its own group only when it has its own ComfyUI to
-                    # run on; sharing one instance means sharing the queue.
-                    concurrency_id="wan" if WAN_PARALLEL else "comfy",
-                )
-
-        if features.enabled(features.Key.JSON_BATCH):
-            with gr.Tab(features.label_for(features.Key.JSON_BATCH)):
-                _tab_intro(
-                    "Submit a list of jobs, e.g.\n"
-                    '```json\n'
-                    '[{"prompt": "a cat", "steps": 8, "resolution": "1216x832",\n'
-                    '  "loras": {"krea2_darkbrush": 1.0}},\n'
-                    ' {"prompt": "a dog", "seed": 7, "model": "FinePn"}]\n'
-                    '```\n'
-                    'The optional `"model"` picks a registered Krea 2 model by '
-                    'name, filename or fragment (steps/CFG default to that '
-                    "model's settings; trigger words are **not** auto-added — "
-                    "write the full prompt you want)."
-                )
-                with gr.Row():
-                    with gr.Column(scale=2, elem_classes="kx-panel"):
-                        json_file_in = gr.File(label="Upload JSON file", type="filepath")
-                        json_text_in = gr.Textbox(
-                            label="…or paste a JSON array here", lines=14
-                        )
-                        json_btn = _cta("🚀 Run JSON batch")
-                    with gr.Column(scale=3, elem_classes="kx-panel-out"):
-                        json_gallery = gr.Gallery(
-                            label="Batch output", columns=2, height=600
-                        )
-                        json_status = _status_box()
-                json_btn.click(
-                    fn=generate_from_json,
-                    inputs=[json_file_in, json_text_in],
-                    outputs=[json_gallery, json_status],
-                    concurrency_id="comfy",
-                )
-
-        if features.enabled(features.Key.GALLERY):
-            with gr.Tab(features.label_for(features.Key.GALLERY)):
-                with gr.Row():
-                    gallery_refresh_btn = gr.Button("🔄 Refresh", size="sm")
-                    gallery_zip_btn = gr.Button(
-                        "📦 Zip all for download", size="sm"
-                    )
-                gallery_info = gr.Markdown(
-                    f"{len(list_output_images())} file(s) in `{OUTPUT_DIR}`",
-                    elem_classes="kx-meta",
-                )
-                all_gallery = gr.Gallery(
-                    label="All generated images & videos (newest first)",
-                    value=list_output_images(), columns=4, height=700,
-                )
-                gallery_zip_file = gr.File(
-                    label="Zip of all images", interactive=False
-                )
-                gallery_refresh_btn.click(
-                    fn=refresh_gallery, outputs=[all_gallery, gallery_info]
-                )
-                gallery_zip_btn.click(
-                    fn=zip_outputs, outputs=[gallery_zip_file, gallery_info]
-                )
+    # Declared after the loop, and that is what lets TAB_ORDER be reordered
+    # freely: the Use buttons write into the two generation tabs' controls,
+    # so wiring them inside the library's own body would force it to be
+    # built last. Gradio only requires a component to exist before the
+    # .click() naming it, not before the tab it lives in.
+    if features.Key.COMMUNITY_PROMPTS in _exports:
+        _lib_rows, _lib_buttons = _exports[features.Key.COMMUNITY_PROMPTS]
+        # Every Use button writes to both tabs' controls, because the
+        # outputs list is fixed at build time; _use_prompt no-ops the half
+        # it is not loading. An unlicensed tab contributes nothing, and its
+        # cards' buttons are dead.
+        _use_outputs = [*(_krea_targets or []), *(_v2_targets or []),
+                        main_tabs]
+        for _slot, _button in enumerate(_lib_buttons):
+            _button.click(fn=partial(_use_prompt, _slot),
+                          inputs=_lib_rows, outputs=_use_outputs)
 
     # Outside the Tabs: one line under every tab, carrying the Ctrl+Enter
     # hint (theme.JS binds it) — a shortcut nobody would find otherwise —

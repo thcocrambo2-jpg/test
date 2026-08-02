@@ -114,14 +114,26 @@ def main() -> None:
             "ReActorFaceSwap", REACTOR_NODES_DIR,
             COMFY_DIR / "custom_nodes" / REACTOR_NODES_DIR,
         )
-    if features.enabled(features.Key.KREA_V2_T2I):
+    if (features.enabled(features.Key.KREA_V2_T2I)
+            or features.enabled(features.Key.KREA_V2_EDIT)):
         # Same reasoning for the Krea 2 V2 packs — two of these nodes have
         # no core equivalent, so a silent import failure would only show up
-        # as "node not found" on the first generation.
+        # as "node not found" on the first generation. Krea 2 V2 Edit runs
+        # the same sampler and variance nodes, so either feature is reason
+        # enough to check.
         for dirname, _repo, class_type in V2_NODE_REPOS:
             comfy.verify_custom_node(
                 class_type, dirname, COMFY_DIR / "custom_nodes" / dirname,
             )
+    if (features.enabled(features.Key.KREA_EDIT)
+            or features.enabled(features.Key.KREA_V2_EDIT)):
+        # Krea2Edit is cloned rather than vendored, so it fails the same
+        # way and deserves the same check. One class proves the pack
+        # loaded; the other lives in the same module.
+        comfy.verify_custom_node(
+            "Krea2EditModelPatch", "comfyui-krea2edit",
+            COMFY_DIR / "custom_nodes" / "comfyui-krea2edit",
+        )
 
     # 7 · Gradio UI (importing ui pulls in the workflow builder + API client).
     # ui builds its gr.Blocks at *import* time, so this import is where the

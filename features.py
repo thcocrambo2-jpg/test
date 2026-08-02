@@ -63,6 +63,7 @@ class Key(str, Enum):
     KREA_V2_T2I = "krea_v2_t2i"
     GALLERY = "gallery"
     KREA_EDIT = "krea_edit"
+    KREA_V2_EDIT = "krea_v2_edit"
     KREA_INPAINT = "krea_inpaint"
     FACESWAP = "faceswap"
     FLUX_T2I = "flux_t2i"
@@ -121,6 +122,11 @@ FEATURES = (
     Feature(Key.GALLERY, "🖼️ Gallery", default=True),
     Feature(Key.KREA_EDIT, "✨ Krea2 Edit",
             needs=("text_encoder", "krea2", "edit_lora")),
+    # The same instruction-edit recipe on the V2 pipeline, so it needs the
+    # "v2" weights rather than "krea2" — and the edit LoRA, which is the
+    # one thing the two edit tabs do share.
+    Feature(Key.KREA_V2_EDIT, "🔷 Krea2 V2 Edit",
+            needs=("text_encoder", "v2", "edit_lora")),
     Feature(Key.KREA_INPAINT, "🖌️ Krea2 Inpaint",
             needs=("text_encoder", "krea2")),
     Feature(Key.FACESWAP, "🎭 Face Swap", needs=("reactor",)),

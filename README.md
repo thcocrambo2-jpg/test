@@ -57,6 +57,7 @@ npm run issue-key -- --name "Acme Corp" --plan pro --seats 2
 | `krea_v2_t2i`  | 🔶 Krea 2 V2            | ~17 GB         |
 | `gallery`      | Gallery                 | none           |
 | `krea_edit`    | ✨ Edit (Instruction)   | ~1.9 GB + base |
+| `krea_v2_edit` | 🔷 Krea 2 V2 Edit       | ~1.9 GB + V2   |
 | `krea_inpaint` | Inpaint / Img2Img       | base only      |
 | `faceswap`     | 🎭 Face Swap (ReActor)  | ~1.8 GB        |
 | `flux_t2i`     | 🌊 Flux 2               | ~57 GB         |
@@ -72,7 +73,14 @@ adds Flux 2 and Klein, and `studio` (89) adds video and JSON batch.
 
 Shared weights are handled for you — `krea_edit` and `krea_inpaint` both
 run the Krea 2 base models, so granting either one fetches them, and
-granting all three fetches them once.
+granting all three fetches them once. `krea_v2_edit` is the same trick one
+level over: it shares the Identity Edit LoRA with `krea_edit` and the ~17 GB
+of weights with `krea_v2_t2i`, so its own cost is only whichever of those
+two is not already granted.
+
+`krea_v2_edit` ships on the internal `admin` plan only. Put it on
+`creator`/`pro`/`studio` in `license-validator/src/plans.js` (next to
+`krea_edit`) when it should be something a customer can buy.
 
 Keys are permanent and names are not: a key is compiled into every shipped
 binary, so renaming one drops that tab for anyone on an older build — the
@@ -330,11 +338,51 @@ error in the log points at a custom node instead.
 - `comfy.py` — GPU detection + ComfyUI server start/wait (1–2 instances)
 - `workflow.py` — Krea 2 workflow builders, text-to-image + inpainting + instruction edit (ComfyUI API format)
 - `workflow_krea2_v2.py` — Krea 2 V2 builder (the Krea2 advanced turbo/raw graph)
+- `workflow_krea2_v2_edit.py` — Krea 2 V2 Edit builder (that graph's instruction-edit variant)
 - `workflow_klein.py` — Flux 2 Klein 9B edit builder (the Klein advanced Klein Edit graph)
 - `workflow_wan.py` — Wan 2.2 image-to-video workflow builder (two-expert A14B)
 - `workflow_reactor.py` — ReActor face-swap workflow builder + availability checks
 - `client.py` — ComfyUI HTTP/websocket client (queue, progress, image upload)
-- `ui.py` — Gradio UI (single/batch, edit, inpaint, face swap, flux, klein edit, video, JSON batch, gallery tabs), the `/pricing` page, and launch logic
+- `ui.py` — Gradio UI (single/batch, edit, V2 edit, inpaint, face swap, flux, klein edit, video, JSON batch, gallery tabs), the `/pricing` page, and launch logic
+
+### Tab order
+
+Each tab's body is a `_tab_*` builder in `ui.py`, and **`TAB_ORDER` is the one
+thing that decides the order they appear in** — a tuple of
+`(feature key, builder, tab id)` that a loop inside the `gr.Blocks` walks:
+
+```python
+TAB_ORDER = (
+    (features.Key.KREA_T2I,          _tab_krea_t2i,          "krea2"),
+    (features.Key.KREA_V2_T2I,       _tab_krea_v2_t2i,       "krea2v2"),
+    (features.Key.COMMUNITY_PROMPTS, _tab_community_prompts, "prompts"),
+    ...
+)
+```
+
+Move an entry and the tab moves; nothing else changes. A feature that is off is
+skipped entirely, so the remaining tabs close up with no gap. The order is fixed
+for the build — the Blocks tree is constructed once at import, so it cannot vary
+per licence.
+
+`tab_id` is only needed by a tab something else selects programmatically. Gradio
+otherwise numbers tabs by construction order, which shifts with the licence, so
+the Prompt Library's "switch to that tab" would land on whichever tab happened to
+be third for that customer.
+
+Note the ordering of `sort_order` in the licence server's `features` collection
+is a *different* thing: it orders the pricing page and the `features` array in an
+acquire response, and never reaches the tab strip. Likewise the `FEATURES` tuple
+in `features.py`, which drives `summary()`, `assets()` and `enabled_keys()` only.
+
+One rule for the builders: cross-tab event wiring belongs *after* the loop, not
+inside a body. The Prompt Library's Use buttons write into the Krea 2 and Krea 2
+V2 controls, which belong to two other builders — Gradio only needs a component
+to exist before the `.click()` naming it, not before the tab it lives in, so
+lifting that one wiring block out is what keeps `TAB_ORDER` freely reorderable.
+Builders return whatever the rest of the page needs from them (the two generation
+tabs return their control lists, the library returns its state and buttons);
+everything else returns `None`.
 - `theme.py` — the UI's look: Gradio theme tokens, CSS, application header, pricing markup, page JS (see below)
 - `build.sh` — compiles the app into a single distributable binary (see below)
 
@@ -688,6 +736,56 @@ geometry (a source whose aspect ratio differs from the output is fitted,
 not stretched) and for `ref_boost`; conversely the v1.2 nodes default
 `fit_mode` to `fit`, which v1/v1.1 weights were not trained for. The node
 pack is held still by `scripts/PINS.json` — bump both together or neither.
+
+## Krea 2 V2 Edit
+
+The **🔷 Krea2 V2 Edit** tab is that same instruction-edit recipe grafted onto
+the Krea 2 V2 pipeline, and it stands to the Edit tab exactly as Krea 2 V2
+stands to Single. Feature key `krea_v2_edit`; builder
+`workflow_krea2_v2_edit.py`.
+
+Everything V2 about it is **imported from `workflow_krea2_v2.py` rather than
+restated**, so the two tabs cannot drift: the same `V2_MODELS` registry and
+turbo/raw defaults, the same Wan 2.1 VAE, the same 11-slot model+CLIP LoRA
+stack (with the Turbo LoRA still on slot 1, still toggled by the Model
+dropdown), the same `ClownsharKSampler_Beta` settings and the same
+`RBG_Smart_Seed_Variance` node. The edit half — `Krea2EditModelPatch`,
+`Krea2EditGroundedEncode`, the Identity Edit LoRA, **Grounding** and
+**Reference fidelity** — behaves as described for the Edit tab above.
+
+Swapping the VAE is safe *here specifically* because the two are the same
+family: Qwen-Image's VAE is a Wan 2.1 derivative over the same 16-channel
+latent space, so the source latents `Krea2EditModelPatch` prepends as
+in-context tokens still mean what the Identity Edit LoRA was trained to read.
+A VAE from any other family would not be substitutable this way.
+
+Three things are deliberately **not** carried over from the V2 tab:
+
+| | V2 | V2 Edit |
+| --- | --- | --- |
+| resolution | aspect + megapixels (`resolve_size`) | from the source image, aspect kept, capped at 2 MP (`fit_size`) |
+| denoise | a slider (default 1.0) | pinned at 1.0, not exposed — the source arrives through conditioning, not the starting latent |
+| sharpen / film grain | toggles, off, reproducing the bypassed source nodes | absent; there is no source graph to reproduce |
+
+The LoRA chain mixes two node types on purpose. The Identity Edit LoRA goes on
+first as `LoraLoaderModelOnly` at strength 1.0 **as trained** — the grounded
+encoder reads the image through the CLIP, so patching the CLIP with an edit
+LoRA is not part of that recipe — and the V2 stack then applies over it as
+`LoraLoader` (model + CLIP), which is what Power Lora Loader's "Single
+Strength" mode does. Each node passes through whatever input it does not
+touch, so the mixed chain is well-formed. As in the Edit tab, the edit LoRA is
+added **by the builder** and is not one of the visible slots, which is what
+makes applying it twice impossible.
+
+An empty **Negatives** box becomes `ConditioningZeroOut`, saving an encoder
+pass; the V2 tab always encodes its negative because its source graph does.
+The box is prefilled with `V2_DEFAULT_NEGATIVE` either way, and CFG 1.0 —
+the turbo default — ignores it regardless.
+
+This tab needs **both** sets of node packs: the three V2 ones above plus
+`comfyui-krea2edit`. `bootstrap.install_custom_nodes` and
+`bootstrap.install_v2_nodes` each run when *either* of the features that
+wants them is on, and `app.py` verifies all four classes registered.
 
 ## Inpainting
 

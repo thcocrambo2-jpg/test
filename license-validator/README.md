@@ -60,6 +60,10 @@ npm run issue-key -- --key KREA2-XXXX-XXXX-XXXX --features-extra "wan_i2v" --upd
 | `studio` | 89 | + wan_i2v, json_batch |
 | `admin` | 0 | everything, `is_public: false` |
 
+`krea_v2_edit` is on `admin` only for now — a new tab lands there before it
+lands on anything a customer is paying for. Add it next to `krea_edit` in
+`creator`/`pro`/`studio` when it should be purchasable.
+
 Prices are **documentation, not enforcement.** Nothing here charges anyone;
 `expires_at` is the only lever that actually stops a key working.
 
@@ -138,6 +142,7 @@ keep a plain name.
 | `krea_v2_t2i` | Krea 2 V2 | generation |
 | `flux_t2i` | Flux 2 — Text to Image | generation |
 | `krea_edit` | Krea Edit — Instruction | editing |
+| `krea_v2_edit` | Krea2 V2 Edit | editing |
 | `krea_inpaint` | Krea Inpaint — Img2Img | editing |
 | `klein_i2i` | Klein Edit — Image to Image | editing |
 | `faceswap` | Face Swap (ReActor) | editing |

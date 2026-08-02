@@ -202,6 +202,7 @@ export const DEFAULT_PLANS = [
       "krea_edit",
       "krea_inpaint",
       "faceswap",
+      "krea_v2_edit",
       "flux_t2i",
       "klein_i2i",
       "community_prompts",
@@ -222,6 +223,7 @@ export const DEFAULT_PLANS = [
       "gallery",
       "krea_edit",
       "krea_inpaint",
+      "krea_v2_edit",
       "faceswap",
       "flux_t2i",
       "klein_i2i",
@@ -232,10 +234,11 @@ export const DEFAULT_PLANS = [
     is_public: true,
     sort_order: 40,
   },
-  // Same feature set as studio today, and still its own document: it is
-  // not public, it is the name that shows up in the server logs for your
-  // own pods, and the moment there is a feature #11 you will want it here
-  // before it is on anything a customer is paying for.
+  // Not public, it is the name that shows up in the server logs for your
+  // own pods, and it is where a new tab lands first — which is exactly
+  // what `krea_v2_edit` is doing here. It is on no paid plan yet; add it
+  // to creator/pro/studio above (next to `krea_edit`) when it should be
+  // something a customer can buy.
   {
     _id: "admin",
     name: "Admin (Internal)",
@@ -248,6 +251,7 @@ export const DEFAULT_PLANS = [
       "krea_v2_t2i",
       "gallery",
       "krea_edit",
+      "krea_v2_edit",
       "krea_inpaint",
       "faceswap",
       "flux_t2i",
@@ -256,6 +260,17 @@ export const DEFAULT_PLANS = [
       "json_batch",
       "community_prompts",
     ],
+    is_public: false,
+    sort_order: 999,
+  },
+  {
+    _id: "admin-minimal",
+    name: "Admin (Minimal)",
+    description: "Minimal access for development",
+    price_monthly: 0,
+    price_yearly: 0,
+    currency: "USD",
+    features: ["krea_t2i", "krea_v2_t2i", "krea_edit", "krea_v2_edit", "gallery", "community_prompts"],
     is_public: false,
     sort_order: 999,
   },

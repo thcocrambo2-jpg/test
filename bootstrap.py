@@ -179,10 +179,11 @@ def install_custom_nodes() -> None:
     instruction-edit workflow needs. Must run before the ComfyUI server
     starts so the nodes register; the pack has no extra Python deps.
 
-    Only the Edit tab uses those two nodes, so this is skipped entirely
-    when that feature is off — it used to run unconditionally.
+    Only the two Edit tabs use those two nodes, so this is skipped
+    entirely when both features are off — it used to run unconditionally.
     """
-    if not features.enabled(features.Key.KREA_EDIT):
+    if not (features.enabled(features.Key.KREA_EDIT)
+            or features.enabled(features.Key.KREA_V2_EDIT)):
         return
     dest = COMFY_DIR / "custom_nodes" / "comfyui-krea2edit"
     if dest.exists():
@@ -203,8 +204,12 @@ def install_v2_nodes() -> None:
     failed requirements install leaves the V2 tab reporting which node is
     missing and every other tab untouched — the same contract install_reactor
     follows. app.py verifies afterwards that each class actually registered.
+
+    Krea 2 V2 Edit runs the same sampler and variance nodes, so it pulls
+    these packs in too — either feature on its own is enough.
     """
-    if not features.enabled(features.Key.KREA_V2_T2I):
+    if not (features.enabled(features.Key.KREA_V2_T2I)
+            or features.enabled(features.Key.KREA_V2_EDIT)):
         return
     for dirname, repo, _class_type in V2_NODE_REPOS:
         dest = COMFY_DIR / "custom_nodes" / dirname
