@@ -1,9 +1,15 @@
 """The public plan catalogue — the data behind the Pricing page.
 
 `GET /v1/plans` on the license server answers with every plan whose
-`is_public` is not false, plus the feature registry that names the tabs
-those plans grant. It is unauthenticated on purpose: it is a price list,
-not an entitlement.
+`is_public` is not false, the feature registry that names the tabs those
+plans grant, and the billing cycles those plans can be bought on. It is
+unauthenticated on purpose: it is a price list, not an entitlement.
+
+The prices are the server's arithmetic, not this module's: a plan arrives
+with one entry per cycle, already discounted. Nothing here multiplies or
+takes a percentage off anything, so the page cannot quote a figure the
+invoice disagrees with — and a cycle launched on the server appears here
+as one more entry, with no rebuild.
 
 **Nothing here decides what this pod can run.** That stays with
 licensing.py → features.py, which act on the flat `features` array in the
@@ -43,6 +49,42 @@ FETCH_TIMEOUT = 12
 
 
 @dataclass(frozen=True)
+class Cycle:
+    """One billing term the catalogue is offering, e.g. monthly or yearly.
+
+    The server sends only the cycles that are switched on, so this tuple is
+    the tab bar: one entry means no tabs at all and the page reads as a
+    plain monthly price list, and a cycle launched in Atlas grows a tab
+    here with nothing rebuilt. `months` is what a plan's price for this
+    cycle covers, and `discount_percent` is what the page badges it with.
+    """
+
+    id: str
+    label: str
+    months: int
+    discount_percent: float = 0.0
+
+
+@dataclass(frozen=True)
+class CyclePrice:
+    """What one plan costs on one cycle, as the server worked it out.
+
+    Every figure is computed server-side from the plan's monthly rate and
+    the cycle's discount (see plans.js `cyclePrice`), so this page renders
+    numbers rather than deriving them — two implementations of the same
+    arithmetic is two chances for the page to quote a price the invoice
+    does not match.
+    """
+
+    cycle: str
+    months: int
+    total: float
+    per_month: float
+    discount_percent: float
+    saving: float
+
+
+@dataclass(frozen=True)
 class Plan:
     """One purchasable tier, as served by /v1/plans."""
 
@@ -50,10 +92,13 @@ class Plan:
     name: str
     description: str | None
     price_monthly: float | None
-    price_yearly: float | None
     currency: str
     features: tuple[str, ...]
     sort_order: int
+    # What this tier costs per cycle, keyed by Cycle.id. Only the enabled
+    # cycles are in it, and a plan with no price at all has none of them —
+    # the page then renders "Price on application" as it always did.
+    prices: dict[str, CyclePrice] = field(default_factory=dict)
     # Presentation only: flags the recommended tier, which the pricing page
     # renders with a "Most Popular" flag and a stronger card. Defaulted so
     # a server too old to send it still parses into a Plan — the page then
@@ -92,6 +137,11 @@ class Catalogue:
 
     plans: tuple[Plan, ...] = ()
     features: dict[str, FeatureInfo] = field(default_factory=dict)
+    # The billing terms on offer, shortest first, monthly always among
+    # them. Empty only when the fetch failed; a server too old to send them
+    # gets a monthly cycle synthesised in _cycles() so the page has
+    # something to render prices against either way.
+    cycles: tuple[Cycle, ...] = ()
     error: str | None = None
     # Where to send someone who wants to change plan — the admin's Telegram,
     # set as CONTACT_URL on the licence server. None is ordinary (unset, or
@@ -135,6 +185,74 @@ def _get(path: str, timeout: int) -> tuple[int | None, dict]:
             return err.code, {}
 
 
+def _number(value) -> float | None:
+    """A figure from the wire, or None. Booleans are not numbers here."""
+    if isinstance(value, bool) or not isinstance(value, (int, float)):
+        return None
+    return float(value)
+
+
+def _cycles(raw) -> tuple[Cycle, ...]:
+    """The billing cycles on offer, shortest term first.
+
+    A server too old to send `cycles` gets a monthly one invented, which is
+    exactly what it used to mean: every price it quotes is a monthly price.
+    The page then renders no tab bar, as it does whenever there is only one
+    cycle, and nothing about it looks like a degraded mode.
+    """
+    out = []
+    for item in raw or []:
+        if not isinstance(item, dict):
+            continue
+        cycle_id = str(item.get("id") or "").strip()
+        months = item.get("months")
+        if not cycle_id or not isinstance(months, int) or months < 1:
+            continue
+        out.append(Cycle(
+            id=cycle_id,
+            label=str(item.get("label") or cycle_id).strip() or cycle_id,
+            months=months,
+            discount_percent=_number(item.get("discount_percent")) or 0.0,
+        ))
+    if not out:
+        return (Cycle(id="monthly", label="Monthly", months=1),)
+    return tuple(sorted(out, key=lambda cycle: cycle.months))
+
+
+def _prices(raw, plan_monthly: float | None) -> dict[str, CyclePrice]:
+    """Per-cycle prices from the wire, keyed by cycle id.
+
+    Falls back to a monthly entry built from `price_monthly` when the
+    server sent no `prices` map at all — the older-server case again, where
+    the one figure it sends *is* the monthly price.
+    """
+    out: dict[str, CyclePrice] = {}
+    for key, item in (raw or {}).items():
+        if not isinstance(item, dict):
+            continue
+        total = _number(item.get("total"))
+        months = item.get("months")
+        if total is None or not isinstance(months, int) or months < 1:
+            continue
+        cycle_id = str(key).strip()
+        if not cycle_id:
+            continue
+        out[cycle_id] = CyclePrice(
+            cycle=cycle_id,
+            months=months,
+            total=total,
+            per_month=_number(item.get("per_month")) or (total / months),
+            discount_percent=_number(item.get("discount_percent")) or 0.0,
+            saving=_number(item.get("saving")) or 0.0,
+        )
+    if not out and plan_monthly is not None:
+        out["monthly"] = CyclePrice(
+            cycle="monthly", months=1, total=plan_monthly,
+            per_month=plan_monthly, discount_percent=0.0, saving=0.0,
+        )
+    return out
+
+
 def _plan(raw: dict) -> Plan | None:
     """One plan from the wire, or None if it is too broken to show.
 
@@ -146,25 +264,22 @@ def _plan(raw: dict) -> Plan | None:
     if not plan_id or not name:
         return None
 
-    def money(key):
-        value = raw.get(key)
-        return float(value) if isinstance(value, (int, float)) else None
-
     features = tuple(
         item.strip() for item in raw.get("features") or []
         if isinstance(item, str) and item.strip()
     )
     description = str(raw.get("description") or "").strip() or None
     sort_order = raw.get("sort_order")
+    monthly = _number(raw.get("price_monthly"))
     return Plan(
         id=plan_id,
         name=name,
         description=description,
-        price_monthly=money("price_monthly"),
-        price_yearly=money("price_yearly"),
-        currency=str(raw.get("currency") or "USD").strip() or "USD",
+        price_monthly=monthly,
+        currency=str(raw.get("currency") or "INR").strip() or "INR",
         features=features,
         sort_order=int(sort_order) if isinstance(sort_order, int) else 0,
+        prices=_prices(raw.get("prices"), monthly),
         is_popular=raw.get("is_popular") is True,
     )
 
@@ -227,10 +342,11 @@ def _fetch() -> Catalogue:
     features = {info.key: info for info in
                 (_feature(raw) for raw in body.get("features") or [])
                 if info is not None}
+    cycles = _cycles(body.get("cycles"))
     contact = _clean_url(body.get("contact_url"))
 
     if not plans:
-        return Catalogue(features=features, contact_url=contact,
+        return Catalogue(features=features, cycles=cycles, contact_url=contact,
                          error="The licence server has no public plans to "
                                "show yet.")
 
@@ -238,9 +354,10 @@ def _fetch() -> Catalogue:
     # document with no sort_order still lands somewhere sensible instead
     # of wherever Mongo returned it.
     plans.sort(key=lambda plan: (plan.sort_order, plan.name))
-    log.info("Plan catalogue: %d plan(s) — %s", len(plans),
-             ", ".join(plan.id for plan in plans))
-    return Catalogue(plans=tuple(plans), features=features,
+    log.info("Plan catalogue: %d plan(s) — %s · billed %s", len(plans),
+             ", ".join(plan.id for plan in plans),
+             ", ".join(cycle.id for cycle in cycles))
+    return Catalogue(plans=tuple(plans), features=features, cycles=cycles,
                      contact_url=contact)
 
 

@@ -28,8 +28,13 @@ import cors from "cors";
 import { ObjectId } from "mongodb";
 
 import { collections } from "./db.js";
-import { allFeatures, sortByRegistry } from "./features.js";
-import { allPlans, resolveEntitlement } from "./plans.js";
+import { allFeatures, isFeatureEnabled, sortByRegistry } from "./features.js";
+import {
+  allPlans,
+  billingCycles,
+  cyclePrice,
+  resolveEntitlement,
+} from "./plans.js";
 import {
   STALE_SECONDS,
   HEARTBEAT_SECONDS,
@@ -387,29 +392,77 @@ app.post(
 //     wrong for one decision.
 //
 // A key the catalogue does not describe sorts to the end rather than
-// being dropped — the deploy-skew case the rest of this file tolerates.
+// being dropped — the deploy-skew case the rest of this file tolerates. A
+// key the catalogue describes and marks `enabled: false` *is* dropped,
+// here and only here: that flag is about what this page advertises, and
+// nothing about it reaches an entitlement (see features.js).
+//
+// ── Billing cycles ─────────────────────────────────────────────────────
+//
+// `cycles` carries only the ones that are switched on, monthly always
+// among them, and each plan carries a `prices` map keyed by those same
+// cycle ids. The page renders a tab per cycle it is sent and nothing when
+// it is sent one — so turning quarterly or yearly on is a boolean in
+// Atlas, with no rebuild on either side. Prices are computed rather than
+// stored; the plan document holds `price_monthly` and nothing else.
+//
+// `price_yearly` is still sent when a yearly cycle is enabled, because
+// builds that shipped before `prices` existed read that field and nothing
+// else. It is a compatibility alias for `prices.yearly.total`, not a
+// second source of truth, and it is null whenever yearly is off — which is
+// exactly what an older build should see while the cycle is unlaunched.
 app.get(
   "/v1/plans",
   wrap(async (_req, res) => {
-    const [plans, features] = await Promise.all([allPlans(), allFeatures()]);
+    const [plans, catalogue, cycles] = await Promise.all([
+      allPlans(),
+      allFeatures(),
+      billingCycles(),
+    ]);
+    // The whole catalogue is kept alongside the filtered one: a key missing
+    // from `features` is either disabled (drop it from the plan) or unknown
+    // to this catalogue entirely (keep it — deploy skew), and only the full
+    // map can tell those apart.
+    const features = new Map(
+      [...catalogue].filter(([, row]) => isFeatureEnabled(row)),
+    );
     // allFeatures() returns the catalogue already ordered by sort_order,
     // so its key order *is* the display order sortByRegistry ranks against.
     const order = [...features.keys()];
+    const live = cycles.filter((cycle) => cycle.enabled);
+
     res.json({
       ok: true,
+      cycles: live,
       plans: [...plans.values()]
         .filter((plan) => plan.is_public !== false)
-        .map((plan) => ({
-          id: plan._id,
-          name: plan.name,
-          description: plan.description || null,
-          price_monthly: plan.price_monthly ?? null,
-          price_yearly: plan.price_yearly ?? null,
-          currency: plan.currency || "USD",
-          features: sortByRegistry(plan.features || [], order),
-          is_popular: plan.is_popular === true,
-          sort_order: plan.sort_order ?? 0,
-        })),
+        .map((plan) => {
+          const prices = {};
+          for (const cycle of live) {
+            const price = cyclePrice(plan, cycle);
+            if (price) prices[cycle.id] = price;
+          }
+          return {
+            id: plan._id,
+            name: plan.name,
+            description: plan.description || null,
+            price_monthly: plan.price_monthly ?? null,
+            price_yearly: prices.yearly?.total ?? null,
+            currency: plan.currency || "INR",
+            prices,
+            // A disabled feature is filtered out of the plan's list even
+            // though the plan still grants it — the tier keeps working for
+            // everyone on it, the page just stops selling the tab.
+            features: sortByRegistry(
+              (plan.features || []).filter((key) =>
+                isFeatureEnabled(catalogue.get(key)),
+              ),
+              order,
+            ),
+            is_popular: plan.is_popular === true,
+            sort_order: plan.sort_order ?? 0,
+          };
+        }),
       features: [...features.values()].map(featureWire),
       contact_url: CONTACT_URL || null,
     });
@@ -653,6 +706,10 @@ function featureWire(row) {
     description: row.description || "",
     category: row.category || "",
     sort_order: row.sort_order ?? 0,
+    // Always true on /v1/plans, which never sends a disabled row. It is on
+    // the wire for the admin listing, which sends every row and needs to
+    // say which of them the pricing page is currently hiding.
+    enabled: isFeatureEnabled(row),
   };
 }
 
@@ -753,20 +810,35 @@ app.get(
 // Every plan with the number of licenses on it. The count is the guard
 // rail for editing: it tells you how many customers a change to this
 // document is about to move, before you make it.
+//
+// Unlike /v1/plans this shows everything as it really is: cycles that are
+// switched off, features that are disabled, and the price each cycle
+// *would* charge if it were on — which is the number you want in front of
+// you when deciding whether to switch it on.
 app.get(
   "/v1/admin/plans",
   requireAdmin,
   wrap(async (_req, res) => {
     const { licenses } = await collections();
-    const [plans, features] = await Promise.all([allPlans(), allFeatures()]);
+    const [plans, features, cycles] = await Promise.all([
+      allPlans(),
+      allFeatures(),
+      billingCycles(),
+    ]);
     const rows = await Promise.all(
       [...plans.values()].map(async (plan) => ({
         ...plan,
+        prices: Object.fromEntries(
+          cycles
+            .map((cycle) => [cycle.id, cyclePrice(plan, cycle)])
+            .filter(([, price]) => price !== null),
+        ),
         licenses: await licenses.countDocuments({ plan_id: plan._id }),
       })),
     );
     res.json({
       ok: true,
+      cycles,
       plans: rows,
       features: [...features.values()].map(featureWire),
     });

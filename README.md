@@ -150,7 +150,15 @@ the plan and expiry that bar already shows.
 The data is the license server's own catalogue — `plans.py` reads
 `GET /v1/plans` at page load and caches it for five minutes, so a price or
 a feature list edited in Atlas shows up without redeploying the app or
-restarting the pod. **Reading it changes nothing.** Which tabs a pod
+restarting the pod.
+
+Prices are quoted per billing cycle. The server sends the cycles it is
+offering and what each one costs, and the page renders a tab per cycle —
+Monthly, Quarterly, Yearly — with the saving badged on the tab and on the
+card. Cycles that are switched off are not sent and get no tab, and with
+only one cycle live there is no tab bar at all. Launching quarterly or
+yearly pricing is therefore a flag on the license server: no rebuild here,
+and no new binary for the pods. **Reading it changes nothing.** Which tabs a pod
 builds still comes only from the flat `features` array in the acquire
 response, so a catalogue that is stale, empty or unreachable costs the
 page its cards and nothing else — it renders a panel saying so, with a

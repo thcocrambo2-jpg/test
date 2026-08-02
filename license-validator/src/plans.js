@@ -33,6 +33,16 @@
 // are a handful of plans, so the whole collection is cached in module
 // scope instead: a cold start pays one small query and warm invocations
 // pay nothing.
+//
+// ── Billing cycles live in the collection, prices are derived ───────────
+//
+// A plan document carries one figure — `price_monthly` — and the billing
+// cycles it can be bought on are a single `__billing` document sitting in
+// the same collection (see DEFAULT_BILLING). Every other price is computed
+// from those two things in cyclePrice(), so a quarterly or yearly price
+// cannot drift out of step with the monthly one it is supposed to
+// discount. Turning a cycle on is one boolean in Atlas, and the pricing
+// page grows a tab for it with nothing rebuilt on either side.
 
 import { collections } from "./db.js";
 import { featureOrder, normalizeFeatures, sortByRegistry } from "./features.js";
@@ -47,7 +57,7 @@ const PLAN_TTL_MS = 60_000;
 // On globalThis for the same reason db.js caches its client there: warm
 // serverless invocations reuse the module scope, cold ones do not.
 let cache = globalThis.__krea2Plans;
-if (!cache) cache = globalThis.__krea2Plans = { at: 0, byId: null };
+if (!cache) cache = globalThis.__krea2Plans = { at: 0, byId: null, cycles: null };
 
 /**
  * A license points at a plan that does not exist.
@@ -71,19 +81,176 @@ export class MissingPlanError extends Error {
   }
 }
 
-/** Every plan, by _id. Cached for PLAN_TTL_MS. */
-export async function allPlans() {
-  if (cache.byId && Date.now() - cache.at < PLAN_TTL_MS) return cache.byId;
+// ── Billing cycles ──────────────────────────────────────────────────────
+//
+// One lookup document in the plans collection, rather than a collection of
+// its own: there is exactly one of it, it is read on the same request as
+// the plans, and keeping it here means the whole pricing story is one
+// screen in Atlas. Mongo does not care that it has a different shape from
+// its neighbours; the readers do, so it is filtered out of allPlans() by
+// its `__` prefix and never reaches getPlan() or the catalogue listing.
+//
+// Each cycle says how long it is and what it takes off the monthly rate.
+// Nothing stores a quarterly or yearly *price* — cyclePrice() derives it,
+// which is why editing `price_monthly` alone can never leave a stale
+// discounted figure behind it.
+//
+//   enabled           whether the pricing page offers this cycle at all.
+//                     Off is invisible, not greyed out: no tab, no price,
+//                     and with every extra cycle off the page shows no tab
+//                     bar at all and reads exactly as it did before cycles
+//                     existed. Flipping one to true in Atlas is the whole
+//                     launch — the client renders whatever it is sent —
+//                     but seed-catalog upserts this document like any
+//                     other, so set it here too or the next run reverts it.
+//   discount_percent  off the monthly rate, per month, for committing to
+//                     the longer term. 0 is a legitimate value: a cycle
+//                     that is only a convenience gets no "save" badge.
+//
+export const BILLING_ID = "__billing";
+
+// The cycle every plan is priced in. Always offered, never discounted:
+// `price_monthly` *is* the list price, so a discount here would mean the
+// figure in the plan document is not the one anybody pays.
+const BASE_CYCLE = "monthly";
+
+export const DEFAULT_BILLING = {
+  _id: BILLING_ID,
+  kind: "billing",
+  cycles: [
+    { id: BASE_CYCLE, label: "Monthly", months: 1, enabled: true,
+      discount_percent: 0 },
+    { id: "quarterly", label: "Quarterly", months: 3, enabled: false,
+      discount_percent: 10 },
+    { id: "yearly", label: "Yearly", months: 12, enabled: false,
+      discount_percent: 20 },
+  ],
+};
+
+/** A percentage from the wire, or null for anything unusable. */
+function percent(value) {
+  const number = Number(value);
+  if (!Number.isFinite(number) || number < 0 || number >= 100) return null;
+  return Math.round(number * 100) / 100;
+}
+
+/**
+ * The cycles as the rest of the service should see them, from a `__billing`
+ * document that may have been hand-edited.
+ *
+ * Every field is re-derived rather than trusted, and a row too broken to
+ * price (no id, no sane month count) is dropped: this document is edited in
+ * Atlas by hand, and a typo in it must cost one cycle rather than the whole
+ * pricing page. The monthly cycle is added back if it is missing and forced
+ * on if it was switched off, because a catalogue with no base cycle has no
+ * price to show for anything.
+ */
+function normalizeCycles(doc) {
+  const rows = Array.isArray(doc?.cycles) ? doc.cycles : DEFAULT_BILLING.cycles;
+  const seen = new Set();
+  const out = [];
+
+  for (const row of rows) {
+    const id = typeof row?.id === "string" ? row.id.trim() : "";
+    const months = Number(row?.months);
+    if (!id || seen.has(id) || !Number.isInteger(months) || months < 1) continue;
+    seen.add(id);
+
+    const fallback = DEFAULT_BILLING.cycles.find((cycle) => cycle.id === id);
+    const label =
+      (typeof row.label === "string" && row.label.trim()) ||
+      fallback?.label ||
+      id.charAt(0).toUpperCase() + id.slice(1);
+    out.push({
+      id,
+      label,
+      months,
+      enabled: id === BASE_CYCLE ? true : row.enabled === true,
+      discount_percent: id === BASE_CYCLE ? 0 : percent(row.discount_percent) ?? 0,
+    });
+  }
+
+  // A copy, not the seed object itself: this array is cached and handed to
+  // every caller, and one of them mutating it would edit the default.
+  if (!seen.has(BASE_CYCLE)) {
+    out.push({ ...DEFAULT_BILLING.cycles.find((c) => c.id === BASE_CYCLE) });
+  }
+  // Shortest first, so the tab bar reads left to right in term length
+  // whatever order the document happens to list them in.
+  return out.sort((a, b) => a.months - b.months);
+}
+
+/** Read the collection once, splitting the lookup document off the plans. */
+async function load() {
+  if (cache.byId && cache.cycles && Date.now() - cache.at < PLAN_TTL_MS) {
+    return cache;
+  }
   const { plans } = await collections();
   const rows = await plans.find({}).sort({ sort_order: 1 }).toArray();
-  cache.byId = new Map(rows.map((plan) => [plan._id, plan]));
+
+  // `__`-prefixed ids are lookup documents, not tiers. Filtering on the
+  // prefix rather than on `kind` means a future lookup document is excluded
+  // the day it is added, without this line having to learn about it.
+  const tiers = rows.filter((row) => !String(row._id).startsWith("__"));
+  const billing = rows.find((row) => row._id === BILLING_ID);
+
+  cache.byId = new Map(tiers.map((plan) => [plan._id, plan]));
+  cache.cycles = normalizeCycles(billing);
   cache.at = Date.now();
-  return cache.byId;
+  return cache;
+}
+
+/** Every plan, by _id. Cached for PLAN_TTL_MS. */
+export async function allPlans() {
+  return (await load()).byId;
+}
+
+/**
+ * The billing cycles, normalized, shortest term first — including the ones
+ * that are switched off, so the caller decides what to do about them.
+ * /v1/plans sends only the enabled ones; the admin listing shows all.
+ */
+export async function billingCycles() {
+  return (await load()).cycles;
+}
+
+/**
+ * What one plan costs on one cycle, or null if the plan carries no price.
+ *
+ * `total` is what is actually charged for the term and is rounded to a
+ * whole unit of currency: the fraction a percentage discount leaves behind
+ * (₹14,390.40) is an artifact of the arithmetic, not a price anybody
+ * intends to quote. `per_month` is the comparison figure the pricing page
+ * puts under it, and is derived from the rounded total so the two cannot
+ * disagree by a rupee.
+ *
+ * A plan may override a cycle's discount with `discounts: { yearly: 25 }`,
+ * for the tier where the standard commitment discount is not the deal you
+ * want to offer. Unset — the normal case — means the cycle's own rate.
+ */
+export function cyclePrice(plan, cycle) {
+  const monthly = Number(plan?.price_monthly);
+  if (!Number.isFinite(monthly) || monthly < 0) return null;
+
+  const override = cycle.id === BASE_CYCLE ? null : percent(plan?.discounts?.[cycle.id]);
+  const discount = override ?? cycle.discount_percent;
+  const undiscounted = Math.round(monthly * cycle.months);
+  const total = Math.round(monthly * cycle.months * (1 - discount / 100));
+
+  return {
+    cycle: cycle.id,
+    months: cycle.months,
+    total,
+    per_month: Math.round((total / cycle.months) * 100) / 100,
+    discount_percent: discount,
+    saving: undiscounted - total,
+  };
 }
 
 /** Drop the cache, so the next read hits Mongo. For scripts and tests. */
 export function invalidatePlans() {
   cache.byId = null;
+  cache.cycles = null;
   cache.at = 0;
 }
 
@@ -146,14 +313,23 @@ export async function resolveEntitlement(license) {
 // edit to `studio` retroactively changed how many pods every studio
 // customer may run.
 //
-// One optional presentation field, read only by the pricing page:
+// `price_monthly` is the only price stored. Quarterly and yearly are
+// derived from it and the discounts on the `__billing` document, so there
+// is no second figure here to forget to update — see cyclePrice(). A plan
+// that should not follow the standard discount can carry its own with
+// `discounts: { yearly: 25 }`; none does today.
+//
+// Two optional presentation fields, read only by the pricing page:
 //
 //   is_popular    marks the recommended tier. The page gives it a "Most
 //                 Popular" flag and a stronger card. At most one plan
 //                 should carry it; if several do, every one of them is
 //                 flagged and the recommendation stops meaning anything.
 //
-// It lives here rather than in the client so the recommended tier can be
+//   discounts     per-cycle override of the billing document's rate, as a
+//                 percentage off the monthly figure above.
+//
+// They live here rather than in the client so the recommended tier can be
 // moved from Atlas without a redeploy — the same reason the feature
 // names moved to the features collection.
 export const DEFAULT_PLANS = [
@@ -161,9 +337,8 @@ export const DEFAULT_PLANS = [
     _id: "starter",
     name: "Starter",
     description: "Fast Krea 2 generation for everyday use",
-    price_monthly: 19,
-    price_yearly: 190,
-    currency: "USD",
+    price_monthly: 599,
+    currency: "INR",
     features: ["krea_t2i", "krea_v2_t2i", "gallery"],
     is_public: true,
     sort_order: 10,
@@ -172,9 +347,8 @@ export const DEFAULT_PLANS = [
     _id: "creator",
     name: "Creator",
     description: "Generation plus the full editing set",
-    price_monthly: 39,
-    price_yearly: 390,
-    currency: "USD",
+    price_monthly: 999,
+    currency: "INR",
     features: [
       "krea_t2i",
       "krea_v2_t2i",
@@ -192,9 +366,8 @@ export const DEFAULT_PLANS = [
     _id: "pro",
     name: "Pro",
     description: "Everything in Creator, plus Flux 2 and Klein Edit",
-    price_monthly: 59,
-    price_yearly: 590,
-    currency: "USD",
+    price_monthly: 1499,
+    currency: "INR",
     features: [
       "krea_t2i",
       "krea_v2_t2i",
@@ -214,9 +387,8 @@ export const DEFAULT_PLANS = [
     _id: "studio",
     name: "Studio",
     description: "Full access — every model, video, and the batch tools",
-    price_monthly: 89,
-    price_yearly: 890,
-    currency: "USD",
+    price_monthly: 1799,
+    currency: "INR",
     features: [
       "krea_t2i",
       "krea_v2_t2i",
@@ -244,8 +416,7 @@ export const DEFAULT_PLANS = [
     name: "Admin (Internal)",
     description: "Full unrestricted access for development",
     price_monthly: 0,
-    price_yearly: 0,
-    currency: "USD",
+    currency: "INR",
     features: [
       "krea_t2i",
       "krea_v2_t2i",
@@ -268,8 +439,7 @@ export const DEFAULT_PLANS = [
     name: "Admin (Minimal)",
     description: "Minimal access for development",
     price_monthly: 0,
-    price_yearly: 0,
-    currency: "USD",
+    currency: "INR",
     features: ["krea_t2i", "krea_v2_t2i", "krea_edit", "krea_v2_edit", "gallery", "community_prompts"],
     is_public: false,
     sort_order: 999,

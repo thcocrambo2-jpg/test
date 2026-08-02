@@ -170,7 +170,7 @@ touches a download.
 | `POST` | `/v1/acquire` | Take a seat. `{license_key, instance_id, meta}` |
 | `POST` | `/v1/heartbeat` | Keep it. Re-checks the license every call |
 | `POST` | `/v1/release` | Give it back. Idempotent |
-| `GET` | `/v1/plans` | Public catalogue — `is_public` plans + feature metadata |
+| `GET` | `/v1/plans` | Public catalogue — `is_public` plans, enabled features, enabled billing cycles |
 | `POST` | `/v1/prompts` | A pod submitting one prompt + its settings. Private on arrival, unless `publish` and the license is `is_admin` |
 | `GET` | `/v1/prompts` | Public library — approved prompts only. `?tab=&source=&q=&skip=&limit=` |
 | `GET` | `/health` | Liveness + DB reachability |
@@ -183,9 +183,10 @@ touches a download.
 
 `/v1/plans` is unauthenticated on purpose: it is a pricing page's data and
 none of it is secret. Non-public plans are filtered out, so `admin` and any
-tier you are still trialling never appear. Its feature metadata comes from
-the code registry rather than the `features` collection, so a pricing page
-can never describe a tab in terms the deployment does not know.
+tier you are still trialling never appear, and so are features marked
+`enabled: false` — including from the feature lists of the plans that still
+grant them. It also carries the enabled billing cycles and, per plan, the
+price each of them works out to.
 
 `/v1/admin/licenses` reports what the customer *actually gets*, resolved
 the same way `/v1/acquire` resolves it — for a license on a plan that is
@@ -281,6 +282,8 @@ resolved, since the literal array would win and the plan would do nothing.
 seeded, the *collection* is what `/v1/acquire` reads, so a price or feature
 list can be changed in Atlas without a redeploy — and a hand edit there is
 reverted by the next seed run unless `DEFAULT_PLANS` is updated to match.
+The same goes for the billing cycles in `DEFAULT_BILLING` — see
+`plans/__billing` under [Data](#data).
 
 ## Deploying to Vercel
 
@@ -356,9 +359,42 @@ review queue you are the one working through.
 
 ```js
 { _id: "pro", name: "Pro", description: "...",
-  price_monthly: 59, price_yearly: 590, currency: "USD",
+  price_monthly: 1499, currency: "INR",
+  discounts: { yearly: 25 },          // optional; overrides the cycle rate
   features: ["krea_t2i", ...], is_public: true, sort_order: 30 }
 ```
+
+`price_monthly` is the **only** price stored. What a quarter or a year
+costs is derived from it and the discount on the billing document below, so
+there is no second figure to forget to update — see `cyclePrice()` in
+`src/plans.js`.
+
+`plans/__billing` — the billing cycles, as one lookup document in the same
+collection. `__`-prefixed ids are filtered out of `allPlans()`, so it is
+never mistaken for a tier by `/v1/plans` or by a license's `plan_id`.
+
+```js
+{ _id: "__billing", kind: "billing",
+  cycles: [
+    { id: "monthly",   label: "Monthly",   months: 1,  enabled: true,  discount_percent: 0 },
+    { id: "quarterly", label: "Quarterly", months: 3,  enabled: false, discount_percent: 10 },
+    { id: "yearly",    label: "Yearly",    months: 12, enabled: false, discount_percent: 20 },
+  ] }
+```
+
+`enabled` is the launch switch: `/v1/plans` sends only the cycles that are
+on, and the pricing page renders a tab per cycle it is sent — so switching
+quarterly or yearly on is **one boolean in Atlas**, live within a minute,
+with no redeploy and no new app build. With everything but monthly off
+there is no tab bar at all. Monthly is forced on however the document is
+edited; a catalogue with no base cycle has no price to show for anything.
+
+Like the plans, it is upserted from the code on every seed run, so a toggle
+flipped in Atlas is reverted by the next one unless `DEFAULT_BILLING` is
+updated to match. Nothing bills anyone from this document — what a customer
+pays is arranged by hand and how long their key lasts is `expires_at` on
+the license — so it is display config, and gets no more protection than a
+price does.
 
 `features` — `_id` is the feature key. Seeded from the code registry for
 reading alongside the plans in Atlas; `src/features.js` stays the source of
@@ -366,8 +402,18 @@ truth and is what `/v1/plans` serves.
 
 ```js
 { _id: "klein_i2i", name: "Klein Edit — Image to Image",
-  description: "...", category: "editing", sort_order: 80 }
+  description: "...", category: "editing", sort_order: 80,
+  enabled: true }
 ```
+
+`enabled: false` withdraws a feature **from the catalogue only**: it is
+dropped from `/v1/plans` and from every plan's feature list on it, so a tab
+that is built but not launched stops being something the pricing page
+promises. It never filters `/v1/acquire` — entitlements are what a customer
+already paid for, and a flag about what a page advertises must not take a
+working tab away from a running pod. Withdrawing a feature from the people
+who have it means editing the plans that grant it. An absent field means
+enabled.
 
 There is deliberately **no `features_cache` on the license.** Denormalising
 the resolved list would turn one plan edit into a fan-out write across

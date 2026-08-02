@@ -22,6 +22,8 @@ Two rules hold the design together:
     check rather than a hunt through the file.
 """
 
+import re
+from collections import namedtuple
 from datetime import datetime, timezone
 
 import gradio as gr
@@ -822,6 +824,98 @@ CSS = f"""
   color: var(--kx-muted) !important;
 }}
 
+/* ---------------------------------------------------- billing cycle tabs */
+/* Monthly / Quarterly / Yearly, as a segmented control over the card grid.
+   The whole thing is CSS — hidden radio inputs sitting before the bar, and
+   sibling selectors that light one tab and reveal one price block per card.
+   No JavaScript, for the same reason the contact dialog is a `:target`: the
+   panel's markup is replaced wholesale every time it is opened or
+   refreshed, and a handler bound to the old nodes would be pointing at
+   elements that no longer exist.
+
+   The rules that do the switching are *generated* into the page by
+   _cycle_style(), because the cycle ids come from the licence server and
+   this stylesheet is a module constant. What lives here is everything that
+   does not depend on which cycles exist, including the selected tab's
+   appearance — held in custom properties so the generated rules only have
+   to say which label gets it, not what it looks like. */
+.kx-cycle-scope {{
+  --kx-tab-on-bg: linear-gradient(135deg, var(--kx-accent), var(--kx-accent-alt));
+  --kx-tab-on-fg: #fff;
+  --kx-tab-on-shadow: 0 6px 16px -8px {ACCENT}99;
+}}
+
+/* Visually hidden, not `display: none`: a removed input cannot be checked
+   and cannot take focus, which would leave the tabs unusable by keyboard. */
+.kx-cycle-radio {{
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  opacity: 0;
+  pointer-events: none;
+}}
+
+.kx-cycle-tabs {{
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  gap: 4px;
+  width: fit-content;
+  max-width: 100%;
+  margin: 18px auto 0;
+  padding: 4px;
+  border: 1px solid var(--kx-border);
+  border-radius: 999px;
+  background: var(--kx-sunken);
+}}
+
+/* `!important` on the things Gradio also has an opinion about for `label`:
+   this markup sits inside one of its blocks, and a tab that inherits the
+   form-label colour is unreadable against the accent fill. The generated
+   rules win over these on id specificity, so the selected tab still gets
+   its own colours. */
+.kx-cycle-tabs label {{
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  margin: 0 !important;
+  padding: 7px 15px !important;
+  border-radius: 999px;
+  font-size: .8rem !important;
+  font-weight: 600 !important;
+  color: var(--kx-muted) !important;
+  background: transparent;
+  white-space: nowrap;
+  cursor: pointer;
+  user-select: none;
+  transition: background .15s ease, color .15s ease;
+}}
+.kx-cycle-tabs label:hover {{ color: var(--kx-text) !important; }}
+
+/* The reason the tabs exist. A cycle that saves money says so on the tab
+   itself rather than only inside the cards, so the offer is visible before
+   anyone thinks to click — and it keeps its accent colour on the unselected
+   tabs, which is where it has work to do. */
+.kx-cycle-save {{
+  padding: 2px 7px;
+  border-radius: 999px;
+  background: var(--kx-accent-soft);
+  color: var(--kx-accent);
+  font-size: .62rem;
+  font-weight: 700;
+  letter-spacing: .04em;
+  text-transform: uppercase;
+}}
+.dark .kx-cycle-save {{ color: #b9bcfb; }}
+
+/* One block per cycle in every card; the checked radio reveals exactly one.
+   The first cycle's block is the one shown by a plain stylesheet, and the
+   generated rules swap it for another — so if those rules never arrive the
+   page falls back to a plain monthly price list rather than to a card with
+   no price on it at all. */
+.kx-price {{ display: none; }}
+.kx-price-first {{ display: block; }}
+
 /* `align-items` is left at its `stretch` default so every card is as tall
    as the tallest in its row. The cards are themselves columns, so the
    extra height lands where the CTA's `margin-top: auto` puts it — as space
@@ -1029,11 +1123,21 @@ CSS = f"""
   color: var(--kx-muted) !important;
 }}
 
-.kx-plan-yearly {{
-  margin: 4px 0 0 !important;
+/* What the headline figure actually bills — "₹5,750 billed yearly" — plus
+   the saving, which is the whole argument for the longer cycle and so is
+   the one thing on this line that is not faint. */
+.kx-plan-billed {{
+  margin: 5px 0 0 !important;
   font-size: .74rem !important;
+  line-height: 1.5;
   color: var(--kx-faint) !important;
 }}
+
+.kx-plan-saving {{
+  color: var(--kx-accent) !important;
+  font-weight: 600;
+}}
+.dark .kx-plan-saving {{ color: #b9bcfb !important; }}
 
 /* The feature list is the page — a customer reads it to find out what a
    tier actually gets them — so it gets the room, and the rule above it
@@ -1594,20 +1698,167 @@ def _price(amount, currency: str) -> str:
     return f"{symbol}{figure}" if symbol else f"{figure} {currency.upper()}"
 
 
-def _yearly_note(plan) -> str:
-    """The "or $390/year · save $78" line, or "" when there is no yearly price.
+# ------------------------------------------------------------ billing cycles
+# The tabs over the card grid. Everything about them — how many there are,
+# what they are called, what they save — arrives in the catalogue, so
+# launching quarterly or yearly pricing is a flag on the licence server and
+# nothing here has to be rebuilt for it. With one cycle there is no tab bar
+# and the page reads exactly as it did before cycles existed.
 
-    The saving is only shown when it is real: a plan priced at twelve times
-    its monthly rate gets the yearly line without a "save 0" badge after it.
+# The shape this file reads off a plans.Cycle, and the fallback term for a
+# catalogue that offers none — a namedtuple rather than the real class
+# because this module still imports nothing but gradio and the stdlib.
+_Cycle = namedtuple("_Cycle", "id label months discount_percent")
+_MONTHLY = _Cycle("monthly", "Monthly", 1, 0.0)
+
+
+# The radio input id for a cycle. Also the CSS hook the generated rules key
+# on, so it is built in one place rather than spelled out at each use.
+def _cycle_id(cycle) -> str:
+    return f"kx-cycle-{cycle.id}"
+
+
+# What a cycle id may contain. See _usable_cycles.
+_CYCLE_ID_OK = re.compile(r"[a-z0-9_-]{1,32}")
+
+
+def _usable_cycles(catalogue) -> list:
+    """The cycles that can safely be rendered, in the order they arrived.
+
+    A cycle id becomes part of a DOM id *and* part of a CSS selector in the
+    generated stylesheet, so anything outside `[a-z0-9_-]` is dropped rather
+    than escaped: the ids are a short closed vocabulary set by the server
+    ("monthly", "quarterly", "yearly"), and refusing the ones that are not
+    is both simpler and the reason a hand-edited billing document cannot
+    inject a selector — or anything else — into this page.
     """
-    if plan.price_yearly is None:
+    return [
+        cycle for cycle in getattr(catalogue, "cycles", ()) or ()
+        if cycle.id and _CYCLE_ID_OK.fullmatch(cycle.id)
+    ]
+
+
+def _cycle_style(cycles: list) -> str:
+    """The rules that make the tabs work, for these cycles specifically.
+
+    Generated rather than written into the stylesheet because the cycle ids
+    come from the database and CSS cannot match on an attribute it has not
+    been told about. Three things per cycle: light its tab (with the badge
+    inside it recoloured for the accent fill it now sits on), reveal its
+    price block, and mark it while it holds keyboard focus.
+
+    The first cycle is the one checked on load and the one the stylesheet
+    shows by default, so it needs no reveal rule — only the swap *away*
+    from it that every other cycle carries.
+    """
+    if len(cycles) < 2:
         return ""
-    note = f"or {_escape(_price(plan.price_yearly, plan.currency))}/year"
-    if plan.price_monthly:
-        saved = plan.price_monthly * 12 - plan.price_yearly
-        if saved > 0:
-            note += f" · save {_escape(_price(saved, plan.currency))}"
-    return f'<p class="kx-plan-yearly">{note}</p>'
+
+    rules = []
+    for index, cycle in enumerate(cycles):
+        node = _cycle_id(cycle)
+        tab = f'#{node}:checked ~ .kx-cycle-tabs label[for="{node}"]'
+        rules.append(f"""
+{tab} {{
+  background: var(--kx-tab-on-bg);
+  color: var(--kx-tab-on-fg) !important;
+  box-shadow: var(--kx-tab-on-shadow);
+}}
+{tab} .kx-cycle-save {{
+  background: rgba(255, 255, 255, .22);
+  color: var(--kx-tab-on-fg) !important;
+}}
+#{node}:focus-visible ~ .kx-cycle-tabs label[for="{node}"] {{
+  outline: 2px solid var(--kx-accent);
+  outline-offset: 2px;
+}}""")
+        if index:
+            rules.append(f"""
+#{node}:checked ~ .kx-plan-grid .kx-price-first {{ display: none; }}
+#{node}:checked ~ .kx-plan-grid .kx-price-{cycle.id} {{ display: block; }}""")
+    return "<style>" + "\n".join(rules) + "\n</style>"
+
+
+def _cycle_tabs(cycles: list) -> str:
+    """The radios and the segmented control they drive.
+
+    Returns "" for a single cycle: one tab is not a choice, and a control
+    that cannot be changed is furniture. The radios must stay in the same
+    parent as, and before, both the tab bar and the card grid — every rule
+    in _cycle_style is a sibling selector.
+    """
+    if len(cycles) < 2:
+        return ""
+    inputs = "".join(
+        f'<input type="radio" name="kx-cycle" class="kx-cycle-radio" '
+        f'id="{_cycle_id(cycle)}"{" checked" if index == 0 else ""}>'
+        for index, cycle in enumerate(cycles)
+    )
+    labels = "".join(
+        f'<label for="{_cycle_id(cycle)}">{_escape(cycle.label)}'
+        + (f'<span class="kx-cycle-save">Save '
+           f'{_percent(cycle.discount_percent)}%</span>'
+           if cycle.discount_percent > 0 else "")
+        + "</label>"
+        for cycle in cycles
+    )
+    return f'{inputs}<div class="kx-cycle-tabs">{labels}</div>'
+
+
+def _percent(value) -> str:
+    """`20.0` → `20`. Discounts are quoted as round numbers where they are."""
+    return f"{value:,.2f}".rstrip("0").rstrip(".")
+
+
+# The term a price is quoted per — "/month", "/quarter", "/year". Taken
+# from the length of the cycle rather than its label, so a cycle renamed on
+# the server ("Annual", "Yearly — best value") still reads correctly here,
+# and one of an unusual length gets an honest "/18 months" instead of a
+# noun invented for it.
+_TERMS = {1: "month", 3: "quarter", 6: "6 months", 12: "year"}
+
+
+def _term(months: int) -> str:
+    return _TERMS.get(months, f"{months} months")
+
+
+def _cycle_price(plan, cycle, is_first: bool) -> str:
+    """One card's price for one cycle: the headline and what it works out at.
+
+    The headline is what the customer is actually charged for the term —
+    ₹14,390/year, not ₹1,199/month with the year in the small print. The
+    line under it carries the two things that headline hides: the monthly
+    equivalent, which is the only figure comparable across the tabs, and
+    the saving, which is the argument for being on this tab at all.
+
+    The monthly equivalent is rounded to a whole unit. It is a comparison,
+    the exact sum is the figure above it, and ₹1,199.17 is a worse answer
+    to "so how much a month" than ₹1,199.
+    """
+    classes = (f"kx-price kx-price-{cycle.id}"
+               + (" kx-price-first" if is_first else ""))
+    price = (getattr(plan, "prices", None) or {}).get(cycle.id)
+    if price is None:
+        # A tier with no price at all. Still gets a block per cycle so the
+        # cards stay the same height whichever tab is showing.
+        return (f'<div class="{classes}">'
+                '<p class="kx-plan-price kx-plan-poa">Price on application</p>'
+                "</div>")
+
+    total = _escape(_price(price.total, plan.currency))
+    if price.months == 1:
+        note = f"Billed {_escape(cycle.label.lower())}"
+    else:
+        monthly = _escape(_price(round(price.per_month), plan.currency))
+        note = f"{monthly}/month, billed {_escape(cycle.label.lower())}"
+    if price.saving > 0:
+        note += ('<span class="kx-plan-saving"> · save '
+                 f"{_escape(_price(price.saving, plan.currency))}</span>")
+
+    return f"""<div class="{classes}">
+    <p class="kx-plan-price"><b>{total}</b><span>/{_term(price.months)}</span></p>
+    <p class="kx-plan-billed">{note}</p>
+  </div>"""
 
 
 # The id the contact dialog is opened by. One dialog for the whole page —
@@ -1669,13 +1920,16 @@ def _contact_modal(contact_url: str | None) -> str:
 """
 
 
-def _plan_card(plan, catalogue, is_current: bool) -> str:
+def _plan_card(plan, catalogue, cycles: list, is_current: bool) -> str:
     """One tier: what it is called, what it costs, and every tab it grants.
 
     The feature list is the point of the page — "the services they get" —
     so each row carries the registry's own name *and* its description
     rather than a bare key, and the plan's order is kept as the server
     sorted it.
+
+    `cycles` is every billing term on offer, and the card carries a price
+    block for each; the tabs above the grid decide which one is on screen.
     """
     rows = "".join(
         f'<li><span class="kx-tick" aria-hidden="true">✓</span>'
@@ -1692,10 +1946,10 @@ def _plan_card(plan, catalogue, is_current: bool) -> str:
 
     badge = ('<span class="kx-plan-badge">Your plan</span>'
              if is_current else "")
-    monthly = _price(plan.price_monthly, plan.currency)
-    price = (f'<p class="kx-plan-price"><b>{_escape(monthly)}</b>'
-             "<span>/month</span></p>") if monthly else (
-        '<p class="kx-plan-price kx-plan-poa">Price on application</p>')
+    prices = "".join(
+        _cycle_price(plan, cycle, is_first=index == 0)
+        for index, cycle in enumerate(cycles)
+    )
     description = (f'<p class="kx-plan-desc">{_escape(plan.description)}</p>'
                    if plan.description else "")
 
@@ -1715,8 +1969,7 @@ def _plan_card(plan, catalogue, is_current: bool) -> str:
     {badge}
   </header>
   {description}
-  {price}
-  {_yearly_note(plan)}
+  {prices}
   <ul class="kx-plan-feats">{rows}</ul>
   {_plan_cta(plan, is_current)}
 </article>
@@ -1729,7 +1982,7 @@ def pricing_html(catalogue, current_plan_id=None,
 
     `catalogue` is a plans.Catalogue — taken duck-typed rather than
     imported so this module keeps depending on nothing but gradio. It is
-    read for `.plans`, `.error` and `.describe(key)`.
+    read for `.plans`, `.cycles`, `.error` and `.describe(key)`.
 
     `current_plan_id` / `current_plan_name` come from licensing.plan() and
     are both None whenever the licence names no plan or the server did not
@@ -1751,8 +2004,13 @@ def pricing_html(catalogue, current_plan_id=None,
 </div>
 """
 
+    # A catalogue with no usable cycle at all still has to render: fall back
+    # to a single monthly term, which is what every price on it means when
+    # nothing says otherwise.
+    cycles = _usable_cycles(catalogue) or [_MONTHLY]
     cards = "".join(
-        _plan_card(plan, catalogue, is_current=plan.id == current_plan_id)
+        _plan_card(plan, catalogue, cycles,
+                   is_current=plan.id == current_plan_id)
         for plan in catalogue.plans
     )
     if current_plan_name:
@@ -1767,13 +2025,12 @@ def pricing_html(catalogue, current_plan_id=None,
 
     return f"""
 <div class="kx-pricing">
-  <header class="kx-pricing-head">
-    <h2>Plans</h2>
-    <p>Every plan runs this same app on your own pod — what changes is which
-       tabs it builds and which weights it downloads. {standing}</p>
-  </header>
-  <div class="kx-plan-grid">{cards}</div>
+  <div class="kx-cycle-scope">
+    {_cycle_tabs(cycles)}
+    <div class="kx-plan-grid">{cards}</div>
+  </div>
 </div>
+{_cycle_style(cycles)}
 {_contact_modal(getattr(catalogue, "contact_url", None))}
 """
 

@@ -22,7 +22,13 @@
 
 import { collections, ensureIndexes } from "../src/db.js";
 import { FEATURES, FEATURE_KEYS } from "../src/features.js";
-import { DEFAULT_PLANS } from "../src/plans.js";
+import {
+  DEFAULT_BILLING,
+  DEFAULT_PLANS,
+  billingCycles,
+  cyclePrice,
+  invalidatePlans,
+} from "../src/plans.js";
 
 const dryRun = process.argv.includes("--dry-run");
 
@@ -87,12 +93,22 @@ await upsertAll(
 );
 await upsertAll(plans, DEFAULT_PLANS, "plans");
 
+// The billing cycles, upserted exactly like everything else above: the
+// code is the truth and a re-run reverts a hand edit, which is the rule
+// this script already follows for prices and feature lists. Nothing bills
+// anyone from this document — what a customer is charged is arranged by
+// hand, and how long their key lasts is `expires_at` on the license — so
+// it is display config for the pricing page and gets no special handling.
+await upsertAll(plans, [DEFAULT_BILLING], "billing");
+
 // Anything in Mongo this build no longer defines. Not an error — you may
 // have added a plan by hand — but a plan with licenses on it and no
 // definition here is one seed run away from being forgotten about.
 const seededPlans = new Set(DEFAULT_PLANS.map((plan) => plan._id));
 const orphans = (await plans.find({}).toArray()).filter(
-  (plan) => !seededPlans.has(plan._id),
+  // `__`-prefixed ids are lookup documents (the billing config), not tiers.
+  // allPlans() filters them out of the API for the same reason.
+  (plan) => !seededPlans.has(plan._id) && !String(plan._id).startsWith("__"),
 );
 if (orphans.length) {
   console.log("\nplans in the database that this build does not define:");
@@ -105,12 +121,38 @@ if (orphans.length) {
   );
 }
 
+// Read back through billingCycles() rather than from DEFAULT_BILLING, so
+// this prints what the API would actually serve: a cycle hand-edited in
+// Atlas between seed runs, or one missing a field, is normalized or dropped
+// there, and seeing that happen here is the point. The prices below follow
+// the enabled ones, so a run of this script reports what a customer would
+// see on the pricing page.
+invalidatePlans();
+const allCycles = await billingCycles();
+const cycles = allCycles.filter((cycle) => cycle.enabled);
+
+console.log("\nbilling cycles:");
+for (const cycle of allCycles) {
+  console.log(
+    `  ${String(cycle.id).padEnd(10)} ${String(cycle.months).padStart(2)} month(s)  ` +
+      `${String(cycle.discount_percent ?? 0).padStart(2)}% off  ` +
+      (cycle.enabled ? "shown" : "hidden"),
+  );
+}
+
 console.log("\nplans now live:");
 for (const plan of await plans.find({}).sort({ sort_order: 1 }).toArray()) {
+  if (String(plan._id).startsWith("__")) continue;
   const count = await licenses.countDocuments({ plan_id: plan._id });
+  const currency = plan.currency || "INR";
+  // One column per enabled cycle: "599/mo  1617/3mo  5750/12mo".
+  const prices = cycles
+    .map((cycle) => cyclePrice(plan, cycle))
+    .filter(Boolean)
+    .map((price) => `${price.total}/${price.months}mo`)
+    .join("  ");
   console.log(
-    `  ${plan._id.padEnd(10)} ${String(plan.price_monthly ?? "-").padStart(4)}` +
-      ` ${(plan.currency || "USD")}/mo  ` +
+    `  ${plan._id.padEnd(13)} ${currency} ${prices.padEnd(34)}` +
       `${String(plan.features?.length ?? 0).padStart(2)} features  ` +
       `${count} license(s)` +
       (plan.is_public === false ? "  (not public)" : ""),

@@ -48,6 +48,21 @@
 // Still never used to filter what /v1/acquire returns. The app and this
 // service deploy separately, so a license granting a tab that shipped
 // before this catalogue knew about it must still be able to grant it.
+//
+// ── `enabled` — what the catalogue is willing to advertise ─────────────
+//
+// A feature row can be switched off. That is a *catalogue* decision, not
+// an entitlement one: a disabled feature is dropped from /v1/plans and
+// from every plan's feature list on it, so a tab that is built but not
+// launched yet — or one being withdrawn — stops being something the
+// pricing page promises. Absent means enabled, so a row written before
+// this field existed, or by hand in Atlas, is on.
+//
+// It deliberately does **not** filter /v1/acquire. Entitlements are what a
+// customer already paid for, and a flag meant to control what a page
+// advertises should not be able to take a working tab away from a pod at
+// its next heartbeat. Withdrawing a feature from people who have it is a
+// change to the plans that grant it.
 
 import { collections } from "./db.js";
 
@@ -68,6 +83,7 @@ export const FEATURES = [
     description: "Create images from text prompts",
     category: "generation",
     sort_order: 10,
+    enabled: true,
   },
   {
     key: "krea_v2_t2i",
@@ -76,6 +92,7 @@ export const FEATURES = [
     description: "Better quality and more control over your generations",
     category: "generation",
     sort_order: 20,
+    enabled: true,
   },
   {
     key: "gallery",
@@ -84,6 +101,7 @@ export const FEATURES = [
     description: "View and download everything you have generated",
     category: "tools",
     sort_order: 30,
+    enabled: true,
   },
   {
     key: "krea_edit",
@@ -92,6 +110,7 @@ export const FEATURES = [
     description: "Change any image just by describing what you want",
     category: "editing",
     sort_order: 40,
+    enabled: true,
   },
   {
     key: "krea_v2_edit",
@@ -104,6 +123,7 @@ export const FEATURES = [
     // 45, between krea_edit (40) and krea_inpaint (50), so the two
     // instruction-edit tabs read together in a plan's feature list.
     sort_order: 67,
+    enabled: true,
   },
   {
     key: "krea_inpaint",
@@ -112,6 +132,7 @@ export const FEATURES = [
     description: "Edit only specific parts of an image",
     category: "editing",
     sort_order: 50,
+    enabled: true,
   },
   {
     key: "faceswap",
@@ -120,6 +141,7 @@ export const FEATURES = [
     description: "Easily replace faces in any image",
     category: "editing",
     sort_order: 60,
+    enabled: true,
   },
   {
     key: "flux_t2i",
@@ -128,6 +150,7 @@ export const FEATURES = [
     description: "Create high-quality images with Flux 2 Dev",
     category: "generation",
     sort_order: 70,
+    enabled: true,
   },
   {
     key: "klein_i2i",
@@ -136,6 +159,7 @@ export const FEATURES = [
     description: "Edit images or combine two images together",
     category: "editing",
     sort_order: 80,
+    enabled: true,
   },
   {
     key: "wan_i2v",
@@ -144,6 +168,7 @@ export const FEATURES = [
     description: "Turn your images into short videos",
     category: "video",
     sort_order: 90,
+    enabled: true,
   },
   {
     key: "json_batch",
@@ -152,6 +177,7 @@ export const FEATURES = [
     description: "Generate many images at once using advanced controls",
     category: "tools",
     sort_order: 100,
+    enabled: true,
   },
   {
     key: "community_prompts",
@@ -168,6 +194,7 @@ export const FEATURES = [
     // so keep it in step with the collection, or the next seed-catalog run
     // reverts an edit made in Atlas.
     sort_order: 65,
+    enabled: true,
   },
 ];
 
@@ -206,6 +233,19 @@ export function invalidateFeatures() {
 /** Feature keys in catalogue order — what sortByRegistry ranks against. */
 export async function featureOrder() {
   return [...(await allFeatures()).keys()];
+}
+
+/**
+ * Is this catalogue row something the pricing page may advertise?
+ *
+ * Only an explicit `enabled: false` says no. An absent field is a yes, so
+ * a row seeded before the flag existed stays visible, and a key the
+ * catalogue has never heard of at all (`undefined` row) is *not* treated
+ * as disabled — that is deploy skew, which this service tolerates
+ * everywhere else and must keep tolerating here.
+ */
+export function isFeatureEnabled(row) {
+  return row?.enabled !== false;
 }
 
 /**

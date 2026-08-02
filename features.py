@@ -26,6 +26,12 @@ fallback, not a mode: it logs a warning, because "whatever this build
 happens to default to" is a moving target and every real key should say
 what it grants.
 
+The one thing that can override the licence is `Feature.enabled` in the
+registry below, and it can only ever say *no*: a tab switched off there is
+not built even for a licence that grants it. That is a build-time kill
+switch for a tab that is written but not launched — changing it means
+shipping a new binary, so it is nothing a licence can be talked into.
+
 Order of operations is why resolve() is called rather than run on import:
 the answer is not known until the license check in app.py has returned,
 which is after most modules have been imported. Every caller in the app
@@ -93,6 +99,16 @@ class Feature:
             treating it as dead weight; it is what a customer sees whenever
             the network answer is missing.
     default whether it is on for a license that names no features at all.
+    enabled whether this build will construct the tab **at all**. False is
+            a kill switch for a tab that is written but not launched, or
+            one being withdrawn: no licence can turn it back on, so it
+            costs nothing to leave the code in place while the feature
+            waits. It is deliberately not the same lever as the licence
+            server's `enabled` flag on the features collection — that one
+            decides what the pricing page advertises and never touches an
+            entitlement, this one decides what this binary can build. A
+            licence granting a disabled feature is honoured for everything
+            else it grants and logs that this one was dropped.
     needs   asset groups download_everything must fetch for this tab.
 
     `key` and `needs` are separate namespaces that happen to overlap. A key
@@ -105,6 +121,7 @@ class Feature:
     key: Key
     label: str
     default: bool = False
+    enabled: bool = True
     needs: tuple[str, ...] = ()
 
 
@@ -182,6 +199,9 @@ def resolve(entitlements: list[str] | None,
     Unknown keys are warned about and ignored rather than rejected: the
     server and this registry deploy separately, so a key issued for a tab
     this build does not have yet must not stop the app from starting.
+
+    A feature marked `enabled=False` in the registry is forced off at the
+    end, whatever the licence said — see Feature.enabled.
     """
     global _resolved
 
@@ -206,6 +226,21 @@ def resolve(entitlements: list[str] | None,
                 )
                 continue
             state[key] = True
+
+    # Applied after both branches, so it holds for the defaults as much as
+    # for a licence: a tab switched off in this build is off, and saying so
+    # in the log is the only way the difference between "not granted" and
+    # "not shipped yet" is visible from a pod.
+    withheld = [feature.key for feature in FEATURES
+                if not feature.enabled and state.get(feature.key)]
+    if withheld:
+        log.warning(
+            "Feature(s) %s are granted but disabled in this build — not "
+            "building their tabs.", ", ".join(withheld),
+        )
+    for feature in FEATURES:
+        if not feature.enabled:
+            state[feature.key] = False
 
     _enabled.clear()
     _enabled.update(state)
