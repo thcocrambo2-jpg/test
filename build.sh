@@ -530,6 +530,18 @@ echo ">>> Compiling (first build is slow — it compiles gradio's tree too) ..."
     --include-package-data=gradio_client \
     --include-distribution-metadata=gradio_client \
     \
+    `# Two of gradio's own dependencies read their version from a data file` \
+    `# rather than from metadata — safehttpx/__init__.py opens` \
+    `# version.txt next to itself at import time, and groovy does the same.` \
+    `# Nuitka compiles both packages (the import graph reaches them through` \
+    `# gradio.processing_utils) but ships no package data unless told, so` \
+    `# the binary starts, downloads every model, and only then dies with` \
+    `# FileNotFoundError: .../safehttpx/version.txt — an import-time crash,` \
+    `# so no tab of the app ever renders. --include-package-data is enough;` \
+    `# neither package looks itself up through importlib.metadata.` \
+    --include-package-data=safehttpx \
+    --include-package-data=groovy \
+    \
     `# No --onefile-tempdir-spec on purpose: a fixed cache dir lets a rebuilt` \
     `# binary silently reuse the previous extraction. Re-extracting on each` \
     `# launch costs seconds, against an app that then loads 13 GB of models.` \
