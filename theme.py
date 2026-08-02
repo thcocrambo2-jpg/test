@@ -715,6 +715,18 @@ CSS = f"""
   background: var(--kx-err-soft);
 }}
 
+/* Gradio hangs `elem_classes` on *both* the block wrapper and the markdown
+   div inside it, so the note above is drawn twice — a bordered card sitting
+   inside a bordered card. The wrapper is the one with the layout box, so the
+   inner copy gives its chrome back. */
+.kx-note[data-testid="markdown"] {{
+  border: 0 !important;
+  border-radius: 0;
+  background: none !important;
+  padding: 0 !important;
+  margin: 0;
+}}
+
 
 /* ------------------------------------------------------- section headings */
 /* The "### 🎭 LoRA stack" style markdown headings inside a panel. */
@@ -862,7 +874,9 @@ CSS = f"""
   gap: 4px;
   width: fit-content;
   max-width: 100%;
-  margin: 18px auto 0;
+  /* The bottom margin clears the "Most popular" flag, which straddles its
+     card's top edge and so reaches 11px above the grid. */
+  margin: 18px auto 16px;
   padding: 4px;
   border: 1px solid var(--kx-border);
   border-radius: 999px;
