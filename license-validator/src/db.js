@@ -6,7 +6,12 @@
 // standard fix on Vercel and costs one module-scope variable.
 
 import { MongoClient } from "mongodb";
-import { MONGODB_URI, DB_NAME, SESSION_TTL_SECONDS } from "./config.js";
+import {
+  MONGODB_URI,
+  DB_NAME,
+  SESSION_TTL_SECONDS,
+  DOWNLOAD_TTL_SECONDS,
+} from "./config.js";
 
 let cached = globalThis.__krea2License;
 if (!cached) cached = globalThis.__krea2License = { client: null, promise: null };
@@ -48,6 +53,19 @@ export async function collections() {
     // it carries a generated _id and is deduplicated on `fingerprint` — see
     // ensureIndexes.
     prompts: db.collection("prompts"),
+    // Published builds, `_id` being the artifact's sha256 — the same value
+    // that addresses it in R2. One document per build ever published, so
+    // the collection is also the history a rollback picks from.
+    //
+    // `channels` is an array of the channel names currently pointing at
+    // this build ("stable", usually). Promotion pulls the name off every
+    // other document and pushes it onto one, which makes rolling back and
+    // rolling forward the identical operation.
+    builds: db.collection("builds"),
+    // One row per download URL issued. This is the visibility the gate
+    // buys: seat counts say how many pods run at once, this says how many
+    // distinct machines have ever pulled the binary on a given key.
+    downloads: db.collection("downloads"),
   };
 }
 
@@ -58,7 +76,7 @@ export async function collections() {
  * that restarts reclaims its own row instead of racing itself into two.
  */
 export async function ensureIndexes() {
-  const { licenses, sessions, prompts } = await collections();
+  const { licenses, sessions, prompts, builds, downloads } = await collections();
   await licenses.createIndex({ key: 1 }, { unique: true, name: "key_unique" });
   await sessions.createIndex(
     { license_key: 1, instance_id: 1 },
@@ -105,5 +123,23 @@ export async function ensureIndexes() {
   await prompts.createIndex(
     { license_key: 1, reviewed_at: 1 },
     { name: "license_pending" },
+  );
+
+  // Build distribution. The channel lookup runs on every pod boot that is
+  // not already up to date, and it is the one query on the path between a
+  // customer starting a pod and the app existing on it.
+  await builds.createIndex({ channels: 1 }, { name: "channels" });
+  await builds.createIndex({ published_at: -1 }, { name: "published" });
+
+  // The rate-limit read: this licence's downloads, newest first. Unlike
+  // the sessions TTL this one *is* only housekeeping — the hourly cap
+  // filters on created_at in the query, exactly as acquire does.
+  await downloads.createIndex(
+    { license_key: 1, created_at: -1 },
+    { name: "license_recent" },
+  );
+  await downloads.createIndex(
+    { created_at: 1 },
+    { expireAfterSeconds: DOWNLOAD_TTL_SECONDS, name: "download_ttl" },
   );
 }

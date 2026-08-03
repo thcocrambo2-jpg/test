@@ -170,6 +170,8 @@ touches a download.
 | `POST` | `/v1/acquire` | Take a seat. `{license_key, instance_id, meta}` |
 | `POST` | `/v1/heartbeat` | Keep it. Re-checks the license every call |
 | `POST` | `/v1/release` | Give it back. Idempotent |
+| `POST` | `/v1/build` | Which build this license gets + a signed R2 URL. `{license_key, instance_id, current_sha}`. Takes no seat |
+| `GET` | `/v1/start.sh` | 302 to a signed URL for the start script. Unauthenticated — the RunPod template fetches it |
 | `GET` | `/v1/plans` | Public catalogue — `is_public` plans, enabled features, enabled billing cycles |
 | `POST` | `/v1/prompts` | A pod submitting one prompt + its settings. Private on arrival, unless `publish` and the license is `is_admin` |
 | `GET` | `/v1/prompts` | Public library — approved prompts only. `?tab=&source=&q=&skip=&limit=` |
@@ -178,6 +180,9 @@ touches a download.
 | `GET` | `/v1/admin/plans` | Every plan with the number of licenses on it |
 | `GET` | `/v1/admin/sessions` | Recent sessions, `?license_key=` to filter |
 | `GET` | `/v1/admin/prompts` | The library, `?pending=1` for the review queue. Includes `license_key` |
+| `POST` | `/v1/admin/builds` | Register an uploaded build. `build.sh` calls this. Idempotent on `sha256` |
+| `GET` | `/v1/admin/builds` | Every build published, newest first — the list you roll back from |
+| `POST` | `/v1/admin/builds/promote` | Point a channel at a build. `{sha256, channel}` |
 | `POST` | `/v1/admin/prompts/review` | `{id, approve}` — publish or reject one prompt |
 | `POST` | `/v1/admin/prompts` | Author an ⭐ official prompt. Public immediately |
 
@@ -239,6 +244,71 @@ Revocation propagates because `/v1/heartbeat` re-reads the license on
 every call — flipping `active` to false stops running instances within
 about a heartbeat, rather than only blocking their next start.
 
+## Build distribution
+
+The app binary lives in a **private** Cloudflare R2 bucket. Pods never
+address it: they send their key to `/v1/build` and get back a signed URL
+that expires in 30 minutes.
+
+Be clear about what that does and does not buy. It stops a lapsed or
+revoked key pulling a **new** build, it lets a build be pinned or rolled
+back per license from the server, and it records which machines pull on
+which key. It does **not** stop a binary someone already has from being
+copied — what limits who can *run* the app is still the seat check, same
+as when the build sat in a public Hugging Face repo.
+
+Objects are content-addressed at `builds/<sha256>/krea2app`, so publishing
+never overwrites and every build stays available. A channel is just a name
+in the `channels` array of one build document, which makes rolling forward
+and rolling back the identical operation:
+
+```bash
+curl -s -H "Authorization: Bearer $KREA2_ADMIN_TOKEN" \
+     https://<deployment>.vercel.app/v1/admin/builds
+
+curl -s -X POST -H "Authorization: Bearer $KREA2_ADMIN_TOKEN" \
+     -H 'Content-Type: application/json' \
+     -d '{"sha256":"<older sha>","channel":"stable"}' \
+     https://<deployment>.vercel.app/v1/admin/builds/promote
+```
+
+Which build a license resolves to, most specific first:
+
+| On the license | Result |
+| --- | --- |
+| `build_sha` is set | exactly that build, channel ignored |
+| `build_channel` is set | whichever build holds that channel |
+| neither | whichever build holds `stable` |
+
+Both fields are absent on an ordinary license, so the default needs no
+edit. Set `build_sha` to hold one customer on a known-good build, or
+`build_channel: "beta"` to put a willing customer on new builds first.
+
+### Two R2 tokens, deliberately
+
+| Where | Scope | Why |
+| --- | --- | --- |
+| this service | Object **Read** | public-facing; only ever signs GETs |
+| `build.sh` | Object **Read & Write** | the only thing that uploads |
+
+Giving the API a write token would mean any path to leaking it is a path
+to replacing the binary every customer downloads. Keeping them apart is
+what makes the read-only half actually read-only.
+
+The builds bucket must also be **separate from the public showcase-images
+bucket**. Public access on R2 is a per-bucket setting, so one bucket
+cannot be both gated and world-readable.
+
+### If the API is down
+
+`scripts/runpod_start.sh` falls back to the binary already on the pod's
+volume for *any* non-200 — unreachable, expired, revoked, rate limited,
+nothing published. A pod that has everything it needs to run is not
+bricked by this service having a bad afternoon, and the seat check that
+follows delivers the real verdict with the message worth reading. A pod
+with no cached binary and a failed call stops, and prints the server's
+message when there is one.
+
 ## Setup
 
 ```bash
@@ -293,10 +363,19 @@ vercel                # first deploy, links the project
 vercel --prod
 ```
 
-Set `MONGODB_URI`, `MONGODB_DB` and `ADMIN_TOKEN` in Project Settings →
-Environment Variables, then redeploy. `vercel.json` rewrites every path to
-`api/index.js`, which exports the same Express app `server.js` runs
-locally.
+Set `MONGODB_URI`, `MONGODB_DB`, `ADMIN_TOKEN` and the four `R2_*`
+variables in Project Settings → Environment Variables, then redeploy.
+`vercel.json` rewrites every path to `api/index.js`, which exports the
+same Express app `server.js` runs locally.
+
+`GET /health` reports both halves of "can a pod start right now":
+
+```json
+{ "db": "connected", "r2": "configured", "stable_build": "<sha256>" }
+```
+
+`r2: "unset"` means the credentials are missing and every `/v1/build` will
+answer 503. `stable_build: null` means nothing has been published yet.
 
 Three things to know:
 

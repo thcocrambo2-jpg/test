@@ -51,6 +51,45 @@ export const SESSION_TTL_SECONDS = int("SESSION_TTL_SECONDS", 900);
 // Optional. When set, guards /v1/admin/*.
 export const ADMIN_TOKEN = process.env.ADMIN_TOKEN || "";
 
+// ── Cloudflare R2: where the app binary is distributed from ──────────────
+//
+// The bucket is PRIVATE. Pods never address it directly — they ask
+// /v1/build with their license key and get a presigned URL back, which is
+// what makes an expired or revoked key unable to pull a new build at all.
+//
+// R2_ACCESS_KEY_ID / R2_SECRET_ACCESS_KEY must be an R2 API token with
+// **Object Read only**, scoped to this one bucket. This service is
+// public-facing and only ever signs GETs; a write-capable token here would
+// turn any leak into the ability to replace the binary every customer
+// downloads. Uploads use a separate read-write token that exists only on
+// the build machine.
+//
+// Keep this bucket distinct from the public showcase-images bucket. Public
+// access on R2 is a per-bucket setting, so a bucket reachable over r2.dev
+// cannot also hold something that is meant to be gated.
+export const R2_ACCOUNT_ID = process.env.R2_ACCOUNT_ID || "";
+export const R2_ACCESS_KEY_ID = process.env.R2_ACCESS_KEY_ID || "";
+export const R2_SECRET_ACCESS_KEY = process.env.R2_SECRET_ACCESS_KEY || "";
+export const R2_BUILDS_BUCKET = process.env.R2_BUILDS_BUCKET || "krea2-builds";
+
+// How long a download URL stays usable. Generous on purpose: the artifact
+// is a few hundred megabytes and a pod on a slow link needs room for
+// curl's retries, which restart the request and so are re-checked against
+// this deadline. A transfer already in flight is not cut off when it
+// passes. Short enough that a URL pasted somewhere is not a lasting
+// bypass — and it is not the security boundary anyway, the seat check is.
+export const BUILD_URL_TTL_SECONDS = int("BUILD_URL_TTL_SECONDS", 1800);
+
+// Cap on presigned URLs per license per hour. This is the abuse signal the
+// whole gate exists to give you: one key pulling builds from thirty
+// machines is visible here and nowhere else. Set to 0 to disable the cap
+// (the download log is still written either way).
+export const BUILD_DOWNLOADS_PER_HOUR = int("BUILD_DOWNLOADS_PER_HOUR", 20);
+
+// Retention for that log. Long enough to answer "who has been pulling
+// this?" across a support conversation, short enough to stay small.
+export const DOWNLOAD_TTL_SECONDS = int("DOWNLOAD_TTL_SECONDS", 30 * 24 * 3600);
+
 // Where a customer is sent to change plan — a Telegram link to whoever
 // handles sales. Served on /v1/plans and shown in the pricing page's
 // "contact us" dialog; with it unset the dialog still explains what to do,

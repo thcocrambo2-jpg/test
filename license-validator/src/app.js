@@ -1,7 +1,8 @@
 // Seat-limited license API.
 //
 // Three endpoints the app calls for its seat (/v1/acquire, /v1/heartbeat,
-// /v1/release), two public reads it renders pages from (/v1/plans,
+// /v1/release), one the *start script* calls before the app exists at all
+// (/v1/build), two public reads it renders pages from (/v1/plans,
 // /v1/prompts), one public write it makes silently (POST /v1/prompts),
 // plus health and the admin surface.
 //
@@ -12,9 +13,18 @@
 //   400  bad_request                               client bug, do not retry
 //   403  invalid_key | revoked | expired |         stop the app now
 //        seat_limit
-//   503  server_error                              transient: retry at
+//   429  rate_limited                              /v1/build only
+//   503  server_error | no_build                   transient: retry at
 //                                                  startup, or ride the
 //                                                  grace window if running
+//
+// /v1/build is the one endpoint whose caller is bash rather than Python,
+// and the one that runs before there is an app to stop. It does not
+// branch as finely: scripts/runpod_start.sh falls back to the binary
+// already on the volume for *any* non-200, and lets the seat check that
+// follows deliver the real verdict. A revoked key running a cached build
+// gets licensing.py's message, which is the one worth showing, instead of
+// a download error that says nothing about why.
 //
 // The 403/503 split is the important one. A database outage must never
 // look like a license violation, or an Atlas blip reads to your customers
@@ -41,7 +51,10 @@ import {
   ADMIN_TOKEN,
   CONTACT_URL,
   DB_NAME,
+  BUILD_URL_TTL_SECONDS,
+  BUILD_DOWNLOADS_PER_HOUR,
 } from "./config.js";
+import { buildKey, presignGet, r2Configured } from "./r2.js";
 
 const app = express();
 
@@ -355,6 +368,165 @@ app.post(
         `deleted=${result.deletedCount}`,
     );
     res.json({ ok: true, released: result.deletedCount > 0 });
+  }),
+);
+
+// ── Build download ──────────────────────────────────────────────────────
+//
+// Hands a pod a time-limited URL for the app binary, which lives in a
+// PRIVATE R2 bucket. This replaced fetching it from a public Hugging Face
+// repo, and it is worth being exact about what that did and did not buy:
+//
+//   it does      stop a lapsed or revoked key pulling a NEW build, let a
+//                build be pinned or rolled back per licence from the
+//                server, and record which machines pull on which key
+//   it does NOT  stop the binary being copied once someone has it
+//
+// The second line is unchanged from the Hugging Face days. What limits who
+// can *run* the app is the seat check above, not where the bytes came
+// from — see the note at the top of licensing.py. Nothing here is
+// load-bearing for that.
+//
+// This deliberately does not take a seat. A pod that is downloading has
+// not started yet, and charging it one would make a slow download look
+// like a seat leak on a single-seat licence.
+//
+// `current_sha` is what the pod already has on its volume. Answering
+// up_to_date with no URL is what keeps a restart free: no signature is
+// minted, no row is written, and pods that are merely rebooting never
+// touch the rate limit.
+app.post(
+  "/v1/build",
+  wrap(async (req, res) => {
+    const { license_key, instance_id, current_sha } = req.body || {};
+    if (!license_key) return badRequest(res, "license_key is required.");
+
+    const { licenses, builds, downloads } = await collections();
+    const license = await licenses.findOne({ key: license_key });
+    const problem = licenseProblem(license);
+    if (problem) return res.status(403).json({ ok: false, ...problem });
+
+    // Most specific first. Both fields are absent on an ordinary licence,
+    // so the default is "whatever stable points at" and nothing has to be
+    // edited to get it. `build_sha` pins one customer to one build —
+    // which is how you hold a customer back, or put a single pod on a
+    // build you are still checking, without touching anyone else.
+    const channel = license.build_channel || "stable";
+    const build = license.build_sha
+      ? await builds.findOne({ _id: license.build_sha })
+      : await builds.findOne({ channels: channel });
+
+    if (!build) {
+      // 503 rather than 404. From the pod's side this is indistinguishable
+      // from the service being transiently wrong, and it is a problem at
+      // the supplier's end either way. A 404 reads as "this pod asked for
+      // something that makes no sense", which is never what happened.
+      console.error(
+        `build    key=${license_key} NO BUILD pin=${license.build_sha || "-"} ` +
+          `channel=${channel}`,
+      );
+      return res.status(503).json({
+        ok: false,
+        error: "no_build",
+        message:
+          "No app build is published for this license yet. Nothing is " +
+          "wrong with this pod — contact your supplier.",
+      });
+    }
+
+    const manifest = {
+      sha256: build._id,
+      size: build.size ?? null,
+      version: build.version || null,
+      built_at: build.built_at || null,
+    };
+
+    if (current_sha && current_sha === build._id) {
+      return res.json({ ok: true, up_to_date: true, build: manifest });
+    }
+
+    if (!r2Configured()) {
+      console.error("build    R2 is not configured — cannot sign a URL");
+      return res.status(503).json({
+        ok: false,
+        error: "server_error",
+        message:
+          "The download service is not available. Nothing is wrong with " +
+          "this pod — contact your supplier.",
+      });
+    }
+
+    // The cap is on *URLs issued*, not bytes: a pod that legitimately
+    // re-downloads sends current_sha and never reaches here, so anything
+    // that does reach here is a machine without the build. Twenty of those
+    // an hour on one key is already well past normal.
+    if (BUILD_DOWNLOADS_PER_HOUR > 0) {
+      const since = new Date(Date.now() - 3600 * 1000);
+      const recent = await downloads.countDocuments({
+        license_key,
+        created_at: { $gt: since },
+      });
+      if (recent >= BUILD_DOWNLOADS_PER_HOUR) {
+        console.warn(
+          `build    key=${license_key} RATE LIMITED ${recent}/h ` +
+            `instance=${instance_id || "-"}`,
+        );
+        return res.status(429).json({
+          ok: false,
+          error: "rate_limited",
+          message:
+            "This license has requested the app download too many times " +
+            "in the last hour. Wait an hour and start the pod again, or " +
+            "contact your supplier if this is unexpected.",
+        });
+      }
+    }
+
+    const url = presignGet(buildKey(build._id), BUILD_URL_TTL_SECONDS);
+    await downloads.insertOne({
+      license_key,
+      instance_id: typeof instance_id === "string" ? instance_id.slice(0, 200) : null,
+      sha256: build._id,
+      ip: req.ip || null,
+      created_at: new Date(),
+    });
+    console.log(
+      `build    key=${license_key} instance=${instance_id || "-"} ` +
+        `sha=${build._id.slice(0, 12)} channel=${license.build_sha ? "pinned" : channel}`,
+    );
+
+    res.json({
+      ok: true,
+      up_to_date: false,
+      build: { ...manifest, url, url_expires_in: BUILD_URL_TTL_SECONDS },
+    });
+  }),
+);
+
+// The RunPod template's bootstrapper fetches this, and it is the one
+// endpoint that must answer before a pod has anything at all — no licence
+// key is sent and none is required. That is deliberate: the template is
+// public, so a credential in the start command would be a credential given
+// to everyone who clones it. The script it returns carries no secret
+// either. Everything that actually needs authorising happens in the script,
+// which sends the key it finds on the pod to /v1/build.
+//
+// A redirect rather than a proxy: the object lives in the private bucket
+// with everything else, and handing back a short-lived signed URL means
+// the bytes never pass through this function. curl -L in the template
+// follows it. The window is small because the fetch happens immediately
+// and a start script URL has no reason to outlive the boot that asked
+// for it.
+app.get(
+  "/v1/start.sh",
+  wrap(async (_req, res) => {
+    if (!r2Configured()) {
+      return res
+        .status(503)
+        .type("text/plain")
+        .send("# The download service is not configured. Contact support.\n");
+    }
+    res.redirect(302, presignGet("start.sh", 300));
   }),
 );
 
@@ -722,14 +894,21 @@ function featureWire(row) {
 // wrong password from a blocked IP.
 app.get("/health", async (_req, res) => {
   try {
-    const { licenses } = await collections();
+    const { licenses, builds } = await collections();
     const licenseCount = await licenses.estimatedDocumentCount();
+    // Both halves of "can a pod actually start right now": credentials to
+    // sign a URL, and something for that URL to point at. Either being
+    // absent leaves every /v1/build answering 503, and this is the only
+    // place that says which one it is.
+    const stable = await builds.findOne({ channels: "stable" });
     res.json({
       ok: true,
       db: "connected",
       db_name: DB_NAME,
       licenses: licenseCount,
       stale_seconds: STALE_SECONDS,
+      r2: r2Configured() ? "configured" : "unset",
+      stable_build: stable ? stable._id : null,
     });
   } catch (err) {
     console.error("health check failed:", err);
@@ -977,6 +1156,135 @@ app.post(
     await prompts.insertOne(doc);
     console.log(`prompt   admin ${doc._id} tab=${tab}`);
     res.json({ ok: true, prompt: promptWire(doc) });
+  }),
+);
+
+// ── Builds ──────────────────────────────────────────────────────────────
+//
+// build.sh calls the first of these once it has uploaded the artifact to
+// R2. Registering is separate from uploading on purpose: the bytes are
+// content-addressed and therefore harmless to have sitting in the bucket
+// unreferenced, so an upload that succeeds and a register that fails
+// leaves nothing broken and the retry costs no transfer.
+//
+// Registering is idempotent — the sha256 is the _id, so re-running
+// --upload-only against an artifact that is already published updates the
+// metadata and re-promotes rather than failing.
+const CHANNEL_RE = /^[a-z0-9][a-z0-9_-]{0,31}$/;
+
+/**
+ * Point `channel` at one build, taking it off whichever build holds it.
+ *
+ * Promotion and rollback are the same operation: there is no "newer" here,
+ * only which document the name currently sits on. That is what makes
+ * going back a one-line admin call rather than a re-upload.
+ */
+async function promote(builds, sha256, channel) {
+  await builds.updateMany(
+    { channels: channel, _id: { $ne: sha256 } },
+    { $pull: { channels: channel } },
+  );
+  await builds.updateOne({ _id: sha256 }, { $addToSet: { channels: channel } });
+}
+
+app.post(
+  "/v1/admin/builds",
+  requireAdmin,
+  wrap(async (req, res) => {
+    const { sha256, size, version, git_commit, git_branch, arch, built_at } =
+      req.body || {};
+    if (typeof sha256 !== "string" || !/^[0-9a-f]{64}$/.test(sha256)) {
+      return badRequest(res, "sha256 must be a 64-character hex digest.");
+    }
+    if (!Number.isInteger(size) || size <= 0) {
+      return badRequest(res, "size must be the artifact's size in bytes.");
+    }
+    // null/absent means "publish but do not point anything at it yet",
+    // which is how a build gets uploaded for checking before customers see
+    // it. Anything else has to be a plausible channel name rather than
+    // whatever was typed — a typo here silently strands every pod on the
+    // channel it was meant to be.
+    const channel = req.body.promote ?? null;
+    if (channel !== null && !CHANNEL_RE.test(String(channel))) {
+      return badRequest(res, "promote must be a short lowercase channel name.");
+    }
+
+    const { builds } = await collections();
+    const now = new Date();
+    await builds.updateOne(
+      { _id: sha256 },
+      {
+        $set: {
+          size,
+          version: version || git_commit || null,
+          git_commit: git_commit || null,
+          git_branch: git_branch || null,
+          arch: arch || null,
+          built_at: built_at ? new Date(built_at) : now,
+          updated_at: now,
+        },
+        $setOnInsert: { channels: [], published_at: now },
+      },
+      { upsert: true },
+    );
+    if (channel) await promote(builds, sha256, channel);
+
+    console.log(
+      `publish  sha=${sha256.slice(0, 12)} size=${size} ` +
+        `commit=${git_commit || "-"} promote=${channel || "-"}`,
+    );
+    const row = await builds.findOne({ _id: sha256 });
+    res.json({ ok: true, build: { ...row, sha256: row._id, _id: undefined } });
+  }),
+);
+
+// The rollback surface, and the reason every build stays in this
+// collection rather than the current one overwriting the last.
+app.get(
+  "/v1/admin/builds",
+  requireAdmin,
+  wrap(async (_req, res) => {
+    const { builds } = await collections();
+    const rows = await builds
+      .find({})
+      .sort({ published_at: -1 })
+      .limit(100)
+      .toArray();
+    res.json({
+      ok: true,
+      builds: rows.map((row) => ({
+        ...row,
+        sha256: row._id,
+        _id: undefined,
+        channels: row.channels || [],
+      })),
+    });
+  }),
+);
+
+app.post(
+  "/v1/admin/builds/promote",
+  requireAdmin,
+  wrap(async (req, res) => {
+    const { sha256 } = req.body || {};
+    const channel = req.body.channel || "stable";
+    if (typeof sha256 !== "string" || !/^[0-9a-f]{64}$/.test(sha256)) {
+      return badRequest(res, "sha256 must be a 64-character hex digest.");
+    }
+    if (!CHANNEL_RE.test(String(channel))) {
+      return badRequest(res, "channel must be a short lowercase name.");
+    }
+    const { builds } = await collections();
+    // Checked rather than upserted: promoting a sha that was never
+    // registered would point every pod on the channel at an object that
+    // may not be in the bucket, and they would all fail the same way at
+    // once with nothing saying why.
+    if (!(await builds.findOne({ _id: sha256 }))) {
+      return badRequest(res, "no build with that sha256 has been published.");
+    }
+    await promote(builds, sha256, channel);
+    console.log(`promote  ${channel} -> ${sha256.slice(0, 12)}`);
+    res.json({ ok: true, channel, sha256 });
   }),
 );
 

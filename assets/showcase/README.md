@@ -15,16 +15,38 @@ renders it. The app never downloads an image itself.
 Set one environment variable on the pod (or on your machine, for a dev
 preview):
 
-    KREA2_SHOWCASE_URL=https://<your-bucket>.r2.dev
+    KREA2_SHOWCASE_URL=https://pub-<hash>.r2.dev
 
 Must be `https://`. Anything else is ignored with a warning. Leave it unset
 and the section still renders in full — every picture becomes a placeholder
 tile naming the file it wants, which is a perfectly good way to work on the
 copy before the bucket is filled.
 
-The bucket has to be **publicly readable** (an r2.dev subdomain or a custom
-domain). No CORS configuration is needed: plain `<img>` and `<video>` loads
-don't require it — only `fetch()` would.
+The bucket has to be **publicly readable**, which is off by default. In the
+Cloudflare dashboard: **R2 → your bucket → Settings → Public access**, then
+either
+
+* **R2.dev subdomain → Allow access.** Cloudflare mints
+  `https://pub-<hash>.r2.dev` — the host is that assigned subdomain, *not*
+  the bucket name, so there is nothing to construct by hand. Fine for
+  getting started; it is rate limited and Cloudflare says not to serve
+  production traffic from it.
+* **Custom domain**, for anything real. Any domain already on your
+  Cloudflare account, e.g. `https://assets.example.com`.
+
+Either way, paste the origin only — no path, no trailing slash. `config.py`
+strips a trailing `/`, a query and a fragment, and refuses anything that is
+not `https://`.
+
+This is a **public URL, not a credential.** It belongs in the RunPod
+template alongside the other non-secret settings, so every pod cloned from
+it renders the page without the customer configuring anything. Note this
+bucket is deliberately *not* the private one the app binary is published
+to — public access on R2 is a per-bucket setting, so one bucket cannot be
+both world-readable and gated.
+
+No CORS configuration is needed: plain `<img>` and `<video>` loads don't
+require it — only `fetch()` would.
 
 ## The bucket layout
 

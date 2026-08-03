@@ -573,6 +573,68 @@ while WSL matches it *by version*. If RunPod bumps its base image past Ubuntu
 24.04, a WSL-built binary may stop starting, and the symptom — a glibc error at
 exec — is obscure.
 
+### Publishing (`make`)
+
+`build.sh` uploads the binary to a **private** Cloudflare R2 bucket and then
+registers it with the licence API, which is what points a channel at it. The
+`Makefile` at the repo root wraps both halves and reads every credential from
+`license-validator/.env`, so there is one file to fill in rather than six
+variables to retype after every reboot.
+
+| Command | Runs | Needs |
+| --- | --- | --- |
+| `make` | lists these | — |
+| `make compile` | `build.sh --no-publish` — compiles `dist/krea2app`, uploads nothing | nothing |
+| `make publish` | `build.sh --upload-only` — uploads the binary already in `dist/` and points `stable` at it | write token + admin |
+| `make release` | `build.sh -y` — compile **and** publish in one step | write token + admin |
+| `make check` | credentials, artifact, and whether the admin token actually opens the deployment | admin |
+| `make health` | the deployment's `/health` — `db`, `r2`, `stable_build` | admin |
+| `make builds` | every build ever published, newest first | admin |
+| `make promote SHA=<sha256>` | point a channel at a build | admin |
+
+Two variables tune a publish:
+
+```bash
+KREA2_BUILD_CHANNEL=beta make publish    # upload without customers getting it
+make promote SHA=<older sha> CHANNEL=beta
+```
+
+**Rollback and roll-forward are the same call.** Builds are content-addressed
+at `builds/<sha256>/krea2app`, so publishing never overwrites and every build
+stays in the bucket. A channel is just a name sitting on one build document —
+`make builds` lists them, `make promote` moves the name. Nothing is
+re-uploaded and pods take it on their next start. To hold a single customer
+on a specific build, set `build_sha` on their licence document instead; it
+wins over the channel.
+
+**Credentials.** `license-validator/.env` holds two R2 tokens under different
+names, and the split is load-bearing: the licence service is public-facing and
+gets **Object Read only** (`R2_ACCESS_KEY_ID`), while publishing gets **Object
+Read & Write** (`R2_WRITE_ACCESS_KEY_ID`). A leak of the deployed credential
+therefore cannot replace the binary customers download. `make check` refuses
+to publish if the two are identical, because R2 does not reject a bad-signature
+PUT until the bytes have arrived — a few hundred megabytes to reach a 403.
+
+`make check` is the cheap pre-flight; run it before spending an upload:
+
+```
+  account     8487b896…
+  bucket      krea2-builds
+  api         https://<node-tag>.vercel.app
+  write key   038e9e…  (differs from read key: ok)
+  artifact    dist/krea2app  (100600024 bytes)
+  admin api   ok
+```
+
+`admin api 404` means `ADMIN_TOKEN` is unset on the deployment *or* the
+deployment predates these routes — the two return an identical body, and both
+are fixed by redeploying with the environment variables set. `/health` gaining
+`"r2":"configured"` is the confirmation the new code landed. See
+[`license-validator/README.md`](license-validator/README.md) for the service
+side: how `/v1/build` gates a download on the licence, and why that stops a
+lapsed key fetching a *new* build without pretending to stop a binary someone
+already has from being copied.
+
 ### Getting the binary off the pod
 
 `scp` over RunPod's SSH proxy often fails (`ssh.runpod.io` is a terminal proxy,

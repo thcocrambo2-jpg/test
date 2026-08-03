@@ -852,7 +852,13 @@ CIVITAI_TOKEN = os.environ.get("CIVITAI_TOKEN") or None
 # Where the pricing page's screenshots are served from — a public Cloudflare
 # R2 bucket, holding the same folder layout showcase.json names:
 #
-#     https://<bucket>.r2.dev/krea_edit/compare-a/before.webp
+#     https://pub-<hash>.r2.dev/krea_edit/compare-a/before.webp
+#
+# Note the host is the subdomain Cloudflare assigns when public access is
+# switched on, not one named after the bucket — enabling it is what mints
+# the value, so there is nothing to guess at from the bucket name. A custom
+# domain works the same way and is the better choice in production, since
+# r2.dev is rate limited and Cloudflare does not intend it for live traffic.
 #
 # They are fetched by the customer's browser, not by this app, so nothing
 # here downloads them and no credential is involved: the bucket has to be

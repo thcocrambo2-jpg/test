@@ -22,6 +22,24 @@
 #   ./build.sh --upload-only   -> publish the dist/krea2app already there,
 #                                 compiling nothing
 #
+# Publishing uploads to a private Cloudflare R2 bucket and then registers
+# the build with the licence API, which is what points a channel at it.
+# Both halves need environment variables, and --no-publish needs none of
+# them:
+#
+#   R2_ACCOUNT_ID          Cloudflare account id
+#   R2_ACCESS_KEY_ID       R2 API token, Object Read & Write on the bucket
+#   R2_SECRET_ACCESS_KEY   ... its secret
+#   R2_BUILDS_BUCKET       krea2-builds
+#   KREA2_NODE_TAG         the deployment id — the same tag pods carry.
+#                          The API is https://<tag>.vercel.app, assembled
+#                          here exactly as config.py assembles it there
+#   KREA2_ADMIN_TOKEN      the ADMIN_TOKEN set on that deployment
+#
+#   KREA2_BUILD_CHANNEL    which channel to point at this build
+#                          (default "stable"; set it to something else to
+#                          upload without customers getting it)
+#
 set -euo pipefail
 
 cd "$(dirname "$0")"
@@ -63,33 +81,60 @@ OUTPUT_NAME="krea2app"
 publish() {
 # ── Publish ───────────────────────────────────────────────────────────────────
 #
-# Push the binary to a PUBLIC Hugging Face repo, which is what the RunPod
-# start script fetches. Public on purpose: that script sits in a template
-# customers can read, so any credential it carried would not be one.
+# Two objects go to one PRIVATE Cloudflare R2 bucket:
 #
-# What stops a stranger running this build is the seat check in
-# licensing.py, not the obscurity of this URL — see the note at the top of
-# that module about what the licence does and does not defend against.
+#   builds/<sha256>/krea2app   the binary, addressed by its own hash
+#   start.sh                   scripts/runpod_start.sh, at a fixed key
 #
-# Three files go up in ONE commit:
+# Neither is reachable without going through the licence API. A pod asks
+# /v1/build with its key and gets a short-lived signed URL back, so a
+# lapsed or revoked key cannot pull a new build at all; /v1/start.sh
+# redirects to a signed URL for the script, which is what the RunPod
+# template's one-line bootstrapper fetches.
 #
-#   krea2app      the binary
-#   latest.json   its sha256 — the start script verifies against this, so
-#                 splitting the two across commits would have a customer
-#                 checking a new hash against old bytes and rejecting a
-#                 build that is perfectly good
-#   start.sh      scripts/runpod_start.sh, which is what pods actually run
+# start.sh is published rather than pasted into the template because a
+# template is cloned once and is then out of reach — a fix to a pasted
+# script never reaches anyone who already has one. The template holds only
+# the bootstrapper, so the start script stays as updatable as the binary.
+# RunPod's start-command field also caps at 4000 characters, which the
+# script has long outgrown.
 #
-# start.sh is published rather than pasted into the RunPod template
-# because a template is cloned once and is then out of reach: a fix to a
-# pasted script never reaches the customers who already have it. Their
-# template holds a one-line bootstrapper that fetches this, so the start
-# script is as updatable as the binary is. RunPod's start-command field
-# also caps at 4000 characters, which the script has already outgrown.
+# What stops a stranger *running* this build is still the seat check in
+# licensing.py, not where the bytes are kept — see the note at the top of
+# that module. Gating the download stops a lapsed key getting a new build
+# and shows which machines pull on which key. It does not stop a binary
+# someone already has from being copied.
+#
+# The binary is content-addressed, so publishing never overwrites: this
+# adds a build and then moves a channel pointer to it. Rolling back is
+# moving that pointer again, with nothing re-uploaded. start.sh is the one
+# thing written in place, because the redirect has to find it at a key
+# that does not change.
+#
+# Uploading and registering are separate steps on purpose. Bytes in the
+# bucket that no channel points at are harmless, so an upload that
+# succeeds and a register that fails leaves nothing broken and the retry
+# re-transfers nothing.
 
 ARTIFACT="$OUTPUT_DIR/$OUTPUT_NAME"
-DIST_REPO="${KREA2_DIST_REPO:-krea2-dist}"
 START_SCRIPT="scripts/runpod_start.sh"
+
+# Where the freshly uploaded build gets registered, assembled from the same
+# node tag the app and the start script use rather than from a URL of its
+# own. There is only ever one deployment to talk to, so a second variable
+# naming it would be a second thing to keep in step — and the one that is
+# wrong is always the one you forget you set.
+#
+# Normalised and validated exactly as config.py and runpod_start.sh do it,
+# so a tag that works on a pod works here.
+NODE_TAG="${KREA2_NODE_TAG:-}"
+NODE_TAG="${NODE_TAG//[[:space:]]/}"
+NODE_TAG="${NODE_TAG,,}"
+API_URL=""
+[[ "$NODE_TAG" =~ ^[a-z0-9][a-z0-9-]{6,61}[a-z0-9]$ ]] \
+    && API_URL="https://$NODE_TAG.vercel.app"
+
+CHANNEL="${KREA2_BUILD_CHANNEL:-stable}"
 
 publish_unavailable() {
     # The build itself succeeded, so this is only fatal when -y said to
@@ -134,13 +179,60 @@ fi
     exit 1
 }
 
-if [[ -z "${HF_WRITE_TOKEN:-}" ]]; then
+# The R2 credential here must be an Object Read & Write token. It is the
+# only place one exists — the licence API holds a read-only token and can
+# therefore never overwrite a published build, which is the whole point of
+# keeping the two apart.
+r2_missing=()
+for var in R2_ACCOUNT_ID R2_ACCESS_KEY_ID R2_SECRET_ACCESS_KEY \
+           R2_BUILDS_BUCKET; do
+    [[ -n "${!var:-}" ]] || r2_missing+=("$var")
+done
+if (( ${#r2_missing[@]} )); then
     publish_unavailable "\
-Not publishing: HF_WRITE_TOKEN is unset.
-Set it to a Hugging Face token with *write* scope and re-run to push
-$ARTIFACT. Nothing is lost by publishing later — re-run with
---upload-only and it will not compile again.
-(Same variable scripts/mirror_to_hf.py uses.)"
+Not publishing: ${r2_missing[*]} unset.
+The binary goes to a private R2 bucket. Create an R2 API token with
+Object Read & Write on that bucket and export:
+
+    R2_ACCOUNT_ID          your Cloudflare account id
+    R2_ACCESS_KEY_ID       from the R2 API token
+    R2_SECRET_ACCESS_KEY   from the R2 API token
+    R2_BUILDS_BUCKET       krea2-builds"
+fi
+
+# Exported rather than assumed: the check above sees a plain shell
+# variable, but r2_presign.py runs as a child process and only ever sees
+# the environment. Setting one without exporting it would pass the check
+# and then fail inside the signer, complaining the value is unset.
+export R2_ACCOUNT_ID R2_ACCESS_KEY_ID R2_SECRET_ACCESS_KEY R2_BUILDS_BUCKET
+
+# Separated from the token check below, because "unset" and "set to
+# something that is not a tag" send you to different places and collapsing
+# them would have you checking a value that is right there and correct.
+if [[ -z "$API_URL" ]]; then
+    if [[ -z "${KREA2_NODE_TAG:-}" ]]; then
+        publish_unavailable "\
+Not publishing: KREA2_NODE_TAG is unset.
+It names the deployment to register this build with — the same tag the
+pods carry. Export it and re-run with --upload-only:
+
+    KREA2_NODE_TAG     the deployment id (a single name, no dots or
+                       slashes, as it appears in <name>.vercel.app)"
+    fi
+    publish_unavailable "\
+Not publishing: KREA2_NODE_TAG is not a valid deployment id.
+It has to be one name as it appears in <name>.vercel.app — no dots, no
+slashes, no https:// prefix. Got: $KREA2_NODE_TAG"
+fi
+
+if [[ -z "${KREA2_ADMIN_TOKEN:-}" ]]; then
+    publish_unavailable "\
+Not publishing: KREA2_ADMIN_TOKEN is unset.
+Uploading the binary without registering it would put bytes in the bucket
+that nothing points at — pods would keep running the previous build and
+nothing would say why. Export it and re-run with --upload-only:
+
+    KREA2_ADMIN_TOKEN  the ADMIN_TOKEN set on $API_URL"
 fi
 
 echo
@@ -157,37 +249,19 @@ if [[ -n "$commit" ]]; then
     git diff --quiet HEAD 2>/dev/null || dirty=" (uncommitted changes)"
 fi
 
-# Resolve the account from the token rather than asking for it: a repo id
-# typed by hand is a repo id that can be typed wrong, and the failure mode
-# is a build published where nothing will look for it.
-account="$("$PYTHON" - <<'PY' 2>/dev/null || true
-import os
-from huggingface_hub import HfApi
-try:
-    print(HfApi(token=os.environ["HF_WRITE_TOKEN"]).whoami()["name"])
-except Exception:
-    pass
-PY
-)"
-[[ -n "$account" ]] || publish_unavailable "\
-Not publishing: could not authenticate to Hugging Face with HF_WRITE_TOKEN.
-Check the token is valid and has write scope."
-
-# Accept either a bare name or a full owner/name in KREA2_DIST_REPO, so
-# pushing to an organisation needs no extra flag.
-[[ "$DIST_REPO" == */* ]] || DIST_REPO="$account/$DIST_REPO"
-
 cat <<EOF
 
-    repo      https://huggingface.co/$DIST_REPO   (PUBLIC)
-    file      $OUTPUT_NAME  ($(numfmt --to=iec --suffix=B "$size" 2>/dev/null || echo "$size bytes"))
-    sha256    $sha
-    plus      start.sh  (from $START_SCRIPT)
+    bucket    r2://$R2_BUILDS_BUCKET   (PRIVATE)
+    binary    builds/$sha/$OUTPUT_NAME
+              $(numfmt --to=iec --suffix=B "$size" 2>/dev/null || echo "$size bytes")
+    start.sh  start.sh  (from $START_SCRIPT, overwritten in place)
+    register  $API_URL  ->  channel "$CHANNEL"
     source    ${commit:-unknown}${branch:+ on $branch}$dirty
-    account   $account
 
-  This overwrites the current build at that path. Customer pods pick it up
-  on their next start — anything already running is unaffected.
+  The binary is addressed by its own hash, so this adds a build rather
+  than replacing one. What changes is where "$CHANNEL" points. Pods pick
+  that up on their next start — anything already running is unaffected,
+  and every previous build stays in the bucket to roll back to.
 
 EOF
 
@@ -198,76 +272,143 @@ elif [[ ! -t 0 ]]; then
 Not publishing: no terminal to confirm on. Re-run with -y to publish
 non-interactively."
 else
-    read -r -p "  Publish to $DIST_REPO? [y/N] " answer
+    read -r -p "  Publish to r2://$R2_BUILDS_BUCKET? [y/N] " answer
     case "$answer" in
         [yY]|[yY][eE][sS]) ;;
         *) echo; echo "Not published. $ARTIFACT is built and waiting."; exit 0 ;;
     esac
 fi
 
-KREA2_PUB_FILE="$ARTIFACT" \
-KREA2_PUB_NAME="$OUTPUT_NAME" \
-KREA2_PUB_REPO="$DIST_REPO" \
-KREA2_PUB_SHA="$sha" \
-KREA2_PUB_COMMIT="$commit" \
-KREA2_PUB_BRANCH="$branch" \
-KREA2_PUB_START="$START_SCRIPT" \
-"$PYTHON" - <<'PY'
-import io, json, os, platform, time
+# Upload with a presigned PUT rather than an SDK. The signing is ~80 lines
+# of stdlib in scripts/r2_presign.py, against pulling boto3 or the aws CLI
+# onto every machine that builds. One PUT is enough: R2 takes a single
+# object up to 5 GB and this is a few hundred megabytes.
+upload() {
+    local file="$1" key="$2" url stats size speed seconds
+    url="$("$PYTHON" scripts/r2_presign.py --key "$key" --method PUT \
+           --expires 3600)" || return 1
 
-from huggingface_hub import CommitOperationAdd, HfApi
+    # --progress-bar draws to stderr while the transfer runs; -w prints the
+    # totals to stdout when it finishes. Both, because the bar is the thing
+    # that reassures you during a slow upload and it is also the thing that
+    # renders as nothing on a fast one — leaving you unable to tell a
+    # hundred megabytes that flew by from a no-op. The totals always print.
+    stats="$(curl -fSL --progress-bar --retry 3 --retry-delay 5 \
+             -w '%{size_upload} %{speed_upload} %{time_total}' \
+             -T "$file" "$url")" || return 1
 
-path = os.environ["KREA2_PUB_FILE"]
-name = os.environ["KREA2_PUB_NAME"]
-repo = os.environ["KREA2_PUB_REPO"]
+    read -r size speed seconds <<<"$stats"
+    # numfmt wants integers and curl reports bytes-per-second as a float.
+    printf '    sent %s in %ss (%s/s)\n' \
+        "$(numfmt --to=iec --suffix=B "$size" 2>/dev/null || echo "$size bytes")" \
+        "$seconds" \
+        "$(numfmt --to=iec --suffix=B "${speed%.*}" 2>/dev/null || echo "$speed")"
 
-meta = {
-    "file": name,
-    "sha256": os.environ["KREA2_PUB_SHA"],
-    "size": os.path.getsize(path),
-    "built_at": time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime()),
-    "git_commit": os.environ.get("KREA2_PUB_COMMIT") or None,
-    "git_branch": os.environ.get("KREA2_PUB_BRANCH") or None,
-    "arch": f"{platform.system().lower()}-{platform.machine()}",
-    "_note": ("Published by build.sh. The start script reads sha256 from "
-              "here to verify its download and to tell an up-to-date pod "
-              "it can skip one."),
+    # A PUT that uploaded nothing is not a success, whatever the status
+    # code said. Worth its own check: an empty or unreadable artifact would
+    # otherwise publish as a perfectly valid zero-byte build, and the first
+    # thing to notice would be a customer's pod failing to execute it.
+    if [[ "$size" == "0" ]]; then
+        echo "    ERROR: nothing was uploaded — $file is empty or unreadable" >&2
+        return 1
+    fi
 }
 
-api = HfApi(token=os.environ["HF_WRITE_TOKEN"])
-api.create_repo(repo, repo_type="model", private=False, exist_ok=True)
-api.create_commit(
-    repo_id=repo,
-    repo_type="model",
-    commit_message=f"build {meta['git_commit'] or meta['built_at']}",
-    operations=[
-        CommitOperationAdd(path_in_repo=name, path_or_fileobj=path),
-        CommitOperationAdd(
-            path_in_repo="start.sh",
-            path_or_fileobj=os.environ["KREA2_PUB_START"],
-        ),
-        CommitOperationAdd(
-            path_in_repo="latest.json",
-            path_or_fileobj=io.BytesIO(
-                json.dumps(meta, indent=2, sort_keys=True).encode() + b"\n"),
-        ),
-    ],
+echo ">>> Uploading $OUTPUT_NAME ..."
+upload "$ARTIFACT" "builds/$sha/$OUTPUT_NAME" || {
+    echo >&2
+    echo "ERROR: uploading the binary to R2 failed." >&2
+    echo "       Check R2_ACCESS_KEY_ID / R2_SECRET_ACCESS_KEY are an" >&2
+    echo "       Object Read & Write token for $R2_BUILDS_BUCKET." >&2
+    exit 1
+}
+
+echo ">>> Uploading start.sh ..."
+upload "$START_SCRIPT" "start.sh" || {
+    echo >&2
+    echo "ERROR: uploading start.sh to R2 failed. The binary is already up" >&2
+    echo "       at builds/$sha/$OUTPUT_NAME — re-run with --upload-only," >&2
+    echo "       which re-transfers it but breaks nothing." >&2
+    exit 1
+}
+
+# Registering is what actually publishes: until this runs, the bytes are in
+# the bucket and no channel points at them, so pods carry on running the
+# previous build.
+echo ">>> Registering the build ..."
+KREA2_REG_SHA="$sha" \
+KREA2_REG_SIZE="$size" \
+KREA2_REG_COMMIT="$commit" \
+KREA2_REG_BRANCH="$branch" \
+KREA2_REG_CHANNEL="$CHANNEL" \
+KREA2_REG_URL="$API_URL" \
+KREA2_ADMIN_TOKEN="$KREA2_ADMIN_TOKEN" \
+"$PYTHON" - <<'PY' || { echo >&2 "ERROR: registering the build failed."; exit 1; }
+import json, os, platform, sys, time
+import urllib.error, urllib.request
+
+body = json.dumps({
+    "sha256": os.environ["KREA2_REG_SHA"],
+    "size": int(os.environ["KREA2_REG_SIZE"]),
+    "git_commit": os.environ.get("KREA2_REG_COMMIT") or None,
+    "git_branch": os.environ.get("KREA2_REG_BRANCH") or None,
+    "arch": f"{platform.system().lower()}-{platform.machine()}",
+    "built_at": time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime()),
+    "promote": os.environ["KREA2_REG_CHANNEL"],
+}).encode()
+
+request = urllib.request.Request(
+    f"{os.environ['KREA2_REG_URL'].rstrip('/')}/v1/admin/builds",
+    data=body,
+    headers={
+        "Content-Type": "application/json",
+        "Authorization": f"Bearer {os.environ['KREA2_ADMIN_TOKEN']}",
+    },
+    method="POST",
 )
+try:
+    with urllib.request.urlopen(request, timeout=30) as response:
+        json.load(response)
+except urllib.error.HTTPError as err:
+    detail = (err.read() or b"").decode(errors="replace")[:400]
+    # 401 here is the single most likely way this step fails, and it is
+    # worth naming: the bytes are already uploaded, so the fix is one
+    # variable and a --upload-only re-run, not a rebuild.
+    print(f"  HTTP {err.code} from the API: {detail}", file=sys.stderr)
+    if err.code == 401:
+        print("  KREA2_ADMIN_TOKEN does not match the ADMIN_TOKEN set on "
+              "that deployment.", file=sys.stderr)
+    raise SystemExit(1)
+except Exception as err:
+    print(f"  could not reach {os.environ['KREA2_REG_URL']}: {err}",
+          file=sys.stderr)
+    raise SystemExit(1)
 PY
 
 cat <<EOF
 
->>> Published: https://huggingface.co/$DIST_REPO
+>>> Published: builds/$sha/$OUTPUT_NAME  ->  channel "$CHANNEL"
 
-    The RunPod template's container start command — this never changes,
-    so a template already cloned by a customer picks up every future
-    build and every fix to the start script on its next start:
+    The RunPod template's container start command. It never changes, so a
+    template picks up every future build and every fix to the start script
+    on its next start — \$KREA2_NODE_TAG is expanded on the pod, from the
+    same variable the licence check already needs:
 
-      bash -c 'curl -fsSL https://huggingface.co/$DIST_REPO/resolve/main/start.sh -o /tmp/krea2-start.sh && exec bash /tmp/krea2-start.sh'
+      bash -c 'curl -fsSL https://\$KREA2_NODE_TAG.vercel.app/v1/start.sh -o /tmp/krea2-start.sh && exec bash /tmp/krea2-start.sh'
 
-    To roll a customer back, every build stays in the repo's history — set
-    KREA2_BUILD_REV to that commit's revision on their pod and the start
-    script fetches it instead of main.
+    To roll back, every build stays in the bucket and in the builds
+    collection. List them and move the channel — no re-upload, and pods
+    take it on their next start:
+
+      curl -s -H "Authorization: Bearer \$KREA2_ADMIN_TOKEN" \\
+           $API_URL/v1/admin/builds
+      curl -s -X POST -H "Authorization: Bearer \$KREA2_ADMIN_TOKEN" \\
+           -H 'Content-Type: application/json' \\
+           -d '{"sha256":"<older sha>","channel":"$CHANNEL"}' \\
+           $API_URL/v1/admin/builds/promote
+
+    To hold one customer on a specific build, set build_sha on their
+    licence document instead — it wins over the channel.
 
     The binary needs python3, git, an NVIDIA driver and disk on the target
     pod — it installs ComfyUI and downloads models on first run, exactly
