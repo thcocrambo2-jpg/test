@@ -31,6 +31,7 @@ Every environment variable this module reads, in one place:
     KREA2_LICENSE_KEY           the customer key (required)
     KREA2_NODE_TAG              the deployment id the key checks in against
     KREA2_LICENSE_GRACE         seconds tolerated with no licence server
+    KREA2_SHOWCASE_URL          public bucket holding the pricing page's images
     HF_TOKEN, CIVITAI_TOKEN     download credentials
 """
 
@@ -64,6 +65,15 @@ FROZEN = "__compiled__" in globals()
 # correct: build.sh bundles deps/ and requirements.txt alongside the code.
 # BASE_DIR is unaffected — it is absolute, so models outlive the extraction.
 PROJECT_DIR = Path(__file__).resolve().parent
+# The pricing page's showcase copy — prose only, a few kilobytes, bundled
+# because it is what decides whether the section renders at all. Under
+# --onefile this resolves inside the extraction dir; build.sh bundles it
+# with --include-data-files. A build that forgets it still starts, and the
+# pricing page simply loses the section (see showcase.py).
+#
+# The *pictures* it names are not here. They live in the R2 bucket below,
+# which is what keeps a page full of screenshots out of the binary.
+ASSETS_DIR = PROJECT_DIR / "assets"
 BASE_DIR = Path(os.environ.get("KREA2_BASE_DIR", "/workspace/krea2"))
 TEMP_DIR = BASE_DIR     # ComfyUI install + model weights
 WORKING_DIR = BASE_DIR  # generated images + logs
@@ -837,6 +847,36 @@ HF_TOKEN = os.environ.get("HF_TOKEN") or None
 # Only needed when a download falls through to CivitAI — i.e. when the
 # mirror could not serve it. A healthy mirrored pod never uses this.
 CIVITAI_TOKEN = os.environ.get("CIVITAI_TOKEN") or None
+
+# ── Showcase images ───────────────────────────────────────────────────────────
+# Where the pricing page's screenshots are served from — a public Cloudflare
+# R2 bucket, holding the same folder layout showcase.json names:
+#
+#     https://<bucket>.r2.dev/krea_edit/compare-a/before.webp
+#
+# They are fetched by the customer's browser, not by this app, so nothing
+# here downloads them and no credential is involved: the bucket has to be
+# public (an r2.dev subdomain or a custom domain). Plain <img> loads need no
+# CORS header either — only fetch() would.
+#
+# The alternative was compiling them into the binary, which put every
+# screenshot into a onefile build that is re-extracted on every launch. This
+# way a new picture is an upload, not a release.
+#
+# Empty is a supported state, not a broken one: the section still renders,
+# in full, with every picture as a placeholder tile naming the file it wants
+# (see showcase.py). That is also what a dev checkout gets for free.
+SHOWCASE_BASE_URL = (os.environ.get("KREA2_SHOWCASE_URL") or "").strip()
+# https only, and no query or fragment: the value is pasted into an env
+# panel rather than reviewed in a diff, and it ends up as the prefix of
+# every image src on the page. Anything else is dropped with a warning
+# rather than used — the page then reads exactly as it does with no bucket
+# configured at all.
+if SHOWCASE_BASE_URL and not SHOWCASE_BASE_URL.lower().startswith("https://"):
+    log.warning("KREA2_SHOWCASE_URL is not an https:// URL — ignoring it. "
+                "The pricing showcase will render with placeholder tiles.")
+    SHOWCASE_BASE_URL = ""
+SHOWCASE_BASE_URL = SHOWCASE_BASE_URL.split("?")[0].split("#")[0].rstrip("/")
 
 for _dir in (TEMP_DIR, MODELS_DIR, OUTPUT_DIR):
     _dir.mkdir(parents=True, exist_ok=True)

@@ -1333,6 +1333,630 @@ CSS = f"""
   color: var(--kx-faint) !important;
 }}
 
+/* ------------------------------------------------------- feature showcase */
+/* What the app actually does, under the plan cards: one section per granted
+   feature, each a short essay and a set of pictures. See showcase.py for
+   where the copy and the images come from.
+
+   The whole thing is markup and CSS with no script, for the reason the
+   contact dialog gives above — gr.HTML strips <script> — so the two
+   interactive parts are done the same way: the zoom view is a `:target`
+   dialog, and nothing else needs state at all.
+
+   Sizing rule for the blocks below: pictures that have to line up with
+   each other (a before/after pair, a row of variants) go in a fixed
+   aspect box and are cropped to fill it; pictures in a collage keep their
+   own shape, and the renderer emits their real width/height so the
+   masonry does not reflow as they load. */
+.kx-show {{ max-width: 1180px; margin: 64px auto 0; }}
+
+/* The seam between the plan grid and the showcase — a full-width rule with
+   the eyebrow sitting on it, so the page reads as two chapters rather than
+   as a card grid that kept going. */
+.kx-show-seam {{
+  position: relative;
+  margin: 0 0 40px;
+  border-top: 1px solid var(--kx-border);
+  text-align: center;
+}}
+.kx-show-seam span {{
+  position: relative;
+  top: -.7em;
+  padding: 0 16px;
+  background: var(--body-background-fill);
+  color: var(--kx-faint);
+  font-size: .68rem;
+  font-weight: 700;
+  letter-spacing: .16em;
+  text-transform: uppercase;
+}}
+
+/* ------------------------------------------------------------ intro */
+.kx-show-intro {{ max-width: 780px; margin: 0 auto 34px; text-align: center; }}
+
+.kx-show-intro h2 {{
+  margin: 0 0 14px !important;
+  font-size: clamp(1.7rem, 3.4vw, 2.5rem) !important;
+  font-weight: 800 !important;
+  line-height: 1.15;
+  letter-spacing: -.025em;
+  color: var(--kx-text) !important;
+}}
+/* The one gradient-filled phrase on the page. `em` carries no emphasis
+   here — it is the hook the copy marks the accent half of the title with. */
+/* Solid accent, not a gradient clipped to the glyphs. `background-clip: text`
+   needs `color: transparent`, and the moment anything stops the gradient
+   from painting — an unsupported property, a variable that did not resolve,
+   a reset that drops the background — the headline is not merely
+   un-styled, it is invisible, because the page shows straight through the
+   letters. Nothing else in this stylesheet risks that, and a headline is
+   the last place to start. */
+.kx-show-intro h2 em {{ font-style: normal; color: var(--kx-accent) !important; }}
+.dark .kx-show-intro h2 em {{ color: #b9bcfb !important; }}
+.kx-show-intro p {{
+  margin: 0 auto 12px !important;
+  max-width: 68ch;
+  font-size: .95rem !important;
+  line-height: 1.75;
+  color: var(--kx-muted) !important;
+}}
+
+/* Four figures in one bordered strip rather than four cards: boxed stats
+   this close to the plan grid read as more pricing. */
+.kx-stats {{
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+  margin: 30px auto 0;
+  border: 1px solid var(--kx-border);
+  border-radius: 16px;
+  background: var(--kx-surface);
+  overflow: hidden;
+}}
+.kx-stat {{ padding: 18px 14px; border-right: 1px solid var(--kx-border-soft); }}
+.kx-stat:last-child {{ border-right: 0; }}
+/* Solid, for the reason given at .kx-show-intro h2 em — these numbers had
+   the same clipped-gradient fill and so the same way of vanishing. */
+.kx-stat b {{
+  display: block;
+  font-size: 1.5rem;
+  font-weight: 800;
+  letter-spacing: -.02em;
+  color: var(--kx-accent);
+}}
+.dark .kx-stat b {{ color: #b9bcfb; }}
+.kx-stat span {{
+  display: block;
+  font-size: .72rem;
+  line-height: 1.45;
+  color: var(--kx-faint);
+}}
+
+/* --------------------------------------------------------- jump chips */
+/* The section is long by design, so it opens with its own contents list,
+   in the same order as the tabs. */
+.kx-jump {{
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  gap: 7px;
+  margin: 0 auto 56px;
+}}
+.kx-jump a {{
+  padding: 6px 13px;
+  border: 1px solid var(--kx-border);
+  border-radius: 999px;
+  background: var(--kx-surface);
+  color: var(--kx-muted) !important;
+  font-size: .76rem;
+  font-weight: 600;
+  text-decoration: none !important;
+  transition: border-color .15s ease, color .15s ease, transform .15s ease;
+}}
+.kx-jump a:hover {{
+  border-color: var(--kx-accent);
+  color: var(--kx-accent) !important;
+  transform: translateY(-1px);
+}}
+
+/* ------------------------------------------------------------ section */
+.kx-feat {{ margin: 0 0 76px; scroll-margin-top: 24px; }}
+
+.kx-feat-head {{
+  display: grid;
+  grid-template-columns: auto 1fr;
+  gap: 0 20px;
+  align-items: start;
+  margin-bottom: 24px;
+}}
+/* Decoration with a job: it says how much section is left, which a run of
+   galleries otherwise hides. */
+.kx-feat-no {{
+  grid-row: span 2;
+  font-size: 2.6rem;
+  font-weight: 800;
+  line-height: 1;
+  letter-spacing: -.04em;
+  color: var(--kx-border);
+  font-variant-numeric: tabular-nums;
+}}
+.dark .kx-feat-no {{ color: #2c3340; }}
+
+.kx-feat-eyebrow {{
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 6px;
+}}
+.kx-feat-tab {{
+  font-size: .74rem;
+  font-weight: 700;
+  letter-spacing: .04em;
+  text-transform: uppercase;
+  color: var(--kx-accent);
+}}
+.kx-chip-on {{
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  padding: 2px 9px;
+  border-radius: 999px;
+  background: rgba(16, 185, 129, .12);
+  color: var(--kx-ok);
+  font-size: .64rem;
+  font-weight: 700;
+  letter-spacing: .04em;
+  text-transform: uppercase;
+}}
+.kx-feat-head h3 {{
+  grid-column: 2;
+  margin: 0 0 10px !important;
+  font-size: clamp(1.25rem, 2.4vw, 1.7rem) !important;
+  font-weight: 700 !important;
+  letter-spacing: -.02em;
+  line-height: 1.25;
+  color: var(--kx-text) !important;
+}}
+.kx-feat-body {{ grid-column: 2; }}
+.kx-feat-body p {{
+  margin: 0 0 12px !important;
+  max-width: 72ch;
+  font-size: .88rem !important;
+  line-height: 1.75;
+  color: var(--kx-muted) !important;
+}}
+.kx-feat-body p:last-child {{ margin-bottom: 0 !important; }}
+
+/* The capability list. Chips rather than bullets: they are short, there are
+   a lot of them, and they wrap into whatever width the prose leaves. */
+.kx-hl {{ display: flex; flex-wrap: wrap; gap: 6px; margin-top: 16px; }}
+.kx-hl span {{
+  padding: 4px 11px;
+  border: 1px solid var(--kx-border);
+  border-radius: 8px;
+  background: var(--kx-surface);
+  font-size: .73rem;
+  color: var(--kx-muted);
+}}
+.kx-hl span::before {{ content: "▪"; margin-right: 6px; color: var(--kx-accent); }}
+
+/* ------------------------------------------------------- block shells */
+.kx-block {{ margin: 28px 0 0; }}
+
+.kx-block-cap {{
+  margin: 12px 2px 0 !important;
+  font-size: .78rem !important;
+  font-style: italic;
+  line-height: 1.6;
+  color: var(--kx-faint) !important;
+}}
+.kx-block-cap b {{ font-style: normal; font-weight: 600; color: var(--kx-muted); }}
+
+/* Text beside pictures instead of above them, used on alternate sections so
+   the page does not become a dozen identical stacks. */
+.kx-split {{
+  display: grid;
+  grid-template-columns: 1fr 1.25fr;
+  align-items: center;
+  gap: 34px;
+}}
+.kx-split-reverse > :first-child {{ order: 2; }}
+.kx-split h4 {{
+  margin: 0 0 8px !important;
+  font-size: 1rem !important;
+  font-weight: 700 !important;
+  letter-spacing: -.01em;
+  color: var(--kx-text) !important;
+}}
+.kx-split p {{
+  margin: 0 !important;
+  font-size: .84rem !important;
+  line-height: 1.75;
+  color: var(--kx-muted) !important;
+}}
+
+/* Two blocks side by side — a feature where one example proves nothing. */
+.kx-pair {{
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(330px, 1fr));
+  gap: 26px;
+}}
+
+/* -------------------------------------------------------------- hero */
+.kx-hero {{
+  position: relative;
+  border-radius: 20px;
+  overflow: hidden;
+  box-shadow: var(--kx-shadow-lg);
+}}
+.kx-hero .kx-shot {{ border: 0; border-radius: 0; box-shadow: none; }}
+.kx-hero-text {{
+  position: absolute;
+  inset: auto 0 0 0;
+  padding: 46px 26px 22px;
+  background: linear-gradient(to top, rgba(6, 8, 14, .88), rgba(6, 8, 14, 0));
+  color: #fff;
+  pointer-events: none;
+}}
+.kx-hero-text b {{
+  display: block;
+  font-size: 1.15rem;
+  font-weight: 700;
+  letter-spacing: -.01em;
+}}
+.kx-hero-text span {{ font-size: .8rem; color: rgba(255, 255, 255, .78); }}
+
+/* ----------------------------------------------------------- compare */
+/* Before and after as two plates rather than a drag slider: a slider hides
+   half the result at all times, and most of these edits change the whole
+   frame rather than one region of it. The arrow is what makes the pair
+   read left-to-right instead of as two unrelated pictures. */
+.kx-compare {{
+  display: grid;
+  grid-template-columns: 1fr auto 1fr;
+  align-items: center;
+  gap: 14px;
+}}
+.kx-arrow {{
+  display: grid;
+  place-items: center;
+  width: 34px;
+  height: 34px;
+  border-radius: 50%;
+  border: 1px solid var(--kx-border);
+  background: var(--kx-surface);
+  box-shadow: var(--kx-shadow-sm);
+  color: var(--kx-accent);
+  font-size: .95rem;
+  font-weight: 700;
+}}
+
+/* --------------------------------------------------------------- fan */
+/* One source, N results — the "same photograph, three directions" row. The
+   source keeps an accent ring so the eye starts there. */
+.kx-fan {{
+  display: grid;
+  grid-template-columns: minmax(180px, .95fr) auto 3fr;
+  align-items: center;
+  gap: 16px;
+}}
+.kx-fan-out {{ display: grid; gap: 12px; }}
+.kx-fan-src .kx-shot {{ outline: 2px solid var(--kx-accent); outline-offset: 3px; }}
+
+/* Also the shape the row and inpaint blocks use on their own. */
+.kx-row {{ display: grid; gap: 12px; }}
+.kx-cols-2 {{ grid-template-columns: repeat(2, 1fr); }}
+.kx-cols-3 {{ grid-template-columns: repeat(3, 1fr); }}
+.kx-cols-4 {{ grid-template-columns: repeat(4, 1fr); }}
+.kx-cols-5 {{ grid-template-columns: repeat(5, 1fr); }}
+
+/* ----------------------------------------------------------- collage */
+/* The deliberately uneven one. CSS columns rather than a grid so tiles of
+   different heights pack without leaving holes, and a repeating nudge keyed
+   off :nth-child so nothing lines up with its neighbour. The rotation comes
+   off on hover, which is what makes it read as arranged rather than broken. */
+.kx-collage {{ columns: 4 210px; column-gap: 14px; }}
+.kx-collage .kx-shot {{
+  break-inside: avoid;
+  margin: 0 0 14px;
+  transition: transform .22s ease, box-shadow .22s ease;
+}}
+.kx-collage .kx-shot:nth-child(4n+1) {{ transform: rotate(-1.1deg); }}
+.kx-collage .kx-shot:nth-child(4n+2) {{ transform: rotate(.8deg) translateY(6px); }}
+.kx-collage .kx-shot:nth-child(4n+3) {{ transform: rotate(1.4deg) translateY(-4px); }}
+.kx-collage .kx-shot:nth-child(4n+4) {{ transform: rotate(-.6deg) translateY(3px); }}
+.kx-collage .kx-shot:hover {{
+  transform: rotate(0) scale(1.03);
+  box-shadow: var(--kx-shadow-lg);
+  position: relative;
+  z-index: 2;
+}}
+
+/* The straight variant, for blocks where the grid itself is the subject
+   (the prompt library) and a skew would read as sloppy. */
+.kx-collage-flat .kx-shot {{ transform: none !important; }}
+.kx-collage-flat .kx-shot:hover {{ transform: scale(1.03) !important; }}
+
+/* ------------------------------------------------------------- strip */
+.kx-strip {{
+  display: flex;
+  gap: 12px;
+  overflow-x: auto;
+  padding-bottom: 10px;
+  scroll-snap-type: x mandatory;
+  scrollbar-width: thin;
+}}
+.kx-strip .kx-shot {{ flex: 0 0 230px; scroll-snap-align: start; }}
+.kx-strip-note {{
+  margin: 4px 0 0 !important;
+  font-size: .72rem !important;
+  color: var(--kx-faint) !important;
+}}
+
+/* -------------------------------------------------------------- shot */
+/* One picture, wherever it appears. The frame, the corner pills and the
+   zoom affordance live here so every block gets them for free. */
+.kx-shot {{
+  position: relative;
+  display: block;
+  margin: 0;
+  border-radius: 14px;
+  overflow: hidden;
+  background: var(--kx-sunken);
+  border: 1px solid var(--kx-border);
+  box-shadow: var(--kx-shadow-sm);
+}}
+a.kx-shot {{ cursor: zoom-in; text-decoration: none !important; }}
+.kx-shot img,
+.kx-shot video {{
+  display: block;
+  width: 100%;
+  height: auto;
+  border-radius: 0;
+}}
+/* Fixed-shape blocks carry the aspect ratio on the frame and crop what is
+   inside it to fill, so a pair of pictures that were not shot at the same
+   size still line up. The collage sets no ratio and its pictures keep their
+   own — which is why it is the one block that measures its files. */
+.kx-shot-fixed > img,
+.kx-shot-fixed > video,
+.kx-shot-fixed > .kx-ph {{
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}}
+
+.kx-tag {{
+  position: absolute;
+  top: 8px;
+  left: 8px;
+  z-index: 2;
+  padding: 3px 9px;
+  border-radius: 999px;
+  background: rgba(8, 10, 16, .62);
+  backdrop-filter: blur(6px);
+  color: #fff;
+  font-size: .64rem;
+  font-weight: 700;
+  letter-spacing: .05em;
+  text-transform: uppercase;
+}}
+.kx-tag-accent {{ left: auto; right: 8px; background: {ACCENT}d9; }}
+.kx-fan-src .kx-tag-accent,
+.kx-shot-lead .kx-tag-accent {{ left: 8px; right: auto; }}
+
+/* The prompt that produced a picture. Positioned out of flow so a long
+   caption can never change a tile's height, which in a masonry would move
+   every tile below it. */
+.kx-shot-cap {{
+  position: absolute;
+  inset: auto 0 0 0;
+  padding: 22px 11px 9px;
+  background: linear-gradient(to top, rgba(6, 8, 14, .9), transparent);
+  color: rgba(255, 255, 255, .92) !important;
+  font-size: .7rem;
+  line-height: 1.4;
+  opacity: 0;
+  transform: translateY(6px);
+  transition: opacity .2s ease, transform .2s ease;
+}}
+.kx-shot:hover .kx-shot-cap {{ opacity: 1; transform: none; }}
+
+/* ------------------------------------------------------ placeholders */
+/* What a slot renders as until a file exists at its path — see showcase.py.
+   It names the file it is waiting for, which is what makes an unfinished
+   folder self-documenting; the hue is picked from that path so a tile keeps
+   its colour as neighbours are added. */
+.kx-ph {{
+  position: relative;
+  display: grid;
+  place-items: center;
+  aspect-ratio: 4 / 3;
+  background:
+    radial-gradient(120% 90% at 20% 0%, rgba(255, 255, 255, .28), transparent 55%),
+    linear-gradient(145deg,
+      hsl(var(--kx-h, 250) 72% 64%),
+      hsl(calc(var(--kx-h, 250) + 38) 72% 56%));
+}}
+.dark .kx-ph {{
+  background:
+    radial-gradient(120% 90% at 20% 0%, rgba(255, 255, 255, .16), transparent 55%),
+    linear-gradient(145deg,
+      hsl(var(--kx-h, 250) 56% 46%),
+      hsl(calc(var(--kx-h, 250) + 38) 56% 38%));
+}}
+/* A faint weave, so a dozen of these together do not read as flat swatches. */
+.kx-ph::before {{
+  content: "";
+  position: absolute;
+  inset: 0;
+  background-image: repeating-linear-gradient(45deg,
+    rgba(255, 255, 255, .07) 0 2px, transparent 2px 9px);
+}}
+.kx-ph-glyph {{
+  position: relative;
+  font-size: 1.5rem;
+  opacity: .5;
+  filter: grayscale(1) brightness(2.4);
+}}
+.kx-ph-path {{
+  position: absolute;
+  left: 8px;
+  right: 8px;
+  bottom: 8px;
+  padding: 3px 7px;
+  border-radius: 6px;
+  background: rgba(8, 10, 16, .5);
+  color: rgba(255, 255, 255, .86);
+  font-family: var(--font-mono);
+  font-size: .6rem;
+  line-height: 1.35;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}}
+
+/* --------------------------------------------------------- not in plan */
+/* A feature this licence does not grant. Nothing here dims it, and that is
+   deliberate: this section sits under the price list to argue for the
+   upgrade, and a greyed-out screenshot argues against it. What marks it is
+   a chip in the accent colour and a line at the end of the section saying
+   how to get it — the section reads as an offer rather than as a locked
+   door. */
+.kx-chip-off {{
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  padding: 2px 9px;
+  border-radius: 999px;
+  background: var(--kx-accent-soft);
+  color: var(--kx-accent);
+  font-size: .64rem;
+  font-weight: 700;
+  letter-spacing: .04em;
+  text-transform: uppercase;
+}}
+.dark .kx-chip-off {{ color: #b9bcfb; }}
+
+/* The per-section upgrade line. Quiet by default — one of these under every
+   ungranted section, and a page of loud banners reads as a nag rather than
+   as a catalogue — but it is a real link, to the plan grid at the top of
+   the page. */
+.kx-feat-up {{
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 10px;
+  margin-top: 18px;
+  padding: 11px 15px;
+  border: 1px solid var(--kx-border);
+  border-left: 3px solid var(--kx-accent);
+  border-radius: 0 12px 12px 0;
+  background: var(--kx-sunken);
+  font-size: .8rem;
+  color: var(--kx-muted);
+}}
+.kx-feat-up a {{
+  margin-left: auto;
+  padding: 5px 13px;
+  border-radius: 999px;
+  background: linear-gradient(135deg, var(--kx-accent), var(--kx-accent-alt));
+  color: #fff !important;
+  font-size: .75rem;
+  font-weight: 600;
+  text-decoration: none !important;
+  white-space: nowrap;
+}}
+
+/* ------------------------------------------------------------ closing */
+.kx-show-cta {{
+  margin: 8px auto 0;
+  padding: 34px 28px;
+  border: 1px solid var(--kx-border);
+  border-radius: 20px;
+  background:
+    linear-gradient(135deg, {ACCENT}1a, {ACCENT_ALT}12),
+    var(--kx-surface);
+  text-align: center;
+}}
+.kx-show-cta h3 {{
+  margin: 0 0 8px !important;
+  font-size: 1.25rem !important;
+  font-weight: 700 !important;
+  letter-spacing: -.02em;
+  color: var(--kx-text) !important;
+}}
+.kx-show-cta p {{
+  margin: 0 auto 18px !important;
+  max-width: 60ch;
+  font-size: .85rem !important;
+  line-height: 1.7;
+  color: var(--kx-muted) !important;
+}}
+.kx-show-cta .kx-plan-btn {{
+  display: inline-block;
+  width: auto;
+  margin: 0;
+  padding: 10px 26px;
+}}
+
+/* ----------------------------------------------------------- lightbox */
+/* Click a picture to see it whole. A `:target` dialog, exactly like the
+   contact one above and for the same reason — there is no script on this
+   page. The full-size copy inside stays lazy, so a section of forty
+   pictures still only fetches what is on screen. */
+.kx-lb {{
+  position: fixed;
+  inset: 0;
+  z-index: 1001;
+  display: none;
+  place-items: center;
+  padding: 32px;
+  background: rgba(6, 8, 14, .84);
+  backdrop-filter: blur(4px);
+}}
+.kx-lb:target {{ display: grid; }}
+.kx-lb-scrim {{ position: absolute; inset: 0; cursor: default; }}
+.kx-lb-card {{
+  position: relative;
+  width: min(1000px, 92vw);
+  max-height: 88vh;
+  border-radius: 16px;
+  overflow: hidden;
+  background: var(--kx-surface);
+  box-shadow: 0 30px 80px -20px rgba(0, 0, 0, .8);
+}}
+.kx-lb-card img,
+.kx-lb-card video {{
+  display: block;
+  width: 100%;
+  max-height: 78vh;
+  object-fit: contain;
+  background: #06080e;
+}}
+.kx-lb-cap {{
+  margin: 0 !important;
+  padding: 11px 15px;
+  font-size: .78rem !important;
+  color: var(--kx-muted) !important;
+}}
+.kx-lb-close {{
+  position: absolute;
+  top: 10px;
+  right: 12px;
+  z-index: 2;
+  padding: 5px 13px;
+  border-radius: 999px;
+  background: rgba(8, 10, 16, .6);
+  backdrop-filter: blur(6px);
+  color: #fff !important;
+  font-size: .78rem;
+  font-weight: 600;
+  text-decoration: none !important;
+}}
+
 /* ---------------------------------------------------------------- footer */
 #kx-footer {{
   margin-top: 22px !important;
@@ -1491,6 +2115,29 @@ CSS = f"""
   .kx-panel, .kx-panel-out {{ flex: 1 1 100% !important; min-width: 100% !important; }}
 }}
 
+/* The showcase blocks, which are laid out by their own grids rather than by
+   Gradio rows and so need their own steps. The arrows turn to point down as
+   the pairs they sit between stack. */
+@media (max-width: 900px) {{
+  .kx-split {{ grid-template-columns: 1fr; }}
+  .kx-split-reverse > :first-child {{ order: 0; }}
+  .kx-fan, .kx-compare {{ grid-template-columns: 1fr; }}
+  .kx-fan .kx-arrow, .kx-compare .kx-arrow {{
+    transform: rotate(90deg);
+    justify-self: center;
+  }}
+  .kx-collage {{ columns: 2 150px; }}
+}}
+
+@media (max-width: 620px) {{
+  .kx-feat-head {{ grid-template-columns: 1fr; }}
+  .kx-feat-no {{ display: none; }}
+  .kx-feat-head h3, .kx-feat-body {{ grid-column: 1; }}
+  .kx-cols-3, .kx-cols-4, .kx-cols-5 {{ grid-template-columns: repeat(2, 1fr); }}
+  .kx-stat {{ border-right: 0; border-bottom: 1px solid var(--kx-border-soft); }}
+  .kx-show {{ margin-top: 44px; }}
+}}
+
 @media (prefers-reduced-motion: reduce) {{
   .gradio-container * {{
     animation-duration: .001ms !important;
@@ -1498,6 +2145,9 @@ CSS = f"""
     transition-duration: .001ms !important;
   }}
   .gradio-container .gallery-item:hover {{ transform: none; }}
+  /* The collage's tilt is decoration, and it is the one thing here that
+     moves without being asked. */
+  .kx-collage .kx-shot {{ transform: none !important; }}
 }}
 """
 
@@ -1879,6 +2529,11 @@ def _cycle_price(plan, cycle, is_first: bool) -> str:
 # every card asks the same question — so the buttons all point here.
 _CONTACT_ID = "kx-contact"
 
+# The plan grid, so the showcase further down the page can link back up to
+# it. Named here rather than written twice because the two are in different
+# functions and a typo would be a link that silently goes nowhere.
+_PLANS_ID = "kx-plans"
+
 
 def _plan_cta(plan, is_current: bool) -> str:
     """The button at the foot of a card.
@@ -2041,11 +2696,357 @@ def pricing_html(catalogue, current_plan_id=None,
 <div class="kx-pricing">
   <div class="kx-cycle-scope">
     {_cycle_tabs(cycles)}
-    <div class="kx-plan-grid">{cards}</div>
+    <div class="kx-plan-grid" id="{_PLANS_ID}">{cards}</div>
   </div>
 </div>
 {_cycle_style(cycles)}
 {_contact_modal(getattr(catalogue, "contact_url", None))}
+"""
+
+
+# -------------------------------------------------------- feature showcase
+# The section under the plan cards: what each granted tab does, in prose and
+# pictures. showcase.py decides what is in it and where the files are; every
+# function here only turns that into markup, and is duck-typed on it for the
+# same reason pricing_html is — this module still imports nothing but gradio
+# and the stdlib.
+#
+# Two shapes recur and are worth stating once:
+#
+#   * `boxes` is threaded through every renderer. A picture is zoomable by
+#     being an <a> pointing at a dialog, and that dialog has to be emitted
+#     somewhere that is not inside the block — so each _shot appends its own
+#     to this list and showcase_html prints them at the end. The id is the
+#     list's length at the time, which is unique by construction.
+#   * a block is rendered by a function of the same name, and the two
+#     container blocks call back into _showcase_block, so nesting a compare
+#     inside a split needs nothing special.
+
+# What a placeholder shows in the middle. Only two, because the tile's job is
+# to name the file it wants, not to illustrate it.
+_PH_IMAGE = "🖼️"
+_PH_VIDEO = "🎬"
+
+
+def _media_tag(media) -> str:
+    """The <img>/<video> for a picture the bucket is expected to hold.
+
+    Lazy and async everywhere: the whole section sits in a panel that starts
+    hidden, so nothing is fetched until the customer opens Plans & pricing
+    and scrolls to it — which is what lets a page of forty screenshots cost
+    nothing to put in the DOM. Videos are muted and looping because they are
+    used as animated stills; a clip with sound that starts itself is not
+    what anyone wants from a page of screenshots.
+
+    `alt` is empty on purpose. Every picture is drawn over the placeholder
+    tile that names it, so a file that has not been uploaded yet already
+    says what it is — and alt text would print itself over that tile in the
+    one state it is there to handle.
+    """
+    url = _escape(media.url)
+    if media.is_video:
+        return (f'<video src="{url}" autoplay muted loop playsinline '
+                f'preload="none"></video>')
+    return f'<img src="{url}" alt="" loading="lazy" decoding="async">'
+
+
+def _placeholder(media) -> str:
+    """The tile that names the file a slot expects.
+
+    Rendered under *every* picture, not only the ones with no URL. The
+    pictures come from a bucket this app never talks to, so nothing here
+    knows whether one has actually been uploaded — and a tile underneath
+    costs one span, while the alternative is a broken-image icon on the
+    page a customer is being asked to buy from. When the picture loads it
+    covers this completely; when it does not, the reader sees a designed
+    tile and whoever is filling the bucket sees the exact path that is
+    missing.
+    """
+    glyph = _PH_VIDEO if media.is_video else _PH_IMAGE
+    return (f'<span class="kx-ph" style="--kx-h: {int(media.hue)}">'
+            f'<span class="kx-ph-glyph" aria-hidden="true">{glyph}</span>'
+            f'<span class="kx-ph-path">{_escape(media.path)}</span></span>')
+
+
+def _lightbox(box_id: str, media) -> str:
+    """The zoom view for one picture."""
+    if media.is_video:
+        inner = (f'<video src="{_escape(media.url)}" controls autoplay muted '
+                 f'loop playsinline preload="none"></video>')
+    else:
+        inner = (f'<img src="{_escape(media.url)}" loading="lazy" '
+                 f'alt="{_escape(media.caption or media.path)}">')
+    caption = media.caption or media.label
+    return f"""
+<div class="kx-lb" id="{box_id}">
+  <a class="kx-lb-scrim" href="#" aria-label="Close"></a>
+  <div class="kx-lb-card" role="dialog" aria-modal="true">
+    <a class="kx-lb-close" href="#">✕ Close</a>
+    {inner}
+    {f'<p class="kx-lb-cap">{_escape(caption)}</p>' if caption else ""}
+  </div>
+</div>"""
+
+
+def _shot(media, boxes: list, classes: str = "") -> str:
+    """One picture in its frame, zoomable if there is anything to zoom.
+
+    A missing one is a <figure> rather than an <a>: a placeholder has no
+    larger version, and a link that opened an empty dialog would be worse
+    than no link.
+    """
+    tag = "figure"
+    attrs = ""
+    shape = f' style="aspect-ratio: {media.ratio}"' if media.ratio else ""
+    frame = f"kx-shot {classes}".strip()
+    if media.ratio:
+        frame += " kx-shot-fixed"
+
+    # The tile always goes in first and the picture, if there is one, is
+    # laid over it — see _placeholder for why that is the default rather
+    # than the fallback.
+    inner = _placeholder(media)
+    if not media.missing:
+        inner += _media_tag(media)
+        box_id = f"kx-lb-{len(boxes)}"
+        boxes.append(_lightbox(box_id, media))
+        tag, attrs = "a", f' href="#{box_id}"'
+
+    label = ""
+    if media.label:
+        accent = " kx-tag-accent" if media.accent else ""
+        label = f'<span class="kx-tag{accent}">{_escape(media.label)}</span>'
+    caption = ""
+    if media.caption and not media.missing:
+        caption = f'<span class="kx-shot-cap">{_escape(media.caption)}</span>'
+
+    return (f'<{tag} class="{frame}"{attrs}{shape}>'
+            f"{label}{inner}{caption}</{tag}>")
+
+
+def _block_caption(block) -> str:
+    """The line under a block. The first sentence is emphasised."""
+    if not block.caption:
+        return ""
+    head, sep, tail = block.caption.partition(". ")
+    if sep and tail:
+        text = f"<b>{_escape(head)}.</b> {_escape(tail)}"
+    else:
+        text = _escape(block.caption)
+    return f'<p class="kx-block-cap">{text}</p>'
+
+
+def _columns(count: int) -> str:
+    """The grid class for a row of `count` pictures, within reason."""
+    return f"kx-cols-{min(max(count, 2), 5)}"
+
+
+def _hero(block, boxes: list) -> str:
+    """One wide plate with the prompt sitting on it."""
+    media = block.items[0]
+    text = ""
+    if block.title or block.note:
+        title = f"<b>{_escape(block.title)}</b>" if block.title else ""
+        note = f"<span>{_escape(block.note)}</span>" if block.note else ""
+        text = f'<div class="kx-hero-text">{title}{note}</div>'
+    return f'<div class="kx-hero">{_shot(media, boxes)}{text}</div>'
+
+
+def _shot_block(block, boxes: list) -> str:
+    return _shot(block.items[0], boxes)
+
+
+def _compare(block, boxes: list) -> str:
+    """Before → after, with the arrow that makes it read as a sequence."""
+    before, after = block.items[0], block.items[1]
+    return (f'<div class="kx-compare">{_shot(before, boxes)}'
+            f'<div class="kx-arrow" aria-hidden="true">→</div>'
+            f"{_shot(after, boxes)}</div>")
+
+
+def _fan(block, boxes: list) -> str:
+    """One source on the left, everything it turned into on the right."""
+    outputs = "".join(_shot(item, boxes) for item in block.items)
+    return f"""<div class="kx-fan">
+  <div class="kx-fan-src">{_shot(block.source, boxes)}</div>
+  <div class="kx-arrow" aria-hidden="true">→</div>
+  <div class="kx-fan-out {_columns(len(block.items))}">{outputs}</div>
+</div>"""
+
+
+def _row(block, boxes: list) -> str:
+    shots = "".join(_shot(item, boxes) for item in block.items)
+    return f'<div class="kx-row {_columns(len(block.items))}">{shots}</div>'
+
+
+def _strip(block, boxes: list) -> str:
+    shots = "".join(_shot(item, boxes) for item in block.items)
+    note = (f'<p class="kx-strip-note">↔ scroll · {_escape(block.note)}</p>'
+            if block.note else "")
+    return f'<div class="kx-strip">{shots}</div>{note}'
+
+
+def _collage(block, boxes: list) -> str:
+    shots = "".join(_shot(item, boxes) for item in block.items)
+    flat = " kx-collage-flat" if block.flat else ""
+    return f'<div class="kx-collage{flat}">{shots}</div>'
+
+
+def _split(block, boxes: list) -> str:
+    """Prose beside a block instead of above it."""
+    title = f"<h4>{_escape(block.title)}</h4>" if block.title else ""
+    body = f"<p>{_escape(block.body)}</p>" if block.body else ""
+    reverse = " kx-split-reverse" if block.reverse else ""
+    inner = "".join(_showcase_block(item, boxes) for item in block.blocks)
+    return (f'<div class="kx-split{reverse}"><div>{title}{body}</div>'
+            f"<div>{inner}</div></div>")
+
+
+def _pair(block, boxes: list) -> str:
+    """Two blocks side by side, each keeping its own caption."""
+    inner = "".join(f"<div>{_showcase_block(item, boxes)}</div>"
+                    for item in block.blocks)
+    return f'<div class="kx-pair">{inner}</div>'
+
+
+_BLOCKS = {
+    "hero": _hero,
+    "shot": _shot_block,
+    "compare": _compare,
+    "fan": _fan,
+    "row": _row,
+    "strip": _strip,
+    "collage": _collage,
+    "split": _split,
+    "pair": _pair,
+}
+
+
+def _showcase_block(block, boxes: list) -> str:
+    """One block of any kind, plus its caption.
+
+    An unknown type renders as nothing. showcase.py already refuses to build
+    one, so this is the second half of the same rule rather than a check that
+    is expected to fire.
+    """
+    render = _BLOCKS.get(block.type)
+    if render is None:
+        return ""
+    body = render(block, boxes)
+    if block.type in ("split", "pair"):
+        # Their captions belong to the blocks they carry, which have already
+        # printed them.
+        return f'<div class="kx-block">{body}</div>'
+    return f'<div class="kx-block">{body}{_block_caption(block)}</div>'
+
+
+def _showcase_section(section, number: int, boxes: list) -> str:
+    """One feature: what it is called, what it does, what it produces."""
+    if section.locked:
+        chip = '<span class="kx-chip-off">🔓 Not in your plan</span>'
+        # Points at the plan grid this page opens with rather than at the
+        # contact dialog: the next question after "I want this" is "which
+        # tier has it", and that is answered up there.
+        upgrade = f"""
+  <div class="kx-feat-up">
+    <span>Not included on your current plan — the plans above show which
+          one adds it.</span>
+    <a href="#{_PLANS_ID}">See the plans ↑</a>
+  </div>"""
+    else:
+        chip = '<span class="kx-chip-on">✓ In your plan</span>'
+        upgrade = ""
+    body = "".join(f"<p>{_escape(para)}</p>" for para in section.body)
+    highlights = ""
+    if section.highlights:
+        chips = "".join(f"<span>{_escape(item)}</span>"
+                        for item in section.highlights)
+        highlights = f'<div class="kx-hl">{chips}</div>'
+    blocks = "".join(_showcase_block(block, boxes) for block in section.blocks)
+
+    return f"""
+<article class="kx-feat" id="kx-feat-{_escape(section.key)}">
+  <header class="kx-feat-head">
+    <div class="kx-feat-no" aria-hidden="true">{number:02d}</div>
+    <div class="kx-feat-eyebrow">
+      <span class="kx-feat-tab">{_escape(section.label)}</span>
+      {chip}
+    </div>
+    <h3>{_escape(section.headline)}</h3>
+    <div class="kx-feat-body">{body}{highlights}</div>
+  </header>
+  {blocks}{upgrade}
+</article>"""
+
+
+def showcase_html(showcase) -> str:
+    """The whole section under the plan cards, or "" if there is none.
+
+    `showcase` is a showcase.Showcase, or None on a build whose assets were
+    not bundled — in which case the pricing page is exactly what it was
+    before this section existed, which is the right way for a decorative
+    panel to fail.
+    """
+    if showcase is None or not showcase.sections:
+        return ""
+
+    boxes: list = []
+    sections = "".join(
+        _showcase_section(section, index + 1, boxes)
+        for index, section in enumerate(showcase.sections)
+    )
+
+    title = _escape(showcase.title)
+    if showcase.title_accent:
+        title = f"{title} <em>{_escape(showcase.title_accent)}</em>"
+    intro = "".join(f"<p>{_escape(para)}</p>" for para in showcase.body)
+
+    stats = ""
+    if showcase.stats:
+        cells = "".join(
+            f'<div class="kx-stat"><b>{_escape(stat.value)}</b>'
+            f"<span>{_escape(stat.label)}</span></div>"
+            for stat in showcase.stats
+        )
+        stats = f'<div class="kx-stats">{cells}</div>'
+
+    # One chip per section, in the order the tabs are in. Only worth the
+    # space once there are enough sections to scroll past.
+    jump = ""
+    if len(showcase.sections) > 2:
+        links = "".join(
+            f'<a href="#kx-feat-{_escape(section.key)}">'
+            f"{_escape(section.label)}</a>"
+            for section in showcase.sections
+        )
+        jump = f'<nav class="kx-jump">{links}</nav>'
+
+    cta = ""
+    if showcase.cta_title:
+        body = (f"<p>{_escape(showcase.cta_body)}</p>"
+                if showcase.cta_body else "")
+        # Points at the same dialog the plan cards' buttons open, which is
+        # rendered once by pricing_html further up the page.
+        cta = f"""
+<div class="kx-show-cta">
+  <h3>{_escape(showcase.cta_title)}</h3>
+  {body}
+  <a class="kx-plan-btn kx-plan-btn-primary" href="#{_CONTACT_ID}">Talk to us</a>
+</div>"""
+
+    return f"""
+<section class="kx-pricing kx-show">
+  <div class="kx-show-seam"><span>{_escape(showcase.eyebrow)}</span></div>
+  <div class="kx-show-intro">
+    <h2>{title}</h2>
+    {intro}
+    {stats}
+  </div>
+  {jump}
+  {sections}
+  {cta}
+</section>
+{"".join(boxes)}
 """
 
 

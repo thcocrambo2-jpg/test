@@ -484,6 +484,18 @@ echo ">>> Compiling (first build is slow — it compiles gradio's tree too) ..."
     --include-data-dir=deps=deps \
     --include-data-files=requirements.txt=requirements.txt \
     \
+    `# The pricing page's feature showcase — the copy only. A few KB of` \
+    `# JSON, read at runtime from config.ASSETS_DIR (= PROJECT_DIR/assets,` \
+    `# i.e. inside the extraction dir). Leaving it out is not fatal: the page` \
+    `# falls back to the plan cards alone and logs why.` \
+    `#` \
+    `# The screenshots it names are deliberately NOT bundled. They are served` \
+    `# from the public R2 bucket in KREA2_SHOWCASE_URL and fetched by the` \
+    `# customer's browser, which keeps a page of forty pictures out of a` \
+    `# onefile binary that is re-extracted on every launch — and means a new` \
+    `# screenshot is an upload rather than a release.` \
+    --include-data-files=assets/showcase/showcase.json=assets/showcase/showcase.json \
+    \
     `# mirror.py looks for these at PROJECT_DIR first, then PROJECT_DIR/scripts` \
     `# — they live under scripts/ in a checkout so Nuitka never sweeps the` \
     `# operator tooling in, and are flattened to the root here. Without them` \

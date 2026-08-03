@@ -74,6 +74,7 @@ import features
 import licensing
 import plans
 import prompts
+import showcase
 import theme
 from client import ComfyUIError, client, model_signature, wan_client
 from comfy import GPU_COUNT, ensure_alive as comfy_ensure_alive
@@ -3383,6 +3384,17 @@ with gr.Blocks(title="Krea 2 on RunPod") as ui:
         # Empty until opened — _open_pricing fills it, so nothing here
         # touches the licence server while the pod is still booting.
         pricing_body = gr.HTML(container=False, padding=False)
+        # Under the plan cards: what each granted tab actually does, in
+        # prose and screenshots. Filled at build time rather than on open,
+        # and deliberately a component of its own:
+        #
+        #   * it reads nothing but bundled files, so there is no reason to
+        #     wait for the panel to be opened — and no reason for Refresh,
+        #     which refetches the price list, to rebuild it
+        #   * the whole panel starts hidden and every picture in here is
+        #     lazy, so sitting in the DOM from page load costs no requests
+        gr.HTML(theme.showcase_html(showcase.showcase()),
+                container=False, padding=False)
 
     _pricing_views = [pricing_open_btn, main_tabs, footer, pricing_view]
     pricing_open_btn.click(fn=_open_pricing,
@@ -3449,6 +3461,9 @@ def launch_ui() -> None:
         show_error=True, ssr_mode=False, prevent_thread_lock=True,
         # OUTPUT_DIR is outside the cwd, so Gradio needs it whitelisted to
         # serve gallery images (on Kaggle the cwd contained the output dir).
+        # Nothing else needs whitelisting: the pricing page's showcase
+        # images are loaded by the browser straight from the R2 bucket, so
+        # they never pass through this app at all.
         allowed_paths=[str(OUTPUT_DIR)],
         **theme.launch_kwargs(),
     )
