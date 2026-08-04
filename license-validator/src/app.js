@@ -969,6 +969,8 @@ app.get(
           is_admin: license.is_admin === true,
           expires_at: license.expires_at || null,
           plan_id: entitlement.plan_id ?? license.plan_id ?? null,
+          build_sha: license.build_sha || null,
+          build_channel: license.build_channel || null,
           features: entitlement.features,
           features_source: entitlement.source,
           plan_error: planError,

@@ -1402,8 +1402,15 @@ CSS = f"""
 }}
 
 /* Four figures in one bordered strip rather than four cards: boxed stats
-   this close to the plan grid read as more pricing. */
-.kx-stats {{
+   this close to the plan grid read as more pricing.
+
+   Named kx-show-stats, not kx-stats: that shorter name is already the
+   header's and the footer's pill row (see .kx-stats far above), and a
+   second unscoped rule for it turned both of those into a bordered grid
+   with `margin: ... auto`, which centred the licence pill in the app bar
+   instead of leaving it at the right edge. Every other piece of this
+   section carries the kx-show- prefix for exactly this reason. */
+.kx-show-stats {{
   display: grid;
   grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
   margin: 30px auto 0;
@@ -1412,19 +1419,19 @@ CSS = f"""
   background: var(--kx-surface);
   overflow: hidden;
 }}
-.kx-stat {{ padding: 18px 14px; border-right: 1px solid var(--kx-border-soft); }}
-.kx-stat:last-child {{ border-right: 0; }}
+.kx-show-stat {{ padding: 18px 14px; border-right: 1px solid var(--kx-border-soft); }}
+.kx-show-stat:last-child {{ border-right: 0; }}
 /* Solid, for the reason given at .kx-show-intro h2 em — these numbers had
    the same clipped-gradient fill and so the same way of vanishing. */
-.kx-stat b {{
+.kx-show-stat b {{
   display: block;
   font-size: 1.5rem;
   font-weight: 800;
   letter-spacing: -.02em;
   color: var(--kx-accent);
 }}
-.dark .kx-stat b {{ color: #b9bcfb; }}
-.kx-stat span {{
+.dark .kx-show-stat b {{ color: #b9bcfb; }}
+.kx-show-stat span {{
   display: block;
   font-size: .72rem;
   line-height: 1.45;
@@ -2134,7 +2141,7 @@ a.kx-shot {{ cursor: zoom-in; text-decoration: none !important; }}
   .kx-feat-no {{ display: none; }}
   .kx-feat-head h3, .kx-feat-body {{ grid-column: 1; }}
   .kx-cols-3, .kx-cols-4, .kx-cols-5 {{ grid-template-columns: repeat(2, 1fr); }}
-  .kx-stat {{ border-right: 0; border-bottom: 1px solid var(--kx-border-soft); }}
+  .kx-show-stat {{ border-right: 0; border-bottom: 1px solid var(--kx-border-soft); }}
   .kx-show {{ margin-top: 44px; }}
 }}
 
@@ -3004,11 +3011,11 @@ def showcase_html(showcase) -> str:
     stats = ""
     if showcase.stats:
         cells = "".join(
-            f'<div class="kx-stat"><b>{_escape(stat.value)}</b>'
+            f'<div class="kx-show-stat"><b>{_escape(stat.value)}</b>'
             f"<span>{_escape(stat.label)}</span></div>"
             for stat in showcase.stats
         )
-        stats = f'<div class="kx-stats">{cells}</div>'
+        stats = f'<div class="kx-show-stats">{cells}</div>'
 
     # One chip per section, in the order the tabs are in. Only worth the
     # space once there are enough sections to scroll past.
