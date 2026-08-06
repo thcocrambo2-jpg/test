@@ -334,7 +334,7 @@ THEME = _theme()
 # --------------------------------------------------------------------------
 CSS = f"""
 /* ======================================================================
-   Krea 2 — application chrome
+   Ember — application chrome
    Custom hooks are the kx-* classes, applied with elem_classes/elem_id in
    ui.py. Rules that depend on Gradio's own class names are collected in
    the "GRADIO INTERNALS" section at the bottom.
@@ -487,6 +487,15 @@ CSS = f"""
   color: #fff;
   background: linear-gradient(135deg, var(--kx-accent), var(--kx-accent-alt));
   box-shadow: 0 6px 18px -6px {ACCENT}b3, inset 0 1px 0 rgba(255, 255, 255, .28);
+}}
+
+/* The mark inside the tile. Height rather than width, because the flame is
+   much taller than it is wide and it is the height that has to sit inside
+   the tile's padding; `fill: currentColor` picks up the white above. */
+#kx-header .kx-logo svg {{
+  display: block;
+  width: auto;
+  height: 22px;
 }}
 
 #kx-header .kx-name {{
@@ -2164,6 +2173,12 @@ a.kx-shot {{ cursor: zoom-in; text-decoration: none !important; }}
 # --------------------------------------------------------------------------
 # Inline SVG data URI rather than launch(favicon_path=...): a path would be
 # one more data file for the Nuitka build to carry.
+#
+# The flame is the Ember mark (assets/branding/ember-logo.svg) with its
+# outline decimated — at the 16-32px a favicon is actually drawn at, the
+# dropped detail is a fraction of a pixel, and the full curve would be five
+# times this much text sitting in every page's <head>. The full-fidelity
+# mark lives in the asset file; use that one anywhere it renders large.
 _FAVICON = (
     "data:image/svg+xml,"
     "%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'%3E"
@@ -2171,13 +2186,31 @@ _FAVICON = (
     "%3Cstop offset='0' stop-color='%236366f1'/%3E"
     "%3Cstop offset='1' stop-color='%238b5cf6'/%3E%3C/linearGradient%3E%3C/defs%3E"
     "%3Crect width='100' height='100' rx='24' fill='url(%23g)'/%3E"
-    "%3Cpath d='M56 12 26 58h20l-6 30 32-48H50z' fill='white'/%3E%3C/svg%3E"
+    "%3Cpath fill='%23fff' d='"
+    "M51.1 18.7L47.5 22.2L46.7 23.4L45.5 25.8L44.8 27.6L44.8 28L44.6 "
+    "28.1L44.3 31.1L44.4 33.4L44.8 35.7L45.7 38.8L46.8 40.8L49.6 "
+    "44.7L53.4 49.1L54 50.1L50.6 47.6L46.7 43.8L44.2 40.9L43.4 "
+    "39.6L42.3 37.3L41.4 33.1L40.3 34.1L39.1 35.6L37.4 39.4L37 "
+    "42.2L37.2 44.4L37.8 47L39.2 50L40.3 51.7L42.4 54.3L42.5 54.7L43.2 "
+    "55.3L43.6 56L43.8 56.1L45.3 58L44.6 58.1L42 57L39.8 55.5L38 "
+    "53.7L36.7 52.1L36.8 52L35.9 50.5L35.1 48.4L34.5 45.4L34.3 "
+    "45.2L33.6 45.8L30.8 49.2L30.3 50.7L30.1 50.7L29.6 51.6L28.4 "
+    "55.9L27.9 59.5L28.1 63.6L28.6 65.8L29.3 68L30.1 69.6L31.3 "
+    "71.8L34.4 75.7L38.2 78.6L40.6 79.9L42.9 80.9L48 82L52.8 81.8L56.9 "
+    "80.9L61.4 78.7L64.7 76.3L66.3 74.7L68.2 72.4L70 69.4L71.3 "
+    "65.9L72.1 61.2L72.1 57.7L71.7 54.8L70.9 51.8L69.7 49L67.2 44.8L63 "
+    "39.9L62.8 39.5L62.1 38.9L59.3 35.4L59 35.3L58.6 34.5L56.5 32L54.6 "
+    "29.3L53.3 26.7L52.4 24L52.1 21.7L52.1 18L51.1 18.7Z"
+    "M43.4 71.6L44.7 72.4L45.8 73.4L46.8 74.6L47.7 76.2L48.4 78.7L48.4 "
+    "80.7L48.1 81.7L48 81.5L47.1 81L45.5 79.4L43.9 77L43.1 74.8L42.7 "
+    "72.3L42.7 71.3L43.4 71.6Z"
+    "'/%3E%3C/svg%3E"
 )
 
 HEAD = f"""
 <link rel="icon" type="image/svg+xml" href="{_FAVICON}">
 <meta name="color-scheme" content="light dark">
-<meta name="description" content="Krea 2 — ComfyUI generation suite on RunPod">
+<meta name="description" content="Ember — ComfyUI generation suite on RunPod">
 """
 
 
@@ -2281,6 +2314,37 @@ def _expiry_pill(expires_at) -> str:
             f'{left}">Expires {when}</span>')
 
 
+# The Ember flame, drawn at whatever size its container gives it and in
+# whatever colour the container sets (see the .kx-logo svg rule). Same
+# decimated outline as _FAVICON and for the same reason — it renders at
+# 22px here. assets/branding/ember-logo.svg holds the full-fidelity curve.
+_MARK = (
+    "<svg viewBox='0 0 396 572' xmlns='http://www.w3.org/2000/svg' "
+    "aria-hidden='true' focusable='false'><path fill='currentColor' d='"
+    "M208 5.9L175.6 37.8L168.5 48.3L157.7 69.4L151.4 86L151.4 "
+    "89.5L149.9 90.4L147.1 116.9L147.6 137.5L151.1 158.5L159.8 "
+    "185.7L169.8 203.3L194.8 238.1L228.2 277.7L233.6 286.8L202.9 "
+    "264.8L168.5 230.2L146.4 205L138.6 192.9L129 172.2L121.2 "
+    "135.1L110.9 144.1L100.6 157.3L85.4 191.5L82.2 216.3L83.3 "
+    "236.2L89.1 258.6L101.1 285.7L111.2 300.8L130 324.1L130.8 "
+    "327.4L137 333.2L140.9 339.8L142.7 340L155.6 357.3L149.8 "
+    "357.9L126.8 348.6L106.8 335L90.5 318.8L78.8 304.3L79.6 "
+    "303.7L71.7 290L64.5 271.5L59.7 244.4L57.5 243.3L51.8 248L26.7 "
+    "279.1L21.5 291.7L19.9 292.4L16.1 300.2L4.9 338.4L0.2 370.9L2.6 "
+    "407.2L6.9 427.3L13.2 446.2L19.8 461.4L31 480.8L58.9 515.9L92.9 "
+    "541.4L113.7 553.1L134.6 561.7L180.2 571.6L223.3 570.2L259.6 "
+    "561.7L299.7 542.4L329 520.6L343.7 506.7L360.3 486.4L376.5 "
+    "459.5L388.5 427.5L395.4 385.7L395.6 354.7L391.6 329.1L384.4 "
+    "301.8L373.8 276.9L351.9 239.4L314.1 195.7L312.5 192.2L305.9 "
+    "186.7L281 155.6L278.8 154.6L274.5 147.2L255.8 125.4L239 "
+    "100.5L227.2 77.5L219.4 54L216.7 32.8L216.8 0.3L208 5.9Z"
+    "M139 478.6L150.8 485.8L160.7 494.6L169.3 505.6L177.1 519.9L183.3 "
+    "542.6L183.4 559.9L181.4 569.3L180.1 567.1L171.8 562.4L157.6 "
+    "548.8L143.4 526.6L136.4 507.4L132.9 485.4L132.9 476L139 478.6Z"
+    "'/></svg>"
+)
+
+
 def header_html(plan_name=None, expires_at=None) -> str:
     """The application bar: the brand, and the state of this license.
 
@@ -2304,9 +2368,9 @@ def header_html(plan_name=None, expires_at=None) -> str:
     return f"""
 <div class="kx-bar">
   <div class="kx-brand">
-    <div class="kx-logo">⚡</div>
+    <div class="kx-logo">{_MARK}</div>
     <div>
-      <h1 class="kx-name">Krea 2</h1>
+      <h1 class="kx-name">Ember</h1>
       <p class="kx-tagline">ComfyUI generation suite · RunPod</p>
     </div>
   </div>

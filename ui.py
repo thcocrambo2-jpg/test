@@ -3300,7 +3300,7 @@ TAB_ORDER = (
 )
 
 
-with gr.Blocks(title="Krea 2 on RunPod") as ui:
+with gr.Blocks(title="Ember") as ui:
     # The application bar: brand and licence on the left, the way into the
     # pricing panel on the right. A Row rather than one gr.HTML because that
     # way in has to be a real Gradio button — the panel is this same page
