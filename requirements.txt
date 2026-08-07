@@ -15,3 +15,9 @@ huggingface_hub
 # the Nuitka bundle and cannot see a pip-installed copy on the pod.
 hf_xet
 safetensors
+# Mask compositing and input downscaling in ui.py, and the gallery
+# thumbnails in gallery_index.py. Listed explicitly because the app imports
+# it unconditionally at startup: it happens to arrive with ComfyUI's own
+# requirements today, which makes a hard dependency look like a transitive
+# one right up until a ComfyUI release drops it.
+Pillow>=10

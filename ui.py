@@ -71,12 +71,13 @@ import requests
 from PIL import Image, ImageChops, ImageFilter
 
 import features
+import gallery_index
 import licensing
 import plans
 import prompts
 import showcase
 import theme
-from client import ComfyUIError, client, model_signature, wan_client
+from client import ComfyUIError, client, model_signature, on_output, wan_client
 from comfy import GPU_COUNT, ensure_alive as comfy_ensure_alive
 from config import (
     COMFY_LOG,
@@ -1306,12 +1307,17 @@ def refresh_lora_choices():
     return [gr.Dropdown(choices=choices) for _ in range(MAX_LORA_SLOTS)]
 
 
+# Every finished prompt tells the index what it wrote, which both keeps the
+# listing correct without a rescan and is what queues the new files'
+# thumbnails. Registered against the client rather than the three separate
+# places that consume its "done" event (_run_jobs, generate_faceswap,
+# _run_wan_jobs), so a fourth executor gets this for free.
+on_output(gallery_index.note_new)
+
+
 def list_output_images() -> list[str]:
     """Every generated image and video in OUTPUT_DIR, newest first."""
-    media = [p for pattern in ("*.png", "*.mp4", "*.webm")
-             for p in OUTPUT_DIR.rglob(pattern)]
-    return [str(p) for p in sorted(media, key=lambda p: p.stat().st_mtime,
-                                   reverse=True)]
+    return gallery_index.list_media()
 
 
 RECENT_IMAGES_LIMIT = 20
@@ -1319,47 +1325,116 @@ RECENT_IMAGES_LIMIT = 20
 
 def list_recent_images(limit: int = RECENT_IMAGES_LIMIT) -> list[str]:
     """The newest generated still images (for the pick-from-existing pickers)."""
-    pngs = sorted(OUTPUT_DIR.rglob("*.png"),
-                  key=lambda p: p.stat().st_mtime, reverse=True)
-    return [str(p) for p in pngs[:limit]]
+    return gallery_index.list_images(limit)
 
 
-def _picked_recent(evt: gr.SelectData):
-    """Gallery click → file path for a gr.Image input (no-op if unreadable)."""
-    value = evt.value
-    path = None
-    if isinstance(value, dict):
-        media = value.get("image") or {}
-        path = media.get("path") or media.get("url")
-    elif isinstance(value, str):
-        path = value
-    return path if path else gr.Image()
+def _picked_recent(paths, evt: gr.SelectData):
+    """Picker click → the ORIGINAL file behind the clicked tile.
+
+    Resolved by *index* against the state that produced the grid, never by
+    reading a path back out of the clicked tile. The grid holds 512px
+    thumbnails, so trusting what was clicked would quietly feed a thumbnail
+    into an edit/face-swap/video job — no error, just a ruined output.
+    """
+    idx = evt.index
+    if not isinstance(idx, int) or not 0 <= idx < len(paths or []):
+        return gr.Image()          # stale click, e.g. right after a refresh
+    return paths[idx]
+
+
+def _recent_page():
+    """The picker's tiles, plus the originals they stand for."""
+    paths = list_recent_images()
+    return paths, gallery_index.thumbs_for(paths)
 
 
 def _recent_picker(target_image):
     """A collapsed 'use a previous generation' gallery under an image input.
 
     Must be called inside a gr.Blocks context, after `target_image` exists.
-    Clicking a thumbnail loads that file into `target_image`; the refresh
-    button re-scans OUTPUT_DIR for the newest images.
+    Clicking a thumbnail loads the full-resolution original into
+    `target_image`; the refresh button re-scans OUTPUT_DIR.
+
+    Filled when the accordion is opened, never at build time. This helper
+    is instantiated once per image-input tab, so populating it eagerly cost
+    a directory scan *and* a screenful of full-size PNGs per picker on every
+    page load — for a panel most sessions never open.
     """
     with gr.Accordion(
         f"📂 Use a previous generation (last {RECENT_IMAGES_LIMIT} images)",
         open=False,
-    ):
+    ) as accordion:
+        # The originals behind the tiles, in tile order — see _picked_recent.
+        picker_paths = gr.State([])
         picker = gr.Gallery(
-            value=list_recent_images(), label="Click an image to use it",
+            value=None, label="Click an image to use it",
             columns=5, height=240, allow_preview=False,
+            # No download button: it would hand over the thumbnail rather
+            # than the image, with nothing to say so.
+            buttons=[],
         )
         refresh_btn = gr.Button("🔄 Refresh", size="sm")
-        refresh_btn.click(fn=list_recent_images, outputs=picker)
-        picker.select(fn=_picked_recent, outputs=target_image)
+        accordion.expand(fn=_recent_page, outputs=[picker_paths, picker])
+        refresh_btn.click(fn=_recent_page, outputs=[picker_paths, picker])
+        picker.select(fn=_picked_recent, inputs=[picker_paths],
+                      outputs=target_image)
+
+
+# How many tiles the Gallery tab shows at a time. A gr.Gallery renders every
+# item it is given at once, so this is what bounds the first paint on a pod
+# with a few hundred generations behind it.
+GALLERY_PAGE = 10
+
+
+def _gallery_view(paths, shown):
+    """The grid, the Load-more button and the count line, for a page depth."""
+    shown = max(0, min(int(shown or 0), len(paths)))
+    remaining = len(paths) - shown
+    return (
+        gr.Gallery(value=gallery_index.thumbs_for(paths[:shown])),
+        gr.Button(value=f"⬇️ Load {min(GALLERY_PAGE, remaining)} more",
+                  visible=remaining > 0),
+        f"{len(paths)} file(s) in `{OUTPUT_DIR}` — showing {shown}",
+    )
 
 
 def refresh_gallery():
-    """Re-scan OUTPUT_DIR for the Gallery tab."""
-    images = list_output_images()
-    return images, f"{len(images)} file(s) in `{OUTPUT_DIR}`"
+    """Tab opened, or Refresh clicked: re-scan and show the newest page.
+
+    Deliberately back to page one. The list is newest-first, so anything
+    generated since the last look is at the top — which is what someone
+    pressing Refresh is looking for.
+    """
+    paths = list_output_images()
+    return (paths, min(GALLERY_PAGE, len(paths)),
+            *_gallery_view(paths, GALLERY_PAGE))
+
+
+def _more_gallery(paths, shown):
+    """Load-more: show one more page of what the last scan found.
+
+    Pages out of the state rather than re-scanning, so paging back through
+    a long history cannot renumber the tiles under a click.
+    """
+    shown = min(len(paths), int(shown or 0) + GALLERY_PAGE)
+    return (shown, *_gallery_view(paths, shown))
+
+
+def _pick_gallery(paths, evt: gr.SelectData):
+    """Grid click → the full-resolution original behind the clicked tile.
+
+    This is the whole point of the tab: tiles are 512px WebP, and the
+    several-MB original is fetched only for the one image someone asked to
+    see. Resolved by index against the state that built the grid — see
+    _picked_recent for why the clicked tile's own path is not trustworthy.
+    """
+    idx = evt.index
+    if not isinstance(idx, int) or not 0 <= idx < len(paths or []):
+        return gr.Image(), gr.Video()      # stale click, e.g. after a refresh
+    path = paths[idx]
+    is_video = path.lower().endswith(gallery_index.VIDEO_EXT)
+    return (gr.Image(value=None if is_video else path, visible=not is_video),
+            gr.Video(value=path if is_video else None, visible=is_video))
 
 
 def zip_outputs():
@@ -1367,8 +1442,17 @@ def zip_outputs():
     images = list_output_images()
     if not images:
         return None, "No images to zip yet."
+    # A fresh name per zip, and the previous one deleted. OUTPUT_DIR is
+    # served static (see the set_static_paths call further down), which
+    # assumes a path's contents never change — reusing "all_outputs.zip"
+    # would let a browser hand the user the *previous* zip from its cache.
+    # The bare "all_outputs.zip" in the glob is the pre-timestamp name, so a
+    # pod that has been running since before this change loses its copy too
+    # rather than leaving a stale several-GB file on an ephemeral disk.
+    for stale in OUTPUT_DIR.glob("all_outputs*.zip"):
+        stale.unlink(missing_ok=True)
     # PNGs/MP4s are already compressed — store instead of deflating (faster).
-    zip_path = OUTPUT_DIR / "all_outputs.zip"
+    zip_path = OUTPUT_DIR / f"all_outputs_{time.strftime('%Y%m%d-%H%M%S')}.zip"
     with zipfile.ZipFile(zip_path, "w", zipfile.ZIP_STORED) as zf:
         for img in images:
             zf.write(img, Path(img).relative_to(OUTPUT_DIR))
@@ -3251,18 +3335,56 @@ def _tab_gallery(tab):
             "📦 Zip all for download", size="sm"
         )
     gallery_info = gr.Markdown(
-        f"{len(list_output_images())} file(s) in `{OUTPUT_DIR}`",
+        "🔄 Refresh to load the gallery.",
         elem_classes="kx-meta",
     )
+    # The originals, newest first, and how many of them the grid is
+    # currently showing. State rather than a recomputed scan, so a click
+    # cannot resolve against a different list than the one it was made on.
+    gallery_paths = gr.State([])
+    gallery_shown = gr.State(0)
     all_gallery = gr.Gallery(
         label="All generated images & videos (newest first)",
-        value=list_output_images(), columns=4, height=700,
+        # Filled when the tab is opened, never at build time: this used to
+        # scan OUTPUT_DIR twice while the Blocks was still being built, and
+        # then serve every full-size PNG in it to anyone who loaded the page.
+        value=None, columns=5, height=520,
+        # Clicking opens the original in the viewer below rather than
+        # Gradio's lightbox, which would only enlarge the thumbnail.
+        allow_preview=False,
+        object_fit="cover",
+        # Only fullscreen. The download buttons would hand over the 512px
+        # thumbnail — silently, with nothing to say it is not the image.
+        # Downloads come from the viewer below and the Zip button.
+        buttons=["fullscreen"],
+    )
+    gallery_more_btn = gr.Button(
+        f"⬇️ Load {GALLERY_PAGE} more", size="sm", visible=False
+    )
+    # One of these at a time, chosen by what was clicked — a video cannot
+    # be shown in a gr.Image, and the Gallery tab is the only place a Wan
+    # render can be watched again once its own tab has moved on.
+    gallery_image = gr.Image(
+        label="Selected image", visible=False, interactive=False,
+        buttons=["download", "fullscreen"],
+    )
+    gallery_video = gr.Video(
+        label="Selected video", visible=False, interactive=False,
     )
     gallery_zip_file = gr.File(
         label="Zip of all images", interactive=False
     )
-    gallery_refresh_btn.click(
-        fn=refresh_gallery, outputs=[all_gallery, gallery_info]
+    open_outputs = [gallery_paths, gallery_shown, all_gallery,
+                    gallery_more_btn, gallery_info]
+    tab.select(fn=refresh_gallery, outputs=open_outputs)
+    gallery_refresh_btn.click(fn=refresh_gallery, outputs=open_outputs)
+    gallery_more_btn.click(
+        fn=_more_gallery, inputs=[gallery_paths, gallery_shown],
+        outputs=[gallery_shown, all_gallery, gallery_more_btn, gallery_info],
+    )
+    all_gallery.select(
+        fn=_pick_gallery, inputs=[gallery_paths],
+        outputs=[gallery_image, gallery_video],
     )
     gallery_zip_btn.click(
         fn=zip_outputs, outputs=[gallery_zip_file, gallery_info]
@@ -3299,6 +3421,22 @@ TAB_ORDER = (
     (features.Key.JSON_BATCH, _tab_json_batch, None),
 )
 
+
+# Serve generated media straight from OUTPUT_DIR instead of copying it into
+# Gradio's cache. Without this, every filepath handed to a gr.Gallery is
+# sha256'd and copy2'd (processing_utils.move_files_to_cache) — so one gallery
+# refresh re-reads the whole output tree and doubles its footprint on a disk
+# that is already ephemeral. Marking the dir static short-circuits both.
+#
+# "Static" means "assumed not to change at a given path". Every file ComfyUI
+# writes has a fresh _00001_ counter, so that holds — the one exception is
+# zip_outputs(), which is why the zip it writes carries a timestamp.
+#
+# This has to run before any component with a filepath value is built, i.e.
+# before the Blocks below. It is process-wide, so scripts/dryrun.py inherits
+# it by importing this module. It grants no access allowed_paths (see
+# launch_ui) did not already grant.
+gr.set_static_paths([str(OUTPUT_DIR)])
 
 with gr.Blocks(title="Ember") as ui:
     # The application bar: brand and licence on the left, the way into the

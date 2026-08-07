@@ -2082,6 +2082,14 @@ a.kx-shot {{ cursor: zoom-in; text-decoration: none !important; }}
   transform: translateY(-2px);
   box-shadow: var(--kx-shadow-md);
 }}
+/* Clicking a tile now opens the full-size original below the grid rather
+   than Gradio's lightbox, so the tiles have to look clickable. */
+.gradio-container .gallery-item {{ cursor: pointer; }}
+/* Square tiles. The grid mixes portrait, landscape and (until video
+   posters exist) video, and object-fit: cover only crops within whatever
+   box it is given — without a fixed ratio a page of mixed shapes leaves
+   the rows ragged. */
+.gradio-container .grid-wrap .gallery-item {{ aspect-ratio: 1 / 1; }}
 
 /* Image / video / editor drop zones read as drop zones. */
 .gradio-container .image-container,

@@ -23,6 +23,32 @@ class ComfyUIError(RuntimeError):
     """A workflow was rejected or failed during execution."""
 
 
+# Called with the list of paths a finished prompt wrote. A registry rather
+# than a direct import because there are three separate consumers of the
+# "done" event upstream (the still, face-swap and video executors in ui.py)
+# and only one producer — and because bookkeeping about generated files is
+# not this module's business to know about.
+_output_hooks = []
+
+
+def on_output(fn) -> None:
+    """Register fn(paths) to run whenever a prompt finishes writing outputs."""
+    _output_hooks.append(fn)
+
+
+def _fire_output_hooks(paths) -> None:
+    """Run the registered hooks, swallowing anything they throw.
+
+    Bookkeeping must never turn a finished job into a failed one — by the
+    time this runs the images are already on disk.
+    """
+    for hook in _output_hooks:
+        try:
+            hook(paths)
+        except Exception as exc:
+            log.warning("Output hook %s failed: %s", hook, exc)
+
+
 # The loader inputs big enough to be worth unloading for: diffusion models
 # (13-35 GB) and text encoders (5-18 GB). Two deliberate omissions, both
 # because /free is all-or-nothing — it unloads *everything*, so anything
@@ -264,7 +290,9 @@ class ComfyClient:
         finally:
             if ws is not None:
                 ws.close()
-        yield {"type": "done", "images": self.output_images(prompt_id)}
+        paths = self.output_images(prompt_id)
+        _fire_output_hooks(paths)
+        yield {"type": "done", "images": paths}
 
 
 client = ComfyClient(COMFY_HOST, COMFY_PORT)
