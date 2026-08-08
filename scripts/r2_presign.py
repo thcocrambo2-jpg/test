@@ -56,24 +56,27 @@ def _uri_encode(value: str, keep_slash: bool = False) -> str:
     return urllib.parse.quote(value, safe="/" if keep_slash else "")
 
 
-def presign(method: str, key: str, expires: int, now: str | None = None) -> str:
-    missing = [
-        name
-        for name in (
-            "R2_ACCOUNT_ID",
-            "R2_ACCESS_KEY_ID",
-            "R2_SECRET_ACCESS_KEY",
-            "R2_BUILDS_BUCKET",
-        )
-        if not os.environ.get(name)
-    ]
+def presign(method: str, key: str, expires: int, now: str | None = None,
+            bucket: str | None = None) -> str:
+    """A presigned URL for one object.
+
+    `bucket` defaults to R2_BUILDS_BUCKET, which is what build.sh wants and
+    is the only caller that existed first. It is a parameter because the
+    builds bucket is not the only one: the showcase images live in their
+    own public bucket, and that uploader signs with this same credential
+    rather than growing a second copy of SigV4 (see r2_upload_showcase.py).
+    """
+    required = ["R2_ACCOUNT_ID", "R2_ACCESS_KEY_ID", "R2_SECRET_ACCESS_KEY"]
+    if bucket is None:
+        required.append("R2_BUILDS_BUCKET")
+    missing = [name for name in required if not os.environ.get(name)]
     if missing:
         raise SystemExit(f"r2_presign: unset: {', '.join(missing)}")
 
     account = os.environ["R2_ACCOUNT_ID"]
     access_key = os.environ["R2_ACCESS_KEY_ID"]
     secret = os.environ["R2_SECRET_ACCESS_KEY"]
-    bucket = os.environ["R2_BUILDS_BUCKET"]
+    bucket = bucket or os.environ["R2_BUILDS_BUCKET"]
 
     host = f"{account}.r2.cloudflarestorage.com"
     amz_date = now or time.strftime("%Y%m%dT%H%M%SZ", time.gmtime())
@@ -130,12 +133,15 @@ def main() -> int:
     parser.add_argument("--key", required=True, help="object key in the bucket")
     parser.add_argument("--method", default="PUT", choices=("GET", "PUT"))
     parser.add_argument("--expires", type=int, default=3600, help="seconds")
+    parser.add_argument("--bucket",
+                        help="bucket name (default: $R2_BUILDS_BUCKET)")
     # Only for checking this signer against the JS one, which cannot agree
     # on a signature unless both are handed the same timestamp.
     parser.add_argument("--date", help=argparse.SUPPRESS)
     args = parser.parse_args()
 
-    print(presign(args.method, args.key, args.expires, args.date))
+    print(presign(args.method, args.key, args.expires, args.date,
+                  bucket=args.bucket))
     return 0
 
 

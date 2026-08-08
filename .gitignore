@@ -21,3 +21,5 @@ venv/
 
 tmp
 .gradio
+
+commands.txt
