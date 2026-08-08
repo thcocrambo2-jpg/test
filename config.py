@@ -74,7 +74,17 @@ PROJECT_DIR = Path(__file__).resolve().parent
 # The *pictures* it names are not here. They live in the R2 bucket below,
 # which is what keeps a page full of screenshots out of the binary.
 ASSETS_DIR = PROJECT_DIR / "assets"
-BASE_DIR = Path(os.environ.get("KREA2_BASE_DIR", "/workspace/krea2"))
+# .resolve() is load-bearing, not tidiness: a relative KREA2_BASE_DIR
+# (KREA2_BASE_DIR=./tmp, natural on a dev box) would otherwise be resolved
+# by each process against its own cwd. ComfyUI runs with cwd=COMFY_DIR
+# (comfy.py) and is handed --output-directory as a string, so it would
+# write to <cwd>/tmp/ComfyUI/tmp/output while this process — the mkdir
+# below, the gallery scan, the "saved under ..." status line — all meant
+# <cwd>/tmp/output. Images land somewhere real and the app cannot find
+# them. Absolute here means every consumer reads the same path.
+BASE_DIR = Path(
+    os.environ.get("KREA2_BASE_DIR", "/workspace/krea2")
+).expanduser().resolve()
 TEMP_DIR = BASE_DIR     # ComfyUI install + model weights
 WORKING_DIR = BASE_DIR  # generated images + logs
 COMFY_DIR = TEMP_DIR / "ComfyUI"

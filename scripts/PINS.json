@@ -19,38 +19,18 @@
     "sha": "e651b7bef55a5376343dcb1c0edb79f0142c985e",
     "url": "https://github.com/comfyanonymous/ComfyUI.git"
   },
-  "ComfyUI-RBG-SmartSeedVariance": {
-    "sha": "e651b7bef55a5376343dcb1c0edb79f0142c985e",
-    "tarball": "ComfyUI-RBG-SmartSeedVariance-e651b7be.tar.gz",
-    "url": "https://github.com/RamonGuthrie/ComfyUI-RBG-SmartSeedVariance"
-  },
-  "ComfyUI-post-processing-nodes": {
-    "sha": "e651b7bef55a5376343dcb1c0edb79f0142c985e",
-    "tarball": "ComfyUI-post-processing-nodes-e651b7be.tar.gz",
-    "url": "https://github.com/EllangoK/ComfyUI-post-processing-nodes"
-  },
   "Gourieff/ReActor": {
     "kind": "hf-dataset",
     "sha": "218401e38fb00476b38f319c043b2f85d4db5b87"
-  },
-  "RES4LYF": {
-    "sha": "e651b7bef55a5376343dcb1c0edb79f0142c985e",
-    "tarball": "RES4LYF-e651b7be.tar.gz",
-    "url": "https://github.com/ClownsharkBatwing/RES4LYF"
   },
   "_note": "SHAs/revisions captured at mirror time. Feed these to bootstrap.py clones and hf_hub_download(revision=...). The mirror and the upstream fallback MUST resolve to the same revision.",
   "black-forest-labs/FLUX.2-klein-9b-fp8": {
     "kind": "hf",
     "sha": "902d9d510b51533e07729f19211414a3648b77d2"
   },
-  "comfyui-krea2edit": {
-    "sha": "86f886dac23013d88996e3a2e99093ba44d322fb",
-    "tarball": "comfyui-krea2edit-86f886da.tar.gz",
-    "url": "https://github.com/lbouaraba/comfyui-krea2edit"
-  },
   "conradlocke/krea2-identity-edit": {
     "kind": "hf",
-    "sha": "2686ea3601417448f9649f6e74ca7103d446da96"
+    "sha": "89e9e7a09ee2e5c9331e952063d79b1b8a703280"
   },
   "edicamargo/qwen_3_8b_fp8mixed_abliterated": {
     "kind": "hf",

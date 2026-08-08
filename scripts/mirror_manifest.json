@@ -191,6 +191,16 @@
     },
     {
       "repo": "loras",
+      "local": "loras/desi-realism-v1.safetensors",
+      "path_in_repo": "loras/desi-realism-v1.safetensors",
+      "source": {
+        "kind": "civitai",
+        "version": 3194454,
+        "subdir": "loras"
+      }
+    },
+    {
+      "repo": "loras",
       "local": "loras/elusarca-photo.safetensors",
       "path_in_repo": "loras/elusarca-photo.safetensors",
       "source": {

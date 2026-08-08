@@ -366,7 +366,9 @@ and Krea2 V2 tabs grow a `⭐ Publish this prompt to the library` checkbox
 above Generate, off by default, with an optional card title next to it.
 Tick it, press Generate, and that prompt goes live as an **⭐ official**
 card immediately — no review, because you are the reviewer. Untick it and
-nothing is stored at all.
+nothing is stored at all. The box unticks itself once the run finishes,
+clearing the title with it: publishing is a per-image decision, so it
+cannot stay armed into the next generation by accident.
 
 That split exists so your own testing does not fill the review queue you
 are the one working through, and so an official prompt is something chosen

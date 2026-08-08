@@ -24,11 +24,19 @@ are org-backed, built to serve that traffic, and in Flux 2's case carry a
 licence better left un-redistributed. What they need instead is a pinned
 revision, which this script records in scripts/PINS.json.
 
-Everything is idempotent and resumable:
+Everything is idempotent and resumable. The mirror repo, not the local
+disk, is what decides the work:
 
+  • already in the repo → nothing happens, whether or not the pod still
+    has a local copy. The mirror holding it is the entire goal, so a
+    fetch to reproduce a file it already has is pure transfer cost,
+  • in the repo at a *different* size → re-uploaded from disk,
+  • not in the repo, on disk → uploaded,
+  • not in the repo, not on disk → downloaded from its original source
+    (CivitAI / community HF repo / URL — never from the mirror), then
+    uploaded,
   • a file already on disk is not re-downloaded (the app's own fetchers
     key on the destination path),
-  • a file already in the mirror repo at the same size is not re-uploaded,
   • an interrupted run picks up where it stopped.
 """
 
@@ -77,10 +85,16 @@ UPLOAD_RETRIES = 4
 
 # Action labels — the checklist prints them, the summary filters on them.
 ACT_SKIP = "skip (in repo)"
+ACT_MIRRORED = "skip (in repo, not on disk)"
 ACT_UPLOAD = "UPLOAD"
 ACT_REUPLOAD = "RE-UPLOAD (size differs)"
 ACT_FETCH = "DOWNLOAD+UPLOAD"
 ACT_MISSING = "MISSING"
+
+# The two actions that mean "the mirror already holds this" — nothing to
+# download, nothing to upload. They differ only in whether the pod happens
+# to have a local copy, which is not something the mirror cares about.
+_ACT_DONE = (ACT_SKIP, ACT_MIRRORED)
 
 # config.py writes CivitAI entries in exactly two shapes, and a commented
 # line is the same text behind a "#". --audit scans the source so that a
@@ -162,6 +176,15 @@ class Item:
     @property
     def action(self) -> str:
         if not self.present:
+            # In the repo already, just not on this disk. Downloading it
+            # would cost a full transfer to arrive at a file the mirror
+            # holds byte-for-byte and would then decline to re-upload —
+            # the fetch is pure waste, and on a CivitAI LoRA it is a waste
+            # measured in gigabytes. This is the common case when the
+            # script is re-run on a fresh box rather than on the fully
+            # populated pod the workflow assumes.
+            if self.remote_size is not None:
+                return ACT_MIRRORED
             return ACT_FETCH if self.fetch else ACT_MISSING
         if self.remote_size == self.size:
             return ACT_SKIP
@@ -515,7 +538,8 @@ def print_checklist(repos: dict, items: list[Item]) -> None:
             name, blurb = repos[current]
             print(f"\n  {name}  —  {blurb}")
             print("  " + "─" * (width + 34))
-        mark = {ACT_SKIP: "✓", ACT_MISSING: "✗"}.get(it.action, "↑")
+        mark = {ACT_SKIP: "✓", ACT_MIRRORED: "✓",
+                ACT_MISSING: "✗"}.get(it.action, "↑")
         size = human(it.size) if it.present else "—"
         print(f"  {mark} {it.path_in_repo:<{width}}  {size:>10}  "
               f"{it.action}" + (f"   [{it.note}]" if it.note else ""))
@@ -625,10 +649,12 @@ def main() -> int:
     probe_remote(api, user, repos, items)
     print_checklist(repos, items)
 
-    to_fetch = [i for i in items if not i.present and i.fetch]
-    stranded = [i for i in items if not i.present and not i.fetch]
+    to_fetch = [i for i in items if i.action == ACT_FETCH]
+    stranded = [i for i in items if i.action == ACT_MISSING]
     to_upload = [i for i in items if i.action in (ACT_UPLOAD, ACT_REUPLOAD)]
-    print(f"\n  {len(items)} items · {len(to_fetch)} to download · "
+    already = [i for i in items if i.action in _ACT_DONE]
+    print(f"\n  {len(items)} items · {len(already)} already mirrored · "
+          f"{len(to_fetch)} to download · "
           f"{len(to_upload)} to upload "
           f"({human(sum(i.size for i in to_upload))}) · "
           f"{len(stranded)} missing with no fetcher")
@@ -689,7 +715,7 @@ def main() -> int:
         "uploaded": [i.path_in_repo for i in live if i not in failed],
         "failed": [i.path_in_repo for i in failed],
         "skipped_already_in_repo": [i.path_in_repo for i in items
-                                    if i.action == ACT_SKIP],
+                                    if i.action in _ACT_DONE],
         "missing_no_fetcher": [str(i.local) for i in stranded],
         "config_entries_not_in_manifest": [v for v, _ in missing],
         "bytes_uploaded": sum(i.size for i in live if i not in failed),
