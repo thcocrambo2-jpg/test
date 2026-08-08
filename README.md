@@ -20,6 +20,158 @@ when the UI is up (`>>> OPEN THE UI HERE: ...`). Press Ctrl-C to stop.
 The pod filesystem is treated as ephemeral — models, outputs and logs all
 live under the base directory and are lost when the pod is destroyed.
 
+## Running locally on Windows
+
+The app targets a pod, but it runs on a local Windows machine with an NVIDIA
+GPU. Three things differ from a pod, and the app handles all three:
+
+- **No PyTorch base image.** On a pod torch arrives with
+  `runpod/pytorch:1.0.2-cu1281-torch280-ubuntu2404`. Locally nothing supplies
+  it, so `bootstrap.ensure_torch()` installs the same versions on first run.
+- **`KREA2_BASE_DIR` has no useful default.** It falls back to the pod path
+  `/workspace/krea2`, which on Windows silently resolves to
+  `C:\workspace\krea2`. Set it.
+- **Symlinks need permission.** `link_model_dirs()` symlinks ComfyUI's model
+  folders. Turn on Developer Mode (Settings → System → For developers) or run
+  from an elevated shell.
+
+### 1. Environment
+
+```powershell
+conda create -n krea2 python=3.12 -y
+conda activate krea2
+```
+
+Python 3.12 because that is what Ubuntu 24.04 ships, so it is the version the
+pod is tested on. If `conda activate` does nothing, run `conda init powershell`
+once and reopen the terminal.
+
+`git` must be on PATH — ComfyUI is cloned, not vendored:
+
+```powershell
+git --version                       # if this fails:
+conda install -c conda-forge git -y
+```
+
+### 2. Configuration
+
+Pick a directory with **45+ GB free**, outside the repo (`dist/` is the Nuitka
+build output and is git-ignored, so a `git clean -xdf` would take your weights
+with it):
+
+```powershell
+$env:KREA2_BASE_DIR    = "C:\krea2"
+$env:KREA2_LICENSE_KEY = "<your key>"
+$env:KREA2_NODE_TAG    = "<your node tag>"
+$env:HF_TOKEN          = "<hf read token>"   # optional, avoids rate limits
+```
+
+Those last as long as the terminal. To persist one:
+
+```powershell
+[Environment]::SetEnvironmentVariable("KREA2_BASE_DIR", "C:\krea2", "User")
+```
+
+Never commit a file containing these — the license key and node tag are
+credentials.
+
+### 3. Run
+
+```powershell
+python app.py
+```
+
+Nothing else to install. The first run takes a while: it installs PyTorch if
+absent, clones ComfyUI and its requirements, downloads whatever weights the
+license's features need, starts ComfyUI, then serves the UI. Every step is
+idempotent, so an interrupted run resumes rather than restarting.
+
+How much it downloads depends entirely on the license — see Features. A
+`krea_t2i` + `gallery` licence pulls ~31 GB; adding `flux_t2i` or `wan_i2v`
+pulls tens of GB more.
+
+### PyTorch
+
+`ensure_torch()` runs before anything else installs packages, because
+ComfyUI's own `requirements.txt` lists `torch` unpinned — on a machine without
+one, that pip pass would take whatever PyPI defaults to.
+
+**Whatever is already installed wins.** The check is capability-based, not
+version-matching: torch imports, CUDA is available, this card's `sm_XX` is in
+the build's arch list, and a real matmul runs on the GPU. A pod on a different
+torch than the pins passes untouched. The pins are used only when torch is
+missing entirely.
+
+That last check matters on Blackwell cards (RTX 50xx, `sm_120`), which have no
+kernels before CUDA 12.8. A default PyPI wheel installs cleanly, imports
+cleanly, reports `cuda.is_available()` as `True`, and then fails at the first
+generation — so version strings are not trusted and a kernel is actually
+launched.
+
+If torch is present but unusable, the app **raises and names the fix** rather
+than replacing it: on a pod that torch is the tested base image. Only
+`torchvision`/`torchaudio` are auto-repaired, with `--no-deps` so torch cannot
+be moved.
+
+To use a different CUDA line, install it yourself before the first run and
+`ensure_torch()` will accept it:
+
+```powershell
+pip install torch==2.8.0 torchvision==0.23.0 torchaudio==2.8.0 --index-url https://download.pytorch.org/whl/cu128
+```
+
+Pin all three. They ship compiled extensions linked against each other's ABI,
+and `torchaudio`'s version tracks torch's exactly.
+
+### Checking it worked
+
+A healthy startup logs this line before ComfyUI starts:
+
+```
+PyTorch OK — torch 2.8.0+cu128 (CUDA 12.8) on NVIDIA GeForce RTX 5050 Laptop GPU [sm_120]
+```
+
+To check the GPU stack on its own:
+
+```powershell
+python -c "import torch, torchvision, torchaudio; print(torch.__version__, torch.version.cuda, torch.cuda.get_device_capability())"
+nvidia-smi
+```
+
+For UI work you do not need any of this. `scripts/dryrun.py` stubs out ComfyUI
+and needs no GPU, no license and no weights:
+
+```powershell
+python scripts/dryrun.py --features all
+```
+
+It cannot generate — it is for the interface only.
+
+### Hardware
+
+The models are sized for a pod, so a consumer card is the constraint:
+
+| | Needed |
+| --- | --- |
+| VRAM | The Krea 2 UNet alone is ~13 GB. Below that, ComfyUI's single-GPU path offloads the remainder to system RAM — it works, but expect minutes per image rather than seconds. |
+| System RAM | Whatever does not fit in VRAM streams from RAM every step. With 8 GB of VRAM, budget ~15 GB free; less means swapping. |
+| Disk | ~31 GB for `krea_t2i`, plus the ComfyUI checkout. |
+
+Close memory-hungry applications before generating. The download phase does
+not care, so the practical order is: start the download, free RAM before the
+first generation.
+
+### Troubleshooting
+
+| Symptom | Cause |
+| --- | --- |
+| `OSError: [WinError 127] The specified procedure could not be found` | `torchvision`/`torchaudio` compiled against a different torch. `ensure_torch()` repairs this automatically; it only surfaces if something installed a mismatch afterwards. |
+| `no kernel image is available for execution on the device` | torch has no kernels for this GPU. The startup check catches it and prints the install command. |
+| `IndexError: list index out of range` in `resolve_model` | A model registry in `config.py` was emptied. Trimming one to a single entry is fine; emptying it is not — several are indexed at `[0]` during import. |
+| `WinError 193` from `cloudflared` | The gradio.live tunnel did not answer and the fallback downloads a Linux binary. Everything already downloaded is cached, so a re-run skips straight past it. |
+| Exits within seconds, no downloads | `KREA2_LICENSE_KEY` / `KREA2_NODE_TAG` unset — the license seat is taken before any expensive work. |
+| Weights land somewhere unexpected | `KREA2_BASE_DIR` unset, so the pod default resolved to `C:\workspace\krea2`. |
+
 ## Environment variables (all optional)
 
 | Variable                   | Purpose                                                         |

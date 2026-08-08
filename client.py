@@ -36,6 +36,32 @@ def on_output(fn) -> None:
     _output_hooks.append(fn)
 
 
+def _rejection_detail(body: dict) -> str:
+    """Why ComfyUI refused a workflow, in one line.
+
+    Its top-level message for a rejected graph is always the same
+    "Prompt outputs failed validation", which is true and useless. What
+    actually went wrong is in `node_errors`, keyed by node id — usually a
+    "value not in list" naming a model file ComfyUI cannot see. Reporting
+    only the headline turns "the model folder symlink is stale" into a
+    mystery, so the per-node reasons are appended.
+    """
+    message = (body.get("error") or {}).get("message", "")
+    reasons = []
+    for node_id, node in (body.get("node_errors") or {}).items():
+        label = node.get("class_type") or f"node {node_id}"
+        for item in node.get("errors") or []:
+            text = item.get("message", "")
+            extra = item.get("details", "")
+            reasons.append(f"{label}: {text}{f' ({extra})' if extra else ''}")
+    if reasons:
+        # Deduplicated: one missing folder usually trips several nodes with
+        # the identical complaint.
+        seen = list(dict.fromkeys(reasons))
+        return f"{message} — " + "; ".join(seen[:4]) if message else "; ".join(seen[:4])
+    return message
+
+
 def _fire_output_hooks(paths) -> None:
     """Run the registered hooks, swallowing anything they throw.
 
@@ -103,7 +129,7 @@ class ComfyClient:
         except urllib.error.HTTPError as err:
             detail = err.read().decode(errors="replace")
             try:
-                detail = json.loads(detail).get("error", {}).get("message", detail)
+                detail = _rejection_detail(json.loads(detail)) or detail
             except Exception:
                 pass
             raise ComfyUIError(f"ComfyUI rejected the workflow: {detail}") from err

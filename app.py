@@ -68,6 +68,12 @@ def main() -> None:
         )
 
     # 3-4 · Clone ComfyUI (idempotent) and install all requirements.
+    # PyTorch first, and before install_comfyui specifically: ComfyUI's own
+    # requirements.txt lists `torch` unpinned, so on a machine without one
+    # that pip pass would pull whatever PyPI defaults to — which on a
+    # Blackwell card is a torch with no kernels for it. On a pod this is a
+    # no-op; the base image already satisfies it.
+    bootstrap.ensure_torch()
     bootstrap.install_comfyui()
     bootstrap.install_custom_nodes()
     bootstrap.install_v2_nodes()

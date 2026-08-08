@@ -7,6 +7,7 @@ Nothing is pinned or downgraded: current ComfyUI has no conflict with a
 standard PyTorch base image's torch / transformers / safetensors / requests.
 """
 
+import json
 import shutil
 import subprocess
 import sys
@@ -85,6 +86,250 @@ def run_cmd(cmd: list, cwd=None, desc: str | None = None) -> None:
         raise RuntimeError(
             f"Command failed ({desc or cmd[0]}), exit {result.returncode}:\n{tail}"
         )
+
+
+# ── PyTorch ───────────────────────────────────────────────────────────────────
+# On a pod, torch arrives with the base image and this whole section is a
+# no-op. Off a pod — a local Windows or Linux box with nothing but Python —
+# there is no base image, and something has to be it.
+#
+# These pins reproduce runpod/pytorch:1.0.2-cu1281-torch280-ubuntu2404, the
+# image the app is tested on. They are used ONLY when torch is absent
+# entirely: whatever is already installed always wins, because on a pod that
+# is the tested configuration and replacing it would be replacing the thing
+# this app is known to work on.
+#
+# cu128 rather than a default PyPI wheel because Blackwell cards (RTX 50xx,
+# compute capability sm_120) have no kernels before CUDA 12.8. A default
+# wheel installs cleanly, imports cleanly, reports cuda.is_available() as
+# True, and then fails at the first generation with "no kernel image is
+# available for execution on the device" — which is why _probe_torch runs a
+# real matmul rather than trusting version strings.
+TORCH_INDEX = "https://download.pytorch.org/whl/cu128"
+TORCH_STACK = ("torch==2.8.0", "torchvision==0.23.0", "torchaudio==2.8.0")
+
+# Written next to the ComfyUI checkout and passed to every later pip call.
+# ComfyUI's requirements.txt lists `torch` unpinned, so without this a
+# ComfyUI release that asks for a newer torch would upgrade it underneath a
+# working install and break the compiled extensions that link against it.
+TORCH_CONSTRAINTS = "torch-constraints.txt"
+
+# Probes the *runtime* interpreter, not this process: bootstrap never
+# imports torch itself, and a torch imported before an install would be a
+# stale module object afterwards. Isolating it in a subprocess also means a
+# hard CUDA fault takes out the probe rather than the app.
+_TORCH_PROBE = r"""
+import json
+out = {}
+try:
+    import torch
+    out["torch"] = torch.__version__
+    out["cuda"] = torch.version.cuda
+    out["cuda_available"] = bool(torch.cuda.is_available())
+    if out["cuda_available"]:
+        major, minor = torch.cuda.get_device_capability(0)
+        out["arch"] = "sm_%d%d" % (major, minor)
+        out["arch_list"] = list(torch.cuda.get_arch_list())
+        out["device"] = torch.cuda.get_device_name(0)
+        try:
+            a = torch.randn(256, 256, device="cuda", dtype=torch.float16)
+            (a @ a).sum().item()
+            torch.cuda.synchronize()
+            out["matmul"] = True
+        except Exception as exc:
+            out["matmul"] = False
+            out["matmul_error"] = "%s: %s" % (type(exc).__name__, exc)
+except ModuleNotFoundError:
+    out["missing"] = True
+except Exception as exc:
+    out["error"] = "%s: %s" % (type(exc).__name__, exc)
+for name in ("torchvision", "torchaudio"):
+    try:
+        out[name] = __import__(name).__version__
+    except Exception as exc:
+        out[name + "_error"] = "%s: %s" % (type(exc).__name__, exc)
+print(json.dumps(out))
+"""
+
+
+# The last probe result ensure_torch accepted. Only a cache: every probe
+# spins up a CUDA context to run its matmul, and the constraints file wants
+# the same answer ensure_torch already paid for.
+_torch_info: dict | None = None
+
+
+def _probe_torch() -> dict:
+    """What the runtime interpreter's torch stack actually is, and does."""
+    result = subprocess.run(
+        [runtime_python(), "-c", _TORCH_PROBE],
+        text=True, stdout=subprocess.PIPE, stderr=subprocess.DEVNULL,
+    )
+    try:
+        return json.loads(result.stdout.strip().splitlines()[-1])
+    except (ValueError, IndexError):
+        return {"error": "probe produced no output"}
+
+
+def _torch_index(info: dict) -> str:
+    """The wheel index matching the *installed* torch's CUDA build.
+
+    A repair has to come from the same CUDA line as the torch already on
+    the machine — pulling a cu128 companion onto a cu126 torch swaps one
+    ABI mismatch for another. Falls back to the pinned index when torch
+    reports no CUDA version to derive from.
+    """
+    cuda = (info.get("cuda") or "").strip()
+    if not cuda:
+        return TORCH_INDEX
+    return f"https://download.pytorch.org/whl/cu{cuda.replace('.', '')}"
+
+
+def _pip_install(args: list, desc: str) -> None:
+    run_cmd([runtime_python(), "-m", "pip", "install", "-q", *args], desc=desc)
+
+
+def torch_constraints_file() -> Path | None:
+    """Pin the installed torch stack so later pip passes cannot move it.
+
+    Written from what is actually installed rather than from TORCH_STACK,
+    so a pod running a different torch than these pins keeps its own.
+    """
+    info = _torch_info if _torch_info is not None else _probe_torch()
+    lines = [f"{name}=={info[name].split('+')[0]}"
+             for name in ("torch", "torchvision", "torchaudio")
+             if isinstance(info.get(name), str)]
+    if not lines:
+        return None
+    path = COMFY_DIR.parent / TORCH_CONSTRAINTS
+    try:
+        path.parent.mkdir(parents=True, exist_ok=True)
+        path.write_text("\n".join(lines) + "\n", encoding="utf-8")
+        return path
+    except OSError as exc:
+        log.warning("Could not write %s (%s) — later pip passes are "
+                    "unconstrained and could upgrade torch", path, exc)
+        return None
+
+
+def _describe(info: dict) -> str:
+    return (f"torch {info.get('torch')} (CUDA {info.get('cuda')}) on "
+            f"{info.get('device')} [{info.get('arch')}]")
+
+
+def _fix_hint(packages, info: dict) -> str:
+    return ("  " + runtime_python() + " -m pip install --force-reinstall "
+            + " ".join(packages) + " --index-url " + _torch_index(info))
+
+
+def ensure_torch() -> None:
+    """Make sure the runtime interpreter has a torch that works on this GPU.
+
+    Four outcomes, and the split between them is the point:
+
+      * everything imports and a real GPU matmul runs  -> return silently.
+        This is the pod path, every time.
+      * torch absent entirely -> install TORCH_STACK from TORCH_INDEX.
+        Nothing was there to have an opinion about.
+      * torch present but unusable (no CUDA, or no kernels for this card)
+        -> raise, naming the fix. Deliberately NOT repaired: on a pod that
+        torch IS the tested base image, and silently replacing it would
+        swap a known configuration for a guess.
+      * torch fine, torchvision/torchaudio failing to import -> repair just
+        those, with --no-deps so torch itself cannot be touched.
+
+    That last case is the WinError 127 class: torchvision and torchaudio
+    ship compiled extensions linked against torch's own C++ ABI, so a
+    companion built for a different torch imports "successfully" as far as
+    pip is concerned and then dies inside ctypes. torchaudio's version
+    tracks torch's exactly, which is what makes the repair derivable.
+    """
+    global _torch_info
+    info = _probe_torch()
+
+    if info.get("missing"):
+        log.info("No torch on the runtime interpreter — installing the "
+                 "tested stack (%s)", ", ".join(TORCH_STACK))
+        _pip_install([*TORCH_STACK, "--index-url", TORCH_INDEX],
+                     desc="Installing PyTorch")
+        info = _probe_torch()
+        if info.get("missing") or info.get("error"):
+            raise RuntimeError(
+                "PyTorch still is not importable after installing it: "
+                f"{info.get('error', 'module not found')}"
+            )
+
+    if info.get("error"):
+        raise RuntimeError(
+            f"PyTorch is installed but will not import: {info['error']}\n"
+            "Reinstall it with:\n" + _fix_hint(TORCH_STACK, info)
+        )
+
+    # Torch itself: report, never replace.
+    if not info.get("cuda"):
+        raise RuntimeError(
+            f"torch {info.get('torch')} is a CPU-only build — this app needs "
+            "CUDA.\nInstall a CUDA build with:\n" + _fix_hint(TORCH_STACK, info)
+        )
+    if not info.get("cuda_available"):
+        raise RuntimeError(
+            f"torch {info.get('torch')} reports no usable CUDA device. Check "
+            "the driver (nvidia-smi) and that a GPU is attached."
+        )
+    arch, arch_list = info.get("arch"), info.get("arch_list") or []
+    if arch and arch not in arch_list:
+        raise RuntimeError(
+            f"This torch has no kernels for {info.get('device')} ({arch}). It "
+            f"was built for: {', '.join(arch_list)}.\nBlackwell cards need a "
+            "CUDA 12.8+ build. Install one with:\n"
+            + _fix_hint(TORCH_STACK, info)
+        )
+    if info.get("matmul") is False:
+        raise RuntimeError(
+            f"torch loads but cannot run a kernel on {info.get('device')}: "
+            f"{info.get('matmul_error')}\nThis is normally a torch built for "
+            "a different CUDA than the card needs. Install the tested "
+            "stack with:\n" + _fix_hint(TORCH_STACK, info)
+        )
+
+    # Companions: repairable, because they cannot break torch.
+    broken = [name for name in ("torchvision", "torchaudio")
+              if info.get(f"{name}_error")]
+    if broken:
+        torch_version = (info.get("torch") or "").split("+")[0]
+        wanted = []
+        for name in broken:
+            log.warning("%s fails to import (%s) — its compiled extension "
+                        "does not match torch %s",
+                        name, info[f"{name}_error"], torch_version)
+            if name == "torchaudio":
+                # Version-locked to torch, so this is always derivable.
+                wanted.append(f"torchaudio=={torch_version}")
+            elif torch_version == "2.8.0":
+                wanted.append("torchvision==0.23.0")
+            else:
+                raise RuntimeError(
+                    f"torchvision fails to import against torch "
+                    f"{torch_version}, and there is no rule to derive the "
+                    "matching torchvision version (it numbers itself "
+                    "separately). Install the pair that goes with your "
+                    "torch from " + _torch_index(info)
+                )
+        # --no-deps is load-bearing: without it pip would resolve these
+        # packages' own torch requirement and could move torch itself.
+        _pip_install([*wanted, "--force-reinstall", "--no-deps",
+                      "--index-url", _torch_index(info)],
+                     desc=f"Repairing {', '.join(broken)}")
+        info = _probe_torch()
+        still = [n for n in ("torchvision", "torchaudio")
+                 if info.get(f"{n}_error")]
+        if still:
+            raise RuntimeError(
+                f"{', '.join(still)} still will not import after repair: "
+                + "; ".join(info[f"{n}_error"] for n in still)
+            )
+
+    _torch_info = info
+    log.info("PyTorch OK — %s", _describe(info))
 
 
 def clone_pinned(url: str, dest, name: str, desc: str) -> None:
@@ -169,6 +414,12 @@ def install_comfyui() -> None:
     if not FROZEN:
         reqs += ["-r", PROJECT_DIR / "requirements.txt"]
         desc = "Installing ComfyUI + app requirements (single resolver pass)"
+    # ComfyUI lists `torch` unpinned, so this pass is free to upgrade it —
+    # which would leave torchvision/torchaudio compiled against the torch
+    # that just went away. Constrain it to whatever ensure_torch settled on.
+    constraints = torch_constraints_file()
+    if constraints is not None:
+        reqs += ["--constraint", constraints]
     run_cmd([runtime_python(), "-m", "pip", "install", "-q", *reqs], desc=desc)
 
 
@@ -392,7 +643,20 @@ def install_reactor() -> None:
 
 
 def link_model_dirs() -> None:
-    """Point ComfyUI's model folders at MODELS_DIR via symlinks."""
+    """Point ComfyUI's model folders at MODELS_DIR via symlinks.
+
+    The links are absolute, so moving or renaming the base directory leaves
+    every one of them dangling. That is worth repairing rather than
+    skipping: ComfyUI does not treat an unreadable model folder as an
+    error, it just sees no models — and the first sign of trouble is every
+    generation failing validation with "Prompt outputs failed validation",
+    which says nothing about symlinks.
+
+    So the test is where a link *points*, not merely that it is a link. An
+    existing symlink is left alone only when it already resolves to src;
+    one pointing anywhere else, or at a path that no longer exists, is
+    replaced.
+    """
     names = MODEL_DIRS + (REACTOR_MODEL_DIRS
                           if features.enabled(features.Key.FACESWAP) else ())
     for name in names:
@@ -400,8 +664,14 @@ def link_model_dirs() -> None:
         src.mkdir(parents=True, exist_ok=True)
         dst = COMFY_DIR / "models" / name
         if dst.is_symlink():
-            continue
-        if dst.exists():
+            # resolve(strict=False): a dangling link resolves to the target
+            # it names, so a stale one compares unequal rather than raising.
+            if dst.resolve() == src.resolve():
+                continue
+            log.warning("Relinking %s — it pointed at %s, which is not %s",
+                        dst, dst.resolve(), src)
+            dst.unlink()
+        elif dst.exists():
             shutil.rmtree(dst)
         dst.symlink_to(src, target_is_directory=True)
         log.info("Linked %s → %s", dst, src)

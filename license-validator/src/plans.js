@@ -444,4 +444,14 @@ export const DEFAULT_PLANS = [
     is_public: false,
     sort_order: 999,
   },
+  {
+    _id: "test-krea1-only",
+    name: "Test (Krea1 Only)",
+    description: "Access for testing Krea1 features",
+    price_monthly: 0,
+    currency: "INR",
+    features: ["krea_t2i", "krea_edit", "gallery", "community_prompts"],
+    is_public: false,
+    sort_order: 999,
+  },
 ];
