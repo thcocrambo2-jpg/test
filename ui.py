@@ -1666,6 +1666,22 @@ def _publish_row():
     return checkbox, title
 
 
+def _reset_publish_after(event, checkbox, title):
+    """Turn the publish controls back off once a generation has finished.
+
+    Publishing is a per-image decision, not a mode. Left ticked it is
+    silent — nothing on the next run says "this one is going to the
+    library too" — so the box disarms itself instead of relying on the
+    admin to remember. The title goes with it, otherwise the next
+    publish quietly inherits the last card's name.
+
+    Chained off the generate click rather than registered as a second
+    click handler, so it cannot land between the click and the payload
+    the generate handler reads its `publish` value from.
+    """
+    return event.then(fn=lambda: (False, ""), outputs=[checkbox, title])
+
+
 def _cta(label: str):
     """A tab's primary action button — Generate, Edit, Swap face, ...
 
@@ -2101,7 +2117,7 @@ def _tab_krea_t2i(tab):
             seed_out = gr.Number(
                 label="Base seed used", interactive=False, precision=0
             )
-    generate_btn.click(
+    _krea_run = generate_btn.click(
         fn=generate_single,
         inputs=[prompt_box, negative_box, seed_box, randomize_cb,
                 steps_slider, cfg_slider, resolution_dd, sampler_dd,
@@ -2111,6 +2127,7 @@ def _tab_krea_t2i(tab):
         outputs=[gallery, status_box, seed_out],
         concurrency_id="comfy",
     )
+    _reset_publish_after(_krea_run, krea_publish, krea_publish_title)
     # Same order as _krea_settings writes them, so loading a
     # prompt is a zip rather than a lookup.
     _krea_targets = [prompt_box, negative_box, model_dd,
@@ -2322,7 +2339,7 @@ def _tab_krea_v2_t2i(tab):
             outputs=[v2_steps, v2_cfg, v2_model_info,
                      v2_cbs[V2_TURBO_SLOT], v2_ws[V2_TURBO_SLOT]],
         )
-    v2_generate_btn.click(
+    _v2_run = v2_generate_btn.click(
         fn=generate_v2,
         inputs=[v2_prompt, v2_negative, v2_seed, v2_randomize,
                 v2_model_dd,
@@ -2339,6 +2356,7 @@ def _tab_krea_v2_t2i(tab):
         outputs=[v2_gallery, v2_status_box, v2_seed_out],
         concurrency_id="comfy",
     )
+    _reset_publish_after(_v2_run, v2_publish, v2_publish_title)
     _v2_targets = [
         v2_prompt, v2_negative, v2_model_dd,
         v2_aspect, v2_megapixels, v2_multiple,
