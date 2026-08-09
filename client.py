@@ -23,6 +23,88 @@ class ComfyUIError(RuntimeError):
     """A workflow was rejected or failed during execution."""
 
 
+# Called with the list of paths a finished prompt wrote. A registry rather
+# than a direct import because there are three separate consumers of the
+# "done" event upstream (the still, face-swap and video executors in ui.py)
+# and only one producer — and because bookkeeping about generated files is
+# not this module's business to know about.
+_output_hooks = []
+
+
+def on_output(fn) -> None:
+    """Register fn(paths) to run whenever a prompt finishes writing outputs."""
+    _output_hooks.append(fn)
+
+
+def _rejection_detail(body: dict) -> str:
+    """Why ComfyUI refused a workflow, in one line.
+
+    Its top-level message for a rejected graph is always the same
+    "Prompt outputs failed validation", which is true and useless. What
+    actually went wrong is in `node_errors`, keyed by node id — usually a
+    "value not in list" naming a model file ComfyUI cannot see. Reporting
+    only the headline turns "the model folder symlink is stale" into a
+    mystery, so the per-node reasons are appended.
+    """
+    message = (body.get("error") or {}).get("message", "")
+    reasons = []
+    for node_id, node in (body.get("node_errors") or {}).items():
+        label = node.get("class_type") or f"node {node_id}"
+        for item in node.get("errors") or []:
+            text = item.get("message", "")
+            extra = item.get("details", "")
+            reasons.append(f"{label}: {text}{f' ({extra})' if extra else ''}")
+    if reasons:
+        # Deduplicated: one missing folder usually trips several nodes with
+        # the identical complaint.
+        seen = list(dict.fromkeys(reasons))
+        return f"{message} — " + "; ".join(seen[:4]) if message else "; ".join(seen[:4])
+    return message
+
+
+def _fire_output_hooks(paths) -> None:
+    """Run the registered hooks, swallowing anything they throw.
+
+    Bookkeeping must never turn a finished job into a failed one — by the
+    time this runs the images are already on disk.
+    """
+    for hook in _output_hooks:
+        try:
+            hook(paths)
+        except Exception as exc:
+            log.warning("Output hook %s failed: %s", hook, exc)
+
+
+# The loader inputs big enough to be worth unloading for: diffusion models
+# (13-35 GB) and text encoders (5-18 GB). Two deliberate omissions, both
+# because /free is all-or-nothing — it unloads *everything*, so anything
+# in this tuple can cost a full UNet reload:
+#   • vae_name — VAEs are 0.25-1.4 GB. Krea 2 V1 and V2 use different ones
+#     (qwen_image vs wan21), so including it would dump a 13 GB UNet the
+#     two tabs otherwise share just to swap 254 MB. Leaving both VAEs
+#     resident is far cheaper.
+#   • lora_name — LoRAs are patches on top of these weights, so including
+#     them would make every slider tweak look like a model swap.
+_WEIGHT_INPUTS = ("unet_name", "clip_name")
+
+
+def model_signature(workflow: dict) -> tuple:
+    """Which base weights a graph loads — the key for detecting a swap.
+
+    Derived from the workflow itself rather than tracked per tab, so a new
+    tab gets swap handling for free and cannot forget to declare what it
+    loads.
+    """
+    found = {}
+    for node in workflow.values():
+        inputs = node.get("inputs", {})
+        for key in _WEIGHT_INPUTS:
+            value = inputs.get(key)
+            if isinstance(value, str):
+                found.setdefault(key, set()).add(value)
+    return tuple(sorted((k, tuple(sorted(v))) for k, v in found.items()))
+
+
 class ComfyClient:
     """Small synchronous client for the ComfyUI HTTP + websocket API."""
 
@@ -47,10 +129,19 @@ class ComfyClient:
         except urllib.error.HTTPError as err:
             detail = err.read().decode(errors="replace")
             try:
-                detail = json.loads(detail).get("error", {}).get("message", detail)
+                detail = _rejection_detail(json.loads(detail)) or detail
             except Exception:
                 pass
             raise ComfyUIError(f"ComfyUI rejected the workflow: {detail}") from err
+        except (urllib.error.URLError, OSError) as err:
+            # Nothing listening: the server exited rather than refusing the
+            # job. Raised as ComfyUIError so the UI reports it in the status
+            # box like any other failure instead of a Gradio traceback.
+            raise ComfyUIError(
+                f"ComfyUI is not answering on {self.base} — the server has "
+                "exited. This most often happens while swapping models. "
+                "Check comfyui.log for its last words."
+            ) from err
         prompt_id = result.get("prompt_id")
         if not prompt_id:
             raise ComfyUIError(f"No prompt_id in ComfyUI response: {result}")
@@ -73,6 +164,60 @@ class ComfyClient:
         stored = info.get("name", name)
         subfolder = info.get("subfolder")
         return f"{subfolder}/{stored}" if subfolder else stored
+
+    def _vram_free(self) -> int:
+        """Free VRAM across all devices, or -1 when it cannot be read."""
+        try:
+            stats = self._get_json("/system_stats")
+        except Exception:
+            return -1
+        return sum(int(d.get("vram_free", 0)) for d in stats.get("devices", []))
+
+    def free_models(self, settle_timeout: float = 45.0) -> bool:
+        """Unload every model, and wait until ComfyUI has actually done it.
+
+        The waiting is the point. /free only sets a flag that the prompt
+        worker consumes between jobs, so submitting straight afterwards
+        can win the race and execute with the previous models still
+        resident — which is precisely the both-model-sets-loaded moment
+        that gets the process OOM-killed. Polling free VRAM until it stops
+        rising is the observable proxy for "the unload finished".
+
+        Best-effort: returns False if the server never answered, and the
+        caller carries on rather than blocking a job on a cleanup step.
+        """
+        before = self._vram_free()
+        payload = json.dumps({"unload_models": True,
+                              "free_memory": True}).encode()
+        req = urllib.request.Request(
+            self.base + "/free", data=payload,
+            headers={"Content-Type": "application/json"},
+        )
+        try:
+            with urllib.request.urlopen(req, timeout=30):
+                pass
+        except Exception as exc:
+            log.warning("Could not ask ComfyUI to unload models: %s", exc)
+            return False
+
+        deadline = time.time() + settle_timeout
+        last, stable = before, 0
+        while time.time() < deadline:
+            time.sleep(0.5)
+            now = self._vram_free()
+            if now < 0:
+                return False       # server went away; ensure_alive handles it
+            # Two consecutive unchanged readings after a rise means the
+            # unload has finished rather than still being in progress.
+            stable = stable + 1 if now == last else 0
+            last = now
+            if stable >= 2 and now >= before:
+                log.info("Models unloaded — %.1f GB VRAM free (was %.1f)",
+                         now / 1e9, max(before, 0) / 1e9)
+                return True
+        log.warning("Model unload did not settle within %.0fs — continuing",
+                    settle_timeout)
+        return False
 
     def _finished(self, prompt_id: str) -> bool:
         return prompt_id in self._get_json(f"/history/{prompt_id}")
@@ -131,6 +276,16 @@ class ComfyClient:
                         if self._finished(prompt_id):
                             break
                         continue
+                    except websocket.WebSocketConnectionClosedException as err:
+                        # The socket was open and went away mid-generation —
+                        # the signature of ComfyUI being killed rather than
+                        # failing a node, which reports execution_error.
+                        raise ComfyUIError(
+                            "ComfyUI closed the connection while the job was "
+                            "running — the server exited mid-generation "
+                            "(typically an out-of-memory kill during a model "
+                            "load). Check comfyui.log for its last words."
+                        ) from err
                     if isinstance(frame, bytes):  # binary preview frames — unused
                         continue
                     msg = json.loads(frame)
@@ -161,7 +316,9 @@ class ComfyClient:
         finally:
             if ws is not None:
                 ws.close()
-        yield {"type": "done", "images": self.output_images(prompt_id)}
+        paths = self.output_images(prompt_id)
+        _fire_output_hooks(paths)
+        yield {"type": "done", "images": paths}
 
 
 client = ComfyClient(COMFY_HOST, COMFY_PORT)

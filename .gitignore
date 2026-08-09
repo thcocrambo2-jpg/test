@@ -1,0 +1,25 @@
+# Python bytecode
+__pycache__/
+*.py[cod]
+
+# Nuitka build output (see build.sh)
+dist/
+*.build/
+*.dist/
+*.onefile-build/
+krea2app
+
+# Local environments
+.venv/
+venv/
+
+# Derived files a local dry run drops into its output dir (scripts/dryrun.py
+# points KREA2_BASE_DIR at .dryrun). The sample images there are committed;
+# thumbnails and zips are regenerated on demand.
+.dryrun/output/.thumbs/
+.dryrun/output/all_outputs_*.zip
+
+tmp
+.gradio
+
+commands.txt

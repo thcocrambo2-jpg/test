@@ -1,0 +1,383 @@
+"""The public plan catalogue — the data behind the Pricing page.
+
+`GET /v1/plans` on the license server answers with every plan whose
+`is_public` is not false, the feature registry that names the tabs those
+plans grant, and the billing cycles those plans can be bought on. It is
+unauthenticated on purpose: it is a price list, not an entitlement.
+
+The prices are the server's arithmetic, not this module's: a plan arrives
+with one entry per cycle, already discounted. Nothing here multiplies or
+takes a percentage off anything, so the page cannot quote a figure the
+invoice disagrees with — and a cycle launched on the server appears here
+as one more entry, with no rebuild.
+
+**Nothing here decides what this pod can run.** That stays with
+licensing.py → features.py, which act on the flat `features` array in the
+acquire response and never learn that tiers exist. This module is read
+only and its answer reaches nothing but the markup — so a plan renamed,
+repriced or added on the server shows up on the page with no rebuild, and
+a wrong answer here cannot switch a tab on or off.
+
+Best-effort by design. Every failure — no node tag, a server that is
+down, a body that does not parse — comes back as `Catalogue.error` rather
+than an exception, because a price list that cannot be fetched must not
+take the page down with it. The caller renders the error and offers a
+retry.
+
+Stdlib-only, like licensing.py: the two are siblings talking to the same
+API, a GET returning JSON needs nothing more, and it keeps the Nuitka
+build unchanged.
+"""
+
+import json
+import threading
+import time
+import urllib.error
+import urllib.request
+from dataclasses import dataclass, field
+
+from config import LICENSE_API_URL, log
+
+# How long a fetched catalogue is served without asking again. The server
+# caches the collection for 60s of its own (see plans.js), so anything
+# below that only costs round trips. Five minutes is well inside how often
+# a price actually changes, and the page's Refresh button forces a read
+# for when it just did.
+TTL_SECONDS = 300
+
+FETCH_TIMEOUT = 12
+
+
+@dataclass(frozen=True)
+class Cycle:
+    """One billing term the catalogue is offering, e.g. monthly or yearly.
+
+    The server sends only the cycles that are switched on, so this tuple is
+    the tab bar: one entry means no tabs at all and the page reads as a
+    plain monthly price list, and a cycle launched in Atlas grows a tab
+    here with nothing rebuilt. `months` is what a plan's price for this
+    cycle covers, and `discount_percent` is what the page badges it with.
+    """
+
+    id: str
+    label: str
+    months: int
+    discount_percent: float = 0.0
+
+
+@dataclass(frozen=True)
+class CyclePrice:
+    """What one plan costs on one cycle, as the server worked it out.
+
+    Every figure is computed server-side from the plan's monthly rate and
+    the cycle's discount (see plans.js `cyclePrice`), so this page renders
+    numbers rather than deriving them — two implementations of the same
+    arithmetic is two chances for the page to quote a price the invoice
+    does not match.
+    """
+
+    cycle: str
+    months: int
+    total: float
+    per_month: float
+    discount_percent: float
+    saving: float
+
+
+@dataclass(frozen=True)
+class Plan:
+    """One purchasable tier, as served by /v1/plans."""
+
+    id: str
+    name: str
+    description: str | None
+    price_monthly: float | None
+    currency: str
+    features: tuple[str, ...]
+    sort_order: int
+    # What this tier costs per cycle, keyed by Cycle.id. Only the enabled
+    # cycles are in it, and a plan with no price at all has none of them —
+    # the page then renders "Price on application" as it always did.
+    prices: dict[str, CyclePrice] = field(default_factory=dict)
+    # Presentation only: flags the recommended tier, which the pricing page
+    # renders with a "Most Popular" flag and a stronger card. Defaulted so
+    # a server too old to send it still parses into a Plan — the page then
+    # simply recommends nothing.
+    is_popular: bool = False
+
+
+@dataclass(frozen=True)
+class FeatureInfo:
+    """What a feature key is called in prose, from the server's catalogue.
+
+    Served from the licence server's features collection, which is the
+    source of truth for naming — so a tab reworded in Atlas reads that way
+    on this page without anything being rebuilt. The same collection names
+    the app's tabs, via `feature_info` on the acquire response; this is
+    the prose half of it (`name`), not the terse tab label.
+
+    Keys the server does not describe are handled by the caller — see
+    `Catalogue.describe`.
+    """
+
+    key: str
+    name: str
+    description: str
+    category: str
+
+
+@dataclass(frozen=True)
+class Catalogue:
+    """The whole answer: plans, the feature registry, and how it went.
+
+    `error` is None on success and a short human sentence otherwise, in
+    which case `plans` is empty. Both are always present, so a caller can
+    render without checking which case it got.
+    """
+
+    plans: tuple[Plan, ...] = ()
+    features: dict[str, FeatureInfo] = field(default_factory=dict)
+    # The billing terms on offer, shortest first, monthly always among
+    # them. Empty only when the fetch failed; a server too old to send them
+    # gets a monthly cycle synthesised in _cycles() so the page has
+    # something to render prices against either way.
+    cycles: tuple[Cycle, ...] = ()
+    error: str | None = None
+    # Where to send someone who wants to change plan — the admin's Telegram,
+    # set as CONTACT_URL on the licence server. None is ordinary (unset, or
+    # a server too old to send it) and the page's dialog then tells the
+    # customer to get in touch without offering a link.
+    contact_url: str | None = None
+
+    def describe(self, key: str) -> FeatureInfo:
+        """Prose for a feature key, invented from the key if unregistered.
+
+        The app and the license server deploy separately, so a plan may
+        well grant a tab this registry has not caught up with. Showing
+        "Wan I2v" beats dropping a line the customer is paying for.
+        """
+        known = self.features.get(key)
+        if known is not None:
+            return known
+        return FeatureInfo(key=key, name=key.replace("_", " ").title(),
+                           description="", category="")
+
+
+_lock = threading.Lock()
+_cached: Catalogue | None = None
+_cached_at = 0.0
+
+
+def _get(path: str, timeout: int) -> tuple[int | None, dict]:
+    """GET JSON. Returns (status, body); status is None on transport error."""
+    request = urllib.request.Request(
+        f"{LICENSE_API_URL}{path}",
+        headers={"Accept": "application/json"},
+        method="GET",
+    )
+    try:
+        with urllib.request.urlopen(request, timeout=timeout) as resp:
+            return resp.status, json.loads(resp.read() or b"{}")
+    except urllib.error.HTTPError as err:
+        try:
+            return err.code, json.loads(err.read() or b"{}")
+        except Exception:
+            return err.code, {}
+
+
+def _number(value) -> float | None:
+    """A figure from the wire, or None. Booleans are not numbers here."""
+    if isinstance(value, bool) or not isinstance(value, (int, float)):
+        return None
+    return float(value)
+
+
+def _cycles(raw) -> tuple[Cycle, ...]:
+    """The billing cycles on offer, shortest term first.
+
+    A server too old to send `cycles` gets a monthly one invented, which is
+    exactly what it used to mean: every price it quotes is a monthly price.
+    The page then renders no tab bar, as it does whenever there is only one
+    cycle, and nothing about it looks like a degraded mode.
+    """
+    out = []
+    for item in raw or []:
+        if not isinstance(item, dict):
+            continue
+        cycle_id = str(item.get("id") or "").strip()
+        months = item.get("months")
+        if not cycle_id or not isinstance(months, int) or months < 1:
+            continue
+        out.append(Cycle(
+            id=cycle_id,
+            label=str(item.get("label") or cycle_id).strip() or cycle_id,
+            months=months,
+            discount_percent=_number(item.get("discount_percent")) or 0.0,
+        ))
+    if not out:
+        return (Cycle(id="monthly", label="Monthly", months=1),)
+    return tuple(sorted(out, key=lambda cycle: cycle.months))
+
+
+def _prices(raw, plan_monthly: float | None) -> dict[str, CyclePrice]:
+    """Per-cycle prices from the wire, keyed by cycle id.
+
+    Falls back to a monthly entry built from `price_monthly` when the
+    server sent no `prices` map at all — the older-server case again, where
+    the one figure it sends *is* the monthly price.
+    """
+    out: dict[str, CyclePrice] = {}
+    for key, item in (raw or {}).items():
+        if not isinstance(item, dict):
+            continue
+        total = _number(item.get("total"))
+        months = item.get("months")
+        if total is None or not isinstance(months, int) or months < 1:
+            continue
+        cycle_id = str(key).strip()
+        if not cycle_id:
+            continue
+        out[cycle_id] = CyclePrice(
+            cycle=cycle_id,
+            months=months,
+            total=total,
+            per_month=_number(item.get("per_month")) or (total / months),
+            discount_percent=_number(item.get("discount_percent")) or 0.0,
+            saving=_number(item.get("saving")) or 0.0,
+        )
+    if not out and plan_monthly is not None:
+        out["monthly"] = CyclePrice(
+            cycle="monthly", months=1, total=plan_monthly,
+            per_month=plan_monthly, discount_percent=0.0, saving=0.0,
+        )
+    return out
+
+
+def _plan(raw: dict) -> Plan | None:
+    """One plan from the wire, or None if it is too broken to show.
+
+    An id and a name are the whole bar: a card with no price still says
+    what the tier includes, but one with no name has nothing to render.
+    """
+    plan_id = str(raw.get("id") or "").strip()
+    name = str(raw.get("name") or "").strip()
+    if not plan_id or not name:
+        return None
+
+    features = tuple(
+        item.strip() for item in raw.get("features") or []
+        if isinstance(item, str) and item.strip()
+    )
+    description = str(raw.get("description") or "").strip() or None
+    sort_order = raw.get("sort_order")
+    monthly = _number(raw.get("price_monthly"))
+    return Plan(
+        id=plan_id,
+        name=name,
+        description=description,
+        price_monthly=monthly,
+        currency=str(raw.get("currency") or "INR").strip() or "INR",
+        features=features,
+        sort_order=int(sort_order) if isinstance(sort_order, int) else 0,
+        prices=_prices(raw.get("prices"), monthly),
+        is_popular=raw.get("is_popular") is True,
+    )
+
+
+def _clean_url(value) -> str | None:
+    """An https URL from the wire, or None for anything else.
+
+    The value ends up in an `href`, and it is set as an environment
+    variable rather than reviewed in a diff, so a `javascript:` or `data:`
+    URL landing there — by typo or otherwise — must not become a live link
+    on a page the customer is looking at.
+
+    https only, not http: the intended value is a t.me link, the page is
+    served over the Gradio share URL's TLS, and a plain-http link from it
+    would be both a downgrade and a mixed-content warning. Anything
+    unusable is dropped entirely — the dialog reads fine without a link.
+    """
+    if not isinstance(value, str):
+        return None
+    url = value.strip()
+    return url if url.lower().startswith("https://") else None
+
+
+def _feature(raw: dict) -> FeatureInfo | None:
+    key = str(raw.get("key") or "").strip()
+    if not key:
+        return None
+    return FeatureInfo(
+        key=key,
+        name=str(raw.get("name") or key).strip(),
+        description=str(raw.get("description") or "").strip(),
+        category=str(raw.get("category") or "").strip(),
+    )
+
+
+def _fetch() -> Catalogue:
+    """One trip to /v1/plans, every failure turned into `error`."""
+    if not LICENSE_API_URL:
+        # Empty when KREA2_NODE_TAG is unset or malformed — see config.py.
+        # A pod in that state never got past licensing.acquire_or_exit(),
+        # so in practice this is the offline dry run (`--features ...`).
+        return Catalogue(error="This build has no node tag, so it cannot "
+                               "reach the licence server to read the plans.")
+
+    try:
+        status, body = _get("/v1/plans", timeout=FETCH_TIMEOUT)
+    except Exception as exc:                # transport: DNS, refused, TLS
+        log.warning("Could not fetch the plan catalogue (%s)", exc)
+        return Catalogue(error=f"Could not reach the licence server ({exc}).")
+
+    if status != 200 or not body.get("ok"):
+        log.warning("Plan catalogue request answered HTTP %s", status)
+        return Catalogue(
+            error=f"The licence server answered HTTP {status} for the plan "
+                  "list."
+        )
+
+    plans = [plan for plan in (_plan(raw) for raw in body.get("plans") or [])
+             if plan is not None]
+    features = {info.key: info for info in
+                (_feature(raw) for raw in body.get("features") or [])
+                if info is not None}
+    cycles = _cycles(body.get("cycles"))
+    contact = _clean_url(body.get("contact_url"))
+
+    if not plans:
+        return Catalogue(features=features, cycles=cycles, contact_url=contact,
+                         error="The licence server has no public plans to "
+                               "show yet.")
+
+    # The server sorts already; re-sorting here means a hand-edited plan
+    # document with no sort_order still lands somewhere sensible instead
+    # of wherever Mongo returned it.
+    plans.sort(key=lambda plan: (plan.sort_order, plan.name))
+    log.info("Plan catalogue: %d plan(s) — %s · billed %s", len(plans),
+             ", ".join(plan.id for plan in plans),
+             ", ".join(cycle.id for cycle in cycles))
+    return Catalogue(plans=tuple(plans), features=features, cycles=cycles,
+                     contact_url=contact)
+
+
+def catalogue(force: bool = False) -> Catalogue:
+    """The catalogue, from cache when it is fresh enough.
+
+    `force=True` is the page's Refresh button: it skips the TTL so a price
+    edited a minute ago can be seen without waiting it out.
+
+    A failed fetch is *not* cached — the next view retries — so a server
+    that was briefly down does not leave the page broken for five minutes.
+    """
+    global _cached, _cached_at
+
+    with _lock:
+        fresh = _cached is not None and time.time() - _cached_at < TTL_SECONDS
+        if fresh and not force and _cached.error is None:
+            return _cached
+
+        result = _fetch()
+        if result.error is None:
+            _cached, _cached_at = result, time.time()
+        return result

@@ -1,11 +1,43 @@
 """Krea 2 on RunPod — configuration.
 
-Everything user-tunable lives in this module: paths, model variant,
-LoRA lists and (optional) access tokens.
+Everything user-tunable lives in this module: paths, model registries,
+LoRA lists and (optional) access tokens. In section order:
+
+    Build mode          FROZEN
+    Disk layout         BASE_DIR and everything under it, ComfyUI's port
+    Model selection     Krea 2 base models, encoder, LoRAs — the
+                        Single / Edit / Inpaint tabs
+    Krea 2 V2           the Krea2 advanced pipeline, self-contained
+    Wan 2.2             image-to-video (+ the parallel-instance knobs)
+    Flux 2              text-to-image
+    Klein Edit          Flux 2 Klein 9B image editing, self-contained
+    ReActor             face swap
+    CivitAI LoRAs       shared LoRA lists, resolutions, samplers
+    Licensing           seat check + access tokens
+
+Which *tabs* exist is not decided here — that is features.py, and the
+answer comes from the license key rather than from anything in this file
+or the environment. This module only describes what each feature would
+need if it were on, so it stays a plain data module that features.py can
+import without a cycle.
+
+Every environment variable this module reads, in one place:
+
+    KREA2_BASE_DIR              where models, outputs and logs live
+    KREA2_KEEP_MODELS_LOADED    do not unload between model swaps
+    KREA2_WAN_PARALLEL          second ComfyUI instance for video
+    KREA2_MAIN_RESERVE_VRAM     GB left for Wan by the image instance
+    KREA2_WAN_RESERVE_VRAM      GB left for images by the video instance
+    KREA2_LICENSE_KEY           the customer key (required)
+    KREA2_NODE_TAG              the deployment id the key checks in against
+    KREA2_LICENSE_GRACE         seconds tolerated with no licence server
+    KREA2_SHOWCASE_URL          public bucket holding the pricing page's images
+    HF_TOKEN, CIVITAI_TOKEN     download credentials
 """
 
 import logging
 import os
+import re
 from pathlib import Path
 
 logging.basicConfig(
@@ -16,12 +48,43 @@ logging.basicConfig(
 )
 log = logging.getLogger("krea2")
 
+# ── Build mode ────────────────────────────────────────────────────────────────
+# True when running as a Nuitka-compiled binary (build.sh), False under a
+# plain `python3 app.py`. Nuitka injects __compiled__ into every module it
+# compiles, so this is the one authoritative check — keep it that way.
+# Only two places may branch on it: bootstrap.runtime_python() and the
+# app-requirements skip in bootstrap.install_comfyui(). Every extra branch
+# is another way for the shipped binary to behave differently from a dev run.
+FROZEN = "__compiled__" in globals()
+
 # ── Disk layout ───────────────────────────────────────────────────────────────
 # The pod filesystem is ephemeral: the ComfyUI install, model weights,
 # generated images and logs all live under one base directory and are lost
 # when the pod is destroyed. Override with the KREA2_BASE_DIR env var.
+# Under --onefile PROJECT_DIR is Nuitka's temp extraction dir, which is
+# correct: build.sh bundles deps/ and requirements.txt alongside the code.
+# BASE_DIR is unaffected — it is absolute, so models outlive the extraction.
 PROJECT_DIR = Path(__file__).resolve().parent
-BASE_DIR = Path(os.environ.get("KREA2_BASE_DIR", "/workspace/krea2"))
+# The pricing page's showcase copy — prose only, a few kilobytes, bundled
+# because it is what decides whether the section renders at all. Under
+# --onefile this resolves inside the extraction dir; build.sh bundles it
+# with --include-data-files. A build that forgets it still starts, and the
+# pricing page simply loses the section (see showcase.py).
+#
+# The *pictures* it names are not here. They live in the R2 bucket below,
+# which is what keeps a page full of screenshots out of the binary.
+ASSETS_DIR = PROJECT_DIR / "assets"
+# .resolve() is load-bearing, not tidiness: a relative KREA2_BASE_DIR
+# (KREA2_BASE_DIR=./tmp, natural on a dev box) would otherwise be resolved
+# by each process against its own cwd. ComfyUI runs with cwd=COMFY_DIR
+# (comfy.py) and is handed --output-directory as a string, so it would
+# write to <cwd>/tmp/ComfyUI/tmp/output while this process — the mkdir
+# below, the gallery scan, the "saved under ..." status line — all meant
+# <cwd>/tmp/output. Images land somewhere real and the app cannot find
+# them. Absolute here means every consumer reads the same path.
+BASE_DIR = Path(
+    os.environ.get("KREA2_BASE_DIR", "/workspace/krea2")
+).expanduser().resolve()
 TEMP_DIR = BASE_DIR     # ComfyUI install + model weights
 WORKING_DIR = BASE_DIR  # generated images + logs
 COMFY_DIR = TEMP_DIR / "ComfyUI"
@@ -31,6 +94,16 @@ COMFY_LOG = WORKING_DIR / "comfyui.log"
 
 COMFY_HOST = "127.0.0.1"
 COMFY_PORT = 8188
+
+# Unload the previous models when a job needs different base weights.
+# ComfyUI keeps what it loaded until memory pressure evicts it, so without
+# this a swap briefly holds two full model sets — the moment where the
+# server gets OOM-killed once several multi-GB UNets are in rotation
+# (Krea 2 V1 turbo/raw plus V2 turbo/raw, plus Flux and Wan). Freeing at
+# the boundary caps the peak at one set and costs only the reload that a
+# swap already pays for. Set KREA2_KEEP_MODELS_LOADED=1 to turn it off on
+# a machine with room to spare, where keeping models warm is faster.
+FREE_ON_SWAP = not os.environ.get("KREA2_KEEP_MODELS_LOADED")
 
 # ── Model selection ───────────────────────────────────────────────────────────
 # Variant-level defaults; a registry entry below can override them per-model.
@@ -76,15 +149,15 @@ KREA2_MODELS = [
         "file": "krea2_raw_fp8_scaled.safetensors",     # ~13.1 GB
         "variant": "raw",
         "hf_path": "diffusion_models/krea2_raw_fp8_scaled.safetensors",
-    },
-    {
-        "name": "FinePn V2 (amateur phone photo)",
-        "file": "Krea2_FinePornV2_FP8.safetensors",       # ~12.2 GB
-        "variant": "turbo",
-        "civitai_version": 3118978,
-        "trigger": "this is an amateur photo taken from smartphone, "
-                   "casual photo",
-    },
+    }
+    # {
+    #     "name": "FinePn V2 (amateur phone photo)",
+    #     "file": "Krea2_FinePornV2_FP8.safetensors",       # ~12.2 GB
+    #     "variant": "turbo",
+    #     "civitai_version": 3118978,
+    #     "trigger": "this is an amateur photo taken from smartphone, "
+    #                "casual photo",
+    # },
 ]
 
 # The default model's variant (first registry entry) — used for logging.
@@ -102,9 +175,17 @@ ABLITERATED_ENCODER_FILE = "qwen3vl_4b_abliterated.safetensors"
 # pack feed the source image into the model itself — as in-context VAE
 # latents and through the Qwen3-VL encoder — so edits preserve identity
 # instead of repainting from scratch like plain img2img/inpaint.
+# Off by default (feature key "krea_edit", ~1.9 GB for the LoRA); the node pack
+# is only cloned when it is on, since nothing else uses those two nodes.
+#
+# Weights and nodes are one unit: v1.2 weights need the v1.2 nodes (they
+# supply the FIT reference geometry and the ref_boost dial that
+# build_edit_workflow wires), and the v1.2 nodes default fit_mode to "fit",
+# which v1/v1.1 weights were not trained for. Bump both together or
+# neither — scripts/PINS.json is what holds the node pack still.
 KREA2EDIT_NODES_REPO = "https://github.com/lbouaraba/comfyui-krea2edit"
 EDIT_LORA_REPO = "conradlocke/krea2-identity-edit"
-EDIT_LORA_FILE = "krea2_identity_edit_v1_1.safetensors"  # ~1.83 GB
+EDIT_LORA_FILE = "krea2_identity_edit_v1_2.safetensors"  # ~1.83 GB
 
 # Diffusion models come from the KREA2_MODELS registry above; only the
 # shared VAE is a fixed download.
@@ -115,6 +196,7 @@ HF_MODEL_FILES = [
 # Official Krea 2 style LoRAs from the same HF repo (~0.5 GB each).
 # Trim this list to save download time and disk space.
 HF_LORA_FILES = [
+    "loras/krea2_turbo_lora_rank_64_bf16.safetensors",
     # "loras/krea2_darkbrush.safetensors",
     # "loras/krea2_dotmatrix.safetensors",
     # "loras/krea2_kidsdrawing.safetensors",
@@ -125,6 +207,246 @@ HF_LORA_FILES = [
     # "loras/krea2_sunsetblur.safetensors",
     # "loras/krea2_vintagetarot.safetensors",
 ]
+
+# ── Krea 2 V2 (Krea2 advanced turbo/raw text-to-image) ────────────────────────────
+# A second, self-contained text-to-image pipeline: the Krea2 advanced
+# "KREA 2 TURBO/RAW" workflow, reproduced node-for-node in its own tab. It
+# deliberately shares nothing with the tabs above except the text encoder —
+# its own UNet quant, its own VAE, its own LoRA stack and its own defaults,
+# so tuning one never moves the other.
+#
+# Three things make it different from the Single tab:
+#   • RES4LYF's ClownsharKSampler_Beta replaces KSampler (eta/bongmath and
+#     the bong_tangent scheduler have no core equivalent),
+#   • an RBG Smart Seed Variance node sits between the positive prompt and
+#     the sampler, perturbing the conditioning per seed,
+#   • LoRAs apply to the model *and* the CLIP (the source workflow uses
+#     rgthree's Power Lora Loader in "Single Strength" mode), unlike the
+#     LoraLoaderModelOnly chain the other Krea tabs build.
+# On by default (feature key "krea_v2_t2i", ~17 GB); a license that does not grant
+# "krea_v2_t2i" skips the downloads, the three node packs and the tab.
+
+# Variant-level defaults, same scheme as VARIANT_DEFAULTS / FLUX_VARIANT_
+# DEFAULTS: a registry entry picks one with its "variant" field and may
+# override any value. `turbo_lora` is the on/off state the Krea 2 Turbo
+# LoRA slot takes when the variant is selected — that LoRA *is* the raw
+# recipe from the source workflow's companion guide (enable it at 0.6,
+# raise steps to 20 and CFG to ~2.5), so the two variants differ by
+# exactly the three things that guide lists.
+V2_VARIANT_DEFAULTS = {
+    "turbo": {"steps": 10, "cfg": 1.0, "turbo_lora": False},
+    "raw": {"steps": 20, "cfg": 2.5, "turbo_lora": True},
+}
+
+# The Krea 2 Turbo LoRA is slot 1 of V2_LORA_STACK below rather than
+# something the builder bolts on. Keeping it a normal, visible slot is what
+# stops it being applied twice when a raw run also has it ticked by hand —
+# the same "never applied silently" rule the trigger words follow.
+V2_TURBO_LORA_FILE = "krea2_turbo_lora_rank_64_bf16.safetensors"
+V2_TURBO_LORA_STRENGTH = 0.6
+
+# Selectable models for the V2 tab. Same fields as KREA2_MODELS
+# (name / file / variant / optional steps, cfg, turbo_lora overrides /
+# hf_path within HF_MODEL_REPO / optional trigger); the first entry is the
+# default and is the model the source workflow ships with.
+#
+# Raw costs no extra disk: krea2_raw_fp8_scaled is already in KREA2_MODELS,
+# and the downloads are keyed on the destination path, so whichever tab
+# asks for it first fetches it and the other finds it cached.
+V2_MODELS = [
+    {
+        "name": "Krea 2 Turbo mxfp8 (workflow default)",
+        "file": "krea2_turbo_mxfp8.safetensors",        # ~13.5 GB
+        "variant": "turbo",
+        "hf_path": "diffusion_models/krea2_turbo_mxfp8.safetensors",
+    },
+    {
+        "name": "Krea 2 Raw fp8",
+        "file": "krea2_raw_fp8_scaled.safetensors",     # ~13.1 GB, shared
+        "variant": "raw",
+        "hf_path": "diffusion_models/krea2_raw_fp8_scaled.safetensors",
+    },
+]
+
+# The workflow's companion guide recommends the Wan 2.1 VAE over the stock
+# Qwen image VAE for this pipeline. Different repo, and it is stored under
+# vae/wan/ upstream, so it is fetched explicitly rather than through the
+# HF_MODEL_FILES list.
+V2_VAE_FILE = "wan21-vae.safetensors"                            # ~254 MB
+V2_VAE_HF_REPO = "wangkanai/wan21-vae"
+V2_VAE_HF_PATH = f"vae/wan/{V2_VAE_FILE}"
+
+# Custom node packs this tab needs. Cloned at bootstrap like Krea2Edit;
+# each one is optional in the sense that a failed clone disables only this
+# tab. RES4LYF and RBG change the image and have no core equivalent;
+# post-processing supplies FilmGrain for the optional grain toggle.
+V2_NODE_REPOS = [
+    # (custom_nodes dir, git URL, a node class that proves it loaded)
+    ("RES4LYF", "https://github.com/ClownsharkBatwing/RES4LYF",
+     "ClownsharKSampler_Beta"),
+    ("ComfyUI-RBG-SmartSeedVariance",
+     "https://github.com/RamonGuthrie/ComfyUI-RBG-SmartSeedVariance",
+     "RBG_Smart_Seed_Variance"),
+    ("ComfyUI-post-processing-nodes",
+     "https://github.com/EllangoK/ComfyUI-post-processing-nodes",
+     "FilmGrain"),
+]
+
+# The workflow's LoRA stack, in its original order and with its original
+# strengths and on/off states. Entries are
+# (filename, strength, enabled_by_default, civitai_version_id) — the
+# version id is None for LoRAs already fetched from Hugging Face.
+# Every strength applies to the model and the CLIP alike (Single Strength).
+V2_LORA_STACK = [
+    # Slot 1 — toggled on/off by the Model dropdown (see V2_VARIANT_DEFAULTS).
+    (V2_TURBO_LORA_FILE, V2_TURBO_LORA_STRENGTH, False, None),
+    ("krea2filterbypass3.safetensors", 0.93, True, 3067151),
+    ("krea2_Enhancer.safetensors", 0.4, True, 3065628),
+    ("Krea2-realism-V2.safetensors", 0.3, True, 3090634),
+    # The companion guide links version 3109006 for this LoRA family; the
+    # workflow names the file v3.1. If CivitAI serves a different revision
+    # the graph still runs — only the filename on disk has to match.
+    ("realism_engine_krea2_v3.1.safetensors", 0.6, True, 3109006),
+    ("RealisticSnapshotKrea2.safetensors", 0.8, True, 3084537),
+    ("purelens_krea2.safetensors", 0.6, True, 3114242),
+    ("lenovo_krea2.safetensors", 0.5, True, 3075606),
+    ("MysticXXX_KREA2_v3.safetensors", 1.0, False, 3116175),
+    ("KNPV4.1_pre.safetensors", 1.0, False, 3085473),
+    ("snofs_krea_v1.safetensors", 1.0, False, 3104629),
+]
+
+# ClownsharKSampler_Beta settings, straight from the workflow. These are
+# the knobs both variants share; steps and cfg are deliberately absent
+# because they belong to the model (V2_VARIANT_DEFAULTS) and would
+# otherwise be a second source of truth for the same two numbers.
+V2_SAMPLER_DEFAULTS = {
+    "eta": 0.5,
+    "sampler_name": "linear/euler",
+    "scheduler": "bong_tangent",
+    "steps_to_run": -1,
+    "denoise": 1.0,
+    "sampler_mode": "standard",
+    "bongmath": True,
+}
+# RES4LYF builds these lists at import time from its own tables, so they
+# cannot be enumerated here. The dropdowns accept free text — these are the
+# values the workflow ships with plus the node's own defaults.
+V2_SAMPLER_NAMES = ["linear/euler", "res_2m", "res_3m", "deis_2m", "euler"]
+V2_SCHEDULERS = ["bong_tangent", "beta57", "normal", "karras", "simple"]
+V2_SAMPLER_MODES = ["standard", "unsample", "resample"]
+
+# RBG Smart Seed Variance settings, straight from the workflow. The combo
+# strings carry emoji and must match the node's option lists character for
+# character, or ComfyUI rejects the prompt.
+V2_VARIANCE_DEFAULTS = {
+    "variance_preset": "🌱 Subtle",
+    "fine_tune_variance": 50,
+    "model_type": "📸 Krea2 (SingleStream)",
+    "fade_curve": "Instant",
+    "noise_injection": "Beginning Steps",
+    "protect_mode": "🚫 None",
+    "protect_regions": "",
+    "direction_shift": "🚫 None",
+    "shift_strength": 100,
+    "variance_schedule": "constant",
+    "cutoff_step": 8,
+    "total_steps": 20,
+    "cutoff_strength": 0.0,
+    "vibe_blend": 0.5,
+}
+V2_VARIANCE_PRESETS = ["❌ Disabled", "🌱 Subtle", "🌿 Balanced", "🪴 Creative",
+                       "🌳 Bold", "🌴 Wild", "⚙️ Custom"]
+V2_VARIANCE_MODEL_TYPES = [
+    "⚡ Z-Image Turbo", "📸 Krea2 (SingleStream)", "🖼️ Qwen-Image",
+    "🔮 Flux (Dev/Schnell)", "🎨 Chroma HD", "🧧 ERNIE-Image",
+    "🔮 Ideogram 4.0", "🖌️ SDXL", "🎬 Wan2.2", "⚙️ Other",
+]
+V2_VARIANCE_SCHEDULES = ["constant", "decreasing", "step_cutoff",
+                         "tiered_release", "hard_lock"]
+
+# Post-processing. Both nodes are bypassed (mode 4) in the source workflow,
+# so both toggles start off and the tab reproduces it exactly as shipped.
+V2_SHARPEN_DEFAULTS = {"sharpen_radius": 1, "sigma": 0.35, "alpha": 1.0}
+V2_FILMGRAIN_DEFAULTS = {"intensity": 0.05, "scale": 1.0, "temperature": 0.0,
+                         "vignette": 0.0}
+
+# The workflow sizes its latent with a ResolutionSelector feeding
+# EmptyLatentImage. That is pure integer plumbing, so the same arithmetic
+# runs in Python here (megapixels × 1024², the core ComfyUI convention) and
+# the tab shows the width/height it resolved to. 3:4 at 1.5 MP snapped to
+# /8 gives the workflow's 1088×1448.
+V2_ASPECT_RATIOS = {
+    "1:1 (Square)": (1, 1),
+    "3:4 (Portrait Standard)": (3, 4),
+    "2:3 (Portrait)": (2, 3),
+    "9:16 (Portrait Tall)": (9, 16),
+    "4:3 (Landscape Standard)": (4, 3),
+    "3:2 (Landscape)": (3, 2),
+    "16:9 (Landscape Wide)": (16, 9),
+}
+V2_DEFAULT_ASPECT = "3:4 (Portrait Standard)"
+V2_DEFAULT_MEGAPIXELS = 1.5
+V2_DEFAULT_MULTIPLE = 8
+
+# The workflow's Negatives node, verbatim.
+V2_DEFAULT_NEGATIVE = (
+    "This low quality greyscale unfinished sketch is inaccurate and flawed. "
+    "The image is very blurred and lacks detail with excessive chromatic "
+    "aberrations and artifacts. The image is overly saturated with excessive "
+    "bloom. It has a toony aesthetic with bold outlines and flat colors.\n\n"
+    "Fake, unreal, wrong anatomy, big eyes, bad anatomy, extra limbs, "
+    "missing fingers, fused fingers, poorly drawn hands, poorly drawn face, "
+    "mutated hands, long neck, extra arms, extra legs, extra fingers, "
+    "disfigured, malformed limbs, missing limbs, skinny, fat, jpeg artifacts, "
+    "watermark, signature, text, logo, exaggerated features, unnatural skin "
+    "tone, bokeh, deformed, lowres, out of frame, aliasing, blurry "
+    "background, doll-like skin, plastic texture, uncanny valley, incorrect "
+    "proportions, duplicate body parts, unnatural poses, poor anatomical "
+    "proportions, pubic hair, digital art, drawing, cartoon, large breasts, "
+    "huge breasts, faded colors, pastel tones, beigesthetic, flat lighting, "
+    "overexposed whites, AI glow, plastic skin, skincare-ad look, studio "
+    "lighting, cartoon or 3D style, text watermark or logos, cleft chin, "
+    "indented chin, smooth groin, Barbie-doll anatomy, blurred genitalia, "
+    "aged, wrinkles, massive breasts, 28G, airbrushed, plastic skin, clothes, "
+    "bra, underwear, iPhone, smartphone, wide angle distortion, tattoos, "
+    "piercings, excessive cum."
+)
+
+# ── Krea 2 V2 Edit (instruction editing on the V2 spine) ──────────────────────
+# The ✨ Krea2 Edit tab's recipe — the Identity Edit LoRA plus the
+# ComfyUI-Krea2Edit nodes — rebuilt on the V2 pipeline instead of the
+# Krea 2 v1 one: V2_MODELS, the Wan 2.1 VAE, the 11-slot model+CLIP LoRA
+# stack, ClownsharKSampler_Beta and Smart Seed Variance. Everything above
+# is reused verbatim, so tuning the V2 tab tunes this one too and there is
+# no second copy of those numbers to drift.
+#
+# The VAE swap is safe here specifically because the two are the same
+# family: Qwen-Image's VAE is a Wan 2.1 derivative with the same 16-channel
+# latent space, so the source latents Krea2EditModelPatch prepends as
+# in-context tokens still mean what the Identity Edit LoRA was trained to
+# read. A VAE from any other family would not be substitutable this way.
+#
+# Off by default (feature key "krea_v2_edit"); it needs the V2 downloads
+# (~17 GB), the Identity Edit LoRA (~1.9 GB) and both sets of node packs.
+
+# The Identity Edit LoRA bleeds and duplicates content above ~2 MP, and the
+# cap applies to the source as much as the output — this tab derives one
+# from the other, and VAE-encoding a 12 MP phone photo as a reference is a
+# needless 12 MP of VRAM.
+V2_EDIT_MAX_PIXELS = 2_000_000
+
+# 384-768 is the LoRA's trained grounding range; above it the model starts
+# emitting duplicated "double picture" compositions. ref_boost is how hard
+# the edit holds the reference: 1.0 neutral, ~4 strong likeness, past ~10
+# removals stop working. Same numbers the v1 Edit tab ships.
+V2_EDIT_DEFAULT_GROUNDING = 768
+V2_EDIT_DEFAULT_REF_BOOST = 4.0
+
+# Krea2EditModelPatch's reference geometry. "fit" is the v1.2 behaviour
+# (resample the reference in pixel space, so a source whose aspect differs
+# from the output is fitted rather than stretched); the legacy value is
+# kept selectable for anyone running older weights.
+V2_EDIT_FIT_MODES = ["fit", "crop (legacy)"]
 
 # ── Wan 2.2 image-to-video ────────────────────────────────────────────────────
 # Two model families, switchable per-job in the Video tab:
@@ -138,9 +460,8 @@ HF_LORA_FILES = [
 #     suits the parallel mode well.
 # Both share the UMT5-XXL text encoder (~6.7 GB). Everything comes from
 # the same Comfy-Org repackaged repo — ~49 GB in total on top of the Krea
-# downloads. Set KREA2_DISABLE_WAN=1 to skip all of it (the Video tab
-# disappears and nothing else changes).
-WAN_ENABLED = not os.environ.get("KREA2_DISABLE_WAN")
+# downloads. Off by default (feature key "wan_i2v"); a license granting "wan_i2v"
+# fetches all of it and shows the Video tab, and nothing else changes.
 WAN_HF_REPO = "Comfy-Org/Wan_2.2_ComfyUI_Repackaged"
 WAN_HIGH_UNET = "wan2.2_i2v_high_noise_14B_fp8_scaled.safetensors"
 WAN_LOW_UNET = "wan2.2_i2v_low_noise_14B_fp8_scaled.safetensors"
@@ -202,7 +523,9 @@ WAN_DEFAULT_NEGATIVE = (
 # render. Each instance is told to leave VRAM for the other via
 # --reserve-vram; on a 48 GB A40 the defaults give Krea ~22 GB and Wan
 # ~26 GB. Without the flag (default) both tabs share one ComfyUI queue —
-# zero OOM risk, but jobs run strictly one after another.
+# zero OOM risk, but jobs run strictly one after another. Only has any
+# effect when the "wan_i2v" feature is on: app.py checks both before paying
+# for a second instance.
 WAN_PARALLEL = bool(os.environ.get("KREA2_WAN_PARALLEL"))
 WAN_COMFY_PORT = 8189
 WAN_COMFY_LOG = WORKING_DIR / "comfyui_wan.log"
@@ -215,8 +538,8 @@ WAN_RESERVE_VRAM_GB = float(os.environ.get("KREA2_WAN_RESERVE_VRAM", 22))
 # fp8 model is ~35.5 GB and the Mistral text encoder ~18 GB, so on a 48 GB
 # A40 run Flux WITHOUT KREA2_WAN_PARALLEL (it needs nearly the whole GPU)
 # and expect a slow model swap when switching between Flux and Krea jobs.
-# Set KREA2_DISABLE_FLUX=1 to skip the ~57 GB of downloads and hide the tab.
-FLUX_ENABLED = not os.environ.get("KREA2_DISABLE_FLUX")
+# Off by default (feature key "flux_t2i"); a license granting "flux_t2i" fetches
+# its ~57 GB and shows the tab.
 FLUX_HF_REPO = "Comfy-Org/flux2-dev"
 FLUX_TEXT_ENCODER = "mistral_3_small_flux2_fp8.safetensors"  # ~18.0 GB
 FLUX_VAE = "flux2-vae.safetensors"                           # ~0.34 GB
@@ -268,6 +591,185 @@ FLUX_CIVITAI_LORAS = [
     # (1234567, "some_flux2_lora.safetensors"),
 ]
 
+# ── Flux 2 Klein 9B Edit ──────────────────────────────────────────────────────
+# The Klein Edit tab is the Klein i2i "FLUX.2 KLEIN 9B EDIT v1.3" workflow
+# ported node-for-node (workflow_klein.py). It edits images rather than
+# generating them: one or two sources are VAE-encoded and attached to the
+# conditioning as ReferenceLatents, so the model works from what it is shown
+# and the prompt describes the change ("the person from image 1 wearing the
+# hat from image 2").
+#
+# It shares nothing with the Flux 2 tab but the VAE file. Klein 9B is a much
+# smaller model — 9.4 GB against Flux 2 Dev's 35.5 GB — with its own Qwen3-8B
+# text encoder, so the two never appear in each other's dropdowns and running
+# this tab does not require the ~57 GB the Flux tab needs. Off by default
+# (feature key "klein_i2i"); a license granting "klein_i2i" fetches its ~19 GB and
+# shows the tab.
+KLEIN_TEXT_ENCODER = "qwen_3_8b_fp8mixed_abliterated.safetensors"   # ~9.2 GB
+KLEIN_TEXT_ENCODER_REPO = "edicamargo/qwen_3_8b_fp8mixed_abliterated"
+# The same file the Flux 2 tab uses, from the same repo. Aliased rather than
+# copied so there is one source of truth for the name, and fetched by this
+# group as well because "klein_i2i" can be the only feature that is on —
+# downloads key on the destination path, so whichever asks first fetches it
+# and the other logs a cache hit.
+KLEIN_VAE = FLUX_VAE
+KLEIN_VAE_HF_REPO = FLUX_HF_REPO
+
+# Selectable Klein models. Same scheme as the other registries, with one
+# difference: hf_repo is per-entry and hf_path is a plain repo path (Black
+# Forest Labs does not use Comfy-Org's split_files/ layout), so add an entry,
+# restart, and it appears in the tab's Model dropdown.
+#
+# The workflow's companion note also lists GGUF quants for smaller GPUs.
+# Those are NOT a registry entry away: they load through UnetLoaderGGUF from
+# a custom node pack rather than UNETLoader, so they would need a builder
+# branch and a node-pack install — deliberately out of scope here.
+KLEIN_MODELS = [
+    {
+        "name": "Flux 2 Klein 9B fp8 (workflow default)",
+        "file": "flux-2-klein-9b-fp8.safetensors",       # ~9.4 GB
+        "hf_repo": "black-forest-labs/FLUX.2-klein-9b-fp8",
+        "hf_path": "flux-2-klein-9b-fp8.safetensors",
+    },
+]
+
+# KSamplerAdvanced settings, straight from the workflow. steps, cfg and
+# guidance are deliberately absent: they belong to the model (KLEIN_DEFAULTS
+# below, overridable per registry entry) and would otherwise be a second
+# source of truth for the same three numbers. What is left spells "run the
+# whole schedule in one pass", which is what makes KSamplerAdvanced behave
+# like the plain KSampler the other tabs build.
+KLEIN_SAMPLER_DEFAULTS = {
+    "add_noise": "enable",
+    "start_at_step": 0,
+    "end_at_step": 10000,
+    "return_with_leftover_noise": "disable",
+}
+
+# The knobs the tab exposes, at the workflow's values. cfg 1.0 with a
+# ConditioningZeroOut negative is the distilled-Flux idiom: FluxGuidance
+# steers prompt adherence instead, which is why both numbers are here.
+KLEIN_DEFAULTS = {
+    "steps": 8,
+    "cfg": 1.0,
+    "guidance": 4.0,
+    "sampler_name": "euler",
+    "scheduler": "normal",
+}
+# Sampler names come from the shared SAMPLERS list below; schedulers are
+# core ComfyUI's, listed here rather than shared because the V2 tab's are
+# RES4LYF's and the two sets have nothing to do with each other.
+KLEIN_SCHEDULERS = ["normal", "simple", "karras", "beta", "sgm_uniform",
+                    "ddim_uniform"]
+
+# ImageScaleToTotalPixels on each source image before it is encoded as a
+# reference latent. This is the workflow's own value and is independent of
+# the *output* size — the reference is what the model looks at, the output
+# latent is what it paints into.
+KLEIN_REFERENCE_MEGAPIXELS = 1.0
+KLEIN_SCALE_METHOD = "lanczos"
+KLEIN_RESOLUTION_STEPS = 1
+
+# The source workflow's three output-resolution groups, of which only the
+# first is live as shipped (the other two are bypassed). "Same as image 1"
+# means exactly that — a 12 MP phone photo asks for a 12 MP render — so the
+# tab warns above KLEIN_WARN_PIXELS and clamps each side at KLEIN_MAX_SIDE
+# rather than letting a paste turn into an OOM kill.
+KLEIN_OUTPUT_SAME = "Same as image 1 (workflow default)"
+KLEIN_OUTPUT_SCALED = "Scale image 1 to megapixels"
+KLEIN_OUTPUT_CUSTOM = "Custom width × height"
+KLEIN_OUTPUT_MODES = [KLEIN_OUTPUT_SAME, KLEIN_OUTPUT_SCALED,
+                      KLEIN_OUTPUT_CUSTOM]
+KLEIN_DEFAULT_MEGAPIXELS = 1.0
+KLEIN_DEFAULT_CUSTOM_SIZE = (1024, 1024)
+KLEIN_MAX_SIDE = 4096
+KLEIN_WARN_PIXELS = 4_000_000
+
+# Klein LoRAs live in their own subfolder (loras/klein/) for the same reason
+# the Flux ones do: the architectures are incompatible, so a Klein LoRA in
+# the Krea 2 dropdown is a job that cannot run. list_lora_files() globs
+# loras/ without recursing, so nothing here leaks into the other tabs.
+#
+# The stack is the workflow's, in its order, at its strengths and on/off
+# states — entries are (filename, strength, enabled_by_default,
+# civitai_version_id), the same shape as V2_LORA_STACK. Each strength
+# applies to the model and the CLIP alike (rgthree "Single Strength").
+KLEIN_LORA_SUBDIR = "klein"
+KLEIN_LORA_STACK = [
+    ("klein_snofs_v1_4.safetensors", 1.0, True, 2960556),
+    ("ultra_real_v4.safetensors", 1.0, True, 2846977),
+    ("realistic_klein_v3.safetensors", 1.0, True, 2876634),
+]
+
+# ── ReActor face swap ─────────────────────────────────────────────────────────
+# The Face Swap tab runs ComfyUI-ReActor: an ONNX face-swap pipeline
+# (inswapper_128) that is completely independent of the diffusion models.
+# It takes a finished image plus a reference face and replaces the face in
+# place — no UNet, no text encoder, no VAE — so it never touches the Krea 2
+# stack and costs nothing in VRAM while a generation is running.
+#
+# Everything it needs is downloaded up front by downloads.py, *including*
+# the three files ReActor would otherwise fetch during the first swap (the
+# RetinaFace detector, the face-parsing net and the NSFW classifier), so a
+# swap never reaches out to the network. ~1.8 GB in total. Off by default
+# (feature key "faceswap"); a license granting "faceswap" installs the
+# node pack, fetches the models and shows the tab.
+REACTOR_NODES_DIR = "ComfyUI-ReActor"
+# The node pack is vendored in deps/, so bootstrap installs it by copying
+# rather than cloning — nothing is fetched from GitHub. The repo URL stays
+# as the fallback for a checkout that does not carry deps/.
+REACTOR_LOCAL_NODES = PROJECT_DIR / "deps" / REACTOR_NODES_DIR
+REACTOR_NODES_REPO = "https://github.com/Gourieff/ComfyUI-ReActor"
+
+# Swap + restore models live in a HF *dataset* repo, so these downloads
+# need repo_type="dataset". Entries are (path in the repo, path under
+# MODELS_DIR) — the repo nests everything under models/, which is not the
+# layout ComfyUI wants, so each file is placed explicitly.
+REACTOR_HF_REPO = "Gourieff/ReActor"
+REACTOR_SWAP_MODEL = "inswapper_128.onnx"           # ~554 MB
+REACTOR_RESTORE_MODEL = "codeformer-v0.1.0.pth"     # ~377 MB
+REACTOR_HF_FILES = [
+    (f"models/{REACTOR_SWAP_MODEL}", f"insightface/{REACTOR_SWAP_MODEL}"),
+    (f"models/facerestore_models/{REACTOR_RESTORE_MODEL}",
+     f"facerestore_models/{REACTOR_RESTORE_MODEL}"),
+    # Add any other restorer from the same repo and it appears in the tab's
+    # "Face restoration" dropdown after a restart:
+    # ("models/facerestore_models/GFPGANv1.4.pth",
+    #  "facerestore_models/GFPGANv1.4.pth"),
+]
+
+# The models originate from insightface, but the package is not involved:
+# ReActor's own reactor_core/analyzer.py drives them through onnxruntime.
+# ReActorFaceAnalysis(name="buffalo_l", root=models/insightface) expects
+# the five ONNX files unpacked flat in models/insightface/models/buffalo_l/
+# — otherwise it downloads and unzips the archive itself on the first swap.
+REACTOR_INSIGHTFACE_PACK = "buffalo_l"
+REACTOR_INSIGHTFACE_ZIP = "models/buffalo_l.zip"    # ~289 MB
+
+# r_facelib resolves its '../../models/facedetection' against the node
+# pack's own directory, i.e. ComfyUI/models/facedetection — which
+# link_model_dirs symlinks at MODELS_DIR/facedetection. Pre-fetching these
+# two is what lets the *first* swap run without a network connection.
+REACTOR_FACEDETECTION_FILES = [
+    "https://github.com/xinntao/facexlib/releases/download/v0.1.0/"
+    "detection_Resnet50_Final.pth",                                  # ~110 MB
+    "https://github.com/sczhou/CodeFormer/releases/download/v0.1.0/"
+    "parsing_parsenet.pth",                                          # ~85 MB
+]
+
+# ComfyUI-ReActor is the SFW edition: it classifies every input image with
+# this ViT before swapping and returns flagged images unswapped. The node
+# looks for it under models/nsfw_detector/vit-base-nsfw-detector, and the
+# check runs whether or not the model is present — so it is downloaded
+# here rather than left to fetch itself mid-swap.
+REACTOR_NSFW_REPO = "AdamCodd/vit-base-nsfw-detector"
+REACTOR_NSFW_DIR = "nsfw_detector/vit-base-nsfw-detector"
+
+# Detector back-ends the ReActorFaceSwap node accepts, in its own order.
+REACTOR_DETECTORS = ["retinaface_resnet50", "retinaface_mobile0.25",
+                     "YOLOv5l", "YOLOv5n"]
+REACTOR_DEFAULT_DETECTOR = "retinaface_resnet50"
+
 # ── CivitAI LoRAs ─────────────────────────────────────────────────────────────
 # Entries are (model_version_id, filename_to_save_as). The version id is the
 # number in the CivitAI download URL: civitai.com/api/download/models/<id>
@@ -280,23 +782,25 @@ CIVITAI_LORAS = [
     (3072664, "SNOFS_Krea2_v1.0.safetensors"),
     (3090634, "Krea2-realism-V2.safetensors"),
     (3071904, "Krea2_AIO_NSFW_v1.0.safetensors"),
-    (3084537, "Realistic_Snapshot_Krea2_v0.5.safetensors"),
+    # (3084537, "Realistic_Snapshot_Krea2_v0.5.safetensors"),
     (3069544, "galaxyace_krea2.safetensors"),
-    (3084588, "Krea2_NSFW_plus.safetensors"),
+    (3160327, "HMBody_D_e10.safetensors"),
+    (3151907, "elusarca-photo.safetensors"),
+    # (3084588, "Krea2_NSFW_plus.safetensors"),
     # (3075498, "nicegirls_krea2.safetensors"),
     # (3066973, "Krea2-realism-V1.safetensors"),
     # (3075606, "lenovo_krea2.safetensors"),
     # (3114242, "purelens_krea2.safetensors"),
     # (3104629, "snofs_krea_v1_1.safetensors"),
-    (3085473, "KNPV4.1_pre.safetensors"),
+    # (3085473, "KNPV4.1_pre.safetensors"),
 ]
 
 # LoRAs pre-selected in the UI's three slots (generate / edit / inpaint tabs).
 # Entries are (filename, default weight); a file that failed to download is
 # silently skipped and the slot falls back to "None".
 DEFAULT_LORAS = [
-    ("Krea2-realism-V2.safetensors", 0.8),
-    ("Realism_Engine_Krea2_v2.0.safetensors", 0.8),
+    ("HMBody_D_e10.safetensors", 0.8),
+    ("Realism_Engine_Krea2_v2.0.safetensors", 0.4),
     ("galaxyace_krea2.safetensors", 0.8),
 ]
 
@@ -309,23 +813,94 @@ RESOLUTION_PRESETS = {
     "1536×1024 (Landscape XL)": (1536, 1024),
     "1024×1536 (Portrait XL)": (1024, 1536),
 }
-DEFAULT_RESOLUTION = "1024×1024 (Square)"
+DEFAULT_RESOLUTION = "1024×1536 (Portrait XL)"
 
 # Valid native ComfyUI samplers that work well with Krea 2 ("simple" scheduler).
 SAMPLERS = ["er_sde", "euler", "euler_ancestral", "dpmpp_2m", "res_multistep"]
 
-# Optional — Comfy-Org/Krea-2 is a public repo; only needed for gated repos.
+# ── Licensing ─────────────────────────────────────────────────────────────────
+# One customer key allows a fixed number of concurrent running instances.
+# The key is per-customer and set on the pod like the tokens below.
+#
+# The endpoint is assembled here from a bare deployment id rather than read
+# as a whole URL, for two reasons. An endpoint that can be repointed is a
+# licence check that can be answered by any server the customer chooses;
+# accepting only the id means the host can never be anything other than a
+# vercel.app subdomain. And the variable is named for what it looks like on
+# a pod — a node tag, sitting among RunPod's own — rather than for what it
+# does, so the licensing path is not the first thing read in the env panel.
+#
+# There is deliberately no fallback. The id is not compiled into the binary,
+# so a pod that does not carry it cannot check out a seat at all.
+_NODE_TAG = (os.environ.get("KREA2_NODE_TAG") or "").strip().lower()
+# One DNS label, nothing more. A dot, a slash, a colon or a port is how a
+# tag would smuggle in a different host, so reject the value outright rather
+# than strip the offending characters and use whatever is left.
+if not re.fullmatch(r"[a-z0-9][a-z0-9-]{6,61}[a-z0-9]", _NODE_TAG):
+    _NODE_TAG = ""
+# Empty when the tag is missing or malformed. licensing.acquire_or_exit()
+# turns that into the stop message; nothing else may call the API without
+# going through it.
+LICENSE_API_URL = f"https://{_NODE_TAG}.vercel.app" if _NODE_TAG else ""
+LICENSE_KEY = os.environ.get("KREA2_LICENSE_KEY") or None
+# How long the app keeps running when the license server is unreachable.
+# Long enough that an outage does not kill a video render mid-way, short
+# enough that a pod cut off from the server does not run indefinitely.
+LICENSE_GRACE_SECONDS = float(os.environ.get("KREA2_LICENSE_GRACE", 1800))
+
+# Optional. The mirror repos (see mirror.py) are public, so a customer pod
+# pulls every mirrored weight anonymously; this is only needed for gated
+# upstream repos. Keep it *unset* rather than wrong — a stale token turns
+# an anonymous download into a 401, which reads as "the mirror is missing
+# files" when the real problem is the credential.
 HF_TOKEN = os.environ.get("HF_TOKEN") or None
-# Needed for most CivitAI downloads (create one at civitai.com → account settings).
+# Only needed when a download falls through to CivitAI — i.e. when the
+# mirror could not serve it. A healthy mirrored pod never uses this.
 CIVITAI_TOKEN = os.environ.get("CIVITAI_TOKEN") or None
+
+# ── Showcase images ───────────────────────────────────────────────────────────
+# Where the pricing page's screenshots are served from — a public Cloudflare
+# R2 bucket, holding the same folder layout showcase.json names:
+#
+#     https://pub-<hash>.r2.dev/krea_edit/compare-a/before.webp
+#
+# Note the host is the subdomain Cloudflare assigns when public access is
+# switched on, not one named after the bucket — enabling it is what mints
+# the value, so there is nothing to guess at from the bucket name. A custom
+# domain works the same way and is the better choice in production, since
+# r2.dev is rate limited and Cloudflare does not intend it for live traffic.
+#
+# They are fetched by the customer's browser, not by this app, so nothing
+# here downloads them and no credential is involved: the bucket has to be
+# public (an r2.dev subdomain or a custom domain). Plain <img> loads need no
+# CORS header either — only fetch() would.
+#
+# The alternative was compiling them into the binary, which put every
+# screenshot into a onefile build that is re-extracted on every launch. This
+# way a new picture is an upload, not a release.
+#
+# Empty is a supported state, not a broken one: the section still renders,
+# in full, with every picture as a placeholder tile naming the file it wants
+# (see showcase.py). That is also what a dev checkout gets for free.
+SHOWCASE_BASE_URL = (os.environ.get("KREA2_SHOWCASE_URL") or "").strip()
+# https only, and no query or fragment: the value is pasted into an env
+# panel rather than reviewed in a diff, and it ends up as the prefix of
+# every image src on the page. Anything else is dropped with a warning
+# rather than used — the page then reads exactly as it does with no bucket
+# configured at all.
+if SHOWCASE_BASE_URL and not SHOWCASE_BASE_URL.lower().startswith("https://"):
+    log.warning("KREA2_SHOWCASE_URL is not an https:// URL — ignoring it. "
+                "The pricing showcase will render with placeholder tiles.")
+    SHOWCASE_BASE_URL = ""
+SHOWCASE_BASE_URL = SHOWCASE_BASE_URL.split("?")[0].split("#")[0].rstrip("/")
 
 for _dir in (TEMP_DIR, MODELS_DIR, OUTPUT_DIR):
     _dir.mkdir(parents=True, exist_ok=True)
 
+# Which features are on is logged by app.py once features.py has resolved
+# them — this module deliberately does not know, so that importing config
+# from features.py stays acyclic.
 log.info(
-    "Variant: Krea 2 %s · Wan 2.2 I2V %s · models → %s · images → %s",
-    KREA2_VARIANT,
-    ("parallel instance" if WAN_PARALLEL else "shared queue")
-    if WAN_ENABLED else "disabled",
-    MODELS_DIR, OUTPUT_DIR,
+    "Variant: Krea 2 %s · models → %s · images → %s",
+    KREA2_VARIANT, MODELS_DIR, OUTPUT_DIR,
 )

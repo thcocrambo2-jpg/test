@@ -340,6 +340,8 @@ def build_edit_workflow(
     sampler: str = "er_sde",
     image_name: str,
     grounding_px: int = 768,
+    ref_boost: float = 4.0,
+    fit_mode: str = "fit",
     loras=(),
     unet_file: str | None = None,
     filename_prefix: str = "Krea2Edit",
@@ -354,10 +356,29 @@ def build_edit_workflow(
     ComfyUI-Krea2Edit pack (installed by bootstrap.install_custom_nodes).
 
     The Identity Edit LoRA is always applied first at strength 1.0 (as
-    trained); style `loras` stack after it. `grounding_px` trades edit
-    adherence (lower) against identity fidelity (higher). Denoise stays
-    1.0: the source enters through conditioning, not the starting latent,
-    and `width`/`height` should match the source aspect ratio (≤ 2 MP).
+    trained); style `loras` stack after it. Denoise stays 1.0: the source
+    enters through conditioning, not the starting latent.
+
+    Three of the patch node's inputs are what make this the v1.2 recipe
+    rather than the v1.1 one, and all three are optional inputs whose
+    absence degrades silently rather than erroring:
+
+      • `vae` + `source_image` — without *both*, fit_mode does nothing.
+        They are what lets the node resample the reference in pixel space,
+        so a source whose aspect ratio differs from width/height is fitted
+        instead of stretched. (`fit_mode="crop (legacy)"` is the v1/v1.1
+        geometry, kept as an argument for running older weights.)
+      • `target_latent` — the same latent KSampler starts from. The node
+        pre-encodes at execution time instead of during the first sampling
+        step, so the diffusion model is not evicted mid-run on a GPU that
+        is already sharing VRAM (see KREA2_MAIN_RESERVE_VRAM).
+
+    `grounding_px` trades edit adherence (lower) against identity fidelity
+    (higher); 384-768 is the trained range and above it the model starts
+    emitting duplicated/split compositions. `ref_boost` is how hard the
+    edit holds the reference: 1.0 is neutral, ~4 gives strong likeness,
+    and past ~10 removals stop working. Generate at ≤ 2 MP either way —
+    the source bleeds into the output above that.
     """
     wf, model_ref, clip_ref, vae_ref = _model_nodes(
         [(EDIT_LORA_FILE, 1.0), *loras], unet_file
@@ -371,9 +392,21 @@ def build_edit_workflow(
         "class_type": "VAEEncode",
         "inputs": {"pixels": ["source", 0], "vae": vae_ref},
     }
+    wf["latent"] = {
+        "class_type": "EmptySD3LatentImage",
+        "inputs": {"width": int(width), "height": int(height), "batch_size": 1},
+    }
     wf["edit_model"] = {
         "class_type": "Krea2EditModelPatch",
-        "inputs": {"model": model_ref, "source_latent": ["encode", 0]},
+        "inputs": {
+            "model": model_ref,
+            "source_latent": ["encode", 0],
+            "source_image": ["source", 0],
+            "vae": vae_ref,
+            "target_latent": ["latent", 0],
+            "fit_mode": fit_mode,
+            "ref_boost": float(ref_boost),
+        },
     }
     wf["positive"] = {
         "class_type": "Krea2EditGroundedEncode",
@@ -392,10 +425,6 @@ def build_edit_workflow(
             "class_type": "ConditioningZeroOut",
             "inputs": {"conditioning": ["positive", 0]},
         }
-    wf["latent"] = {
-        "class_type": "EmptySD3LatentImage",
-        "inputs": {"width": int(width), "height": int(height), "batch_size": 1},
-    }
     wf["sampler"] = {
         "class_type": "KSampler",
         "inputs": {

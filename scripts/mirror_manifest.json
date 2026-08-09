@@ -1,0 +1,437 @@
+{
+  "_note": [
+    "THE authoritative list of what the mirror holds. mirror_to_hf.py reads this file and does nothing else - it has no built-in list.",
+    "Add a model or LoRA to config.py? Add it here too. Run `mirror_to_hf.py --audit` to be told what config.py has that this file does not.",
+    "Entries are never removed. An item stays here after config.py stops mentioning it - that is the point of a mirror.",
+    "local/path_in_repo are relative to MODELS_DIR and the repo root.",
+    "source.kind: civitai | hf | hf_dataset | url | dir | abliterated_merge | local"
+  ],
+  "mirror_public": true,
+  "repos": {
+    "loras": {
+      "name": "krea2-loras",
+      "description": "CivitAI LoRAs - highest churn"
+    },
+    "encoders": {
+      "name": "krea2-encoders",
+      "description": "Merged abliterated Qwen3-VL encoder"
+    },
+    "assets": {
+      "name": "krea2-assets",
+      "description": "Community HF weights"
+    },
+    "reactor": {
+      "name": "krea2-reactor",
+      "description": "Face-swap models + detectors"
+    },
+    "nodes": {
+      "name": "krea2-nodes",
+      "description": "Pinned custom-node tarballs + PINS.json"
+    }
+  },
+  "items": [
+    {
+      "repo": "loras",
+      "local": "loras/krea2filterbypass3.safetensors",
+      "path_in_repo": "loras/krea2filterbypass3.safetensors",
+      "source": {
+        "kind": "civitai",
+        "version": 3067151,
+        "subdir": "loras"
+      },
+      "aliases": [
+        "Krea2FilterBypass_3vector.safetensors"
+      ]
+    },
+    {
+      "repo": "loras",
+      "local": "loras/krea2_Enhancer.safetensors",
+      "path_in_repo": "loras/krea2_Enhancer.safetensors",
+      "source": {
+        "kind": "civitai",
+        "version": 3065628,
+        "subdir": "loras"
+      }
+    },
+    {
+      "repo": "loras",
+      "local": "loras/Krea2-realism-V2.safetensors",
+      "path_in_repo": "loras/Krea2-realism-V2.safetensors",
+      "source": {
+        "kind": "civitai",
+        "version": 3090634,
+        "subdir": "loras"
+      }
+    },
+    {
+      "repo": "loras",
+      "local": "loras/realism_engine_krea2_v3.1.safetensors",
+      "path_in_repo": "loras/realism_engine_krea2_v3.1.safetensors",
+      "source": {
+        "kind": "civitai",
+        "version": 3109006,
+        "subdir": "loras"
+      }
+    },
+    {
+      "repo": "loras",
+      "local": "loras/RealisticSnapshotKrea2.safetensors",
+      "path_in_repo": "loras/RealisticSnapshotKrea2.safetensors",
+      "source": {
+        "kind": "civitai",
+        "version": 3084537,
+        "subdir": "loras"
+      },
+      "aliases": [
+        "Realistic_Snapshot_Krea2_v0.5.safetensors"
+      ]
+    },
+    {
+      "repo": "loras",
+      "local": "loras/purelens_krea2.safetensors",
+      "path_in_repo": "loras/purelens_krea2.safetensors",
+      "source": {
+        "kind": "civitai",
+        "version": 3114242,
+        "subdir": "loras"
+      }
+    },
+    {
+      "repo": "loras",
+      "local": "loras/lenovo_krea2.safetensors",
+      "path_in_repo": "loras/lenovo_krea2.safetensors",
+      "source": {
+        "kind": "civitai",
+        "version": 3075606,
+        "subdir": "loras"
+      }
+    },
+    {
+      "repo": "loras",
+      "local": "loras/MysticXXX_KREA2_v3.safetensors",
+      "path_in_repo": "loras/MysticXXX_KREA2_v3.safetensors",
+      "source": {
+        "kind": "civitai",
+        "version": 3116175,
+        "subdir": "loras"
+      }
+    },
+    {
+      "repo": "loras",
+      "local": "loras/KNPV4.1_pre.safetensors",
+      "path_in_repo": "loras/KNPV4.1_pre.safetensors",
+      "source": {
+        "kind": "civitai",
+        "version": 3085473,
+        "subdir": "loras"
+      }
+    },
+    {
+      "repo": "loras",
+      "local": "loras/snofs_krea_v1.safetensors",
+      "path_in_repo": "loras/snofs_krea_v1.safetensors",
+      "source": {
+        "kind": "civitai",
+        "version": 3104629,
+        "subdir": "loras"
+      },
+      "aliases": [
+        "snofs_krea_v1_1.safetensors"
+      ]
+    },
+    {
+      "repo": "loras",
+      "local": "loras/Realism_Engine_Krea2_v2.0.safetensors",
+      "path_in_repo": "loras/Realism_Engine_Krea2_v2.0.safetensors",
+      "source": {
+        "kind": "civitai",
+        "version": 3070702,
+        "subdir": "loras"
+      }
+    },
+    {
+      "repo": "loras",
+      "local": "loras/SNOFS_Krea2_v1.0.safetensors",
+      "path_in_repo": "loras/SNOFS_Krea2_v1.0.safetensors",
+      "source": {
+        "kind": "civitai",
+        "version": 3072664,
+        "subdir": "loras"
+      }
+    },
+    {
+      "repo": "loras",
+      "local": "loras/Krea2_AIO_NSFW_v1.0.safetensors",
+      "path_in_repo": "loras/Krea2_AIO_NSFW_v1.0.safetensors",
+      "source": {
+        "kind": "civitai",
+        "version": 3071904,
+        "subdir": "loras"
+      }
+    },
+    {
+      "repo": "loras",
+      "local": "loras/galaxyace_krea2.safetensors",
+      "path_in_repo": "loras/galaxyace_krea2.safetensors",
+      "source": {
+        "kind": "civitai",
+        "version": 3069544,
+        "subdir": "loras"
+      }
+    },
+    {
+      "repo": "loras",
+      "local": "loras/HMBody_D_e10.safetensors",
+      "path_in_repo": "loras/HMBody_D_e10.safetensors",
+      "source": {
+        "kind": "civitai",
+        "version": 3160327,
+        "subdir": "loras"
+      }
+    },
+    {
+      "repo": "loras",
+      "local": "loras/desi-realism-v1.safetensors",
+      "path_in_repo": "loras/desi-realism-v1.safetensors",
+      "source": {
+        "kind": "civitai",
+        "version": 3194454,
+        "subdir": "loras"
+      }
+    },
+    {
+      "repo": "loras",
+      "local": "loras/elusarca-photo.safetensors",
+      "path_in_repo": "loras/elusarca-photo.safetensors",
+      "source": {
+        "kind": "civitai",
+        "version": 3151907,
+        "subdir": "loras"
+      }
+    },
+    {
+      "repo": "loras",
+      "local": "loras/Krea2_NSFW_plus.safetensors",
+      "path_in_repo": "loras/Krea2_NSFW_plus.safetensors",
+      "source": {
+        "kind": "civitai",
+        "version": 3084588,
+        "subdir": "loras"
+      },
+      "note": "commented out in config.py"
+    },
+    {
+      "repo": "loras",
+      "local": "loras/nicegirls_krea2.safetensors",
+      "path_in_repo": "loras/nicegirls_krea2.safetensors",
+      "source": {
+        "kind": "civitai",
+        "version": 3075498,
+        "subdir": "loras"
+      },
+      "note": "commented out in config.py"
+    },
+    {
+      "repo": "loras",
+      "local": "loras/Krea2-realism-V1.safetensors",
+      "path_in_repo": "loras/Krea2-realism-V1.safetensors",
+      "source": {
+        "kind": "civitai",
+        "version": 3066973,
+        "subdir": "loras"
+      },
+      "note": "commented out in config.py"
+    },
+    {
+      "repo": "encoders",
+      "local": "text_encoders/qwen3vl_4b_abliterated.safetensors",
+      "path_in_repo": "text_encoders/qwen3vl_4b_abliterated.safetensors",
+      "source": {
+        "kind": "abliterated_merge",
+        "repo": "huihui-ai/Huihui-Qwen3-VL-4B-Instruct-abliterated"
+      },
+      "note": "merged shards - mirroring this skips the runtime merge"
+    },
+    {
+      "repo": "assets",
+      "local": "loras/krea2_identity_edit_v1_2.safetensors",
+      "path_in_repo": "loras/krea2_identity_edit_v1_2.safetensors",
+      "source": {
+        "kind": "hf",
+        "repo": "conradlocke/krea2-identity-edit",
+        "path": "krea2_identity_edit_v1_2.safetensors"
+      },
+      "note": "needs the v1.2 nodes (fit geometry + ref_boost)"
+    },
+    {
+      "repo": "assets",
+      "local": "vae/wan21-vae.safetensors",
+      "path_in_repo": "vae/wan21-vae.safetensors",
+      "source": {
+        "kind": "hf",
+        "repo": "wangkanai/wan21-vae",
+        "path": "vae/wan/wan21-vae.safetensors"
+      }
+    },
+    {
+      "repo": "reactor",
+      "local": "insightface/inswapper_128.onnx",
+      "path_in_repo": "insightface/inswapper_128.onnx",
+      "source": {
+        "kind": "hf_dataset",
+        "repo": "Gourieff/ReActor",
+        "path": "models/inswapper_128.onnx"
+      }
+    },
+    {
+      "repo": "reactor",
+      "local": "facerestore_models/codeformer-v0.1.0.pth",
+      "path_in_repo": "facerestore_models/codeformer-v0.1.0.pth",
+      "source": {
+        "kind": "hf_dataset",
+        "repo": "Gourieff/ReActor",
+        "path": "models/facerestore_models/codeformer-v0.1.0.pth"
+      }
+    },
+    {
+      "repo": "reactor",
+      "local": "facerestore_models/GFPGANv1.4.pth",
+      "path_in_repo": "facerestore_models/GFPGANv1.4.pth",
+      "source": {
+        "kind": "hf_dataset",
+        "repo": "Gourieff/ReActor",
+        "path": "models/facerestore_models/GFPGANv1.4.pth"
+      },
+      "note": "commented out in config.py REACTOR_HF_FILES"
+    },
+    {
+      "repo": "reactor",
+      "local": "insightface/models/buffalo_l",
+      "path_in_repo": "insightface/models/buffalo_l",
+      "source": {
+        "kind": "dir"
+      },
+      "note": "unpacked by the app from buffalo_l.zip; mirrored flat"
+    },
+    {
+      "repo": "reactor",
+      "local": "nsfw_detector/vit-base-nsfw-detector",
+      "path_in_repo": "nsfw_detector/vit-base-nsfw-detector",
+      "source": {
+        "kind": "dir"
+      },
+      "note": "AdamCodd/vit-base-nsfw-detector snapshot"
+    },
+    {
+      "repo": "reactor",
+      "local": "facedetection/detection_Resnet50_Final.pth",
+      "path_in_repo": "facedetection/detection_Resnet50_Final.pth",
+      "source": {
+        "kind": "url",
+        "url": "https://github.com/xinntao/facexlib/releases/download/v0.1.0/detection_Resnet50_Final.pth"
+      },
+      "note": "GitHub release asset - a fork would not carry this"
+    },
+    {
+      "repo": "reactor",
+      "local": "facedetection/parsing_parsenet.pth",
+      "path_in_repo": "facedetection/parsing_parsenet.pth",
+      "source": {
+        "kind": "url",
+        "url": "https://github.com/sczhou/CodeFormer/releases/download/v0.1.0/parsing_parsenet.pth"
+      },
+      "note": "GitHub release asset - a fork would not carry this"
+    },
+    {
+      "repo": "loras",
+      "local": "diffusion_models/Krea2_FinePornV2_FP8.safetensors",
+      "path_in_repo": "diffusion_models/Krea2_FinePornV2_FP8.safetensors",
+      "source": {
+        "kind": "civitai",
+        "version": 3118978,
+        "subdir": "diffusion_models"
+      },
+      "enabled": false,
+      "note": "~12.2 GB UNet, commented out in config.py KREA2_MODELS. Enable with --include-disabled or flip this flag."
+    },
+    {
+      "repo": "encoders",
+      "local": "text_encoders/qwen_3_8b_fp8mixed_abliterated.safetensors",
+      "path_in_repo": "text_encoders/qwen_3_8b_fp8mixed_abliterated.safetensors",
+      "source": {
+        "kind": "hf",
+        "repo": "edicamargo/qwen_3_8b_fp8mixed_abliterated",
+        "path": "qwen_3_8b_fp8mixed_abliterated.safetensors"
+      },
+      "note": "~9.2 GB Qwen3-8B encoder for the Klein Edit tab - a single-account repo, the category most likely to vanish"
+    },
+    {
+      "repo": "loras",
+      "local": "loras/klein/klein_snofs_v1_4.safetensors",
+      "path_in_repo": "loras/klein/klein_snofs_v1_4.safetensors",
+      "source": {
+        "kind": "civitai",
+        "version": 2960556,
+        "subdir": "loras/klein"
+      }
+    },
+    {
+      "repo": "loras",
+      "local": "loras/klein/ultra_real_v4.safetensors",
+      "path_in_repo": "loras/klein/ultra_real_v4.safetensors",
+      "source": {
+        "kind": "civitai",
+        "version": 2846977,
+        "subdir": "loras/klein"
+      }
+    },
+    {
+      "repo": "loras",
+      "local": "loras/klein/realistic_klein_v3.safetensors",
+      "path_in_repo": "loras/klein/realistic_klein_v3.safetensors",
+      "source": {
+        "kind": "civitai",
+        "version": 2876634,
+        "subdir": "loras/klein"
+      }
+    }
+  ],
+  "node_packs": [
+    {
+      "dir": "RES4LYF",
+      "repo": "nodes",
+      "url": "https://github.com/ClownsharkBatwing/RES4LYF"
+    },
+    {
+      "dir": "ComfyUI-RBG-SmartSeedVariance",
+      "repo": "nodes",
+      "url": "https://github.com/RamonGuthrie/ComfyUI-RBG-SmartSeedVariance"
+    },
+    {
+      "dir": "ComfyUI-post-processing-nodes",
+      "repo": "nodes",
+      "url": "https://github.com/EllangoK/ComfyUI-post-processing-nodes"
+    },
+    {
+      "dir": "comfyui-krea2edit",
+      "repo": "nodes",
+      "url": "https://github.com/lbouaraba/comfyui-krea2edit"
+    }
+  ],
+  "pin_upstream": {
+    "Comfy-Org/Krea-2": "hf",
+    "Comfy-Org/Wan_2.2_ComfyUI_Repackaged": "hf",
+    "Comfy-Org/flux2-dev": "hf",
+    "Gourieff/ReActor": "hf-dataset",
+    "conradlocke/krea2-identity-edit": "hf",
+    "wangkanai/wan21-vae": "hf",
+    "huihui-ai/Huihui-Qwen3-VL-4B-Instruct-abliterated": "hf",
+    "AdamCodd/vit-base-nsfw-detector": "hf",
+    "black-forest-labs/FLUX.2-klein-9b-fp8": "hf",
+    "edicamargo/qwen_3_8b_fp8mixed_abliterated": "hf",
+    "https://github.com/comfyanonymous/ComfyUI.git": "git"
+  },
+  "scan_ignore_ids": [
+    1234567
+  ]
+}

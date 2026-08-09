@@ -1,0 +1,7 @@
+node_modules/
+.env
+.env.local
+# Temporary, holds credentials in plaintext — see the header in the file.
+push-env.js
+.vercel
+npm-debug.log*

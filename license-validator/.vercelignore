@@ -1,0 +1,25 @@
+# Keep credentials out of the deployment bundle.
+#
+# Until this file existed, `vercel --prod` uploaded the whole directory —
+# .gitignore has no say in what Vercel ships — so .env went up with every
+# deploy and dotenv loaded it at runtime. That is how production reached
+# Atlas without a single Vercel environment variable being set, and it put
+# the Mongo password inside an artifact anyone who can read the project's
+# source could open.
+#
+# ────────────────────────────────────────────────────────────────────────
+# BEFORE THE NEXT DEPLOY: the variables have to exist in Vercel's own
+# Environment Variables, or that deploy comes up with nothing to read and
+# every request 503s on a Mongo connect that has no URI.
+#
+#     make push-env          # then redeploy
+#
+# To undo in a hurry, delete this file and redeploy — the old behaviour
+# comes straight back.
+# ────────────────────────────────────────────────────────────────────────
+.env
+.env.local
+
+# Holds live credentials in plaintext by design. It is a local one-shot
+# for seeding Vercel's environment and has no business running there.
+push-env.js
