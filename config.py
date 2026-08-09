@@ -793,6 +793,8 @@ CIVITAI_LORAS = [
     # (3114242, "purelens_krea2.safetensors"),
     # (3104629, "snofs_krea_v1_1.safetensors"),
     # (3085473, "KNPV4.1_pre.safetensors"),
+    (3194454, "desi-realism-v1.safetensors"),
+    (3173942, "pawg.safetensors"),
 ]
 
 # LoRAs pre-selected in the UI's three slots (generate / edit / inpaint tabs).
