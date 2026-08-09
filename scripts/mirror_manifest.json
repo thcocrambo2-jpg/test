@@ -201,6 +201,16 @@
     },
     {
       "repo": "loras",
+      "local": "loras/pawg.safetensors",
+      "path_in_repo": "loras/pawg.safetensors",
+      "source": {
+        "kind": "civitai",
+        "version": 3173942,
+        "subdir": "loras"
+      }
+    },
+    {
+      "repo": "loras",
       "local": "loras/elusarca-photo.safetensors",
       "path_in_repo": "loras/elusarca-photo.safetensors",
       "source": {
