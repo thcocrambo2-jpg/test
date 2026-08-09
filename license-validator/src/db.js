@@ -53,6 +53,17 @@ export async function collections() {
     // it carries a generated _id and is deduplicated on `fingerprint` — see
     // ensureIndexes.
     prompts: db.collection("prompts"),
+    // Settings presets: a named settings blob per tab, offered to every pod
+    // in a dropdown. The sibling of `prompts` and deliberately not the same
+    // collection — a prompt is a whole recipe *including its text* and
+    // arrives from customers for review, a preset carries no prompt text,
+    // is only ever written by an admin, and is keyed by a name people read
+    // rather than by a fingerprint nobody does.
+    //
+    // `enabled` is what the public read filters on: a preset that is off
+    // stays in the collection and simply stops being offered, which is the
+    // one thing you want when a preset turns out to be wrong.
+    presets: db.collection("presets"),
     // Published builds, `_id` being the artifact's sha256 — the same value
     // that addresses it in R2. One document per build ever published, so
     // the collection is also the history a rollback picks from.
@@ -76,7 +87,8 @@ export async function collections() {
  * that restarts reclaims its own row instead of racing itself into two.
  */
 export async function ensureIndexes() {
-  const { licenses, sessions, prompts, builds, downloads } = await collections();
+  const { licenses, sessions, prompts, presets, builds, downloads } =
+    await collections();
   await licenses.createIndex({ key: 1 }, { unique: true, name: "key_unique" });
   await sessions.createIndex(
     { license_key: 1, instance_id: 1 },
@@ -123,6 +135,26 @@ export async function ensureIndexes() {
   await prompts.createIndex(
     { license_key: 1, reviewed_at: 1 },
     { name: "license_pending" },
+  );
+
+  // Settings presets. A name identifies a preset within its tab — it is
+  // what the dropdown shows and what people say to each other — so this
+  // index is what keeps two of them apart. Saving from the app relies on it
+  // twice over: it is the only race-free answer to "is this name free", and
+  // its duplicate-key error is what makes a repeated name step to
+  // "Portrait (2)" instead of overwriting the row (see insertUnique).
+  //
+  // Per tab, because the same name meaning one thing in Krea2 and another
+  // in Krea2 V2 is normal — the two dropdowns are separate lists.
+  await presets.createIndex(
+    { tab: 1, name: 1 },
+    { unique: true, name: "tab_name_unique" },
+  );
+  // The public listing: enabled first because it is what filters, then the
+  // tab, then the display order the dropdown is built in.
+  await presets.createIndex(
+    { enabled: 1, tab: 1, sort_order: 1, name: 1 },
+    { name: "enabled_tab_order" },
   );
 
   // Build distribution. The channel lookup runs on every pod boot that is

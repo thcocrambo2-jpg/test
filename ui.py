@@ -32,6 +32,16 @@ prompts.record() with what they were given. That call is silent by
 contract — the customer is never told their prompts are saved, so it can
 neither block generation nor surface a failure.
 
+The two generation tabs also open with a **preset** dropdown: one tab's
+settings, saved under a name on the licence server (presets.py) and
+offered to every pod. Picking one writes every control below it and
+leaves the prompt boxes alone, which is the whole difference between a
+preset and a library card — same settings blob, same guarding, minus the
+words. Only an admin licence can write one, from a tickbox next to the
+publish one; everyone else reads. The preset each tab marks as its
+default is applied on page load, so what a fresh session starts on is a
+row in Atlas rather than something compiled into the binary.
+
 Alongside the tabs there is one other view: the pricing panel, which is
 the plan catalogue read from the licence server (plans.py) and rendered by
 theme.pricing_html. "Plans & pricing" hides the tabs and shows it, Back
@@ -74,6 +84,7 @@ import features
 import gallery_index
 import licensing
 import plans
+import presets
 import prompts
 import showcase
 import theme
@@ -422,23 +433,24 @@ def _krea_settings(seed, randomize, steps, cfg, resolution, sampler, model,
 
 def generate_single(prompt, negative, seed, randomize, steps, cfg, resolution,
                     sampler, model, batch_count, publish, publish_title,
-                    *lora_slots):
+                    save_preset, preset_name, *lora_slots):
     """First tab: run batch_count jobs on sequential seeds."""
     entry, error = _check_model(model)
     if error:
         yield [], error, 0
         return
+    settings = _krea_settings(seed, randomize, steps, cfg, resolution,
+                              sampler, model, batch_count, lora_slots)
     # After the guard, before the work: a click that could never run does
     # not belong in the library, but one that fails half way through a
     # batch still had a recipe worth keeping. Returns instantly and
     # cannot raise, and decides for itself whether this pod captures
     # automatically or only on `publish` — see prompts.record.
     prompts.record(
-        prompts.TAB_KREA2, prompt, negative or "",
-        _krea_settings(seed, randomize, steps, cfg, resolution, sampler,
-                       model, batch_count, lora_slots),
+        prompts.TAB_KREA2, prompt, negative or "", settings,
         publish=publish, title=publish_title,
     )
+    notice = _save_preset(presets.TAB_KREA2, save_preset, preset_name, settings)
     base_seed = random.randint(0, 2**32 - 1) if randomize else int(seed)
     width, height = parse_resolution(resolution)
     loras = _resolve_lora_slots(*lora_slots)
@@ -448,7 +460,39 @@ def generate_single(prompt, negative, seed, randomize, steps, cfg, resolution,
         "sampler": sampler, "loras": loras, "unet_file": entry["file"],
     } for i in range(int(batch_count))]
     for images, status in _run_jobs(jobs):
-        yield images, status, base_seed
+        yield images, notice + status, base_seed
+
+
+def _save_preset(tab, save, name, settings) -> str:
+    """Save these settings as a preset if asked to; return a status prefix.
+
+    The counterpart of `publish` for the settings half: one tickbox, read
+    on the click that generates, admin-only and enforced on the server
+    against the licence document.
+
+    Every tick is a **new** preset. Loading one, adjusting it and saving is
+    the ordinary gesture, and it must not destroy the preset it started
+    from — so the server steps a repeated name to "… (2)" rather than
+    overwriting, and an empty name is stamped with the time rather than
+    refused. See presets.save; both decisions are why the message below
+    names the preset that was actually written.
+
+    It reports, where publishing deliberately does not. Publishing is
+    invisible by design — the customer is never told prompts are saved, so
+    nothing about it may appear in the UI — but a preset is a thing an
+    admin is *waiting on*, and "did it save?" is a fair question. The
+    answer rides on the status box as a first line, so it costs no
+    component and is gone on the next run.
+
+    Never raises and never blocks the generation: presets.save returns
+    (ok, message) for everything that can go wrong, including a licence
+    the server refuses.
+    """
+    if not save:
+        return ""
+    ok, message = presets.save(tab, name, settings)
+    (log.info if ok else log.warning)("Preset: %s", message)
+    return ("✅ " if ok else "⚠️ ") + message + "\n"
 
 
 def _flux_model_info_text(entry) -> str:
@@ -719,7 +763,7 @@ def generate_v2(prompt, negative, seed, randomize, model, aspect, megapixels,
                 variance_model_type, variance_schedule, cutoff_step,
                 total_steps, cutoff_strength, shift_strength, sharpen,
                 film_grain, batch_count, publish, publish_title,
-                *lora_slots):
+                save_preset, preset_name, *lora_slots):
     """Krea 2 V2 tab: the Krea2 advanced turbo/raw text-to-image graph."""
     ready, message = v2_status()
     if not ready:
@@ -753,7 +797,12 @@ def generate_v2(prompt, negative, seed, randomize, model, aspect, megapixels,
     # is stored as the aspect/megapixels/multiple the controls hold, not
     # the width/height they resolve to, so a loaded prompt puts the three
     # sliders back where they were. See _krea_settings.
-    prompts.record(prompts.TAB_KREA2_V2, prompt, negative or "", {
+    #
+    # One blob, two readers: the prompt library stores it alongside the
+    # prompt text, a preset stores it *instead* of the prompt text. Keeping
+    # them the same shape is what lets one set of "load this into the
+    # controls" code serve both.
+    settings = {
         "model": model,
         "aspect": aspect,
         "megapixels": float(megapixels),
@@ -767,7 +816,11 @@ def generate_v2(prompt, negative, seed, randomize, model, aspect, megapixels,
         "film_grain": bool(film_grain),
         "loras": [[bool(on), name, float(weight)] for on, name, weight
                   in zip(lora_slots[::3], lora_slots[1::3], lora_slots[2::3])],
-    }, publish=publish, title=publish_title)
+    }
+    prompts.record(prompts.TAB_KREA2_V2, prompt, negative or "", settings,
+                   publish=publish, title=publish_title)
+    notice = _save_preset(presets.TAB_KREA2_V2, save_preset, preset_name,
+                          settings)
     jobs = [{
         "prompt": prompt, "negative": negative or "", "seed": base_seed + i,
         "width": width, "height": height, "loras": loras,
@@ -778,7 +831,7 @@ def generate_v2(prompt, negative, seed, randomize, model, aspect, megapixels,
     } for i in range(int(batch_count))]
     for images, status in _run_jobs(jobs, builder=build_v2_workflow,
                                     prefix="Krea2V2"):
-        yield images, status, base_seed
+        yield images, notice + status, base_seed
 
 
 def refresh_v2_lora_choices():
@@ -1666,20 +1719,76 @@ def _publish_row():
     return checkbox, title
 
 
-def _reset_publish_after(event, checkbox, title):
-    """Turn the publish controls back off once a generation has finished.
+def _preset_save_row():
+    """The admin-only "save these settings as a preset" controls.
 
-    Publishing is a per-image decision, not a mode. Left ticked it is
-    silent — nothing on the next run says "this one is going to the
-    library too" — so the box disarms itself instead of relying on the
-    admin to remember. The title goes with it, otherwise the next
-    publish quietly inherits the last card's name.
+    The settings-side twin of _publish_row, built the same way and for the
+    same reasons — both either way and hidden for a customer, because a
+    tab's click() input list is fixed at build time and a hidden checkbox
+    still sends False.
+
+    Hiding rather than disabling is a weaker requirement here than it is
+    for publishing (there is no secret to keep — customers can see the
+    presets and are told where they come from), but a control nobody can
+    use is still clutter, and the two rows sit together.
+    """
+    admin = licensing.is_admin()
+    with gr.Row(visible=admin):
+        checkbox = gr.Checkbox(
+            label="💾 Save these settings as a preset", value=False,
+            scale=0, min_width=280,
+        )
+        name = gr.Textbox(
+            label="Preset name", scale=1,
+            placeholder="Portrait · soft light",
+            info="Always saved as a new preset — a name already in use "
+                 "gets a “(2)”. Blank is stamped with the time.",
+        )
+    return checkbox, name
+
+
+def _reset_after_generate(event, tab, publish, publish_title,
+                          save_preset, preset_name, preset_dd):
+    """Disarm the publish and preset boxes once a generation has finished.
+
+    Both are per-run decisions, not modes. Left ticked they are silent —
+    nothing on the next run says "this one is going to the library too" —
+    so they disarm themselves instead of relying on the admin to
+    remember. The two text boxes go with them, otherwise the next publish
+    quietly inherits the last card's name.
+
+    The dropdown is refreshed in the same breath, but **only when a preset
+    was actually saved**: that is the one moment the list on the server is
+    known to have changed, and forcing a refetch on every generation would
+    put a request on every customer's Generate click for nothing.
 
     Chained off the generate click rather than registered as a second
-    click handler, so it cannot land between the click and the payload
-    the generate handler reads its `publish` value from.
+    click handler, so it cannot land between the click and the payload the
+    generate handler reads its `publish` value from.
     """
-    return event.then(fn=lambda: (False, ""), outputs=[checkbox, title])
+    return event.then(
+        fn=partial(_after_generate, tab), inputs=[save_preset, preset_name],
+        outputs=[publish, publish_title, save_preset, preset_name, preset_dd],
+    )
+
+
+def _after_generate(tab, saved, saved_name):
+    """The reset itself — see _reset_after_generate."""
+    if not saved:
+        return False, "", False, "", gr.update()
+    # force=True: presets.save already dropped the cache, so this is the
+    # read that fills it again with the preset that was just written.
+    choices, _default = _preset_choices(tab, force=True)
+    # The typed name is selected only when it *is* the stored one. A save
+    # never overwrites, so a name already in use was stored as "… (2)" —
+    # and the status line names it. Rather than guess which of the choices
+    # that was, the selection is left where it is: the dropdown says which
+    # preset was loaded, which is still true, and the new one is in the
+    # list either way.
+    name = (saved_name or "").strip()
+    return (False, "", False, "",
+            gr.update(choices=choices, value=name) if name in choices
+            else gr.update(choices=choices))
 
 
 def _cta(label: str):
@@ -1828,12 +1937,26 @@ def _lora_updates(rows, count, choices, default_weight=0.8):
 
 def _krea_updates(entry):
     """A library prompt → updates for every Krea 2 control, in target order."""
-    settings = entry.settings or {}
-    names, weights = _lora_updates(_rows(settings), MAX_LORA_SLOTS,
-                                   LORA_CHOICES)
     return [
         gr.update(value=entry.prompt),
         gr.update(value=entry.negative or ""),
+        *_krea_setting_updates(entry.settings or {}),
+    ]
+
+
+def _krea_setting_updates(settings):
+    """The same, minus the two prompt boxes — the settings alone.
+
+    Split out because a **preset** is exactly this and nothing else: the
+    dials without the words. Both readers hand over the same blob (see
+    generate_single), so the guarding — unknown model left alone, missing
+    LoRA file blanked, numbers clamped — is written once and covers a
+    preset written on this pod and a prompt written on someone else's
+    alike.
+    """
+    names, weights = _lora_updates(_rows(settings), MAX_LORA_SLOTS,
+                                   LORA_CHOICES)
+    return [
         _pick(settings.get("model"), MODEL_CHOICES),
         _num(settings.get("steps"), 1, 60),
         _num(settings.get("cfg"), 0.5, 8.0),
@@ -1848,7 +1971,15 @@ def _krea_updates(entry):
 
 def _v2_updates(entry):
     """A library prompt → updates for every Krea 2 V2 control, in order."""
-    settings = entry.settings or {}
+    return [
+        gr.update(value=entry.prompt),
+        gr.update(value=entry.negative or ""),
+        *_v2_setting_updates(entry.settings or {}),
+    ]
+
+
+def _v2_setting_updates(settings):
+    """The settings half of the above — what a preset carries."""
     sampler = _sub(settings, "sampler")
     variance = _sub(settings, "variance")
 
@@ -1868,8 +1999,6 @@ def _v2_updates(entry):
         weights.append(_num(row[2] if row and len(row) > 2 else 1.0, 0.0, 2.0))
 
     return [
-        gr.update(value=entry.prompt),
-        gr.update(value=entry.negative or ""),
         _pick(settings.get("model"), V2_MODEL_CHOICES),
         _pick(settings.get("aspect"), list(V2_ASPECT_RATIOS)),
         _num(settings.get("megapixels"), 0.5, 4.0),
@@ -1902,6 +2031,137 @@ def _v2_updates(entry):
         gr.update(value=bool(settings.get("film_grain", False))),
         *enables, *names, *weights,
     ]
+
+
+# ---------------------------------------------------------- settings presets
+# The dropdown at the top of the two generation tabs. A preset is one of
+# those tabs' control panels saved under a name on the licence server
+# (presets.py), so this section is the prompt library's machinery pointed at
+# a different source: the same _pick/_num/_lora_updates guarding, the same
+# "apply a settings blob to a list of components" shape, minus the two
+# prompt boxes.
+#
+# Which builder belongs to which tab. Read at apply time rather than
+# branched on with an if, so adding a third tab is an entry here plus its
+# targets — the same trick TAB_ORDER plays.
+_PRESET_UPDATES = {
+    presets.TAB_KREA2: _krea_setting_updates,
+    presets.TAB_KREA2_V2: _v2_setting_updates,
+}
+
+# How many of a tab's targets are prompt boxes. Both lists start with the
+# positive prompt and the negative, and everything after them is settings —
+# which is exactly the difference between what the prompt library writes
+# into a tab and what a preset does.
+PROMPT_BOXES = 2
+
+
+def _preset_choices(tab, force=False):
+    """(names, the default's name or None) for one tab's dropdown.
+
+    Only presets the server marks `enabled` ever get here, and the default
+    is only the one explicitly flagged: with nothing flagged the dropdown
+    opens blank and the controls keep the values config.py compiled into
+    them, which is the right answer for a deployment that has not seeded
+    any presets.
+
+    A failed read is an empty list and nothing else — no message, because
+    a preset list that cannot be reached says nothing about whether this
+    pod can generate, and the tab is perfectly usable at its built-in
+    defaults. presets.catalogue has already logged the reason once.
+    """
+    rows = presets.catalogue(force=force).for_tab(tab)
+    default = next((row.name for row in rows if row.is_default), None)
+    return [row.name for row in rows], default
+
+
+def _preset_settings(tab, name):
+    """One preset's settings blob by name, or None if it is not on offer."""
+    for row in presets.catalogue().for_tab(tab):
+        if row.name == name:
+            return row.settings
+    return None
+
+
+def _apply_preset(tab, count, name):
+    """A preset name → updates for that tab's settings controls.
+
+    `count` is how many controls the caller wired as outputs, which is what
+    the "nothing to apply" answer has to be as long as. A name that is not
+    on offer — a preset disabled or renamed while this page sat open — is
+    exactly that case: changing nothing is the honest response, and the
+    controls keep whatever the customer had set.
+
+    One wrinkle, shared with the prompt library's Use button. Applying a
+    preset that names a *different* model fires the Model dropdown's own
+    change handler, which resets Steps and CFG to that model's variant
+    defaults — so those two land on the model's values rather than the
+    preset's. Everything else applies as stored. A preset for the model
+    already selected (the ordinary case, and the only one when a registry
+    holds a single model) is unaffected, because a value that does not
+    change fires nothing.
+    """
+    settings = _preset_settings(tab, name) if name else None
+    if not isinstance(settings, dict):
+        return [gr.update()] * count
+    return _PRESET_UPDATES[tab](settings)
+
+
+def _load_default_presets():
+    """Page load → each tab's default preset applied to its controls.
+
+    Both tabs every time, in the order the outputs list is built after the
+    TAB_ORDER loop; a tab this licence does not grant contributes nothing
+    to that list and nothing here. With no default flagged, or with the
+    server unreachable, every update is a no-op and the controls keep the
+    values config.py built them with.
+
+    This is what makes "the defaults" editable from Atlas: seed the shipped
+    values as a preset, mark it default, and a fresh session opens on
+    whatever that row says instead of on what the binary was compiled with.
+    """
+    updates = []
+    for tab, targets in ((presets.TAB_KREA2, _krea_preset_targets),
+                         (presets.TAB_KREA2_V2, _v2_preset_targets)):
+        if not targets:
+            continue
+        _choices, default = _preset_choices(tab)
+        updates += _apply_preset(tab, len(targets), default)
+    return updates
+
+
+def _refresh_presets(tab, current):
+    """🔄 next to the dropdown — refetch the list, keep the selection.
+
+    force=True skips presets.TTL_SECONDS, which is the whole point of the
+    button: it exists for the minute after a preset is saved or switched
+    off somewhere else. The current selection survives if it is still on
+    offer and is cleared if it is not, rather than being left naming a
+    preset this dropdown no longer has.
+    """
+    choices, _default = _preset_choices(tab, force=True)
+    return gr.update(choices=choices,
+                     value=current if current in choices else None)
+
+
+def _preset_row(tab):
+    """The preset dropdown and its refresh button, for one tab.
+
+    Built at the top of the control column because it is the control that
+    moves every other one. Filled at build time rather than lazily: the
+    dropdown has to have its choices before the page renders, and the pod
+    has already talked to the licence server to take its seat by the time
+    ui.py is imported. A server that is unreachable costs the list and
+    nothing else — see _preset_choices.
+    """
+    choices, default = _preset_choices(tab)
+    with gr.Row():
+        dropdown = gr.Dropdown(
+            choices=choices, value=default, label="⚙️ Preset", scale=1,
+            info="Loads every setting below. Your prompt is left alone.",
+        )
+        refresh = gr.Button("🔄", scale=0, min_width=60)
+    return dropdown, refresh
 
 
 def _card_chips(entry) -> str:
@@ -2072,6 +2332,7 @@ def _tab_krea_t2i(tab):
     """The KREA_T2I tab body."""
     with gr.Row():
         with gr.Column(scale=2, elem_classes="kx-panel"):
+            preset_dd, preset_refresh = _preset_row(presets.TAB_KREA2)
             prompt_box = gr.Textbox(
                 label="Prompt", lines=5,
                 value="A photorealistic golden-hour portrait, natural "
@@ -2110,6 +2371,7 @@ def _tab_krea_t2i(tab):
                 )
             lora_dds, lora_ws = _lora_stack()
             krea_publish, krea_publish_title = _publish_row()
+            krea_save_preset, krea_preset_name = _preset_save_row()
             generate_btn = _cta("🚀 Generate")
         with gr.Column(scale=3, elem_classes="kx-panel-out"):
             gallery = gr.Gallery(label="Output", columns=2, height=600)
@@ -2123,17 +2385,33 @@ def _tab_krea_t2i(tab):
                 steps_slider, cfg_slider, resolution_dd, sampler_dd,
                 model_dd, batch_slider,
                 krea_publish, krea_publish_title,
+                krea_save_preset, krea_preset_name,
                 *_lora_inputs(lora_dds, lora_ws)],
         outputs=[gallery, status_box, seed_out],
         concurrency_id="comfy",
     )
-    _reset_publish_after(_krea_run, krea_publish, krea_publish_title)
+    _reset_after_generate(_krea_run, presets.TAB_KREA2,
+                          krea_publish, krea_publish_title,
+                          krea_save_preset, krea_preset_name, preset_dd)
     # Same order as _krea_settings writes them, so loading a
     # prompt is a zip rather than a lookup.
     _krea_targets = [prompt_box, negative_box, model_dd,
                      steps_slider, cfg_slider, resolution_dd,
                      sampler_dd, seed_box, randomize_cb,
                      batch_slider, *lora_dds, *lora_ws]
+    # A preset is the same list without the two prompt boxes — see
+    # _krea_setting_updates. Wired here rather than after the TAB_ORDER
+    # loop because, unlike the library's Use buttons, both ends of this
+    # live in this tab.
+    _preset_targets = _krea_targets[PROMPT_BOXES:]
+    preset_dd.change(
+        fn=partial(_apply_preset, presets.TAB_KREA2, len(_preset_targets)),
+        inputs=preset_dd, outputs=_preset_targets,
+    )
+    preset_refresh.click(
+        fn=partial(_refresh_presets, presets.TAB_KREA2),
+        inputs=preset_dd, outputs=preset_dd,
+    )
 
     return _krea_targets
 
@@ -2155,6 +2433,7 @@ def _tab_krea_v2_t2i(tab):
     )
     with gr.Row():
         with gr.Column(scale=2, elem_classes="kx-panel"):
+            v2_preset_dd, v2_preset_refresh = _preset_row(presets.TAB_KREA2_V2)
             v2_prompt = gr.Textbox(
                 label="Positive Prompt", lines=6,
                 placeholder="The source workflow ships this box "
@@ -2210,6 +2489,7 @@ def _tab_krea_v2_t2i(tab):
                                      label="Batch count")
             v2_cbs, v2_dds, v2_ws = _v2_lora_stack()
             v2_publish, v2_publish_title = _publish_row()
+            v2_save_preset, v2_preset_name = _preset_save_row()
             v2_generate_btn = _cta("🚀 Generate")
         with gr.Column(scale=3, elem_classes="kx-panel-out"):
             v2_gallery = gr.Gallery(label="Output", columns=2,
@@ -2352,11 +2632,14 @@ def _tab_krea_v2_t2i(tab):
                 v2_cutoff_strength, v2_shift_strength,
                 v2_sharpen, v2_grain, v2_batch,
                 v2_publish, v2_publish_title,
+                v2_save_preset, v2_preset_name,
                 *_lora_triples(v2_cbs, v2_dds, v2_ws)],
         outputs=[v2_gallery, v2_status_box, v2_seed_out],
         concurrency_id="comfy",
     )
-    _reset_publish_after(_v2_run, v2_publish, v2_publish_title)
+    _reset_after_generate(_v2_run, presets.TAB_KREA2_V2,
+                          v2_publish, v2_publish_title,
+                          v2_save_preset, v2_preset_name, v2_preset_dd)
     _v2_targets = [
         v2_prompt, v2_negative, v2_model_dd,
         v2_aspect, v2_megapixels, v2_multiple,
@@ -2369,6 +2652,17 @@ def _tab_krea_v2_t2i(tab):
         v2_sharpen, v2_grain,
         *v2_cbs, *v2_dds, *v2_ws,
     ]
+    # Same split as the Krea 2 tab: everything past the two prompt boxes
+    # is what a preset carries.
+    _preset_targets = _v2_targets[PROMPT_BOXES:]
+    v2_preset_dd.change(
+        fn=partial(_apply_preset, presets.TAB_KREA2_V2, len(_preset_targets)),
+        inputs=v2_preset_dd, outputs=_preset_targets,
+    )
+    v2_preset_refresh.click(
+        fn=partial(_refresh_presets, presets.TAB_KREA2_V2),
+        inputs=v2_preset_dd, outputs=v2_preset_dd,
+    )
 
     return _v2_targets
 
@@ -3510,6 +3804,19 @@ with gr.Blocks(title="Ember") as ui:
         for _slot, _button in enumerate(_lib_buttons):
             _button.click(fn=partial(_use_prompt, _slot),
                           inputs=_lib_rows, outputs=_use_outputs)
+
+    # The settings half of the same idea: each generation tab's dropdown is
+    # built already showing the preset the server marks as that tab's
+    # default, so the values behind it have to be applied for the two to
+    # agree. Done on page load rather than at build time because the
+    # components carry config.py's values as their `value=` — that is the
+    # floor a pod with no server keeps, and this writes over it when there
+    # is one.
+    _krea_preset_targets = (_krea_targets or [])[PROMPT_BOXES:]
+    _v2_preset_targets = (_v2_targets or [])[PROMPT_BOXES:]
+    if _krea_preset_targets or _v2_preset_targets:
+        ui.load(fn=_load_default_presets,
+                outputs=[*_krea_preset_targets, *_v2_preset_targets])
 
     # Outside the Tabs: one line under every tab, carrying the Ctrl+Enter
     # hint (theme.JS binds it) — a shortcut nobody would find otherwise —

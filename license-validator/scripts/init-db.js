@@ -14,18 +14,22 @@ const db = await getDb();
 await ensureIndexes();
 
 console.log(`database        ${DB_NAME}`);
-console.log(`collections     licenses, sessions, plans, features`);
+console.log(
+  "collections     licenses, sessions, plans, features, prompts, presets, " +
+    "builds, downloads",
+);
 console.log(`stale window    ${STALE_SECONDS}s (a seat frees itself after this)`);
 console.log(`session TTL     ${SESSION_TTL_SECONDS}s (cleanup only)`);
 console.log("\nindexes:");
 // plans and features are keyed by their string _id, so they need no
 // indexes beyond the one Mongo creates for _id itself.
-for (const name of ["licenses", "sessions"]) {
+for (const name of ["licenses", "sessions", "prompts", "presets"]) {
   for (const index of await db.collection(name).indexes()) {
     console.log(`  ${name}.${index.name}`);
   }
 }
 console.log("\nNext: npm run seed-catalog");
+console.log("      npm run seed-presets");
 console.log(
   '      npm run issue-key -- --name "Acme Corp" --plan pro --seats 2',
 );

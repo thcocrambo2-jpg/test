@@ -2,9 +2,10 @@
 //
 // Three endpoints the app calls for its seat (/v1/acquire, /v1/heartbeat,
 // /v1/release), one the *start script* calls before the app exists at all
-// (/v1/build), two public reads it renders pages from (/v1/plans,
-// /v1/prompts), one public write it makes silently (POST /v1/prompts),
-// plus health and the admin surface.
+// (/v1/build), three public reads it renders pages from (/v1/plans,
+// /v1/prompts, /v1/presets), one public write it makes silently
+// (POST /v1/prompts) and one it makes on an admin's say-so
+// (POST /v1/presets), plus health and the admin surface.
 //
 // The status code carries the contract, and the Python client branches on
 // exactly this — keep it stable:
@@ -13,6 +14,9 @@
 //   400  bad_request                               client bug, do not retry
 //   403  invalid_key | revoked | expired |         stop the app now
 //        seat_limit
+//        forbidden                                 POST /v1/presets only:
+//                                                  the licence is fine, it
+//                                                  is just not an admin
 //   429  rate_limited                              /v1/build only
 //   503  server_error | no_build                   transient: retry at
 //                                                  startup, or ride the
@@ -865,6 +869,339 @@ app.get(
       total,
       skip,
       limit,
+    });
+  }),
+);
+
+// ── Settings presets ────────────────────────────────────────────────────
+//
+// A preset is a named settings blob for one tab: the same shape the prompt
+// library stores, minus the prompt text. Pods read them into a dropdown and
+// applying one writes every control below it. Two halves, like the prompt
+// library, but the moderation story is the opposite way round — there is no
+// queue, because only an admin licence can write one at all:
+//
+//   write   POST /v1/presets from the app's own tickbox. Refused outright
+//           unless the licence document says `is_admin`.
+//   read    GET /v1/presets, public, `enabled: true` only.
+//
+// `enabled` is the whole reason a preset that turns out to be wrong is a
+// one-field edit rather than a delete: it stops being offered, and the pods
+// already holding it in a dropdown lose it on their next read.
+
+// The same list the prompt library uses, and necessarily so: applying a
+// preset means writing values into a specific set of form controls, which
+// is exactly what replaying a prompt does. A tab joins both lists in the
+// commit that teaches the client to load it.
+const PRESET_TABS = PROMPT_TABS;
+
+const MAX_PRESET_NAME_CHARS = 60;
+const MAX_PRESET_DESCRIPTION_CHARS = 200;
+
+// How many presets may share a name on one tab before the write is refused.
+// The suffix walk below is O(attempts) round trips, so this is both a naming
+// cap and the loop's bound.
+const MAX_NAME_ATTEMPTS = 20;
+
+/**
+ * Insert a preset under `doc.name`, stepping past names already taken.
+ *
+ * Saving from the app **never overwrites** — see POST /v1/presets — so a
+ * name that exists becomes "Portrait (2)", then "Portrait (3)". Returns the
+ * name it actually used, or null when even the last attempt collided.
+ *
+ * The duplicate-key error is the mechanism rather than a pre-flight
+ * findOne, and that is deliberate: the unique index is the only thing that
+ * can answer "is this name free" without a race, so two admins saving the
+ * same name in the same second get two presets rather than one of them
+ * silently landing on the other's row.
+ */
+async function insertUnique(presets, doc) {
+  for (let attempt = 1; attempt <= MAX_NAME_ATTEMPTS; attempt += 1) {
+    const suffix = ` (${attempt})`;
+    // The base is trimmed to make room rather than the suffix being
+    // dropped, so a 60-character name still ends up unique instead of
+    // colliding forever at the length limit.
+    const name =
+      attempt === 1
+        ? doc.name
+        : doc.name.slice(0, MAX_PRESET_NAME_CHARS - suffix.length) + suffix;
+    try {
+      await presets.insertOne({ ...doc, name });
+      return name;
+    } catch (err) {
+      if (err?.code !== 11000) throw err;      // not a name clash — real error
+    }
+  }
+  return null;
+}
+
+/** One preset as clients read it. */
+function presetWire(row) {
+  return {
+    id: String(row._id),
+    tab: row.tab,
+    name: row.name,
+    description: row.description || null,
+    settings: row.settings || {},
+    is_default: row.is_default === true,
+    sort_order: row.sort_order ?? 0,
+  };
+}
+
+/**
+ * Make one preset the default for its tab, taking the flag off the others.
+ *
+ * The same shape as promote() for builds, and for the same reason: "which
+ * one is the default" is a property of the tab, not of the document, so it
+ * is only ever true in one place and setting it is one operation.
+ */
+async function setDefault(presets, tab, id) {
+  await presets.updateMany(
+    { tab, _id: { $ne: id } },
+    { $set: { is_default: false } },
+  );
+  await presets.updateOne({ _id: id }, { $set: { is_default: true } });
+}
+
+/** The shared body checks for a preset write. Returns {error} or {value}. */
+function presetBody(body) {
+  if (!PRESET_TABS.includes(body.tab)) {
+    return { error: `tab must be one of: ${PRESET_TABS.join(", ")}.` };
+  }
+  const name = text(body.name, MAX_PRESET_NAME_CHARS);
+  if (!name) return { error: "name is required." };
+  const settings = body.settings;
+  if (settings === null || typeof settings !== "object" ||
+      Array.isArray(settings)) {
+    return { error: "settings must be an object." };
+  }
+  if (JSON.stringify(settings).length > MAX_SETTINGS_BYTES) {
+    return { error: "settings is too large." };
+  }
+  return {
+    value: {
+      tab: body.tab,
+      name,
+      settings,
+      description: text(body.description, MAX_PRESET_DESCRIPTION_CHARS) || null,
+    },
+  };
+}
+
+// Written from the app, by an admin, with the tickbox next to Generate.
+//
+// **Always an insert.** Ticking the box means "keep these settings", and
+// the settings on screen are a new starting point — usually a preset that
+// was loaded and then changed. Treating a repeated name as an edit would
+// make the ordinary gesture (load Default, adjust, save) destroy the row it
+// started from, with no undo and nothing on screen having said so. So a
+// name that is taken becomes "Portrait (2)" and the response says which
+// name it got. Editing a preset in place is the admin route's job, where
+// naming an existing preset is the whole point of the call.
+//
+// Unlike POST /v1/prompts this answers a real error when it refuses. That
+// endpoint is silent because the customer was never told it exists; this
+// one is a button someone deliberately pressed, and "did my preset save?"
+// deserves an answer.
+app.post(
+  "/v1/presets",
+  wrap(async (req, res) => {
+    const { license_key, instance_id } = req.body || {};
+    if (!license_key || !instance_id) {
+      return badRequest(res, "license_key and instance_id are required.");
+    }
+    const parsed = presetBody(req.body || {});
+    if (parsed.error) return badRequest(res, parsed.error);
+
+    const { licenses, presets } = await collections();
+    const license = await licenses.findOne({ key: license_key });
+    const problem = licenseProblem(license);
+    if (problem) return res.status(403).json({ ok: false, ...problem });
+
+    // Checked against the licence document, never against what the body
+    // claims — same rule as publishing a prompt. A customer build hides
+    // the tickbox entirely, so anything arriving here without the role is
+    // not a mistake worth being gentle about.
+    if (license.is_admin !== true) {
+      return res.status(403).json({
+        ok: false,
+        error: "forbidden",
+        message: "Only an admin license can save presets.",
+      });
+    }
+
+    const now = new Date();
+    const name = await insertUnique(presets, {
+      ...parsed.value,
+      enabled: true,
+      is_default: false,
+      sort_order: 0,
+      created_by: license_key,
+      created_at: now,
+      updated_at: now,
+    });
+    if (name === null) {
+      return badRequest(
+        res,
+        `There are already ${MAX_NAME_ATTEMPTS} presets called ` +
+          `"${parsed.value.name}" on this tab. Use a different name.`,
+      );
+    }
+
+    console.log(
+      `preset   created tab=${parsed.value.tab} name="${name}" ` +
+        `by=${license_key}`,
+    );
+    // `name` is the name it actually got, which is not always the one that
+    // was asked for — the client shows this rather than what was typed.
+    res.json({ ok: true, stored: true, created: true, name });
+  }),
+);
+
+// Public and unauthenticated like /v1/plans: a preset holds dropdown labels
+// and slider values and nothing else, and the only rows reachable here are
+// ones an admin switched on. `tab` is optional — the app asks for all of
+// them in one request at startup and splits them itself, which is one round
+// trip on the path between a pod booting and its tabs being usable.
+app.get(
+  "/v1/presets",
+  wrap(async (req, res) => {
+    const filter = { enabled: true };
+    if (PRESET_TABS.includes(req.query.tab)) filter.tab = req.query.tab;
+
+    const { presets } = await collections();
+    const rows = await presets
+      .find(filter)
+      .sort({ tab: 1, sort_order: 1, name: 1 })
+      .limit(200)
+      .toArray();
+    res.json({ ok: true, presets: rows.map(presetWire) });
+  }),
+);
+
+// The admin listing — every preset, including the ones switched off, which
+// is the whole difference from the public read.
+app.get(
+  "/v1/admin/presets",
+  requireAdmin,
+  wrap(async (req, res) => {
+    const { presets } = await collections();
+    const filter = {};
+    if (PRESET_TABS.includes(req.query.tab)) filter.tab = req.query.tab;
+    const rows = await presets
+      .find(filter)
+      .sort({ tab: 1, sort_order: 1, name: 1 })
+      .toArray();
+    res.json({
+      ok: true,
+      presets: rows.map((row) => ({
+        ...presetWire(row),
+        enabled: row.enabled === true,
+        created_by: row.created_by || null,
+        updated_at: row.updated_at || null,
+      })),
+    });
+  }),
+);
+
+// Author or edit a preset from outside the app. Same upsert as the pod
+// route, plus the three fields the pod has no business setting: whether it
+// is offered at all, whether it is the one a fresh session starts on, and
+// where it sits in the dropdown.
+app.post(
+  "/v1/admin/presets",
+  requireAdmin,
+  wrap(async (req, res) => {
+    const parsed = presetBody(req.body || {});
+    if (parsed.error) return badRequest(res, parsed.error);
+
+    const { presets } = await collections();
+    const now = new Date();
+    const update = {
+      $set: { ...parsed.value, updated_at: now },
+      $setOnInsert: {
+        enabled: true,
+        is_default: false,
+        sort_order: 0,
+        created_by: null,
+        created_at: now,
+      },
+    };
+    // Only the fields actually sent are moved from $setOnInsert to $set, so
+    // editing a preset's settings without mentioning `enabled` leaves it
+    // exactly as switched on or off as it was.
+    for (const field of ["enabled", "sort_order"]) {
+      if (req.body[field] === undefined) continue;
+      delete update.$setOnInsert[field];
+      update.$set[field] =
+        field === "enabled" ? req.body[field] === true : Number(req.body[field]) || 0;
+    }
+
+    await presets.updateOne(
+      { tab: parsed.value.tab, name: parsed.value.name },
+      update,
+      { upsert: true },
+    );
+    const row = await presets.findOne({
+      tab: parsed.value.tab,
+      name: parsed.value.name,
+    });
+    // Last, and against the stored row: making this one the default is a
+    // change to every other preset on the tab, so it cannot ride along in
+    // the upsert above.
+    if (req.body.is_default === true) {
+      await setDefault(presets, row.tab, row._id);
+      row.is_default = true;
+    }
+    console.log(`preset   admin ${row._id} tab=${row.tab} name="${row.name}"`);
+    res.json({ ok: true, preset: presetWire(row) });
+  }),
+);
+
+// Switch one preset on or off, or make it the tab's default. Separate from
+// the upsert above because it names a preset by id rather than by content:
+// this is the route you reach for when a preset is already wrong and you do
+// not want to restate it to change one flag.
+app.post(
+  "/v1/admin/presets/state",
+  requireAdmin,
+  wrap(async (req, res) => {
+    const { id } = req.body || {};
+    if (!id || !ObjectId.isValid(id)) {
+      return badRequest(res, "id must be a preset's _id.");
+    }
+    if (req.body.enabled === undefined && req.body.is_default === undefined) {
+      return badRequest(res, "send enabled and/or is_default.");
+    }
+    const { presets } = await collections();
+    const _id = new ObjectId(String(id));
+    const row = await presets.findOne({ _id });
+    if (!row) return badRequest(res, "no preset with that id.");
+
+    if (req.body.enabled !== undefined) {
+      await presets.updateOne(
+        { _id },
+        { $set: { enabled: req.body.enabled === true, updated_at: new Date() } },
+      );
+    }
+    // Deliberately allowed on a disabled preset, and deliberately not
+    // enabling it: the two flags answer different questions, and quietly
+    // switching one on because the other was set is the kind of help that
+    // makes a state impossible to reason about.
+    if (req.body.is_default === true) await setDefault(presets, row.tab, _id);
+    else if (req.body.is_default === false) {
+      await presets.updateOne({ _id }, { $set: { is_default: false } });
+    }
+
+    const after = await presets.findOne({ _id });
+    console.log(
+      `preset   state ${id} enabled=${after.enabled === true} ` +
+        `default=${after.is_default === true}`,
+    );
+    res.json({
+      ok: true,
+      preset: { ...presetWire(after), enabled: after.enabled === true },
     });
   }),
 );

@@ -435,6 +435,127 @@ A card for a tab this licence does not grant still renders, with its
 button reading `🔒 Needs Krea2 V2` instead of being hidden. What the tab
 you have not bought can do is exactly the thing worth seeing.
 
+## Settings presets
+
+The Krea2 and Krea2 V2 tabs open with an **⚙️ Preset** dropdown. Picking one
+writes every control below it — model, steps, CFG, resolution, sampler,
+seed, batch count, the whole LoRA stack — and **leaves the prompt boxes
+alone.** That is the entire difference between a preset and a library card:
+same settings blob, same guarding, minus the words.
+
+Presets live on the licence server, so changing one changes it for every
+customer without shipping a binary.
+
+### Only an admin can write one
+
+Same gesture as publishing a prompt, and the same rule behind it. An admin
+pod grows a `💾 Save these settings as a preset` checkbox next to the
+publish one, with an optional name box beside it. Tick it, press Generate:
+whatever the controls hold at that moment is saved and appears in the
+dropdown for every pod on its next start or 🔄. The box unticks itself when
+the run finishes, exactly like publishing.
+
+Unlike publishing, this one **reports back** — a first line on the status
+box saying `✅ Preset "Portrait · soft light" saved.` or why it did not.
+Prompt capture is silent because the customer was never told it happens; a
+preset is a box you deliberately ticked and are waiting on.
+
+The customer's half of the tab is read-only: the checkbox is hidden (their
+input list is fixed at build time, and a hidden checkbox sends `False`), and
+`POST /v1/presets` refuses `403 forbidden` for any licence the document does
+not mark `is_admin`. The server checks the record, never the flag on the
+request.
+
+### Every tick is a new preset
+
+Load `Default`, change six things, tick, Generate — you get a **new** preset
+and `Default` is untouched. That is the ordinary gesture, so saving never
+overwrites:
+
+- **A name already in use** becomes `Portrait (2)`, then `(3)`. The status
+  line names whichever it got (`✅ Preset "Portrait (2)" saved. (that name
+  was taken)`), because it is not always the name you typed. Twenty of one
+  name is the cap, and past it the save is refused rather than looping.
+- **A blank name** is stamped with the time — `Preset 2026-08-09 15:19` —
+  rather than refused. A ticked box that silently saved nothing is the worse
+  outcome; rename it afterwards with
+  `npm run presets -- --rename <id> --to "…"`.
+
+The dropdown selection is left where it is unless the name you typed is
+exactly what got stored, so it never claims to be showing a preset that is
+not the one just written.
+
+Editing a preset **in place** is deliberately the admin tools' job, where
+naming an existing preset is the whole point of the call:
+`npm run presets -- --add --tab … --name "Portrait" --settings ./x.json`
+overwrites `Portrait`'s settings and leaves its flags alone.
+
+The `(tab, name)` unique index is what makes all of this safe: it is the
+only race-free answer to "is this name free", so two admins saving the same
+name in the same second get two presets rather than one landing on the
+other's row.
+
+### The enable flag, and the default
+
+```bash
+cd license-validator
+npm run seed-presets                          # the shipped defaults, as presets
+npm run presets                                # list everything, on and off
+npm run presets -- --show <id>                 # one preset's whole settings blob
+npm run presets -- --disable <id>              # out of every dropdown, kept in the db
+npm run presets -- --enable  <id>
+npm run presets -- --default <id>              # what a fresh session opens on
+npm run presets -- --order <id> --to 10        # where it sits in the dropdown
+npm run presets -- --rename <id> --to "Portrait, soft"
+npm run presets -- --delete <id>
+```
+
+Two flags decide what customers see:
+
+- **`enabled`** — `GET /v1/presets` returns nothing else. `--disable` is the
+  tool for a preset that turns out to be wrong: it leaves the dropdowns
+  immediately and the row stays put, so `--enable` brings it back with
+  nothing retyped. `--delete` is for the preset that should never have
+  existed.
+- **`is_default`** — at most one per tab, and it is the one a **fresh page
+  load applies.** Setting it on one clears it on every other preset for that
+  tab, so there is only ever one answer to "what does this tab open on".
+
+`npm run seed-presets` writes the values compiled into `config.py` as a
+preset called `Default` on each tab and marks it `is_default`. Nothing about
+what anyone gets changes on the day you run it — it makes what everyone
+already gets nameable, and therefore editable from Atlas without a rebuild.
+Those compiled values stay the floor: they are what the controls are built
+with, and what a pod that cannot reach the server keeps.
+
+Re-running the seed updates the settings and **never touches the two
+flags** — a preset you switched off stays off — the same `$set`/
+`$setOnInsert` split `seed-prompts` makes.
+
+### What a preset costs at startup
+
+The list is fetched once while `ui.py` builds its Blocks (one request, all
+tabs), which is after the seat check, so the licence server is already on
+that path. A server that is slow or down costs the dropdown and nothing
+else — every control keeps its compiled default and the tab generates
+normally. Failures are cached for 30s so a bad minute does not put a
+timeout on every page load.
+
+### Cross-pod safety
+
+Identical to the prompt library's, and the same code: an unknown model,
+resolution or sampler leaves its control alone, a missing LoRA file resets
+that slot to `None`, numbers are clamped into their slider's range, and a
+preset name that has since been disabled or renamed applies nothing rather
+than blanking the tab.
+
+One wrinkle worth knowing, shared with the library's **Use** button:
+applying a preset that names a *different* model fires the Model dropdown's
+own change handler, so Steps and CFG land on that model's variant defaults
+rather than the preset's. Everything else applies as stored, and a preset
+for the model already selected — the ordinary case, and the only one when a
+registry holds a single model — is unaffected.
+
 ## Model swapping and crash recovery
 
 With Krea 2 V1 (turbo/raw), V2 (turbo mxfp8/raw), Flux and Wan all

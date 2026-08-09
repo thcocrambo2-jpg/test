@@ -10,8 +10,10 @@
     "init-db": "node scripts/init-db.js",
     "seed-catalog": "node scripts/seed-catalog.js",
     "seed-prompts": "node scripts/seed-prompts.js",
+    "seed-presets": "node scripts/seed-presets.js",
     "issue-key": "node scripts/issue-key.js",
-    "prompts": "node scripts/add-prompt.js"
+    "prompts": "node scripts/add-prompt.js",
+    "presets": "node scripts/presets.js"
   },
   "engines": {
     "node": ">=20"
