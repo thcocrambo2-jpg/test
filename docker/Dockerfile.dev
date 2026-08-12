@@ -1,0 +1,43 @@
+# The dev image: the production image plus the app's own Python
+# dependencies.
+#
+# Those are absent from the production image on purpose. There, the app is
+# a Nuitka binary with gradio, huggingface_hub and the rest compiled in —
+# build.sh's --include-package — and a pip-installed copy alongside it
+# would never be imported (the bundle resolves imports inside itself). Run
+# from source they are exactly what is missing.
+#
+# Strictly an optimisation. With KREA2_DEV_SOURCE set, the production image
+# runs from source too: uncompiled, config.FROZEN is False, so
+# bootstrap.install_comfyui() installs requirements.txt itself. That pip
+# pass would just repeat on every run, because the container it writes to
+# is deleted by `docker compose down`.
+#
+# Built on top of the production image rather than beside it, so what you
+# test is the environment customers get, with nothing else different.
+#
+#     make image        # produces krea2:latest, the base for this
+#     make image-dev    # produces krea2:dev
+#
+# or, in one step, `docker compose -f docker-compose.dev.yml up --build`
+# once krea2:latest exists.
+ARG BASE_IMAGE=krea2:latest
+FROM ${BASE_IMAGE}
+
+# Only requirements.txt is copied. The source itself is bind-mounted at run
+# time — baking it in would defeat the entire purpose, since the image would
+# then need rebuilding for every edit.
+COPY requirements.txt /opt/krea2/app-requirements.txt
+
+# Under the same torch constraint as everything else in the image: gradio
+# pulls a large dependency tree, and nothing in it has any business moving
+# the torch the base image was built around.
+RUN python3 -m pip install --no-cache-dir \
+        -r /opt/krea2/app-requirements.txt \
+        --constraint /opt/krea2/torch-constraints.txt
+
+# Fail the build rather than the first run if the tree resolved badly —
+# gradio 6 and ComfyUI's requirements share enough transitive dependencies
+# that a bad pin shows up here.
+RUN python3 -c "import gradio, websocket, huggingface_hub, safetensors, PIL; \
+    print('app dependencies import OK — gradio', gradio.__version__)"

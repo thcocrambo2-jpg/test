@@ -1,0 +1,49 @@
+# Deny everything, then name what the build needs.
+#
+# An allowlist rather than a list of exclusions, and that is the whole
+# point: this image is published, and the repo it is built from contains
+# license-validator/.env (R2 write credentials, the admin token), a root
+# .env (a customer licence key) and dist/krea2app (the licensed binary).
+# A deny-list is one forgotten line away from shipping one of them; a file
+# that is not listed below cannot reach the build context at all.
+#
+# The Dockerfile also copies the four modules into a throwaway build stage
+# rather than the final image, so none of the app's source is published
+# either — see the stage comment there.
+
+*
+
+# Pins and the mirror index — bake_nodes.py resolves every revision from
+# these two files.
+!scripts/PINS.json
+!scripts/mirror_manifest.json
+
+# What bake_nodes.py imports to read them. Build stage only.
+!config.py
+!features.py
+!mirror.py
+!bootstrap.py
+
+# The start script, copied in verbatim: the same file build.sh publishes
+# to R2 and a RunPod template downloads from /v1/start.sh.
+!scripts/runpod_start.sh
+
+!docker/bake_nodes.py
+!docker/entrypoint.sh
+
+# The dev image (docker/Dockerfile.dev) installs the app's own dependencies
+# so a mounted source tree can run. Only the requirements file is needed —
+# the source is bind-mounted at run time, never copied into an image.
+!requirements.txt
+!docker/Dockerfile.dev
+
+# The vendored ReActor pack, copied into custom_nodes exactly as
+# install_reactor() would.
+!deps/ComfyUI-ReActor
+
+# Junk inside the directories allowed above. Last match wins, so these
+# have to come after the exceptions.
+**/__pycache__
+**/*.py[cod]
+**/.git
+**/.gitignore

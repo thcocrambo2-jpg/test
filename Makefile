@@ -20,6 +20,14 @@ SHELL := /bin/bash
 ENV_FILE := license-validator/.env
 ARTIFACT := dist/krea2app
 
+# The Docker image (Dockerfile, docker-compose.yml). Unrelated to the
+# artifact above and to $(ENV_FILE): it carries no credential and no
+# licensed code, which is what makes it publishable. Running it is
+# `docker compose up`, so there is no target for that here.
+IMAGE    := krea2
+TAG      := latest
+REGISTRY :=
+
 # What every recipe needs: the file, the deployment it talks to, and the
 # token that opens its admin routes.
 #
@@ -89,7 +97,7 @@ if [[ -n "$$read_key" && "$$read_key" == "$$R2_ACCESS_KEY_ID" ]]; then
 fi
 endef
 
-.PHONY: help check compile publish release health builds promote
+.PHONY: help check compile publish release health builds promote image image-dev image-push
 
 help:
 	@echo
@@ -102,6 +110,10 @@ help:
 	echo "  make release    compile, then publish"
 	echo
 	echo "  make promote SHA=<sha256>    roll a channel back to a build"
+	echo
+	echo "  make image      build $(IMAGE):$(TAG), the environment image"
+	echo "  make image-dev  ... plus app deps, to run a working tree in it"
+	echo "  make image-push push it to REGISTRY=<host/owner>"
 	echo
 	echo "  credentials     $(ENV_FILE)"
 	echo
@@ -182,4 +194,42 @@ promote:
 	     -H 'Content-Type: application/json' \
 	     -d "{\"sha256\":\"$$SHA\",\"channel\":\"$${CHANNEL:-stable}\"}" \
 	     "$$API/v1/admin/builds/promote" | python3 -m json.tool
+
+# ── The Docker image ──────────────────────────────────────────────────────
+# Needs no credentials at all, which is the point: nothing in it is secret,
+# so anyone with the repo can reproduce it. Bumping a pin in
+# scripts/PINS.json is the only thing that changes what comes out.
+image:
+	@docker build -t "$(IMAGE):$(TAG)" .
+	echo
+	echo "built $(IMAGE):$(TAG)"
+	echo "run it with: docker compose up   (after copying .env.example to .env)"
+	echo
+
+# The same image plus the app's Python dependencies, so a mounted working
+# tree can run in it. Layered on $(IMAGE):$(TAG), so build that first.
+image-dev: image
+	@docker build -t "$(IMAGE):dev" \
+	    --build-arg "BASE_IMAGE=$(IMAGE):$(TAG)" \
+	    -f docker/Dockerfile.dev .
+	echo
+	echo "built $(IMAGE):dev"
+	echo "run your working tree with:"
+	echo "    docker compose -f docker-compose.dev.yml up"
+	echo
+
+# Tagged at push time rather than at build time, so the same local image
+# can go to more than one registry without rebuilding.
+image-push:
+	@if [[ -z "$(REGISTRY)" ]]; then
+	    echo "usage: make image-push REGISTRY=ghcr.io/<owner>" >&2
+	    echo "       (or REGISTRY=docker.io/<user>)" >&2
+	    exit 2
+	fi
+	docker tag "$(IMAGE):$(TAG)" "$(REGISTRY)/$(IMAGE):$(TAG)"
+	docker push "$(REGISTRY)/$(IMAGE):$(TAG)"
+	echo
+	echo "pushed $(REGISTRY)/$(IMAGE):$(TAG)"
+	echo "customers set KREA2_IMAGE=$(REGISTRY)/$(IMAGE):$(TAG) in .env"
+	echo
 

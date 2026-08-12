@@ -8,3 +8,17 @@
 # to LF everywhere so a checkout, an scp or a `cp -r` into WSL all produce
 # something that runs.
 *.sh text eol=lf
+
+# Same problem, two more file types that are written on Windows and read
+# inside a Linux container.
+#
+# A Dockerfile checked out with CRLF appends a \r to the last argument of
+# every command, so `RUN python3 -c "..."` runs and fails on a trailing
+# carriage return that nothing in the error message mentions. The
+# multi-line RUN blocks in ours make that likelier, not less.
+#
+# .env.example is copied to .env and read by docker compose, where a \r
+# would ride along on the end of the licence key and turn a correct key
+# into an invalid one.
+Dockerfile text eol=lf
+*.env.example text eol=lf

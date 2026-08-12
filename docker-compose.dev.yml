@@ -1,0 +1,74 @@
+# Run your working tree inside the production environment.
+#
+#     make image                                      # or: docker compose build
+#     docker compose -f docker-compose.dev.yml up --build
+#
+# Same GPU, same CUDA, same ComfyUI, same pinned node packs as a customer
+# gets — but running the code in this directory rather than the binary the
+# licence server hands out. Edit, Ctrl-C, up again.
+#
+# A separate file rather than a profile in docker-compose.yml: profiles add
+# to what starts rather than replacing it, so `--profile dev up` would bring
+# up the production service as well and the two would fight over port 7860
+# and the GPU. Two files cannot do that.
+#
+# This shares krea2-data with the production service, so both see the same
+# models. Do not run both at once.
+
+name: krea2-dev
+
+services:
+  krea2-dev:
+    image: ${KREA2_DEV_IMAGE:-krea2:dev}
+    build:
+      context: .
+      dockerfile: docker/Dockerfile.dev
+      args:
+        # The production image this is layered on. Build it first.
+        BASE_IMAGE: ${KREA2_IMAGE:-krea2:latest}
+
+    # The same two values a customer sets. app.py still takes a licence
+    # seat when run from source — that is the app's behaviour, and a dev
+    # mode that skipped it would be testing something nobody runs.
+    env_file: .env
+
+    environment:
+      # What flips the entrypoint out of "fetch the published build" and
+      # into "run this". The path is where the source is mounted below.
+      KREA2_DEV_SOURCE: /src
+      # Keeps Linux .pyc files out of the Windows checkout this is mounted
+      # from. They would be harmless — the interpreter tag differs from a
+      # local run's — but they are noise in `git status` either way.
+      PYTHONDONTWRITEBYTECODE: "1"
+
+    volumes:
+      # The working tree, read-write: gradio writes .gradio/ into the
+      # working directory, and being able to see output written from
+      # inside the container is half the point of a dev loop.
+      - .:/src
+      # Models and outputs, shared with the production service so a dev run
+      # does not download another 90 GB.
+      - krea2-data:/workspace
+
+    working_dir: /src
+    ports:
+      - "7860:7860"
+    shm_size: 8gb
+    stop_grace_period: 60s
+
+    deploy:
+      resources:
+        reservations:
+          devices:
+            - driver: nvidia
+              count: all
+              capabilities: [gpu]
+
+volumes:
+  krea2-data:
+    # Not created here — this is the volume docker-compose.yml declares,
+    # named the same so a dev run and a production run share one set of
+    # weights. `external: true` makes that explicit: this file will not
+    # silently create an empty second copy if the name is ever wrong.
+    external: true
+    name: krea2-data

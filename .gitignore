@@ -13,6 +13,12 @@ krea2app
 .venv/
 venv/
 
+# What docker compose reads: a customer's licence key and node tag.
+# .env.example is the committed template. (license-validator/.env is a
+# different file with different contents and is ignored by that directory's
+# own .gitignore.)
+.env
+
 # Derived files a local dry run drops into its output dir (scripts/dryrun.py
 # points KREA2_BASE_DIR at .dryrun). The sample images there are committed;
 # thumbnails and zips are regenerated on demand.

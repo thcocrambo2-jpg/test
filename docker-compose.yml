@@ -1,0 +1,69 @@
+# Run Krea 2 on your own machine.
+#
+#     copy .env.example .env      # then fill in the two values
+#     docker compose up
+#
+# Nothing is set in the shell and no flags are typed: compose reads .env
+# from this directory on its own. Stop with Ctrl-C or `docker compose down`.
+#
+# `docker compose down` keeps the models. `docker compose down -v` deletes
+# the volume, and with it ~90 GB you will have to download again.
+
+# Without this the project is named after whatever directory the repo was
+# cloned into, which then prefixes the container and volume names.
+name: krea2
+
+services:
+  krea2:
+    # Built by `make image`. Point KREA2_IMAGE at a published tag to run one
+    # you did not build (e.g. ghcr.io/<owner>/krea2:latest).
+    image: ${KREA2_IMAGE:-krea2:latest}
+    build:
+      context: .
+      dockerfile: Dockerfile
+
+    # KREA2_LICENSE_KEY and KREA2_NODE_TAG. Named explicitly rather than
+    # relying on compose's automatic .env loading: that mechanism only
+    # substitutes ${...} inside this file, and would leave the container
+    # itself with no licence key.
+    env_file: .env
+
+    ports:
+      - "7860:7860"          # the Gradio UI; also printed as a gradio.live link
+
+    volumes:
+      - krea2-data:/workspace
+
+    # A named volume, not a bind mount to a host folder. On Windows a bind
+    # mount reaches the container through Docker Desktop's file-sharing
+    # layer, where symlink creation is unreliable — and link_model_dirs()
+    # creates symlinks — and where reading 20 GB of weights per model load
+    # is far slower than the ext4 filesystem a named volume gets.
+    #
+    # It lives in the WSL2 virtual disk on C:. Docker Desktop → Settings →
+    # Resources → Advanced → "Disk image location" moves it to another drive.
+
+    shm_size: 8gb            # Docker's 64 MB default is not enough for torch
+
+    # licensing.py releases the seat from a SIGTERM handler. Compose's
+    # default is 10 seconds and then SIGKILL, which would skip that and
+    # leave the seat held until it expires — a licensing bug that is not
+    # one. The app also has ComfyUI subprocesses to bring down.
+    stop_grace_period: 60s
+
+    deploy:
+      resources:
+        reservations:
+          devices:
+            - driver: nvidia
+              count: all
+              capabilities: [gpu]
+
+volumes:
+  # Named explicitly so it is `krea2-data` and not `<project>_krea2-data`.
+  # It holds ~90 GB of weights and outlives any particular checkout of this
+  # repo, so a name that depends on the directory it was cloned into would
+  # be the wrong name — and it is the name the seeding command in the
+  # README refers to.
+  krea2-data:
+    name: krea2-data

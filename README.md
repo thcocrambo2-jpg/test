@@ -172,6 +172,161 @@ first generation.
 | Exits within seconds, no downloads | `KREA2_LICENSE_KEY` / `KREA2_NODE_TAG` unset — the license seat is taken before any expensive work. |
 | Weights land somewhere unexpected | `KREA2_BASE_DIR` unset, so the pod default resolved to `C:\workspace\krea2`. |
 
+## Docker image
+
+An image that carries the environment — the ComfyUI checkout at its pinned
+SHA, the custom node packs, ComfyUI's Python requirements, ReActor's
+dependency set, a working onnxruntime — so a machine spends none of its
+first boot on them.
+
+It does **not** carry the app. `scripts/runpod_start.sh` is baked in
+unmodified and still fetches the binary from the licence server, which
+means publishing a build reaches these containers exactly as it reaches
+every other pod, `make promote` can still roll them back, and the image
+holds no secret and no licensed code. An app release needs no image
+rebuild.
+
+```
+/entrypoint.sh  ->  /opt/krea2/bin/start.sh  ->  the binary
+ (symlinks the       (fetches + verifies       (bootstrap finds
+  baked ComfyUI)      the build)                everything present)
+```
+
+Models are never baked: ~90 GB, licence-gated, and they belong on the
+volume.
+
+### Running it on your own machine
+
+```
+copy .env.example .env      # then fill in the two values
+docker compose up
+```
+
+Nothing is set in the shell and no flags are typed — compose reads `.env`
+from the project directory on its own, and `docker-compose.yml` carries
+the GPU reservation, the shared-memory size, the port and the volume. The
+UI link is printed in the output, and `http://localhost:7860` also works.
+
+On Windows this needs Docker Desktop on the **WSL2 backend** plus a current
+NVIDIA driver; no CUDA toolkit is installed on Windows. The Hyper-V backend
+cannot pass a GPU through at all, and it shows up as
+`torch.cuda.is_available()` being False in the log rather than as an error.
+
+Storage is the named volume `krea2-data`, never a bind mount to a host
+folder — see the comment in `docker-compose.yml` for why. It lives in the
+WSL2 virtual disk on `C:`; Docker Desktop → Settings → Resources →
+Advanced → *Disk image location* moves it to a drive with room for 90 GB.
+
+`docker compose down` keeps the models, so the next `up` finds them already
+there and downloads nothing — the same thing `KREA2_BASE_DIR=./tmp` does
+for a local `python app.py`. **`docker compose down -v` deletes the
+volume** and the weights with it.
+
+### Reusing models you already downloaded
+
+Every download guards on the file simply existing under `MODELS_DIR`
+(`downloads.py`), so weights copied in by hand count as downloaded. Nothing
+on the host can write into a named volume directly, so the copy runs in a
+throwaway container that can see both:
+
+```powershell
+docker run --rm `
+  -v krea2-data:/workspace `
+  -v C:\path\to\your\tmp\models:/seed:ro `
+  alpine sh -c "mkdir -p /workspace/krea2/models && cp -an /seed/. /workspace/krea2/models/"
+```
+
+Run it before the first `docker compose up`, or the app will already be
+downloading the same files. The source is mounted read-only, so this cannot
+touch the originals.
+
+`cp -an` is no-clobber, which makes the command re-runnable: after
+downloading more models locally, run it again and only the new files copy.
+The one thing it will not do is replace a file that is already in the
+volume — to refresh a corrupt one, delete it there first.
+
+Seeding is optional for anything in `config.py`'s registries; the app
+downloads what is missing on its own, and copying only saves the
+bandwidth. It is the *only* route for files you added by hand, such as a
+LoRA that no registry lists.
+
+Copy `models/` only. The image has its own ComfyUI at the pinned SHA, and
+the entrypoint leaves a real `$KREA2_BASE_DIR/ComfyUI` directory alone —
+seeding one there would shadow the baked copy for no benefit.
+
+### On RunPod
+
+Use the image as the template's container image and leave the start command
+empty. Expose HTTP port `7860`, mount the network volume at `/workspace`,
+and leave `KREA2_LICENSE_KEY` and `KREA2_NODE_TAG` **empty** in the
+template — a template is public, so a key typed into one is a key given to
+everyone (the reasoning is in `scripts/runpod_start.sh`'s header). The
+customer fills them in on their own pod.
+
+Pods on the existing template are unaffected and keep fetching
+`start.sh` from `/v1/start.sh` as before.
+
+### Running your working tree in the image
+
+`docker compose up` runs the binary the licence server hands out — whatever
+`make release` last shipped, not the code in this directory. To run the
+working tree instead, in the same CUDA/ComfyUI environment a customer gets:
+
+```
+make image                                            # krea2:latest
+docker compose -f docker-compose.dev.yml up --build    # krea2:dev, then run
+```
+
+Edit, Ctrl-C, `up` again. The repo is bind-mounted at `/src` and
+`KREA2_DEV_SOURCE=/src` is what makes the entrypoint skip the download and
+`exec python3 app.py`.
+
+It shares the `krea2-data` volume with the production service, so a dev run
+does not download another 90 GB. If you have not run the production service
+yet, `docker volume create krea2-data` first — the dev file declares the
+volume `external` so it cannot silently create a second, empty one.
+
+Two things are deliberately *not* different in dev mode. The licence seat is
+still taken, because that is the app's behaviour and a dev mode that skipped
+it would be testing something no customer runs. And the environment is the
+production image, so a dependency that is missing there is missing here.
+
+`docker/Dockerfile.dev` only adds `requirements.txt` — gradio and the rest,
+which the production image has no use for because `build.sh` compiles them
+into the binary. It is an optimisation rather than a requirement: run from
+source, `config.FROZEN` is False, so `bootstrap.install_comfyui()` installs
+them itself. Without the dev image that pip pass repeats on every run,
+because the container it writes into is deleted on `down`.
+
+Do not run both compose files at once — they would contend for port 7860
+and the GPU.
+
+### Building and publishing
+
+```
+make image                                # -> krea2:latest
+make image-push REGISTRY=ghcr.io/<owner>  # -> ghcr.io/<owner>/krea2:latest
+```
+
+Neither needs credentials from `license-validator/.env`; nothing in the
+image is secret. `.dockerignore` is an allowlist rather than a list of
+exclusions, so a file that is not named in it cannot reach the build
+context at all — that is what keeps `license-validator/.env`, the root
+`.env` and `dist/krea2app` out of a published image.
+
+What goes into the image comes from `scripts/PINS.json`: `docker/bake_nodes.py`
+runs `bootstrap.py`'s own clone and mirror-tarball helpers at build time, so
+bumping a pin is the only edit needed to move the image. Every container
+prints what it was built from on boot.
+
+### Escape hatches
+
+| Variable | Effect |
+| --- | --- |
+| `KREA2_USE_BAKED_COMFY=0` | Ignore the baked ComfyUI; the app clones and pip-installs its own, which is the non-Docker behaviour. For a baked tree that turns out to be wrong. |
+| `KREA2_START_SOURCE=api` | Fetch the start script from the licence server instead of using the baked copy, so a fix there applies without a new image. |
+| `KREA2_IMAGE` | A published tag to run instead of a locally built one. |
+
 ## Environment variables (all optional)
 
 | Variable                   | Purpose                                                         |
