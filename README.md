@@ -4,6 +4,42 @@ A standalone Python app (converted from the Kaggle notebook) that bootstraps
 ComfyUI, downloads the Krea 2 Turbo models + LoRAs plus the Wan 2.2
 image-to-video models, and serves a Gradio UI.
 
+## The four ways to run it
+
+One app, one licence server, four ways of getting the app onto a machine.
+They differ in who compiles it and what the machine has to have already;
+they do **not** differ in what the app does, and all four take a seat
+through the same licence check.
+
+| | For | What runs | Where the app comes from |
+| --- | --- | --- | --- |
+| **1. Linux binary** | RunPod customers | `scripts/runpod_start.sh` → `dist/krea2app` | built by `./build.sh` on a pod, fetched from the licence server on every start |
+| **2. Windows binary** | Windows customers | `scripts/windows_start.ps1` → `dist\krea2app.exe` | built by `.\build.ps1` on Windows, fetched the same way |
+| **3. Docker image** | anyone with a GPU and Docker | `docker compose up` | the image carries the *environment*; the binary is still fetched by `runpod_start.sh` inside it |
+| **4. From source** | you, while developing | `python app.py` | your working tree |
+
+**Which one to use.**
+
+- **A customer on RunPod** gets 1. It is the proven path and the one the
+  pricing and support flow assume.
+- **A customer on their own Windows PC with an NVIDIA card** gets 2. They
+  need Python 3.12 and git installed — the `.exe` is not self-contained
+  (see [Windows binary](#windows-binary-buildps1)).
+- **A customer who wants a reproducible environment**, or who is on Linux
+  but not RunPod, gets 3. It removes the first-boot ComfyUI install, not
+  the model download.
+- **You, changing code**, use 4. Nothing else lets you test what you just
+  edited: 1, 2 and 3 all run the last *published* build.
+
+**Which are proven.** 1 and 4 are what production runs on. 3 is written
+but has never been built or run — treat it as unverified. 2 is new; what
+has and has not been tested is spelled out in its section below.
+
+The two build scripts are a matched pair and neither can produce the
+other's artifact — Nuitka compiles for the OS it runs on and cannot
+cross-compile. They bundle the same set of data files and packages, and
+`make check-args` fails the build if that ever stops being true.
+
 ## Run
 
 On a RunPod GPU pod (PyTorch base image, `git` available):
@@ -21,6 +57,12 @@ The pod filesystem is treated as ephemeral — models, outputs and logs all
 live under the base directory and are lost when the pod is destroyed.
 
 ## Running locally on Windows
+
+This is the **source** path on Windows — `python app.py` against a checkout,
+which is what you want while changing code. A Windows *customer* runs the
+compiled `.exe` instead and never sees a repository; that is
+[Windows binary](#windows-binary-buildps1). The requirements below are the
+same either way, because the `.exe` bundles the app and nothing else.
 
 The app targets a pod, but it runs on a local Windows machine with an NVIDIA
 GPU. Three things differ from a pod, and the app handles all three:
@@ -872,6 +914,11 @@ an older one; building where you deploy sidesteps both. The build needs no GPU
 check never fires) and `build.sh` installs `nuitka` and a compiler if the pod
 lacks them.
 
+This whole section is about the **Linux** artifact. The Windows `.exe` is the
+same idea run on the other side of the same wall — `.\build.ps1` on a Windows
+machine, because that inability to cross-compile cuts both ways. See
+[Windows binary](#windows-binary-buildps1).
+
 What the binary contains vs. what it still installs at runtime:
 
 | Inside the binary | Installed on first run |
@@ -1093,7 +1140,263 @@ cd /test/dist && python3 -m http.server 7860
 
 The artifact is a **Linux** binary — it will not run on Windows; downloading is
 only for redistribution. Whoever receives it needs `chmod +x krea2app` first,
-since the executable bit does not survive most transfers.
+since the executable bit does not survive most transfers. For a Windows
+customer you do not transcode this file, you build the other one — see below.
+
+## Windows binary (`build.ps1`)
+
+The same app compiled to `dist\krea2app.exe`, so a customer with an NVIDIA
+card and no cloud account runs one script and gets the RunPod experience on
+their own machine. Everything about licences, seats, channels and rollback
+is unchanged: it is the same licence server, the same private bucket, the
+same `stable` channel.
+
+**It has to be built on Windows.** Nuitka emits native code for the OS it
+runs on, so `build.sh` and `build.ps1` are two scripts producing two
+artifacts, and there is no cross-compiling either way.
+
+```powershell
+.\build.ps1                  # compile only. Publishes nothing.
+.\build.ps1 -Publish         # ... then ask before publishing
+.\build.ps1 -Publish -Yes    # ... publish without asking
+.\build.ps1 -UploadOnly      # publish what is already in dist\
+```
+
+Publishing is **off by default**, unlike `build.sh`, where the default is
+to ask. This one runs on a desktop rather than on a pod that exists only to
+build, so the common case is "does it still compile" on a tree with
+uncommitted work in it, and that must not end at a prompt whose yes reaches
+customers.
+
+It needs the same credentials `build.sh` does (`R2_*`, `KREA2_NODE_TAG`,
+`KREA2_ADMIN_TOKEN`) and reads them from the environment. On Windows there
+is no `make`, so set them in the shell:
+
+```powershell
+$env:R2_ACCOUNT_ID = "..."; $env:R2_ACCESS_KEY_ID = "..."   # etc.
+```
+
+### What the build machine needs
+
+`build.ps1` installs `nuitka`, `zstandard` and the app's own requirements
+itself. What it cannot install is a C compiler, and the rule there is not
+the one you would guess:
+
+| Build interpreter | Compiler |
+| --- | --- |
+| **Python 3.12 or older** | MSVC if present, otherwise Nuitka downloads MinGW64 — nothing to install |
+| **Python 3.13 or newer** | **MSVC build tools required.** Nuitka refuses MinGW64 above 3.12 |
+
+So on a machine with 3.13+ and no Visual Studio there is no build, and
+Nuitka's own message for it (`FATAL: Error, cannot use '--mingw64' on
+Python version 3.13 or higher`) arrives *after* the pip installs and the
+dependency checks have all passed. `build.ps1` therefore checks the pair up
+front and refuses immediately, naming both ways out.
+
+**Prefer a Python 3.12 build environment.** It needs no Visual Studio, and
+3.12 is what the pod builds on and what the app is tested against — so the
+two artifacts differ in as few ways as possible.
+
+The `krea2` conda environment from
+[Running locally on Windows](#running-locally-on-windows) is already that:
+Python 3.12 with the app's dependencies installed, which is exactly what
+Nuitka needs to compile them in. Point the build at it:
+
+```powershell
+$env:PYTHON = "$env:USERPROFILE\miniconda3\envs\krea2\python.exe"
+.\build.ps1
+```
+
+Or from scratch, without conda:
+
+```powershell
+py -3.12 -m venv .venv312
+.\.venv312\Scripts\python.exe -m pip install -r requirements.txt
+$env:PYTHON = "$PWD\.venv312\Scripts\python.exe"
+.\build.ps1
+```
+
+`$env:PYTHON` is how you point the script at an interpreter other than
+whatever `python` resolves to, exactly as `PYTHON=` does for `build.sh`.
+Note that it is the **build** interpreter only — it decides what gets
+compiled in, and has nothing to do with the Python 3.12 the customer's
+machine needs for ComfyUI.
+
+`build.ps1` installs `nuitka` and `zstandard` into whichever environment
+you point it at, the same way `build.sh` does on a pod.
+
+### What the machine running it still needs
+
+The `.exe` is **not** self-contained, and that is the same design as on
+Linux rather than a Windows shortcoming: the app never imports torch or
+ComfyUI, it installs them and runs ComfyUI as a **separate process**. So
+the target machine needs
+
+- **Python 3.12** on `PATH` — from python.org, with "Add python.exe to
+  PATH" ticked. It is what ComfyUI runs on. The Microsoft Store build
+  causes enough path trouble to be worth avoiding.
+- **git** — ComfyUI is cloned, not vendored.
+- **an NVIDIA GPU** with a current driver. `ensure_torch()` installs the
+  cu128 wheels, which is what Blackwell cards (RTX 50xx, `sm_120`) need.
+- **Developer Mode**, or an elevated shell. `link_model_dirs()` symlinks
+  ComfyUI's model folders; without the privilege ComfyUI silently sees no
+  models and every generation fails validation with a message that never
+  mentions symlinks.
+- **~45 GB free**, more with Flux or Wan.
+
+`scripts/windows_start.ps1` checks all of these and says which is missing
+before downloading anything.
+
+**SmartScreen and antivirus will complain.** The binary is unsigned, so the
+first run gets "Windows protected your PC" → *More info* → *Run anyway*.
+Code signing is not attempted here — it needs a certificate and is a
+separate decision. Defender also rescans the onefile extraction on every
+launch, so excluding the base directory is worth suggesting to anyone who
+finds startup slow.
+
+### What a customer runs
+
+The exact counterpart of the RunPod template's container start command —
+
+```bash
+bash -c 'curl -fsSL https://$KREA2_NODE_TAG.vercel.app/v1/start.sh -o /tmp/krea2-start.sh && exec bash /tmp/krea2-start.sh'
+```
+
+— fetch the current start script, then run it. Windows has no template
+field to paste it into, so it goes in a file the customer keeps. Save this
+as **`krea2.cmd`** on their desktop; double-clicking it starts the app:
+
+```bat
+@echo off
+powershell -NoProfile -ExecutionPolicy Bypass -Command "$s = Join-Path $env:TEMP 'krea2-start.ps1'; $u = 'https://' + $env:KREA2_NODE_TAG + '.vercel.app/v1/start.ps1'; curl.exe -fsSL $u -o $s; if ($LASTEXITCODE -ne 0) { Write-Host 'Could not fetch the start script. Check KREA2_NODE_TAG and your internet connection.'; exit 1 }; & $s; exit $LASTEXITCODE"
+```
+
+Or, from a PowerShell window they already have open:
+
+```powershell
+$s = "$env:TEMP\krea2-start.ps1"
+curl.exe -fsSL https://$env:KREA2_NODE_TAG.vercel.app/v1/start.ps1 -o $s
+powershell -ExecutionPolicy Bypass -File $s
+```
+
+Both need `KREA2_LICENSE_KEY` and `KREA2_NODE_TAG` set as **user**
+environment variables (not just for the session), which is the equivalent
+of filling them into a pod's environment panel:
+
+```powershell
+[Environment]::SetEnvironmentVariable("KREA2_LICENSE_KEY", "<key>", "User")
+[Environment]::SetEnvironmentVariable("KREA2_NODE_TAG", "<tag>", "User")
+```
+
+Three details that differ from the bash one-liner, all forced by Windows:
+
+- **`-ExecutionPolicy Bypass`** replaces nothing in the bash version — it
+  is simply required, because the default policy refuses to run a
+  downloaded `.ps1` at all.
+- **`exit $LASTEXITCODE`** replaces `exec`. There is no exec, so the script
+  runs as a child and its exit code has to be passed back by hand;
+  `-Command` otherwise returns its own status and the app's is lost.
+  (The `-File` form above does this on its own.)
+- **`curl.exe`, not `curl`** — in PowerShell, bare `curl` is an alias for
+  `Invoke-WebRequest`, which takes none of these flags.
+
+A copy of a start script a customer holds is a copy no fix ever reaches,
+which is why the file above holds only the bootstrapper. Everything that
+might need changing lives in `start.ps1`, on the server.
+
+The script mirrors `runpod_start.sh` step for step — same variable checks,
+same node-tag validation, sends the sha256 of the binary it already has so
+a restart downloads nothing, falls back to the on-disk build when the
+server is unreachable, verifies the download before running it. Two things
+differ, both because Windows differs:
+
+- Models default to **`C:\krea2`**, not `/workspace/krea2`. The pod default
+  resolves to `C:\workspace\krea2` on Windows, which is a real path and the
+  wrong one. Override with `KREA2_BASE_DIR`.
+- There is no `exec`, so the app runs as a child process. Ctrl-C reaches it
+  and releases the seat cleanly; closing the window does not, and that seat
+  is freed by the server's stale-lease sweep a few minutes later.
+
+### How a Windows build stays away from Linux pods
+
+This is the part worth understanding before publishing one, because the
+failure mode is silent on the publishing side and total on the receiving
+side: a Linux pod handed a `.exe` downloads it, matches the checksum, and
+dies with `Exec format error`.
+
+A build document carries a **`platform`**, and `/v1/build` resolves a build
+by *(channel, platform)* rather than by channel alone:
+
+```
+POST /v1/build {license_key, instance_id, current_sha}              -> linux
+POST /v1/build {license_key, instance_id, current_sha, platform}    -> as asked
+```
+
+**A client that sends no `platform` gets Linux.** That is not a default
+chosen for tidiness — it is the compatibility guarantee. Every pod running
+today sends exactly the first body, and `scripts/runpod_start.sh` is
+unchanged, so they all keep resolving the build they already had.
+
+Three things had to change together, and all three are in
+`license-validator/`:
+
+1. `/v1/build` filters by platform, on **both** the channel lookup and the
+   `build_sha` pin. A pin names one artifact and an artifact is for one OS,
+   so a customer pinned to a Linux sha and running Windows gets a clean
+   "no build" rather than the wrong one.
+2. `promote()` scopes its `$pull` by platform. Without that, promoting a
+   Windows build to `stable` would take `stable` off the **Linux** build
+   and every Linux pod would get `no_build` on its next start — an outage
+   caused at publish time, before any pod asked for anything.
+3. `buildKey()` takes the filename from the build document, so a Windows
+   artifact is stored at `builds/<sha>/krea2app.exe`. Content addressing
+   already keeps the two apart; this is so a bucket listing is readable.
+
+Builds published before any of this exists have no `platform` field and are
+treated as Linux, so nothing needed migrating.
+
+**Deploy order matters.** The licence server change must be live *before*
+the first Windows build is published and before the start script reaches a
+customer. An old server ignores the `platform` field it does not know about
+and answers with the Linux build; `windows_start.ps1` refuses to run
+anything that is not marked `windows` — including a response with no
+platform at all — so the failure is a clear message rather than a mystery,
+but it is still a failure.
+
+### Keeping the two build scripts in step
+
+`build.ps1` carries its own copy of the long `--include-*` argument list.
+That duplication is deliberate — `build.sh` produces what every customer
+runs today and was left byte-for-byte alone — and the price of it is drift:
+
+```bash
+make check-args          # or: python scripts/check_build_args.py
+```
+
+`make compile` and `make release` both depend on it, so the Linux build
+refuses to run while the two disagree. It is worth having because every
+flag in that list is one whose absence produces a binary that **compiles
+and runs** and is then quietly wrong — no Xet acceleration, un-pinned
+weights, a missing `version.txt` that only crashes after the models have
+downloaded.
+
+Flags that genuinely belong to one platform (`--jobs`, `--mingw64`,
+`--static-libpython`, the output filename) are listed in `PLATFORM_SPECIFIC`
+in that script, with the reason.
+
+### Publishing a start-script fix without a Windows machine
+
+`start.ps1` and the `.exe` are two independent objects in the bucket. A fix
+to the start script is one upload:
+
+```bash
+make start-ps1
+```
+
+It refuses to publish a `.ps1` that has lost its UTF-8 BOM, because
+`powershell.exe` decodes a BOM-less script as Windows-1252 and a single
+em-dash in a comment then ends a string early — the file fails to *parse*,
+before any of its own error handling can say why.
 
 ## Krea 2 V2 (Krea2 advanced graph)
 

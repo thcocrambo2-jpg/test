@@ -53,7 +53,7 @@ services:
     working_dir: /src
     ports:
       - "7860:7860"
-    shm_size: 8gb
+    shm_size: 2gb            # see docker-compose.yml
     stop_grace_period: 60s
 
     deploy:

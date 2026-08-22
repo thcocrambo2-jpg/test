@@ -58,7 +58,12 @@ import {
   BUILD_URL_TTL_SECONDS,
   BUILD_DOWNLOADS_PER_HOUR,
 } from "./config.js";
-import { buildKey, presignGet, r2Configured } from "./r2.js";
+import {
+  DEFAULT_FILENAME,
+  buildKey,
+  presignGet,
+  r2Configured,
+} from "./r2.js";
 
 const app = express();
 
@@ -375,6 +380,65 @@ app.post(
   }),
 );
 
+// ── Platforms ───────────────────────────────────────────────────────────
+//
+// A build is for one operating system, and handing the wrong one to a
+// client is the failure mode with no downstream check: the bytes transfer,
+// the sha256 matches, and the pod dies with "Exec format error" — or on
+// Windows, with nothing at all. So the OS is a field on the build document
+// and a filter on every lookup, rather than a convention in the channel
+// name.
+//
+// Platform is deliberately NOT folded into the channel ("windows-stable").
+// The channel is resolved from the *licence*, and a licence is per
+// customer, not per machine: a customer with a RunPod pod and a Windows
+// desktop on one key would have both machines resolve to one channel, so
+// one of them gets the wrong OS. Keeping the two axes apart means the
+// channel keeps meaning "which release train" and one `stable` can exist
+// per platform.
+//
+// The cost of that, and it is a real one: `channels` is no longer unique
+// across the collection. Two documents can both hold "stable", so anything
+// reading that collection has to think in (channel, platform) pairs — see
+// promote() and the admin listing below.
+const PLATFORMS = ["linux", "windows"];
+const DEFAULT_PLATFORM = "linux";
+
+/**
+ * The platform a build document is for.
+ *
+ * Documents published before platforms existed have no such field, and
+ * they are all Linux — every build in the collection when this was written
+ * carried `arch: "linux-x86_64"`. Answering "linux" for them means no
+ * migration and no backfill: the builds that are live keep resolving for
+ * the pods that are running.
+ *
+ * `arch` is not parsed for this. It is assembled client-side as
+ * `platform.system().lower() + "-" + platform.machine()`, and machine() is
+ * NOT lowercased — a Windows build registers "windows-AMD64". A field that
+ * is only sometimes lowercase is a bad thing to branch on, so the platform
+ * is sent explicitly and this fallback covers only the pre-platform past.
+ */
+const buildPlatform = (build) => build?.platform || DEFAULT_PLATFORM;
+
+/**
+ * Match builds for one platform, including the pre-platform documents.
+ *
+ * `{platform: "linux"}` does not match a document with no platform field
+ * at all, which is exactly the set of builds already published — so asking
+ * for Linux has to mean "linux, or old enough not to say".
+ */
+const platformFilter = (platform) =>
+  platform === DEFAULT_PLATFORM
+    ? { $or: [{ platform: DEFAULT_PLATFORM }, { platform: { $exists: false } }] }
+    : { platform };
+
+// The artifact's name inside its content-addressed prefix. Constrained
+// because it goes straight into an R2 key that this service then signs: a
+// value with a slash or a .. in it is a signed URL for an object the
+// caller chose. A basename, and a conservative one.
+const FILENAME_RE = /^[A-Za-z0-9._-]{1,64}$/;
+
 // ── Build download ──────────────────────────────────────────────────────
 //
 // Hands a pod a time-limited URL for the app binary, which lives in a
@@ -399,11 +463,26 @@ app.post(
 // up_to_date with no URL is what keeps a restart free: no signature is
 // minted, no row is written, and pods that are merely rebooting never
 // touch the rate limit.
+//
+// `platform` is what keeps a Windows .exe away from a Linux pod. It is
+// optional and defaults to "linux", which is not a preference — it is the
+// compatibility guarantee. scripts/runpod_start.sh sends
+// {license_key, instance_id, current_sha} and nothing else, and every pod
+// running today is that script. A default of anything but "linux", or a
+// required field, would break all of them at once.
 app.post(
   "/v1/build",
   wrap(async (req, res) => {
     const { license_key, instance_id, current_sha } = req.body || {};
     if (!license_key) return badRequest(res, "license_key is required.");
+
+    const platform = req.body?.platform ?? DEFAULT_PLATFORM;
+    if (!PLATFORMS.includes(platform)) {
+      return badRequest(
+        res,
+        `platform must be one of: ${PLATFORMS.join(", ")}.`,
+      );
+    }
 
     const { licenses, builds, downloads } = await collections();
     const license = await licenses.findOne({ key: license_key });
@@ -415,19 +494,39 @@ app.post(
     // edited to get it. `build_sha` pins one customer to one build —
     // which is how you hold a customer back, or put a single pod on a
     // build you are still checking, without touching anyone else.
+    //
+    // The platform filter is on BOTH lookups, and the pin is the one that
+    // is easy to miss: a licence pinned to a Linux sha would otherwise
+    // hand that sha to a Windows client, which is the exact failure the
+    // channel filter exists to prevent — reintroduced through the door
+    // marked "hold this customer back one build".
     const channel = license.build_channel || "stable";
     const build = license.build_sha
-      ? await builds.findOne({ _id: license.build_sha })
-      : await builds.findOne({ channels: channel });
+      ? await builds.findOne({ _id: license.build_sha, ...platformFilter(platform) })
+      : await builds.findOne({ channels: channel, ...platformFilter(platform) });
 
     if (!build) {
       // 503 rather than 404. From the pod's side this is indistinguishable
       // from the service being transiently wrong, and it is a problem at
       // the supplier's end either way. A 404 reads as "this pod asked for
       // something that makes no sense", which is never what happened.
+      //
+      // A pin that exists but is for the other platform is called out
+      // separately. It is the one case here that looks like a server fault
+      // and is actually a one-field licence edit: build_sha names a single
+      // artifact, and an artifact is for one OS.
+      if (license.build_sha) {
+        const pinned = await builds.findOne({ _id: license.build_sha });
+        if (pinned) {
+          console.error(
+            `build    key=${license_key} PIN IS ${buildPlatform(pinned)} ` +
+              `but client asked for ${platform} — sha=${license.build_sha.slice(0, 12)}`,
+          );
+        }
+      }
       console.error(
         `build    key=${license_key} NO BUILD pin=${license.build_sha || "-"} ` +
-          `channel=${channel}`,
+          `channel=${channel} platform=${platform}`,
       );
       return res.status(503).json({
         ok: false,
@@ -438,11 +537,18 @@ app.post(
       });
     }
 
+    // `platform` is in the manifest so the client can refuse a build for
+    // the wrong OS rather than download it, checksum it happily and fail
+    // to execute it. scripts/windows_start.ps1 treats a missing platform
+    // as a refusal too, which is what makes an un-upgraded server (one
+    // that ignores the field it was sent and answers with the Linux
+    // build) a clean error instead of a mysterious one.
     const manifest = {
       sha256: build._id,
       size: build.size ?? null,
       version: build.version || null,
       built_at: build.built_at || null,
+      platform: buildPlatform(build),
     };
 
     if (current_sha && current_sha === build._id) {
@@ -486,17 +592,22 @@ app.post(
       }
     }
 
-    const url = presignGet(buildKey(build._id), BUILD_URL_TTL_SECONDS);
+    const url = presignGet(
+      buildKey(build._id, build.filename),
+      BUILD_URL_TTL_SECONDS,
+    );
     await downloads.insertOne({
       license_key,
       instance_id: typeof instance_id === "string" ? instance_id.slice(0, 200) : null,
       sha256: build._id,
+      platform: buildPlatform(build),
       ip: req.ip || null,
       created_at: new Date(),
     });
     console.log(
       `build    key=${license_key} instance=${instance_id || "-"} ` +
-        `sha=${build._id.slice(0, 12)} channel=${license.build_sha ? "pinned" : channel}`,
+        `sha=${build._id.slice(0, 12)} platform=${buildPlatform(build)} ` +
+        `channel=${license.build_sha ? "pinned" : channel}`,
     );
 
     res.json({
@@ -531,6 +642,35 @@ app.get(
         .send("# The download service is not configured. Contact support.\n");
     }
     res.redirect(302, presignGet("start.sh", 300));
+  }),
+);
+
+// The Windows half of the same idea, and for the same reason: a customer
+// keeps a two-line shortcut that fetches this every time, so a fix to the
+// start script reaches them without anyone being talked through editing a
+// file. There is no template to paste into here — the shortcut is on their
+// desktop — which makes it *more* important that the script itself is not
+// the thing they hold a copy of.
+//
+// A separate object rather than content negotiation on /v1/start.sh: the
+// two scripts are fetched by different tools (curl in a RunPod template,
+// PowerShell on a desktop), and a redirect that depends on a User-Agent is
+// a thing that breaks silently when either side changes.
+//
+// This will 404 from R2 until a Windows publish has uploaded start.ps1.
+// That is the same behaviour /v1/start.sh has always had before a first
+// publish, and the presign cannot tell the difference — the object's
+// existence is not checked here, R2 answers it.
+app.get(
+  "/v1/start.ps1",
+  wrap(async (_req, res) => {
+    if (!r2Configured()) {
+      return res
+        .status(503)
+        .type("text/plain")
+        .send("# The download service is not configured. Contact support.\n");
+    }
+    res.redirect(302, presignGet("start.ps1", 300));
   }),
 );
 
@@ -1237,7 +1377,24 @@ app.get("/health", async (_req, res) => {
     // sign a URL, and something for that URL to point at. Either being
     // absent leaves every /v1/build answering 503, and this is the only
     // place that says which one it is.
-    const stable = await builds.findOne({ channels: "stable" });
+    //
+    // Once "stable" can sit on one build per platform, a single answer
+    // here is not merely incomplete — it is arbitrary, because findOne
+    // returns whichever of the two the server reaches first. So each
+    // platform is looked up on its own, and `stable_build` keeps naming
+    // the Linux one: it is what every pod in production downloads, and it
+    // is the field anything reading this endpoint already means.
+    const stable = Object.fromEntries(
+      await Promise.all(
+        PLATFORMS.map(async (name) => [
+          name,
+          (await builds.findOne({
+            channels: "stable",
+            ...platformFilter(name),
+          }))?._id ?? null,
+        ]),
+      ),
+    );
     res.json({
       ok: true,
       db: "connected",
@@ -1245,7 +1402,8 @@ app.get("/health", async (_req, res) => {
       licenses: licenseCount,
       stale_seconds: STALE_SECONDS,
       r2: r2Configured() ? "configured" : "unset",
-      stable_build: stable ? stable._id : null,
+      stable_build: stable[DEFAULT_PLATFORM],
+      stable_builds: stable,
     });
   } catch (err) {
     console.error("health check failed:", err);
@@ -1512,18 +1670,32 @@ app.post(
 const CHANNEL_RE = /^[a-z0-9][a-z0-9_-]{0,31}$/;
 
 /**
- * Point `channel` at one build, taking it off whichever build holds it.
+ * Point `channel` at one build, taking it off whichever build holds it
+ * FOR THE SAME PLATFORM.
  *
  * Promotion and rollback are the same operation: there is no "newer" here,
  * only which document the name currently sits on. That is what makes
  * going back a one-line admin call rather than a re-upload.
+ *
+ * The platform scope is what makes two platforms able to share a channel
+ * name, and leaving it out is not a cosmetic bug: an unscoped $pull run
+ * for a Windows build would take "stable" off the Linux build, and every
+ * Linux pod would get no_build on its next start. The outage would happen
+ * at publish time, before any pod asked for anything.
+ *
+ * The platform comes from the stored document rather than from the
+ * caller, so the two can never disagree — a promote is always for the
+ * platform the artifact actually is.
  */
 async function promote(builds, sha256, channel) {
+  const target = await builds.findOne({ _id: sha256 });
+  const platform = buildPlatform(target);
   await builds.updateMany(
-    { channels: channel, _id: { $ne: sha256 } },
+    { channels: channel, _id: { $ne: sha256 }, ...platformFilter(platform) },
     { $pull: { channels: channel } },
   );
   await builds.updateOne({ _id: sha256 }, { $addToSet: { channels: channel } });
+  return platform;
 }
 
 app.post(
@@ -1548,6 +1720,22 @@ app.post(
       return badRequest(res, "promote must be a short lowercase channel name.");
     }
 
+    // Both default to the Linux values, so build.sh registers exactly what
+    // it always did without sending either field. Validated rather than
+    // trusted: `platform` decides which clients are handed this artifact,
+    // and `filename` becomes part of a key this service signs.
+    const platform = req.body.platform ?? DEFAULT_PLATFORM;
+    if (!PLATFORMS.includes(platform)) {
+      return badRequest(res, `platform must be one of: ${PLATFORMS.join(", ")}.`);
+    }
+    const filename = req.body.filename ?? DEFAULT_FILENAME;
+    if (!FILENAME_RE.test(String(filename))) {
+      return badRequest(
+        res,
+        "filename must be a plain basename (letters, digits, . _ -).",
+      );
+    }
+
     const { builds } = await collections();
     const now = new Date();
     await builds.updateOne(
@@ -1559,6 +1747,8 @@ app.post(
           git_commit: git_commit || null,
           git_branch: git_branch || null,
           arch: arch || null,
+          platform,
+          filename,
           built_at: built_at ? new Date(built_at) : now,
           updated_at: now,
         },
@@ -1569,7 +1759,7 @@ app.post(
     if (channel) await promote(builds, sha256, channel);
 
     console.log(
-      `publish  sha=${sha256.slice(0, 12)} size=${size} ` +
+      `publish  sha=${sha256.slice(0, 12)} size=${size} platform=${platform} ` +
         `commit=${git_commit || "-"} promote=${channel || "-"}`,
     );
     const row = await builds.findOne({ _id: sha256 });
@@ -1579,6 +1769,12 @@ app.post(
 
 // The rollback surface, and the reason every build stays in this
 // collection rather than the current one overwriting the last.
+//
+// `platform` is filled in for the older rows rather than left absent, so
+// the listing answers "which build does a Linux pod get" without the
+// reader having to know that a missing field means Linux. Two rows can
+// hold the same channel now — one per platform — and that is only legible
+// if every row says which platform it is.
 app.get(
   "/v1/admin/builds",
   requireAdmin,
@@ -1596,6 +1792,8 @@ app.get(
         sha256: row._id,
         _id: undefined,
         channels: row.channels || [],
+        platform: buildPlatform(row),
+        filename: row.filename || DEFAULT_FILENAME,
       })),
     });
   }),
@@ -1621,9 +1819,16 @@ app.post(
     if (!(await builds.findOne({ _id: sha256 }))) {
       return badRequest(res, "no build with that sha256 has been published.");
     }
-    await promote(builds, sha256, channel);
-    console.log(`promote  ${channel} -> ${sha256.slice(0, 12)}`);
-    res.json({ ok: true, channel, sha256 });
+    // The platform is reported back rather than accepted as input: it is
+    // the artifact's own, and a rollback is one place you want to be told
+    // which set of machines you just moved. `make promote SHA=...` prints
+    // this, so a Windows sha typed in by mistake says "windows" instead of
+    // looking like it did what was meant.
+    const platform = await promote(builds, sha256, channel);
+    console.log(
+      `promote  ${channel}/${platform} -> ${sha256.slice(0, 12)}`,
+    );
+    res.json({ ok: true, channel, platform, sha256 });
   }),
 );
 

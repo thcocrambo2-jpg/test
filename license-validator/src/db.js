@@ -72,6 +72,12 @@ export async function collections() {
     // this build ("stable", usually). Promotion pulls the name off every
     // other document and pushes it onto one, which makes rolling back and
     // rolling forward the identical operation.
+    //
+    // A channel name is unique per `platform`, not across the collection:
+    // "stable" sits on one Linux build and one Windows build at the same
+    // time, because they are two artifacts of the same release. Documents
+    // published before Windows existed carry no `platform` and are Linux
+    // — see buildPlatform() in app.js.
     builds: db.collection("builds"),
     // One row per download URL issued. This is the visibility the gate
     // buys: seat counts say how many pods run at once, this says how many
@@ -160,7 +166,17 @@ export async function ensureIndexes() {
   // Build distribution. The channel lookup runs on every pod boot that is
   // not already up to date, and it is the one query on the path between a
   // customer starting a pod and the app existing on it.
-  await builds.createIndex({ channels: 1 }, { name: "channels" });
+  //
+  // Compound with `platform` because that lookup is now (channel,
+  // platform): one build holds "stable" per operating system, so the
+  // channel alone no longer identifies a single document. Nothing depends
+  // on this index existing — the collection holds one row per build ever
+  // published and a scan of it is nothing — so a deployment that never
+  // runs `npm run init-db` is slower here and not broken.
+  await builds.createIndex(
+    { channels: 1, platform: 1 },
+    { name: "channels_platform" },
+  );
   await builds.createIndex({ published_at: -1 }, { name: "published" });
 
   // The rate-limit read: this licence's downloads, newest first. Unlike

@@ -20,6 +20,12 @@ SHELL := /bin/bash
 ENV_FILE := license-validator/.env
 ARTIFACT := dist/krea2app
 
+# The Windows half of the pair. Nothing here builds it — Nuitka does not
+# cross-compile, so `.\build.ps1` has to run on Windows — but the start
+# script it publishes is a plain file, and pushing a fix to that should not
+# require finding a Windows machine. See the start-ps1 target.
+WIN_START := scripts/windows_start.ps1
+
 # The Docker image (Dockerfile, docker-compose.yml). Unrelated to the
 # artifact above and to $(ENV_FILE): it carries no credential and no
 # licensed code, which is what makes it publishable. Running it is
@@ -97,7 +103,8 @@ if [[ -n "$$read_key" && "$$read_key" == "$$R2_ACCESS_KEY_ID" ]]; then
 fi
 endef
 
-.PHONY: help check compile publish release health builds promote image image-dev image-push
+.PHONY: help check check-args compile publish release health builds promote \
+        start-ps1 image image-dev image-push
 
 help:
 	@echo
@@ -105,11 +112,17 @@ help:
 	echo "  make health     what the deployment reports"
 	echo "  make builds     every build published, newest first"
 	echo
-	echo "  make compile    build $(ARTIFACT), publish nothing"
+	echo "  make compile    build $(ARTIFACT) for LINUX, publish nothing"
 	echo "  make publish    upload $(ARTIFACT) and point \"stable\" at it"
 	echo "  make release    compile, then publish"
+	echo "  make check-args build.sh and build.ps1 must bundle the same things"
 	echo
 	echo "  make promote SHA=<sha256>    roll a channel back to a build"
+	echo
+	echo "  Windows builds are made on Windows - Nuitka cannot cross-compile:"
+	echo "      .\\\\build.ps1               compile dist/krea2app.exe"
+	echo "      .\\\\build.ps1 -Publish      ... and publish it"
+	echo "  make start-ps1  push a $(WIN_START) fix without a Windows box"
 	echo
 	echo "  make image      build $(IMAGE):$(TAG), the environment image"
 	echo "  make image-dev  ... plus app deps, to run a working tree in it"
@@ -142,6 +155,11 @@ check:
 	else
 	    echo "  artifact    none yet - run 'make compile'"
 	fi
+	if [[ -f "$(ARTIFACT).exe" ]]; then
+	    echo "  windows     $(ARTIFACT).exe  ($$(stat -c %s "$(ARTIFACT).exe") bytes)"
+	else
+	    echo "  windows     none here - built on Windows with .\\\\build.ps1"
+	fi
 	echo
 	# Proves the admin token actually opens the deployment, which is the
 	# one credential a successful upload still cannot tell you about.
@@ -155,6 +173,22 @@ check:
 	    000) echo "  admin api   unreachable - check KREA2_NODE_TAG" ;;
 	    *)   echo "  admin api   HTTP $$code" ;;
 	esac
+	# What each platform's customers would be handed right now. Two builds
+	# hold "stable" once Windows is published - one per platform - so a
+	# single answer here would be arbitrary, and "is the Windows build live
+	# yet" is the question this target exists to answer.
+	#
+	# Written without an indented block on purpose. Make strips the leading
+	# whitespace from every line of a .ONESHELL recipe, not just the tab, so
+	# an indented `for` body arrives at Python with no indentation at all and
+	# dies with an IndentationError - which 2>/dev/null then hides, leaving a
+	# check that silently reports nothing.
+	curl -s "$$API/health" | python3 -c '
+	import json, sys
+	stable = json.load(sys.stdin).get("stable_builds") or {}
+	for name in sorted(stable): print("  stable %-7s %s" % (name, stable[name][:12] if stable[name] else "NOT PUBLISHED"))
+	if not stable: print("  stable      (this deployment predates per-platform builds)")
+	' 2>/dev/null || true
 	echo
 
 health:
@@ -168,7 +202,15 @@ builds:
 	     "$$API/v1/admin/builds" | python3 -m json.tool 2>/dev/null || \
 	    echo "could not list builds - try 'make check'"
 
-compile:
+# Cheap, credential-free, and a dependency of both build targets: the two
+# scripts each hold their own copy of the Nuitka --include-* list, and a
+# flag added to one and not the other produces a build that compiles, runs,
+# and is quietly missing something. Catching that costs a fraction of a
+# second here against noticing it in a customer's log.
+check-args:
+	@python3 scripts/check_build_args.py
+
+compile: check-args
 	@./build.sh --no-publish
 
 publish:
@@ -176,10 +218,48 @@ publish:
 	$(LOAD_WRITE)
 	./build.sh --upload-only
 
-release:
+release: check-args
 	@$(LOAD_ENV)
 	$(LOAD_WRITE)
 	./build.sh -y
+
+# Publish the Windows start script on its own.
+#
+# It is normally uploaded by `.\build.ps1 -Publish`, alongside the .exe —
+# but the two are independent objects, and a fix to the start script should
+# not need a Windows machine, a recompile, or a new build document. This is
+# the same PUT that script does, from wherever you already have the write
+# credentials.
+#
+# The binary is untouched: this writes one object, at the fixed key
+# /v1/start.ps1 redirects to.
+start-ps1:
+	@$(LOAD_ENV)
+	$(LOAD_WRITE)
+	if [[ ! -f "$(WIN_START)" ]]; then
+	    echo "ERROR: $(WIN_START) not found." >&2
+	    exit 1
+	fi
+	# Rejected rather than uploaded: powershell.exe decodes a .ps1 with
+	# no BOM as Windows-1252, so a file that lost its BOM in an editor
+	# fails to PARSE on the customer's machine — before any of its own
+	# error handling can say anything. Cheaper to catch here than to
+	# publish and find out from a customer.
+	if [[ "$$(head -c 3 "$(WIN_START)" | xxd -p)" != "efbbbf" ]]; then
+	    echo "ERROR: $(WIN_START) has no UTF-8 BOM." >&2
+	    echo "       PowerShell 5.1 would read its comments as Windows-1252" >&2
+	    echo "       and fail to parse the file. Re-save it as UTF-8 with BOM." >&2
+	    exit 1
+	fi
+	url=$$(python3 scripts/r2_presign.py --key start.ps1 --method PUT --expires 900)
+	code=$$(curl -sS -o /dev/null -w '%{http_code}' -T "$(WIN_START)" "$$url")
+	if [[ "$$code" == "200" ]]; then
+	    echo "uploaded $(WIN_START) -> r2://$$R2_BUILDS_BUCKET/start.ps1"
+	    echo "Windows customers get it on their next start."
+	else
+	    echo "ERROR: upload failed (HTTP $$code)" >&2
+	    exit 1
+	fi
 
 # Rolling back and rolling forward are the same call: the channel is just
 # a name on whichever build document holds it.

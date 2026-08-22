@@ -43,7 +43,12 @@ services:
     # It lives in the WSL2 virtual disk on C:. Docker Desktop → Settings →
     # Resources → Advanced → "Disk image location" moves it to another drive.
 
-    shm_size: 8gb            # Docker's 64 MB default is not enough for torch
+    # Docker's 64 MB default is not enough for torch. Not 8gb either: this
+    # is a tmpfs cap, and on Docker Desktop the tmpfs lives in the WSL2 VM's
+    # RAM — which defaults to half the host's. ComfyUI's DynamicVRAM streams
+    # weights through that same RAM, so headroom there is what keeps a model
+    # larger than VRAM loadable at all.
+    shm_size: 2gb
 
     # licensing.py releases the seat from a SIGTERM handler. Compose's
     # default is 10 seconds and then SIGKILL, which would skip that and

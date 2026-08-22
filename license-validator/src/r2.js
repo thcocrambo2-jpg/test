@@ -130,11 +130,31 @@ export function presignGet(key, expiresIn) {
 }
 
 /**
+ * What an artifact is called inside its prefix, when nothing says.
+ *
+ * Every build published before Windows existed is at this name, so it is
+ * the default rather than a preference — a build document with no
+ * `filename` is one of those, and its object is still there under it.
+ */
+export const DEFAULT_FILENAME = "krea2app";
+
+/**
  * Where a build's bytes live.
  *
  * Content-addressed, so an object is immutable once written: publishing
  * never overwrites, rollback is a pointer change rather than a re-upload,
  * and a stale cache anywhere in the path cannot serve the wrong bytes
  * under the right name.
+ *
+ * The name inside the prefix is stored on the build document rather than
+ * derived from its platform. The sha already keeps the two platforms from
+ * colliding, so this is for the human reading a bucket listing — and
+ * recording what the publisher actually uploaded cannot drift from it,
+ * where a rule reimplemented here and in the build script can.
+ *
+ * The caller is the API's own build document. `filename` is validated at
+ * registration (see FILENAME_RE in app.js) precisely because it lands
+ * here, in a key this service signs.
  */
-export const buildKey = (sha256) => `builds/${sha256}/krea2app`;
+export const buildKey = (sha256, filename = DEFAULT_FILENAME) =>
+  `builds/${sha256}/${filename || DEFAULT_FILENAME}`;

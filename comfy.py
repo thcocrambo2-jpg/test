@@ -12,6 +12,7 @@ so importing this module on a machine without an NVIDIA GPU raises.
 
 import json
 import os
+import platform
 import subprocess
 import time
 import urllib.request
@@ -62,6 +63,41 @@ log.info(
 )
 
 
+def _is_wsl() -> bool:
+    """True when the running kernel is WSL2's — Docker Desktop's included.
+
+    The same two suffixes ComfyUI's own model_management.is_wsl() tests.
+    Mirrored rather than imported: ComfyUI runs as a subprocess under its
+    own interpreter (runtime_python), so its modules are not importable
+    from this process.
+    """
+    return platform.uname().release.endswith(
+        ("-Microsoft", "microsoft-standard-WSL2")
+    )
+
+
+def dynamic_vram_args() -> tuple[str, ...]:
+    """--enable-dynamic-vram where ComfyUI would otherwise switch it off.
+
+    ComfyUI's main.py gates DynamicVRAM — the comfy-aimdo weight streaming
+    that is what lets a model larger than VRAM run at all — behind
+    `not is_wsl()`. Docker Desktop's VM kernel ends in
+    'microsoft-standard-WSL2', so a container running there trips a check
+    meant for ComfyUI started inside a WSL distro: aimdo imports, logs its
+    version, and is then never initialised. The legacy static loader takes
+    over, and Krea 2 on an 8 GB card dies with 'Allocation on device' —
+    the same workflow that works run natively on Windows, where is_wsl()
+    is False and the streaming path is on.
+
+    The flag is main.py's own escape hatch for this ("Enable dynamic VRAM
+    on systems where it's not enabled by default"). Passed only under WSL
+    so a Linux host keeps ComfyUI's unforced behaviour: there DynamicVRAM
+    is already on by default, and forcing it would also suppress the
+    torch < 2.8 fallback main.py prints instead of initialising aimdo.
+    """
+    return ("--enable-dynamic-vram",) if _is_wsl() else ()
+
+
 def _server_alive(timeout: float = 3.0, port: int = COMFY_PORT) -> bool:
     try:
         with urllib.request.urlopen(
@@ -93,6 +129,9 @@ def start_comfyui(port: int = COMFY_PORT, log_path=COMFY_LOG, extra_args=()):
         "--output-directory", str(OUTPUT_DIR),
         "--temp-directory", str(TEMP_DIR / "comfy_temp"),
         "--disable-auto-launch",
+        # Here rather than at the call sites so the Wan instance and the
+        # ensure_alive() restart get it too, not just the main one.
+        *dynamic_vram_args(),
         *[str(a) for a in extra_args],
     ]
     log.info("Starting ComfyUI on port %d (logs → %s)", port, log_path)

@@ -22,3 +22,17 @@
 # into an invalid one.
 Dockerfile text eol=lf
 *.env.example text eol=lf
+
+# The mirror image of the rule above, for the same reason in reverse.
+# PowerShell scripts run on Windows and are published to customers, and
+# CRLF is what every Windows tool that might open one expects.
+#
+# What is NOT expressed here, and matters more: both .ps1 files are stored
+# with a UTF-8 BOM. powershell.exe (5.1, the default on Windows 11) decodes
+# a .ps1 without one as Windows-1252, so the em-dashes in their comments
+# each become three characters — one of them a closing quote, which ends a
+# string early and makes the file fail to PARSE before it can run a line of
+# its own error handling. Git preserves a BOM and has no attribute to
+# require one, so `make start-ps1` refuses to publish a start script that
+# has lost it.
+*.ps1 text eol=crlf
