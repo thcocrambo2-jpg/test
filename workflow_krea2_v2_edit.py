@@ -144,10 +144,12 @@ def build_v2_edit_workflow(
     width: int,
     height: int,
     image_name: str,
+    image2_name: str | None = None,
     loras=(),
     unet_file: str | None = None,
     grounding_px: int = 768,
     ref_boost: float = 4.0,
+    ref_boost_a: float = 1.0,
     fit_mode: str = "fit",
     sampler_settings=None,
     variance_settings=None,
@@ -184,6 +186,19 @@ def build_v2_edit_workflow(
       • `target_latent` — the same latent the sampler starts from, so the
         node pre-encodes at execution time instead of during the first
         sampling step and the diffusion model is not evicted mid-run.
+
+    `image2_name` adds the optional **second reference**, exactly as in
+    build_edit_workflow — scene on `image_name`, subject on `image2_name`,
+    both wired to the patch node and to *both* grounded encoders. Omit it
+    and the b-inputs are left unwired, so a one-image edit builds the same
+    graph it always did. `ref_boost` applies to the last reference (the
+    subject when there are two), `ref_boost_a` to the scene; the latter is
+    emitted only when a second reference exists.
+
+    Note the output size still comes from the *first* image via `fit_size`
+    — the scene is what the composition is kept from. The subject does not
+    need to match its aspect ratio, because the patch node resamples every
+    reference onto the target grid in pixel space.
     """
     entry = resolve_model(unet_file)
     steps, cfg, _turbo_lora = model_defaults(entry)
@@ -259,29 +274,45 @@ def build_v2_edit_workflow(
         "inputs": {"width": int(width), "height": int(height),
                    "batch_size": 1},
     }
+    patch_inputs = {
+        "model": model_ref,
+        "source_latent": ["encode", 0],
+        "source_image": ["source", 0],
+        "vae": vae_ref,
+        "target_latent": ["latent", 0],
+        "fit_mode": fit_mode,
+        "ref_boost": float(ref_boost),
+    }
+    # Shared by both grounded encoders, so the negative sees exactly the
+    # references the positive does — the trained unconditional.
+    grounding = {"grounding_px": int(grounding_px)}
+    if image2_name:
+        wf["source_b"] = {
+            "class_type": "LoadImage",
+            "inputs": {"image": image2_name},
+        }
+        wf["encode_b"] = {
+            "class_type": "VAEEncode",
+            "inputs": {"pixels": ["source_b", 0], "vae": vae_ref},
+        }
+        patch_inputs["source_latent_b"] = ["encode_b", 0]
+        patch_inputs["source_image_b"] = ["source_b", 0]
+        patch_inputs["ref_boost_a"] = float(ref_boost_a)
+        grounding["image_b"] = ["source_b", 0]
     wf["edit_model"] = {
         "class_type": "Krea2EditModelPatch",
-        "inputs": {
-            "model": model_ref,
-            "source_latent": ["encode", 0],
-            "source_image": ["source", 0],
-            "vae": vae_ref,
-            "target_latent": ["latent", 0],
-            "fit_mode": fit_mode,
-            "ref_boost": float(ref_boost),
-        },
+        "inputs": patch_inputs,
     }
     wf["positive"] = {
         "class_type": "Krea2EditGroundedEncode",
         "inputs": {"clip": clip_ref, "prompt": prompt,
-                   "image": ["source", 0], "grounding_px": int(grounding_px)},
+                   "image": ["source", 0], **grounding},
     }
     if negative.strip():
         wf["negative"] = {
             "class_type": "Krea2EditGroundedEncode",
             "inputs": {"clip": clip_ref, "prompt": negative,
-                       "image": ["source", 0],
-                       "grounding_px": int(grounding_px)},
+                       "image": ["source", 0], **grounding},
         }
     else:
         # One fewer encoder pass, and the same thing an empty negative
@@ -324,6 +355,7 @@ def build_v2_edit_workflow(
         "class_type": "SaveImage",
         "inputs": {"filename_prefix": filename_prefix, "images": ["decode", 0]},
     }
-    log.debug("Krea 2 V2 Edit graph: %d nodes, %d style LoRA(s) over the "
-              "Identity Edit LoRA", len(wf), len(loras))
+    log.debug("Krea 2 V2 Edit graph: %d nodes, %d reference(s), %d style "
+              "LoRA(s) over the Identity Edit LoRA", len(wf),
+              2 if image2_name else 1, len(loras))
     return wf

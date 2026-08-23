@@ -300,12 +300,36 @@ def audit(manifest: dict) -> list[tuple[int, str]]:
 
 # ── Node packs ────────────────────────────────────────────────────────────────
 def _git_sha(repo_dir: Path) -> str | None:
-    try:
-        out = subprocess.run(["git", "-C", str(repo_dir), "rev-parse", "HEAD"],
-                             capture_output=True, text=True, timeout=30)
-        return out.stdout.strip() or None
-    except Exception:
+    """HEAD of the checkout *at* `repo_dir`, or None if it is not its root.
+
+    `git -C <dir> rev-parse HEAD` walks UP the tree when <dir> has no .git
+    of its own, and every pack lives inside ComfyUI's own checkout — so a
+    pack installed from a mirror tarball (which _skip_junk deliberately
+    strips .git from) answered with *ComfyUI's* HEAD. That stamped one
+    wrong SHA onto every pack in the same run, and it was self-reinforcing:
+    the next pod bootstrapped from those tarballs had no .git either.
+
+    So confirm the repository git discovered is actually this directory
+    before believing its answer, and return None rather than a lie when it
+    is not — pack_nodes then leaves the pin alone instead of overwriting a
+    good SHA with ComfyUI's.
+    """
+    def _git(*args) -> str | None:
+        try:
+            out = subprocess.run(["git", "-C", str(repo_dir), *args],
+                                 capture_output=True, text=True, timeout=30)
+        except Exception:
+            return None
+        return out.stdout.strip() if out.returncode == 0 else None
+
+    top = _git("rev-parse", "--show-toplevel")
+    if top is None or Path(top).resolve() != Path(repo_dir).resolve():
+        log.warning("%s is not a git checkout root (no .git of its own) — "
+                    "refusing to read a SHA that would belong to the "
+                    "enclosing repo. Installed from a mirror tarball? Its "
+                    "pin has to be set by hand.", repo_dir)
         return None
+    return _git("rev-parse", "HEAD")
 
 
 def _skip_junk(info: tarfile.TarInfo):
@@ -352,15 +376,53 @@ def pack_nodes(manifest: dict, staging: Path) -> tuple[list[Item], dict]:
     staging.mkdir(parents=True, exist_ok=True)
     custom_nodes = COMFY_DIR / "custom_nodes"
     items, pins = [], {}
+    # PINS.json is rebuilt from scratch every run, so anything a given pod
+    # cannot re-derive silently vanishes from it. That is how three packs
+    # lost their pins — their features were off on the boot run, so their
+    # directories did not exist — and losing a pin does more than unpin:
+    # node_pack_from_mirror looks the tarball up BY PIN, so a pack with no
+    # pin never uses the mirror copy that is sitting right there, and
+    # bootstrap falls back to cloning HEAD unpinned. Carry the previous
+    # file forward and overwrite only what this run can actually prove.
+    previous = {}
+    if PINS_PATH.exists():
+        try:
+            previous = json.loads(PINS_PATH.read_text(encoding="utf-8"))
+        except Exception as exc:
+            log.warning("existing %s is unreadable (%s) — starting from "
+                        "scratch, so unbuilt packs will lose their pins.",
+                        PINS_PATH, exc)
+
     for pack in manifest.get("node_packs", []):
         dirname = pack["dir"]
         src = custom_nodes / dirname
+        kept = previous.get(dirname)
+        kept_sha = kept.get("sha") if isinstance(kept, dict) else None
         if not src.is_dir():
             log.warning("node pack %s not present at %s — skipping (was its "
                         "feature enabled on the boot run?)", dirname, src)
+            if kept_sha:
+                pins[dirname] = kept
+                log.info("  ... keeping its recorded pin (%s)", kept_sha[:8])
             continue
         sha = _git_sha(src)
-        short = (sha or "unknown")[:8]
+        if sha is None:
+            # _git_sha refused rather than answering with the enclosing
+            # ComfyUI checkout's HEAD. An unverifiable pin must not be
+            # invented: keep the one already on record and leave the
+            # tarball that matches it alone on the mirror.
+            if kept_sha:
+                pins[dirname] = kept
+                log.warning("%s: cannot confirm this checkout's SHA — "
+                            "keeping the recorded pin (%s) and not "
+                            "re-packing.", dirname, kept_sha[:8])
+            else:
+                log.error("%s: cannot confirm its SHA and there is no pin on "
+                          "record — leaving it unpinned. Re-run from a real "
+                          "git clone of the pack, or set its pin by hand.",
+                          dirname)
+            continue
+        short = sha[:8]
         # The SHA is in the *filename*, not just PINS.json. A bare
         # `{dirname}.tar.gz` meant a second run after the pack updated
         # reused the stale tarball (it still existed) while PINS.json
@@ -376,11 +438,20 @@ def pack_nodes(manifest: dict, staging: Path) -> tuple[list[Item], dict]:
                           note=f"@{short}"))
 
     # ComfyUI itself is not mirrored — but it is the most likely thing on
-    # the list to break you, so its SHA is always recorded.
-    pins["ComfyUI"] = {
-        "url": "https://github.com/comfyanonymous/ComfyUI.git",
-        "sha": _git_sha(COMFY_DIR),
-    }
+    # the list to break you, so its SHA is always recorded. Same rule as
+    # the packs: a SHA that cannot be confirmed must not replace one that
+    # was.
+    comfy_sha = _git_sha(COMFY_DIR)
+    if comfy_sha is None and isinstance(previous.get("ComfyUI"), dict):
+        pins["ComfyUI"] = previous["ComfyUI"]
+        log.warning("cannot confirm ComfyUI's SHA at %s — keeping the "
+                    "recorded pin (%s).", COMFY_DIR,
+                    (pins["ComfyUI"].get("sha") or "?")[:8])
+    else:
+        pins["ComfyUI"] = {
+            "url": "https://github.com/comfyanonymous/ComfyUI.git",
+            "sha": comfy_sha,
+        }
     return items, pins
 
 

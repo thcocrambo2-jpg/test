@@ -988,14 +988,23 @@ def _fit_edit_size(w: int, h: int, max_pixels: int = 2_000_000) -> tuple:
             max(64, int(h * scale) // 16 * 16))
 
 
-def generate_edit(image, prompt, negative, seed, randomize, steps, cfg,
-                  sampler, grounding, ref_boost, model, batch_count,
-                  *lora_slots):
+def generate_edit(image, use_image2, image2, prompt, negative, seed,
+                  randomize, steps, cfg, sampler, grounding, ref_boost,
+                  ref_boost_a, model, batch_count, *lora_slots):
     """Edit tab: instruction-based editing. The model sees the source image
     (Identity Edit LoRA dual conditioning), so the prompt describes the
-    change to make — no mask, no denoise tuning."""
+    change to make — no mask, no denoise tuning.
+
+    With the second reference enabled this becomes a two-input edit: the
+    first image is the scene (it sets the output size), the second is the
+    subject to place into it. Off, it behaves exactly as it always has.
+    """
     if image is None:
         yield [], "❌ Upload an image first.", 0
+        return
+    if use_image2 and image2 is None:
+        yield [], ("❌ Second reference is enabled but empty — upload it, "
+                   "or switch the toggle off."), 0
         return
     entry, error = _check_model(model)
     if error:
@@ -1012,10 +1021,24 @@ def generate_edit(image, prompt, negative, seed, randomize, steps, cfg,
     width, height = _fit_edit_size(*image.size)
     if (width, height) != image.size:
         image = image.resize((width, height), Image.LANCZOS)
+    # The subject keeps its OWN aspect ratio — the patch node resamples
+    # every reference onto the target grid in pixel space, so it does not
+    # have to match the scene. It is still capped to the same 2 MP budget,
+    # because nothing else stops a 24 MP phone photo from being handed
+    # whole to the VAEEncode behind source_latent_b.
+    if use_image2:
+        image2 = image2.convert("RGB")
+        b_size = _fit_edit_size(*image2.size)
+        if b_size != image2.size:
+            image2 = image2.resize(b_size, Image.LANCZOS)
     base_seed = random.randint(0, 2**32 - 1) if randomize else int(seed)
     tag = uuid.uuid4().hex[:8]
     try:
         image_name = client.upload_image(_png_bytes(image), f"edit_{tag}.png")
+        image2_name = None
+        if use_image2:
+            image2_name = client.upload_image(_png_bytes(image2),
+                                              f"edit_{tag}_b.png")
     except Exception as exc:
         yield [], f"❌ Uploading the image to ComfyUI failed: {exc}", base_seed
         return
@@ -1023,7 +1046,9 @@ def generate_edit(image, prompt, negative, seed, randomize, steps, cfg,
         "prompt": prompt, "negative": negative or "", "seed": base_seed + i,
         "steps": int(steps), "cfg": float(cfg), "width": width,
         "height": height, "sampler": sampler, "image_name": image_name,
+        "image2_name": image2_name,
         "grounding_px": int(grounding), "ref_boost": float(ref_boost),
+        "ref_boost_a": float(ref_boost_a),
         "loras": _resolve_lora_slots(*lora_slots),
         "unet_file": entry["file"],
     } for i in range(int(batch_count))]
@@ -1032,8 +1057,10 @@ def generate_edit(image, prompt, negative, seed, randomize, steps, cfg,
         yield images, status, base_seed
 
 
-def generate_v2_edit(image, prompt, negative, seed, randomize, model,
-                     grounding, ref_boost, fit_mode, eta, sampler_name,
+def generate_v2_edit(image, use_image2, image2, prompt, negative, seed,
+                     randomize, model,
+                     grounding, ref_boost, ref_boost_a, fit_mode, eta,
+                     sampler_name,
                      scheduler, steps, cfg, sampler_mode, bongmath,
                      variance_preset, fine_tune_variance,
                      variance_model_type, variance_schedule, cutoff_step,
@@ -1049,6 +1076,10 @@ def generate_v2_edit(image, prompt, negative, seed, randomize, model,
     """
     if image is None:
         yield [], "❌ Upload an image first.", 0
+        return
+    if use_image2 and image2 is None:
+        yield [], ("❌ Second reference is enabled but empty — upload it, "
+                   "or switch the toggle off."), 0
         return
     ready, message = v2_edit_status()
     if not ready:
@@ -1066,11 +1097,22 @@ def generate_v2_edit(image, prompt, negative, seed, randomize, model,
     width, height = v2_edit_fit_size(*image.size)
     if (width, height) != image.size:
         image = image.resize((width, height), Image.LANCZOS)
+    # Same rule as the v1 Edit tab: the subject keeps its own aspect ratio
+    # (the patch node refits it in pixel space) but not its full size.
+    if use_image2:
+        image2 = image2.convert("RGB")
+        b_size = v2_edit_fit_size(*image2.size)
+        if b_size != image2.size:
+            image2 = image2.resize(b_size, Image.LANCZOS)
     base_seed = random.randint(0, 2**32 - 1) if randomize else int(seed)
     tag = uuid.uuid4().hex[:8]
     try:
         image_name = client.upload_image(_png_bytes(image),
                                          f"v2edit_{tag}.png")
+        image2_name = None
+        if use_image2:
+            image2_name = client.upload_image(_png_bytes(image2),
+                                              f"v2edit_{tag}_b.png")
     except Exception as exc:
         yield [], f"❌ Uploading the image to ComfyUI failed: {exc}", base_seed
         return
@@ -1091,9 +1133,11 @@ def generate_v2_edit(image, prompt, negative, seed, randomize, model,
     jobs = [{
         "prompt": prompt, "negative": negative or "", "seed": base_seed + i,
         "width": width, "height": height, "image_name": image_name,
+        "image2_name": image2_name,
         "loras": _resolve_v2_lora_slots(*lora_slots),
         "unet_file": entry["file"],
         "grounding_px": int(grounding), "ref_boost": float(ref_boost),
+        "ref_boost_a": float(ref_boost_a),
         "fit_mode": fit_mode,
         "sampler_settings": sampler_settings,
         "variance_settings": variance_settings,
@@ -2782,6 +2826,17 @@ def _tab_krea_edit(tab):
                 sources=["upload", "clipboard"],
             )
             _recent_picker(edit_image)
+            edit_use_image2 = gr.Checkbox(
+                label="➕ Add a second reference (subject)", value=False,
+                info="Two-input edit: image 1 is the scene and sets the "
+                     "output size, image 2 is the subject to place into "
+                     "it. Placing both in one pass is more reliable than "
+                     "two edits in a row.",
+            )
+            edit_image2 = gr.Image(
+                label="Second reference — subject", type="pil",
+                visible=False, sources=["upload", "clipboard"],
+            )
             edit_prompt = gr.Textbox(
                 label="Edit instruction",
                 value="Remove all her clothes completely, make her fully nude. Keep the exact same face, facial features, expression, skin tone, hairstyle, body pose, hands position, and background. Do not change the face at all.          remove clothes exposing her naked average natural shaped tits. dont change her face",
@@ -2822,10 +2877,27 @@ def _tab_krea_edit(tab):
                     label="Reference fidelity (1 = neutral, "
                           "~4 = strong likeness, >10 breaks "
                           "removals)",
+                    info="Applies to the last reference — the subject "
+                         "when a second one is on.",
                 )
+            edit_ref_boost_a = gr.Slider(
+                0.0, 10.0, value=1.0, step=0.5, visible=False,
+                label="Scene fidelity (1 = neutral)",
+                info="The same dial for the first reference. Only has an "
+                     "effect with a second reference on.",
+            )
+            edit_use_image2.change(
+                fn=lambda on: (gr.Image(visible=bool(on)),
+                               gr.Slider(visible=bool(on))),
+                inputs=edit_use_image2,
+                outputs=[edit_image2, edit_ref_boost_a],
+            )
             with gr.Row():
                 edit_sampler = gr.Dropdown(
-                    choices=SAMPLERS, value=SAMPLERS[0], label="Sampler"
+                    choices=SAMPLERS, value=SAMPLERS[0], label="Sampler",
+                    info="Outpainting? Switch to euler. SDE samplers "
+                         "inject noise that disrupts the reference-copy "
+                         "channel and ruins outpaint coherence.",
                 )
             with gr.Row():
                 edit_seed = gr.Number(label="Seed", value=42, precision=0)
@@ -2845,10 +2917,11 @@ def _tab_krea_edit(tab):
             )
     edit_btn.click(
         fn=generate_edit,
-        inputs=[edit_image, edit_prompt, edit_negative, edit_seed,
+        inputs=[edit_image, edit_use_image2, edit_image2,
+                edit_prompt, edit_negative, edit_seed,
                 edit_random, edit_steps, edit_cfg, edit_sampler,
-                edit_grounding, edit_ref_boost, edit_model_dd,
-                edit_batch,
+                edit_grounding, edit_ref_boost, edit_ref_boost_a,
+                edit_model_dd, edit_batch,
                 *_lora_inputs(edit_lora_dds, edit_lora_ws)],
         outputs=[edit_gallery, edit_status, edit_seed_out],
         concurrency_id="comfy",
@@ -2878,6 +2951,17 @@ def _tab_krea_v2_edit(tab):
                 type="pil", sources=["upload", "clipboard"],
             )
             _recent_picker(v2e_image)
+            v2e_use_image2 = gr.Checkbox(
+                label="➕ Add a second reference (subject)", value=False,
+                info="Two-input edit: image 1 is the scene and sets the "
+                     "output size, image 2 is the subject to place into "
+                     "it. Placing both in one pass is more reliable than "
+                     "two edits in a row.",
+            )
+            v2e_image2 = gr.Image(
+                label="Second reference — subject", type="pil",
+                visible=False, sources=["upload", "clipboard"],
+            )
             v2e_prompt = gr.Textbox(
                 label="Edit instruction", lines=3,
                 placeholder="make the jacket red · this person "
@@ -2908,7 +2992,21 @@ def _tab_krea_v2_edit(tab):
                     label="Reference fidelity (1 = neutral, "
                           "~4 = strong likeness, >10 breaks "
                           "removals)",
+                    info="Applies to the last reference — the subject "
+                         "when a second one is on.",
                 )
+            v2e_ref_boost_a = gr.Slider(
+                0.0, 10.0, value=1.0, step=0.5, visible=False,
+                label="Scene fidelity (1 = neutral)",
+                info="The same dial for the first reference. Only has an "
+                     "effect with a second reference on.",
+            )
+            v2e_use_image2.change(
+                fn=lambda on: (gr.Image(visible=bool(on)),
+                               gr.Slider(visible=bool(on))),
+                inputs=v2e_use_image2,
+                outputs=[v2e_image2, v2e_ref_boost_a],
+            )
             v2e_fit_mode = gr.Dropdown(
                 choices=V2_EDIT_FIT_MODES,
                 value=V2_EDIT_FIT_MODES[0],
@@ -3038,9 +3136,10 @@ def _tab_krea_v2_edit(tab):
         )
     v2e_btn.click(
         fn=generate_v2_edit,
-        inputs=[v2e_image, v2e_prompt, v2e_negative, v2e_seed,
+        inputs=[v2e_image, v2e_use_image2, v2e_image2,
+                v2e_prompt, v2e_negative, v2e_seed,
                 v2e_randomize, v2e_model_dd, v2e_grounding,
-                v2e_ref_boost, v2e_fit_mode, v2e_eta,
+                v2e_ref_boost, v2e_ref_boost_a, v2e_fit_mode, v2e_eta,
                 v2e_sampler_name, v2e_scheduler, v2e_steps,
                 v2e_cfg, v2e_sampler_mode, v2e_bongmath,
                 v2e_variance_preset, v2e_fine_tune,

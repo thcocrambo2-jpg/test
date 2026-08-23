@@ -432,6 +432,13 @@ def install_custom_nodes() -> None:
 
     Only the two Edit tabs use those two nodes, so this is skipped
     entirely when both features are off — it used to run unconditionally.
+
+    A failure here is logged, not raised, which is the contract
+    install_v2_nodes already follows: the two Edit tabs then report the
+    missing nodes and refuse to run, and every other tab starts normally.
+    It used to abort the whole bootstrap, so one unreachable node pack
+    took the entire app down with it — including the tabs that never
+    needed those nodes.
     """
     if not (features.enabled(features.Key.KREA_EDIT)
             or features.enabled(features.Key.KREA_V2_EDIT)):
@@ -440,8 +447,12 @@ def install_custom_nodes() -> None:
     if dest.exists():
         log.info("Krea2Edit nodes already present at %s — skipping clone", dest)
         return
-    install_node_pack("comfyui-krea2edit", KREA2EDIT_NODES_REPO, dest,
-                      "Cloning ComfyUI-Krea2Edit nodes")
+    try:
+        install_node_pack("comfyui-krea2edit", KREA2EDIT_NODES_REPO, dest,
+                          "Cloning ComfyUI-Krea2Edit nodes")
+    except RuntimeError as exc:
+        log.error("Could not install comfyui-krea2edit (%s) — the Edit tabs "
+                  "will refuse to run until it is installed.", exc)
 
 
 def install_v2_nodes() -> None:

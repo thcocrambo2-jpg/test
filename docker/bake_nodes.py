@@ -16,13 +16,14 @@ Which packs get baked, and why each is treated differently:
     ComfyUI                 pinned in PINS.json -> full clone + checkout
     comfyui-krea2edit       has a mirror tarball -> that, exactly as
                             bootstrap.install_node_pack prefers it
-    the V2 packs            unpinned today, so bootstrap clones HEAD at
-                            boot; here they are cloned at build time
-                            instead, which freezes them per image tag.
-                            That is a small improvement over the current
-                            behaviour rather than a change of policy: two
-                            pods from one image now agree, where two pods
-                            booted a week apart did not.
+    the V2 packs            pinned in PINS.json like the rest, so these
+                            come from their mirror tarballs too. They were
+                            unpinned for a while — their entries had been
+                            dropped from PINS.json — and the image froze
+                            them per tag by cloning HEAD at build time,
+                            which is strictly weaker than a pin: two pods
+                            from one image agreed, two images built a week
+                            apart did not.
 
 ComfyUI-ReActor is absent on purpose — it is vendored in deps/ and the
 Dockerfile copies it in directly, the same way install_reactor() does.
@@ -56,12 +57,29 @@ import mirror                                                # noqa: E402
 
 
 def git_sha(path: Path) -> str | None:
-    """The checked-out revision of `path`, or None if it is not a checkout."""
-    result = subprocess.run(
-        ["git", "-C", str(path), "rev-parse", "HEAD"],
-        text=True, stdout=subprocess.PIPE, stderr=subprocess.DEVNULL,
-    )
-    return result.stdout.strip() or None
+    """The checked-out revision of `path`, or None if it is not a checkout.
+
+    "Not a checkout" has to mean `path` itself. `git -C <dir> rev-parse
+    HEAD` walks UP until it finds a repository, so a node pack with no
+    .git of its own — every pack installed from a mirror tarball, since
+    those are packed without one — used to answer with the *enclosing*
+    ComfyUI checkout's HEAD. That is how scripts/PINS.json ended up
+    recording ComfyUI's SHA as comfyui-krea2edit's, and here it would
+    write the same lie into baked.json, which is the only record of what
+    a running container is made of. Confirm the repository git found is
+    this directory before believing it; the caller falls back to the pin.
+    """
+    def _git(*args) -> str | None:
+        result = subprocess.run(
+            ["git", "-C", str(path), *args],
+            text=True, stdout=subprocess.PIPE, stderr=subprocess.DEVNULL,
+        )
+        return result.stdout.strip() if result.returncode == 0 else None
+
+    top = _git("rev-parse", "--show-toplevel")
+    if top is None or Path(top).resolve() != Path(path).resolve():
+        return None
+    return _git("rev-parse", "HEAD")
 
 
 def strip_git(path: Path) -> None:

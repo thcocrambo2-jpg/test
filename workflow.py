@@ -339,8 +339,10 @@ def build_edit_workflow(
     height: int,
     sampler: str = "er_sde",
     image_name: str,
+    image2_name: str | None = None,
     grounding_px: int = 768,
     ref_boost: float = 4.0,
+    ref_boost_a: float = 1.0,
     fit_mode: str = "fit",
     loras=(),
     unet_file: str | None = None,
@@ -379,6 +381,27 @@ def build_edit_workflow(
     edit holds the reference: 1.0 is neutral, ~4 gives strong likeness,
     and past ~10 removals stop working. Generate at ≤ 2 MP either way —
     the source bleeds into the output above that.
+
+    `image2_name` is the optional **second reference**, and passing it is
+    what turns this into a two-input edit ("put this person into this
+    scene", "these two people in one shot"). The order is the one training
+    used and is not interchangeable: the scene — the image whose
+    composition the output keeps — goes to `image_name`, the subject to
+    `image2_name`. Both references reach the model twice, as latents on
+    the patch node (`source_latent_b`) and as vision tokens on *both*
+    grounded encoders (`image_b`), which is how the shipped workflow wires
+    its second group.
+
+    Two references also split the fidelity dial in two. `ref_boost` always
+    applies to the *last* reference — so it means "the source" in a
+    one-image edit and "the subject" in a two-image one — and `ref_boost_a`
+    is the same dial for the scene. `ref_boost_a` is only emitted when
+    there is a second reference, since it does nothing without one.
+
+    With no `image2_name` this builds exactly the graph it always did: the
+    b-inputs are left unwired rather than passed as None, which is what
+    upstream means by "leave the b-inputs unconnected for single-image
+    use".
     """
     wf, model_ref, clip_ref, vae_ref = _model_nodes(
         [(EDIT_LORA_FILE, 1.0), *loras], unet_file
@@ -396,29 +419,45 @@ def build_edit_workflow(
         "class_type": "EmptySD3LatentImage",
         "inputs": {"width": int(width), "height": int(height), "batch_size": 1},
     }
+    patch_inputs = {
+        "model": model_ref,
+        "source_latent": ["encode", 0],
+        "source_image": ["source", 0],
+        "vae": vae_ref,
+        "target_latent": ["latent", 0],
+        "fit_mode": fit_mode,
+        "ref_boost": float(ref_boost),
+    }
+    # Shared by both grounded encoders, so the negative sees exactly the
+    # references the positive does — the trained unconditional.
+    grounding = {"grounding_px": int(grounding_px)}
+    if image2_name:
+        wf["source_b"] = {
+            "class_type": "LoadImage",
+            "inputs": {"image": image2_name},
+        }
+        wf["encode_b"] = {
+            "class_type": "VAEEncode",
+            "inputs": {"pixels": ["source_b", 0], "vae": vae_ref},
+        }
+        patch_inputs["source_latent_b"] = ["encode_b", 0]
+        patch_inputs["source_image_b"] = ["source_b", 0]
+        patch_inputs["ref_boost_a"] = float(ref_boost_a)
+        grounding["image_b"] = ["source_b", 0]
     wf["edit_model"] = {
         "class_type": "Krea2EditModelPatch",
-        "inputs": {
-            "model": model_ref,
-            "source_latent": ["encode", 0],
-            "source_image": ["source", 0],
-            "vae": vae_ref,
-            "target_latent": ["latent", 0],
-            "fit_mode": fit_mode,
-            "ref_boost": float(ref_boost),
-        },
+        "inputs": patch_inputs,
     }
     wf["positive"] = {
         "class_type": "Krea2EditGroundedEncode",
         "inputs": {"clip": clip_ref, "prompt": prompt,
-                   "image": ["source", 0], "grounding_px": int(grounding_px)},
+                   "image": ["source", 0], **grounding},
     }
     if negative.strip():
         wf["negative"] = {
             "class_type": "Krea2EditGroundedEncode",
             "inputs": {"clip": clip_ref, "prompt": negative,
-                       "image": ["source", 0],
-                       "grounding_px": int(grounding_px)},
+                       "image": ["source", 0], **grounding},
         }
     else:
         wf["negative"] = {
