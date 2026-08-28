@@ -313,6 +313,7 @@ V2_LORA_STACK = [
     ("MysticXXX_KREA2_v3.safetensors", 1.0, False, 3116175),
     ("KNPV4.1_pre.safetensors", 1.0, False, 3085473),
     ("snofs_krea_v1.safetensors", 1.0, False, 3104629),
+    ("Halide-v1.safetensors", 1.0, False, 3265522),
 ]
 
 # ClownsharKSampler_Beta settings, straight from the workflow. These are
