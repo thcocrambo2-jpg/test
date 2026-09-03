@@ -2033,6 +2033,49 @@ dropped. The companion note's GGUF quants are **not** a registry entry
 away: they load through `UnetLoaderGGUF` from a custom node pack rather
 than `UNETLoader`, which would need a builder branch and a node install.
 
+## Prompt undo / redo
+
+Every prompt box carries a pair of small **↶ / ↷** buttons under it, plus
+Ctrl+Z and Ctrl+Y (or Ctrl+Shift+Z) while the box has focus.
+
+They exist for phones. A desktop browser gives a textarea its own undo
+stack and Ctrl+Z reaches it; a phone keyboard has no Ctrl, and no mobile
+browser exposes undo for a text field any other way — so a prompt trimmed
+on a phone was simply not recoverable.
+
+The history lives in the page JS (`theme.JS`) rather than leaning on the
+browser's, for three reasons:
+
+- it is the only way a *button* can drive it
+- it survives a value written by Gradio, so loading a **preset**, a
+  **recipe** or a **library card** over a prompt is undoable — the native
+  stack knows nothing about those, because assigning `.value` from script
+  never enters it
+- the keys are routed through the same stack, so the buttons and Ctrl+Z
+  cannot drift apart the way two separate histories would
+
+A burst of typing is one entry, the way an editor does it: a pause of
+450 ms, or finishing a word, closes the current entry and opens the next
+— stepping back one character at a time would be worse than no undo at
+all. Up to 100 entries are kept per box, and each box has its own history.
+
+Attached to every editable `<textarea>` on the page, which is exactly the
+prompt and negative-prompt boxes plus the JSON batch box; status lines are
+`interactive=False`, so they render disabled and are skipped. New boxes are
+picked up by a `MutationObserver` (debounced to one scan a frame, because
+the queue's poll touches the DOM every second), so a tab built later or the
+pricing panel swapping sections in and out costs nothing.
+
+Two details that are easy to get wrong and are load-bearing here:
+
+- stepping the history assigns `textarea.value` and then **dispatches an
+  `input` event**. Gradio's binding listens for that, and a scripted
+  assignment fires nothing on its own — without it the box would show the
+  old text while Generate still sent the new one
+- the buttons call `preventDefault()` on `pointerdown`, so pressing one
+  does not take focus. On a phone that is what keeps the keyboard open and
+  the caret in place between taps
+
 ## Image input shortcuts
 
 All image inputs (Edit, Inpaint, Face Swap, Video) accept **clipboard

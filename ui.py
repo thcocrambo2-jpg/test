@@ -2341,11 +2341,25 @@ def _queue_row_button(view):
     return gr.update(value="✕ Clear", variant="secondary")
 
 
+def _queue_rows(rows):
+    """The jobs the panel draws, newest first.
+
+    jobqueue keeps its list in arrival order, which is the order the work
+    runs in — but it is not the order to read it in. What was just clicked
+    is what someone is looking for, and a queue that grows downwards puts
+    it below however much finished history is on screen.
+
+    The one definition of that order, because two callers depend on it
+    agreeing: the rows themselves, and the ids the ✕ buttons resolve
+    against. If those ever disagreed, cancelling row three would stop
+    whatever job happened to be third in the *other* order.
+    """
+    return list(reversed(rows))[:QUEUE_ROWS]
+
+
 def _queue_panel(rows, waiting, running):
     """The whole panel for one snapshot, in _queue_tick's output order."""
-    # Newest end of the list: the pool is smaller than jobqueue.HISTORY, and
-    # what has just been queued matters more than what finished an hour ago.
-    shown = rows[-QUEUE_ROWS:]
+    shown = _queue_rows(rows)
     if running and waiting:
         label = f"🗂️ Queue — {running} running · {waiting} waiting"
     elif running:
@@ -2408,7 +2422,7 @@ def _queue_tick(seen):
     revision, rows, waiting, running = jobqueue.snapshot()
 
     if seen.get("queue") == revision:
-        panel = (gr.update(), [view.id for view in rows[-QUEUE_ROWS:]],
+        panel = (gr.update(), [view.id for view in _queue_rows(rows)],
                  gr.update(), *([gr.update()] * (3 * QUEUE_ROWS)))
     else:
         seen["queue"] = revision

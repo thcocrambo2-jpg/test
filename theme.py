@@ -794,6 +794,54 @@ CSS = f"""
   resize: none;
 }}
 
+/* ------------------------------------------------------------------ undo */
+/* The undo/redo pair the page JS puts under every prompt box. Small and
+   quiet — they are a way back, not an action anyone is looking for — and
+   right-aligned under the box so they read as belonging to it rather than
+   to whatever control comes next. */
+.kx-undo {{
+  display: flex;
+  justify-content: flex-end;
+  gap: 5px;
+  margin-top: 5px;
+}}
+.kx-undo-btn {{
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 32px;
+  height: 27px;
+  padding: 0;
+  border: 1px solid var(--kx-border);
+  border-radius: 7px;
+  background: var(--kx-surface);
+  color: var(--kx-muted);
+  cursor: pointer;
+  transition: color .15s, border-color .15s, background .15s;
+}}
+.kx-undo-btn svg {{
+  width: 15px;
+  height: 15px;
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 2;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}}
+.kx-undo-btn:hover:not(:disabled) {{
+  color: var(--kx-text);
+  border-color: var(--kx-accent);
+}}
+.kx-undo-btn:active:not(:disabled) {{ background: var(--kx-sunken); }}
+.kx-undo-btn:disabled {{ opacity: .3; cursor: default; }}
+
+/* A thumb, not a mouse pointer — which is the case these buttons exist
+   for, so they get a real tap target rather than a scaled-down one. */
+@media (pointer: coarse) {{
+  .kx-undo-btn {{ width: 42px; height: 34px; }}
+  .kx-undo-btn svg {{ width: 17px; height: 17px; }}
+}}
+
 /* ---------------------------------------------------------------- recipe */
 /* The Gallery tab's "how this was made" panel. Its body is a settings
    table plus the prompt as a quote, so it is read rather than scanned —
@@ -2284,11 +2332,27 @@ HEAD = f"""
 # --------------------------------------------------------------------------
 # Page JS
 # --------------------------------------------------------------------------
-# Two conveniences, both additive: nothing here is required for any control
-# to work, and both are written to no-op rather than throw if Gradio's DOM
-# is not what they expect.
-JS = """
-() => {
+# Three conveniences, all additive: nothing here is required for any control
+# to work, and each is written to no-op rather than throw if Gradio's DOM
+# is not what it expects. The third — undo/redo on the prompt boxes — is
+# the one that is not merely a convenience on a phone, where the browser
+# offers no other way back from an edit.
+# Raw, so a regex like /\s$/ reaches the browser as written rather than
+# being read as a Python escape on the way past.
+#
+# **Self-executing, and it has to be.** `launch(js=...)` drops this string
+# into a <script> tag verbatim — so a bare `() => {...}` is an expression
+# that is evaluated and thrown away, and nothing in here ever runs. That is
+# what happened between the Gradio 4 API (which called the function for us)
+# and Gradio 6 (which does not): the whole blob went quietly dead, taking
+# Ctrl+Enter and the copy-path pill with it, with no error anywhere.
+#
+# The guard is belt and braces: if a future Gradio goes back to calling it,
+# the listeners below must not be registered twice.
+JS = r"""
+(() => {
+  if (window.__kxPageJs) return;
+  window.__kxPageJs = true;
   // Ctrl/Cmd+Enter runs the tab you are looking at. Resolved at press time
   // from the visible tab panel, so it follows the user across tabs and
   // never fires for a tab that is not on screen.
@@ -2328,7 +2392,165 @@ JS = """
     pill.classList.add("kx-copied");
     setTimeout(() => pill.classList.remove("kx-copied"), 1400);
   });
-}
+
+  // ------------------------------------------------------------------ undo
+  // Undo and redo for every prompt box, as two buttons under it.
+  //
+  // A desktop browser gives a textarea its own undo stack and Ctrl+Z
+  // reaches it. A phone keyboard has no Ctrl, and no mobile browser
+  // exposes undo for a text field any other way — so a prompt edited on a
+  // phone was simply not recoverable, which is the whole reason this
+  // exists.
+  //
+  // The history is kept here rather than leaning on the browser's, for
+  // three reasons. It is the only way a *button* can drive it. It survives
+  // a value written by Gradio, so loading a preset, a recipe or a library
+  // card over a prompt is undoable — the native stack knows nothing about
+  // those. And the keys are routed through it too, so the buttons and
+  // Ctrl+Z share one history instead of walking two that disagree the
+  // moment either is used.
+  const UNDO_COALESCE_MS = 450;   // a burst of typing is one entry
+  const UNDO_DEPTH = 100;         // entries kept per box; prompts are small
+  const undoStates = new WeakMap();
+
+  const UNDO_ICONS = {
+    Undo: '<svg viewBox="0 0 24 24" aria-hidden="true">'
+        + '<path d="M9 14 4 9l5-5"/><path d="M4 9h8a6 6 0 0 1 0 12H9"/></svg>',
+    Redo: '<svg viewBox="0 0 24 24" aria-hidden="true">'
+        + '<path d="m15 14 5-5-5-5"/><path d="M20 9h-8a6 6 0 0 0 0 12h3"/>'
+        + '</svg>',
+  };
+
+  function undoState(area) {
+    let state = undoStates.get(area);
+    if (!state) {
+      state = { stack: [area.value], at: 0, typed: 0, applying: false,
+                buttons: {} };
+      undoStates.set(area, state);
+    }
+    return state;
+  }
+
+  // Gradio writes a value straight onto the element and fires no input
+  // event, so the stack finds out lazily: anything that is not what we
+  // last left there is someone else's edit, and becomes its own entry —
+  // which is what makes "undo the preset I just loaded" work.
+  function undoSync(area, state) {
+    if (area.value === state.stack[state.at]) return;
+    state.stack.length = state.at + 1;
+    state.stack.push(area.value);
+    state.at = state.stack.length - 1;
+    state.typed = 0;
+  }
+
+  function undoRefresh(state) {
+    const { Undo, Redo } = state.buttons;
+    if (Undo) Undo.disabled = state.at <= 0;
+    if (Redo) Redo.disabled = state.at >= state.stack.length - 1;
+  }
+
+  function undoStep(area, delta) {
+    const state = undoState(area);
+    undoSync(area, state);
+    const next = state.at + delta;
+    if (next < 0 || next >= state.stack.length) {
+      undoRefresh(state);
+      return;
+    }
+    state.at = next;
+    state.typed = 0;                       // never coalesce onto a jump
+    state.applying = true;
+    area.value = state.stack[next];
+    // What actually tells Gradio. Its binding listens for `input`, and a
+    // value assigned from script fires nothing on its own — without this
+    // the box would show the old text while Generate still sent the new.
+    area.dispatchEvent(new Event("input", { bubbles: true }));
+    state.applying = false;
+    undoRefresh(state);
+  }
+
+  function undoAttach(area) {
+    if (area.dataset.kxUndo || area.disabled || area.readOnly) return;
+    area.dataset.kxUndo = "1";
+    const state = undoState(area);
+    const bar = document.createElement("div");
+    bar.className = "kx-undo";
+    for (const [name, delta] of [["Undo", -1], ["Redo", 1]]) {
+      const button = document.createElement("button");
+      button.type = "button";
+      button.className = "kx-undo-btn";
+      button.title = name + (name === "Undo" ? " (Ctrl+Z)" : " (Ctrl+Y)");
+      button.setAttribute("aria-label", name);
+      button.innerHTML = UNDO_ICONS[name];
+      // Pressing a button takes focus, which on a phone shuts the keyboard
+      // between taps. Refusing the focus keeps the caret in the box, so
+      // undo can be tapped several times in a row.
+      button.addEventListener("pointerdown", (event) => event.preventDefault());
+      button.addEventListener("click", () => undoStep(area, delta));
+      bar.appendChild(button);
+      state.buttons[name] = button;
+    }
+    undoRefresh(state);
+    // Inside the component's own block, so it travels with the box it
+    // belongs to rather than sitting loose in the column.
+    (area.closest(".block") || area.parentElement).appendChild(bar);
+  }
+
+  function undoScan() {
+    document.querySelectorAll("textarea:not([data-kx-undo])")
+            .forEach(undoAttach);
+  }
+
+  document.addEventListener("input", (event) => {
+    const area = event.target;
+    if (!(area instanceof HTMLTextAreaElement) || !area.dataset.kxUndo) return;
+    const state = undoStates.get(area);
+    if (!state || state.applying) return;
+    // One entry per burst, the way an editor does it: a pause, or the end
+    // of a word, closes the current entry and opens the next. Without it
+    // undo would step back one character at a time, which on a phone is
+    // worse than no undo at all.
+    const now = Date.now();
+    if (now - state.typed > UNDO_COALESCE_MS) {
+      state.stack.length = state.at + 1;
+      state.stack.push(area.value);
+      if (state.stack.length > UNDO_DEPTH) state.stack.shift();
+      state.at = state.stack.length - 1;
+    } else {
+      state.stack[state.at] = area.value;
+    }
+    state.typed = /\s$/.test(area.value) ? 0 : now;
+    undoRefresh(state);
+  });
+
+  document.addEventListener("keydown", (event) => {
+    const area = event.target;
+    if (!(area instanceof HTMLTextAreaElement) || !area.dataset.kxUndo) return;
+    if (!(event.ctrlKey || event.metaKey) || event.altKey) return;
+    const key = (event.key || "").toLowerCase();
+    let delta = 0;
+    if (key === "z") delta = event.shiftKey ? 1 : -1;
+    else if (key === "y") delta = 1;
+    else return;
+    event.preventDefault();
+    undoStep(area, delta);
+  });
+
+  undoScan();
+  // A box can appear long after load — a licence decides which tabs are
+  // built, and the pricing panel swaps whole sections in and out. focusin
+  // catches anything the observer somehow missed, at the moment it starts
+  // to matter.
+  document.addEventListener("focusin", (event) => {
+    if (event.target instanceof HTMLTextAreaElement) undoAttach(event.target);
+  });
+  let undoPending = false;
+  new MutationObserver(() => {
+    if (undoPending) return;      // the queue's poll touches the DOM every
+    undoPending = true;           // second; one scan a frame is plenty
+    requestAnimationFrame(() => { undoPending = false; undoScan(); });
+  }).observe(document.documentElement, { childList: true, subtree: true });
+})();
 """
 
 
