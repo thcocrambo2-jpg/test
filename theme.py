@@ -804,9 +804,16 @@ CSS = f"""
   background: transparent !important;
   margin: -2px 0 2px !important;
 }}
+/* The right padding is not decoration and must not go to zero. Gradio turns
+   the heading's ▼ by 90° to point it sideways when the accordion is shut, and
+   a rotated box is measured by its *bounding* box: an 11px-wide arrow that is
+   18px tall becomes 18px wide, so it hangs ~3.5px past the block. Gradio gives
+   .block overflow:auto, and that overhang is enough to raise a horizontal
+   scrollbar under the heading. Its own 12px absorbs it; ours has to keep
+   enough to do the same. In em so it holds if the font is scaled. */
 .kx-negative > button,
 .kx-negative > .label-wrap {{
-  padding: 2px 0 !important;
+  padding: 2px .45em 2px 0 !important;
   font-size: .74rem !important;
   color: var(--kx-muted) !important;
 }}
