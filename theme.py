@@ -794,6 +794,25 @@ CSS = f"""
   resize: none;
 }}
 
+/* -------------------------------------------------------------- negative */
+/* The folded negative prompt. Quiet chrome: it sits between the prompt and
+   the model picker, and an accordion styled like the panels around it would
+   read as a section of the form rather than as one line that can be opened
+   when it is wanted. */
+.kx-negative {{
+  border: none !important;
+  background: transparent !important;
+  margin: -2px 0 2px !important;
+}}
+.kx-negative > button,
+.kx-negative > .label-wrap {{
+  padding: 2px 0 !important;
+  font-size: .74rem !important;
+  color: var(--kx-muted) !important;
+}}
+.kx-negative > button:hover,
+.kx-negative > .label-wrap:hover {{ color: var(--kx-text) !important; }}
+
 /* ------------------------------------------------------------------ undo */
 /* The undo/redo pair the page JS puts under every prompt box. Small and
    quiet — they are a way back, not an action anyone is looking for — and

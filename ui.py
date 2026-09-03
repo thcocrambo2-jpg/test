@@ -2509,6 +2509,32 @@ def _cta(label: str):
                      elem_classes="kx-cta")
 
 
+def _negative_box(**kwargs):
+    """A negative prompt, folded away behind its own heading.
+
+    Negatives are the exception here rather than the rule — most runs never
+    touch one — so an always-open two-line box spent the top of the control
+    column, the most valuable space on the tab, on the control least used.
+    Collapsed it costs one line.
+
+    **Folding changes nothing about what runs.** A gr.Accordion only hides
+    its children: every one stays mounted and keeps its value, and the
+    click reads that value out of the `inputs=` list whether the accordion
+    is open or shut. So the two tabs that ship a default negative (V2 and
+    Video) still send it on every run exactly as before, and a negative
+    typed once and folded away is still applied.
+
+    The accordion's heading is the box's own label and the box's is hidden,
+    so the two never say the same thing twice. Only `show_label` changes —
+    `label` stays on the component, because a recipe matches its stored
+    fields against it (see _use_recipe) and renaming one would quietly
+    orphan every recipe that carries it.
+    """
+    with gr.Accordion(f"➖ {kwargs['label']}", open=False,
+                      elem_classes="kx-negative"):
+        return gr.Textbox(show_label=False, **kwargs)
+
+
 def _status_box():
     """The read-only status line every generation tab reports through."""
     return gr.Textbox(label="Status", interactive=False,
@@ -3046,7 +3072,7 @@ def _tab_krea_t2i(tab):
                 value="A photorealistic golden-hour portrait, natural "
                       "skin texture, shallow depth of field",
             )
-            negative_box = gr.Textbox(
+            negative_box = _negative_box(
                 label="Negative prompt (only used when CFG > 1)", lines=2
             )
             model_dd, model_info = _model_selector()
@@ -3147,7 +3173,7 @@ def _tab_krea_v2_t2i(tab):
                 placeholder="The source workflow ships this box "
                             "empty — describe your image here.",
             )
-            v2_negative = gr.Textbox(
+            v2_negative = _negative_box(
                 label="Negatives", lines=6,
                 value=V2_DEFAULT_NEGATIVE,
             )
@@ -3508,7 +3534,7 @@ def _tab_krea_edit(tab):
                             "walking a dog on a beach at sunset",
                 lines=3,
             )
-            edit_negative = gr.Textbox(
+            edit_negative = _negative_box(
                 label="Negative prompt (only used when CFG > 1)", lines=2
             )
             edit_model_dd, edit_model_info = _model_selector()
@@ -3633,7 +3659,7 @@ def _tab_krea_v2_edit(tab):
                 placeholder="make the jacket red · this person "
                             "walking a dog on a beach at sunset",
             )
-            v2e_negative = gr.Textbox(
+            v2e_negative = _negative_box(
                 label="Negatives (only used when CFG > 1)",
                 lines=4, value=V2_DEFAULT_NEGATIVE,
             )
@@ -3856,7 +3882,7 @@ def _tab_krea_inpaint(tab):
             inpaint_prompt = gr.Textbox(
                 label="Prompt (describes the masked region)", lines=3
             )
-            inpaint_negative = gr.Textbox(
+            inpaint_negative = _negative_box(
                 label="Negative prompt (only used when CFG > 1)", lines=2
             )
             inpaint_model_dd, inpaint_model_info = _model_selector()
@@ -4293,7 +4319,7 @@ def _tab_wan_i2v(tab):
                             "the hair",
                 lines=3,
             )
-            wan_negative = gr.Textbox(
+            wan_negative = _negative_box(
                 label="Negative prompt (only used when CFG > 1, "
                       "i.e. Raw mode)",
                 value=WAN_DEFAULT_NEGATIVE, lines=2,
