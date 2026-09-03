@@ -794,6 +794,34 @@ CSS = f"""
   resize: none;
 }}
 
+/* ---------------------------------------------------------------- recipe */
+/* The Gallery tab's "how this was made" panel. Its body is a settings
+   table plus the prompt as a quote, so it is read rather than scanned —
+   the table stays narrow and the quote gets room to breathe. */
+.kx-recipe table {{
+  width: auto;
+  font-size: .74rem;
+  border-collapse: collapse;
+  margin: 6px 0 2px;
+}}
+.kx-recipe th, .kx-recipe td {{
+  padding: 3px 12px 3px 0 !important;
+  border: none !important;
+  border-bottom: 1px solid var(--kx-border) !important;
+  text-align: left;
+}}
+.kx-recipe th {{ color: var(--kx-muted); font-weight: 600; }}
+.kx-recipe td code {{ font-size: .72rem; }}
+.kx-recipe blockquote {{
+  margin: 4px 0 10px !important;
+  padding: 6px 12px !important;
+  border-left: 2px solid var(--kx-accent) !important;
+  background: var(--kx-sunken);
+  font-size: .78rem;
+  line-height: 1.5;
+}}
+.kx-recipe blockquote p {{ margin: 0 !important; }}
+
 /* ----------------------------------------------------------------- queue */
 /* The job queue sits under the tabs, so it is chrome on every screen and
    has to read as a list rather than as another panel of controls. Rows are

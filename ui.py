@@ -87,6 +87,7 @@ import licensing
 import plans
 import presets
 import prompts
+import recipes
 import showcase
 import theme
 from client import ComfyUIError, client, model_signature, on_output, wan_client
@@ -365,6 +366,12 @@ def _run_jobs(jobs, builder=build_workflow, prefix="Krea2"):
         if swap_note:
             yield images, f"{swap_note} — job {label} will be slower"
         size = f", {job['width']}×{job['height']}" if "width" in job else ""
+        # The seed this particular picture runs on, which is the one thing
+        # the controls cannot be read back for: a batch walks consecutive
+        # seeds, and with "🎲 Random seed" ticked none of them is the
+        # number in the box. Stamped per job, so a batch of four files
+        # four recipes that differ in exactly the field that matters.
+        recipes.stamp(seed=job["seed"])
         yield images, f"⏳ Job {label} — queued (seed {job['seed']}{size})"
         try:
             for event in client.run(workflow):
@@ -410,6 +417,8 @@ def _lora_inputs(dropdowns, weights) -> list:
     Kept last in every click() input list so the slot count can grow
     without disturbing the fixed leading arguments.
     """
+    for dropdown, weight in zip(dropdowns, weights):
+        _recipe_gate(dropdown, weight)
     return [component for pair in zip(dropdowns, weights) for component in pair]
 
 
@@ -902,6 +911,8 @@ def _lora_triples(cbs, dds, ws) -> list:
     rows carry a per-row on/off checkbox — the plain two-value _lora_inputs
     is for the tabs whose slots do not.
     """
+    for checkbox, dropdown, weight in zip(cbs, dds, ws):
+        _recipe_gate(dropdown, checkbox, weight)
     return [c for triple in zip(cbs, dds, ws) for c in triple]
 
 
@@ -1298,6 +1309,7 @@ def _run_wan_jobs(jobs, builder=build_wan_i2v_workflow):
         swap_note = _release_on_swap(wan_client, workflow)
         if swap_note:
             yield videos, latest, f"{swap_note} — video {label} will be slower"
+        recipes.stamp(seed=job["seed"])       # see _run_jobs
         yield videos, latest, (
             f"⏳ Video {label} — queued (seed {job['seed']}, "
             f"{job['width']}×{job['height']}, {job['length']} frames)"
@@ -1432,6 +1444,9 @@ def refresh_lora_choices():
 # places that consume its "done" event (_run_jobs, generate_faceswap,
 # _run_wan_jobs), so a fourth executor gets this for free.
 on_output(gallery_index.note_new)
+# And the same for the recipe behind them, for the same reason: one
+# producer of the "done" event, so a fourth executor gets this free too.
+on_output(recipes.note_output)
 
 
 def list_output_images() -> list[str]:
@@ -1549,11 +1564,29 @@ def _pick_gallery(paths, evt: gr.SelectData):
     """
     idx = evt.index
     if not isinstance(idx, int) or not 0 <= idx < len(paths or []):
-        return gr.Image(), gr.Video()      # stale click, e.g. after a refresh
+        # Stale click, e.g. a tile clicked after a refresh renumbered the
+        # grid. The viewers keep what they have; the recipe panel is put
+        # away, because the one thing worse than no recipe is a recipe
+        # sitting under a heading naming a different picture. Cleared with
+        # a real None rather than a gr.update() — this output is a
+        # gr.State, whose value is whatever it is handed, update object
+        # and all.
+        return (gr.Image(), gr.Video(), gr.update(visible=False),
+                gr.update(), None, gr.update(interactive=False))
     path = paths[idx]
     is_video = path.lower().endswith(gallery_index.VIDEO_EXT)
+    # Read on the click rather than kept per tile: a gallery page is ten
+    # files and the store is a dict, so this is a lookup, and doing it here
+    # means a recipe written since the page was drawn is still found.
+    recipe = recipes.for_path(path)
+    usable = bool(recipe) and str(recipe.get("tab")) in _RECIPE_VIEWS
     return (gr.Image(value=None if is_video else path, visible=not is_video),
-            gr.Video(value=path if is_video else None, visible=is_video))
+            gr.Video(value=path if is_video else None, visible=is_video),
+            gr.update(visible=True,
+                      label=f"🧾 How this was made — {Path(path).name}"),
+            _recipe_body(recipe, path),
+            recipe,
+            gr.update(interactive=usable))
 
 
 def zip_outputs():
@@ -1782,6 +1815,7 @@ def _publish_row():
             label="Card title (optional)", scale=1,
             placeholder="Golden hour portrait",
         )
+    _recipe_skip(checkbox, title)
     return checkbox, title
 
 
@@ -1810,6 +1844,7 @@ def _preset_save_row():
             info="Always saved as a new preset — a name already in use "
                  "gets a “(2)”. Blank is stamped with the time.",
         )
+    _recipe_skip(checkbox, name)
     return checkbox, name
 
 
@@ -1862,6 +1897,294 @@ def _preset_dropdown_update(tab):
     """
     choices, _default = _preset_choices(tab, force=True)
     return gr.update(choices=choices)
+
+
+# ----------------------------------------------------------------- recipes
+# Every generation records what it was made with, and the Gallery tab reads
+# it back — see recipes.py for the store. This half is the wiring: which
+# controls a tab's recipe is made of, how a stored one is rendered, and how
+# it goes back into the controls it came from.
+#
+# The trick that makes this one implementation rather than ten is that a
+# tab's recipe *is* its click's `inputs` list. Recording it is zipping that
+# list against the values Gradio just handed over, and restoring it is
+# writing them back into the very same components — so a tab that grows a
+# control gets it in its recipes with no change here.
+
+# key → (tab id for switching to it, [that tab's input components]), in
+# build order. A tab this licence does not grant never registers, so its
+# recipes simply cannot be loaded — which is the correct answer, and the
+# same one the prompt library gives for a card it cannot use.
+_RECIPE_VIEWS = {}
+
+# The two controls a recipe deliberately overrides on the way back in, by
+# label. Every seeded tab labels them identically — see _use_recipe.
+SEED_LABEL = "Seed"
+RANDOM_SEED_LABEL = "🎲 Random seed"
+
+# Controls whose value is a file the customer supplied rather than a
+# setting: an uploaded image, a mask, a JSON file. They are recorded as
+# None and skipped on the way back, and the panel says so rather than
+# quietly restoring nine tenths of a recipe.
+_UNRECORDED = (gr.Image, gr.ImageEditor, gr.File, gr.Gallery, gr.Video)
+
+# Controls that sit in a click's inputs but are not settings: the publish
+# and save-preset boxes. They are per-run decisions — see
+# _reset_after_generate, which disarms them after every click — so putting
+# them in a recipe would mean loading one silently re-arms a publish, which
+# is the one thing that must never happen by accident.
+_RECIPE_SKIP = set()
+
+
+def _recipe_skip(*components):
+    """Keep these controls out of every recipe, wherever they are used."""
+    _RECIPE_SKIP.update(id(component) for component in components)
+
+
+# member control → the control that decides whether it means anything. An
+# empty LoRA slot is a dropdown reading "None" and a weight of 0.8, and
+# printing eight rows of "Weight 0.8" under every recipe is eight rows of
+# noise. Recorded either way, because restoring a slot has to restore all
+# of it — this only decides what the panel is worth showing.
+_RECIPE_GATES = {}
+
+
+def _recipe_gate(gate, *members):
+    """Show `members` in a recipe only when `gate` has a value."""
+    _RECIPE_GATES.update({id(member): id(gate) for member in members})
+
+
+def _recipe_view(key, tab_id, inputs):
+    """Register a tab's controls as its recipe, and hand the list back.
+
+    Returns `inputs` so the caller can use it directly as the click's
+    `inputs=`, which is the point: the list is written once, and the thing
+    that is recorded cannot drift from the thing that is submitted.
+    """
+    _RECIPE_VIEWS[str(key)] = (tab_id, list(inputs))
+    return inputs
+
+
+def _recipe_components():
+    """Every registered control, flattened in the registry's order.
+
+    The one definition of that order — _use_recipe returns its updates in
+    it, and the button's outputs list is built from it.
+    """
+    return [component for _tab_id, components in _RECIPE_VIEWS.values()
+            for component in components]
+
+
+def _recordable(value):
+    """Is this control value worth storing?
+
+    An allowlist, not a json.dumps attempt. Every control that holds a
+    *setting* answers with a string, a number or a bool; everything else
+    is an uploaded file, and storing those would turn a few hundred bytes
+    a picture into a second copy of the input.
+    """
+    return value is None or isinstance(value, (str, int, float, bool))
+
+
+def _recipe_fields(components, values):
+    """[[label, value], ...] for one click, in the tab's own control order.
+
+    Positional, and it has to be: a LoRA stack is eight controls all
+    labelled "Weight", so the order is the only thing that says which slot
+    each one belongs to. The label rides along anyway, because it is what
+    the panel shows and what _use_recipe checks before writing a value
+    back into a build that may have moved on since.
+    """
+    fields = []
+    for component, value in zip(components, values):
+        label = (getattr(component, "label", None) or "").strip()
+        keep = _recordable(value) and id(component) not in _RECIPE_SKIP
+        fields.append([label, value if keep else None])
+    return fields
+
+
+def _recipe_pair(entry) -> bool:
+    """Is this a usable [label, value] out of a stored recipe?
+
+    The store is a file on a pod's disk that outlives the build that wrote
+    it, so every reader treats a row as data of unknown shape rather than
+    as something it can unpack.
+    """
+    return isinstance(entry, (list, tuple)) and len(entry) >= 2
+
+
+def _recipe_at(fields, index):
+    """The stored value at `index`, or None — see _recipe_pair."""
+    entry = fields[index] if index < len(fields) else None
+    return entry[1] if _recipe_pair(entry) else None
+
+
+def _recipe_escape(text) -> str:
+    """A value, safe to drop in a markdown table cell."""
+    return " ".join(str(text).split()).replace("|", "\\|")
+
+
+def _recipe_body(recipe, path) -> str:
+    """A stored recipe, as something readable under the selected file.
+
+    Prompts are pulled out above the table as quotes and everything else
+    goes in it. Which is which comes from the *live* control at that
+    position rather than from anything stored: a text box is a text box,
+    and a prompt reflowed into a table cell — where a newline cannot go —
+    is exactly the thing someone opened this panel to read. The length
+    test is the fallback for a recipe whose tab this licence does not
+    grant, where there is no control left to ask.
+
+    The seed rides in the heading and is deliberately kept out of the
+    table. What the box held is not what the picture ran on — a batch
+    walks consecutive seeds, and a random tick ignores the box entirely —
+    so listing both would put two different seeds on one panel.
+    """
+    if not recipe:
+        return (f"No recipe on file for **{Path(path).name}**.\n\n"
+                "Only generations made since this pod started keeping them "
+                "have one — anything older, or copied into the output "
+                "folder by hand, cannot be traced back.")
+
+    when = time.strftime("%d %b %Y, %H:%M",
+                         time.localtime(recipe.get("at") or 0))
+    head = f"**{recipe.get('tab_label') or 'Unknown tab'}** · {when}"
+    seed = recipe.get("seed")
+    if seed is not None:
+        head += f" · seed `{seed}`"
+    lines = [head]
+
+    _tab_id, components = _RECIPE_VIEWS.get(str(recipe.get("tab")), (None, []))
+    fields = recipe.get("fields") or []
+    # id(control) → what it is set to, so a gated control can be looked up
+    # by the member it gates. Only meaningful for a recipe from this build,
+    # which is the only case where components is non-empty.
+    live = {id(component): _recipe_at(fields, index)
+            for index, component in enumerate(components)}
+    quotes, table = [], []
+    for index, entry in enumerate(fields):
+        if not _recipe_pair(entry):
+            continue
+        label, value = entry[0], entry[1]
+        if value is None or value == "" or value == "None" or not label:
+            continue
+        if label in (SEED_LABEL, RANDOM_SEED_LABEL):
+            continue
+        component = components[index] if index < len(components) else None
+        gate = _RECIPE_GATES.get(id(component))
+        if gate is not None and live.get(gate) in (None, "", "None"):
+            continue                  # an empty slot's settings say nothing
+        text = str(value)
+        is_text = (isinstance(component, gr.Textbox) if component is not None
+                   else len(text) > 60 or "\n" in text)
+        (quotes if is_text else table).append((label, text))
+
+    for label, text in quotes:
+        body = "\n> ".join(text.strip().splitlines())
+        lines.append(f"\n**{label}**\n\n> {body}")
+    if table:
+        lines.append("\n| Setting | Value |\n| --- | --- |")
+        lines += [f"| {_recipe_escape(label)} | `{_recipe_escape(text)}` |"
+                  for label, text in table]
+
+    if str(recipe.get("tab")) not in _RECIPE_VIEWS:
+        lines.append(f"\n⚠️ The **{recipe.get('tab_label')}** tab is not part "
+                     "of this licence, so these settings can be read but not "
+                     "loaded.")
+    return "\n".join(lines)
+
+
+def _recipe_update(component, value):
+    """One stored value → an update for the control it belongs to.
+
+    Guarded exactly the way the prompt library's `_pick` and `_num` are,
+    and for the same reason: a recipe can outlive the build that wrote it.
+    A dropdown handed a value outside its choices is a *broken* component
+    rather than a wrong one, and a slider's range is a property of this
+    build rather than of the recipe — so an unknown choice leaves the
+    control alone and an out-of-range number is clamped into it.
+    """
+    if isinstance(component, (gr.Dropdown, gr.Radio)):
+        choices = [choice[1] if isinstance(choice, (list, tuple)) else choice
+                   for choice in (component.choices or [])]
+        return gr.update(value=value) if value in choices else gr.update()
+    if isinstance(component, gr.Checkbox):
+        return gr.update(value=bool(value))
+    if isinstance(component, (gr.Slider, gr.Number)):
+        try:
+            number = float(value)
+        except (TypeError, ValueError):
+            return gr.update()
+        low, high = component.minimum, component.maximum
+        if low is not None:
+            number = max(float(low), number)
+        if high is not None:
+            number = min(float(high), number)
+        return gr.update(value=number)
+    if isinstance(component, gr.Textbox):
+        return gr.update(value="" if value is None else str(value))
+    return gr.update()
+
+
+def _use_recipe(recipe):
+    """▶️ Load these settings — put a stored recipe back into its tab.
+
+    Writes updates for *every* registered tab's controls, because the
+    outputs list is fixed at build time; the tabs a recipe is not for get
+    bare gr.update()s, which change nothing. Same shape as _use_prompt,
+    and for the same reason.
+
+    Two values are deliberately not restored as recorded. **Seed** becomes
+    the seed the picture actually ran on rather than whatever was in the
+    box, and **🎲 Random seed** is switched off — together they are the
+    difference between "the same settings" and "the same image", which is
+    what someone clicking this is asking for.
+    """
+    recipe = recipe or {}
+    tab = str(recipe.get("tab") or "")
+    fields = recipe.get("fields") or []
+    seed = recipe.get("seed")
+
+    updates, selected, missing = [], gr.update(), 0
+    for key, (tab_id, components) in _RECIPE_VIEWS.items():
+        if key != tab:
+            updates.extend([gr.update()] * len(components))
+            continue
+        if tab_id:
+            selected = gr.update(selected=tab_id)
+        for index, component in enumerate(components):
+            label = (getattr(component, "label", None) or "").strip()
+            stored = fields[index] if index < len(fields) else None
+            if not _recipe_pair(stored) or stored[0] != label:
+                # The recipe was written by a build whose controls sat in a
+                # different order. Rather than guess, that one control keeps
+                # what it has — the rest of the recipe still loads.
+                updates.append(gr.update())
+                continue
+            value = stored[1]
+            if label == SEED_LABEL and seed is not None:
+                value = seed
+            elif label == RANDOM_SEED_LABEL:
+                value = False
+            if value is None and isinstance(component, _UNRECORDED):
+                missing += 1
+            updates.append(_recipe_update(component, value))
+
+    if not tab:
+        message = "⚠️ Nothing to load — pick an image first."
+    elif tab not in _RECIPE_VIEWS:
+        message = (f"⚠️ **{recipe.get('tab_label')}** is not part of this "
+                   "licence, so its settings cannot be loaded.")
+    else:
+        message = f"✅ Loaded into **{recipe.get('tab_label')}**."
+        if seed is not None:
+            message = (f"✅ Loaded into **{recipe.get('tab_label')}** on seed "
+                       f"`{seed}`, with random seed switched off — so it "
+                       "renders the same image.")
+        if missing:
+            message += (f" The {missing} uploaded file(s) it used are not "
+                        "stored — pick those again before generating.")
+    return (*updates, selected, message)
 
 
 # ------------------------------------------------------------------- queue
@@ -1942,7 +2265,8 @@ def _enqueue(key, fn, *, prompt_arg=None, status_index=1, lane=None):
     def submit(*args):
         view = jobqueue.submit(
             lane=lane, tab=str(key), tab_label=features.label_for(key),
-            title=_job_title(args, prompt_arg), fn=fn, args=args,
+            title=_job_title(args, prompt_arg),
+            fn=_recording(key, fn, args), args=args,
             status_index=status_index,
         )
         ahead = max(0, view.place - 1)
@@ -1952,6 +2276,34 @@ def _enqueue(key, fn, *, prompt_arg=None, status_index=1, lane=None):
         return gr.Timer(QUEUE_POLL_SECONDS, active=True), line
 
     return submit
+
+
+def _recording(key, fn, args):
+    """`fn`, wrapped so whatever it writes is filed under a recipe.
+
+    The wrapper exists to move one line onto the *worker* thread. The
+    values were read from the controls back on the click, but the recipe
+    has to be announced from the thread that will do the generating —
+    recipes keys it by thread, so that the output hook deep inside
+    client.run can find it without every executor having to pass it down
+    (see recipes.py).
+
+    A generator, because the handlers are: `yield from` keeps the tab's
+    own progress reporting exactly as it was, and the `finally` runs on a
+    cancelled job too, since closing a generator raises GeneratorExit at
+    its current yield.
+    """
+    tab_id, components = _RECIPE_VIEWS.get(str(key), (None, []))
+    fields = _recipe_fields(components, args)
+
+    def run(*call_args):
+        recipes.begin(str(key), features.label_for(key), tab_id, fields)
+        try:
+            yield from fn(*call_args)
+        finally:
+            recipes.end()
+
+    return run
 
 
 _QUEUE_ICONS = {
@@ -2725,12 +3077,12 @@ def _tab_krea_t2i(tab):
                 preset_tab=presets.TAB_KREA2, preset_dd=preset_dd)
     _krea_run = generate_btn.click(
         fn=_enqueue(features.Key.KREA_T2I, generate_single, prompt_arg=0),
-        inputs=[prompt_box, negative_box, seed_box, randomize_cb,
-                steps_slider, cfg_slider, resolution_dd, sampler_dd,
-                model_dd, batch_slider,
-                krea_publish, krea_publish_title,
-                krea_save_preset, krea_preset_name,
-                *_lora_inputs(lora_dds, lora_ws)],
+        inputs=_recipe_view(features.Key.KREA_T2I, "krea2", [
+            prompt_box, negative_box, seed_box, randomize_cb,
+            steps_slider, cfg_slider, resolution_dd, sampler_dd,
+            model_dd, batch_slider, krea_publish, krea_publish_title,
+            krea_save_preset, krea_preset_name,
+            *_lora_inputs(lora_dds, lora_ws)]),
         outputs=[_queue_timer, status_box],
     )
     _reset_after_generate(_krea_run, krea_publish, krea_publish_title,
@@ -2966,19 +3318,18 @@ def _tab_krea_v2_t2i(tab):
                 preset_tab=presets.TAB_KREA2_V2, preset_dd=v2_preset_dd)
     _v2_run = v2_generate_btn.click(
         fn=_enqueue(features.Key.KREA_V2_T2I, generate_v2, prompt_arg=0),
-        inputs=[v2_prompt, v2_negative, v2_seed, v2_randomize,
-                v2_model_dd,
-                v2_aspect, v2_megapixels, v2_multiple,
-                v2_eta, v2_sampler_name, v2_scheduler, v2_steps,
-                v2_denoise, v2_cfg, v2_sampler_mode, v2_bongmath,
-                v2_variance_preset, v2_fine_tune,
-                v2_variance_model, v2_variance_schedule,
-                v2_cutoff_step, v2_total_steps,
-                v2_cutoff_strength, v2_shift_strength,
-                v2_sharpen, v2_grain, v2_batch,
-                v2_publish, v2_publish_title,
-                v2_save_preset, v2_preset_name,
-                *_lora_triples(v2_cbs, v2_dds, v2_ws)],
+        inputs=_recipe_view(features.Key.KREA_V2_T2I, "krea2v2", [
+            v2_prompt, v2_negative, v2_seed, v2_randomize, v2_model_dd,
+            v2_aspect, v2_megapixels, v2_multiple,
+            v2_eta, v2_sampler_name, v2_scheduler, v2_steps,
+            v2_denoise, v2_cfg, v2_sampler_mode, v2_bongmath,
+            v2_variance_preset, v2_fine_tune,
+            v2_variance_model, v2_variance_schedule,
+            v2_cutoff_step, v2_total_steps,
+            v2_cutoff_strength, v2_shift_strength,
+            v2_sharpen, v2_grain, v2_batch, v2_publish, v2_publish_title,
+            v2_save_preset, v2_preset_name,
+            *_lora_triples(v2_cbs, v2_dds, v2_ws)]),
         outputs=[_queue_timer, v2_status_box],
     )
     _reset_after_generate(_v2_run, v2_publish, v2_publish_title,
@@ -3218,12 +3569,13 @@ def _tab_krea_edit(tab):
                 [edit_gallery, edit_status, edit_seed_out])
     edit_btn.click(
         fn=_enqueue(features.Key.KREA_EDIT, generate_edit, prompt_arg=3),
-        inputs=[edit_image, edit_use_image2, edit_image2,
-                edit_prompt, edit_negative, edit_seed,
-                edit_random, edit_steps, edit_cfg, edit_sampler,
-                edit_grounding, edit_ref_boost, edit_ref_boost_a,
-                edit_model_dd, edit_batch,
-                *_lora_inputs(edit_lora_dds, edit_lora_ws)],
+        inputs=_recipe_view(features.Key.KREA_EDIT, "edit", [
+            edit_image, edit_use_image2, edit_image2,
+            edit_prompt, edit_negative, edit_seed,
+            edit_random, edit_steps, edit_cfg, edit_sampler,
+            edit_grounding, edit_ref_boost, edit_ref_boost_a,
+            edit_model_dd, edit_batch,
+            *_lora_inputs(edit_lora_dds, edit_lora_ws)]),
         outputs=[_queue_timer, edit_status],
     )
 
@@ -3439,18 +3791,18 @@ def _tab_krea_v2_edit(tab):
     v2e_btn.click(
         fn=_enqueue(features.Key.KREA_V2_EDIT, generate_v2_edit,
                     prompt_arg=3),
-        inputs=[v2e_image, v2e_use_image2, v2e_image2,
-                v2e_prompt, v2e_negative, v2e_seed,
-                v2e_randomize, v2e_model_dd, v2e_grounding,
-                v2e_ref_boost, v2e_ref_boost_a, v2e_fit_mode, v2e_eta,
-                v2e_sampler_name, v2e_scheduler, v2e_steps,
-                v2e_cfg, v2e_sampler_mode, v2e_bongmath,
-                v2e_variance_preset, v2e_fine_tune,
-                v2e_variance_model, v2e_variance_schedule,
-                v2e_cutoff_step, v2e_total_steps,
-                v2e_cutoff_strength, v2e_shift_strength,
-                v2e_batch,
-                *_lora_triples(v2e_cbs, v2e_dds, v2e_ws)],
+        inputs=_recipe_view(features.Key.KREA_V2_EDIT, "v2edit", [
+            v2e_image, v2e_use_image2, v2e_image2,
+            v2e_prompt, v2e_negative, v2e_seed,
+            v2e_randomize, v2e_model_dd, v2e_grounding,
+            v2e_ref_boost, v2e_ref_boost_a, v2e_fit_mode, v2e_eta,
+            v2e_sampler_name, v2e_scheduler, v2e_steps,
+            v2e_cfg, v2e_sampler_mode, v2e_bongmath,
+            v2e_variance_preset, v2e_fine_tune,
+            v2e_variance_model, v2e_variance_schedule,
+            v2e_cutoff_step, v2e_total_steps,
+            v2e_cutoff_strength, v2e_shift_strength, v2e_batch,
+            *_lora_triples(v2e_cbs, v2e_dds, v2e_ws)]),
         outputs=[_queue_timer, v2e_status_box],
     )
 
@@ -3547,12 +3899,12 @@ def _tab_krea_inpaint(tab):
     inpaint_btn.click(
         fn=_enqueue(features.Key.KREA_INPAINT, generate_inpaint,
                     prompt_arg=1),
-        inputs=[inpaint_editor, inpaint_prompt, inpaint_negative,
-                inpaint_seed, inpaint_random, inpaint_steps,
-                inpaint_cfg, inpaint_denoise, inpaint_sampler,
-                inpaint_grow, inpaint_blur, inpaint_model_dd,
-                inpaint_batch,
-                *_lora_inputs(inpaint_lora_dds, inpaint_lora_ws)],
+        inputs=_recipe_view(features.Key.KREA_INPAINT, "inpaint", [
+            inpaint_editor, inpaint_prompt, inpaint_negative,
+            inpaint_seed, inpaint_random, inpaint_steps,
+            inpaint_cfg, inpaint_denoise, inpaint_sampler,
+            inpaint_grow, inpaint_blur, inpaint_model_dd, inpaint_batch,
+            *_lora_inputs(inpaint_lora_dds, inpaint_lora_ws)]),
         outputs=[_queue_timer, inpaint_status],
     )
 
@@ -3634,10 +3986,10 @@ def _tab_faceswap(tab):
     _queue_view(features.Key.FACESWAP, [swap_gallery, swap_status])
     swap_btn.click(
         fn=_enqueue(features.Key.FACESWAP, generate_faceswap),
-        inputs=[swap_base, swap_face, swap_model_dd,
-                swap_detector_dd, swap_restore_dd, swap_visibility,
-                swap_codeformer_w, swap_input_idx,
-                swap_source_idx],
+        inputs=_recipe_view(features.Key.FACESWAP, "faceswap", [
+            swap_base, swap_face, swap_model_dd,
+            swap_detector_dd, swap_restore_dd, swap_visibility,
+            swap_codeformer_w, swap_input_idx, swap_source_idx]),
         outputs=[_queue_timer, swap_status],
     )
 
@@ -3723,10 +4075,11 @@ def _tab_flux_t2i(tab):
                 [flux_gallery, flux_status, flux_seed_out])
     flux_btn.click(
         fn=_enqueue(features.Key.FLUX_T2I, generate_flux, prompt_arg=0),
-        inputs=[flux_prompt, flux_seed, flux_random, flux_steps,
-                flux_guidance, flux_resolution, flux_sampler,
-                flux_model_dd, flux_batch,
-                *_lora_inputs(flux_lora_dds, flux_lora_ws)],
+        inputs=_recipe_view(features.Key.FLUX_T2I, "flux", [
+            flux_prompt, flux_seed, flux_random, flux_steps,
+            flux_guidance, flux_resolution, flux_sampler,
+            flux_model_dd, flux_batch,
+            *_lora_inputs(flux_lora_dds, flux_lora_ws)]),
         outputs=[_queue_timer, flux_status],
     )
 
@@ -3871,14 +4224,14 @@ def _tab_klein_i2i(tab):
     klein_btn.click(
         fn=_enqueue(features.Key.KLEIN_I2I, generate_klein_edit,
                     prompt_arg=3),
-        inputs=[klein_image, klein_use_image2, klein_image2,
-                klein_prompt, klein_seed, klein_random,
-                klein_model_dd, klein_steps, klein_cfg,
-                klein_guidance, klein_sampler, klein_scheduler,
-                klein_reference_mp, klein_output_mode,
-                klein_output_mp, klein_custom_w, klein_custom_h,
-                klein_batch,
-                *_lora_triples(klein_cbs, klein_dds, klein_ws)],
+        inputs=_recipe_view(features.Key.KLEIN_I2I, "klein", [
+            klein_image, klein_use_image2, klein_image2,
+            klein_prompt, klein_seed, klein_random,
+            klein_model_dd, klein_steps, klein_cfg,
+            klein_guidance, klein_sampler, klein_scheduler,
+            klein_reference_mp, klein_output_mode,
+            klein_output_mp, klein_custom_w, klein_custom_h, klein_batch,
+            *_lora_triples(klein_cbs, klein_dds, klein_ws)]),
         outputs=[_queue_timer, klein_status_box],
     )
 
@@ -4004,10 +4357,10 @@ def _tab_wan_i2v(tab):
         # status text, where every other tab yields one.
         fn=_enqueue(features.Key.WAN_I2V, generate_wan_video, prompt_arg=1,
                     status_index=2, lane=WAN_LANE),
-        inputs=[wan_image, wan_prompt, wan_negative, wan_model,
-                wan_mode, wan_seed, wan_random, wan_steps,
-                wan_cfg, wan_resolution, wan_seconds, wan_sampler,
-                wan_batch],
+        inputs=_recipe_view(features.Key.WAN_I2V, "video", [
+            wan_image, wan_prompt, wan_negative, wan_model,
+            wan_mode, wan_seed, wan_random, wan_steps,
+            wan_cfg, wan_resolution, wan_seconds, wan_sampler, wan_batch]),
         outputs=[_queue_timer, wan_status],
     )
 
@@ -4041,7 +4394,8 @@ def _tab_json_batch(tab):
     _queue_view(features.Key.JSON_BATCH, [json_gallery, json_status])
     json_btn.click(
         fn=_enqueue(features.Key.JSON_BATCH, generate_from_json),
-        inputs=[json_file_in, json_text_in],
+        inputs=_recipe_view(features.Key.JSON_BATCH, "json", [
+            json_file_in, json_text_in]),
         outputs=[_queue_timer, json_status],
     )
 
@@ -4090,6 +4444,23 @@ def _tab_gallery(tab):
     gallery_video = gr.Video(
         label="Selected video", visible=False, interactive=False,
     )
+    # What the selected file was made with, and the way to make it again.
+    # Hidden until something is picked, because an empty panel saying
+    # "nothing selected" is a row of chrome that is wrong most of the time.
+    with gr.Accordion("🧾 How this was made", open=True,
+                      visible=False, elem_classes="kx-recipe") as recipe_panel:
+        recipe_body = gr.Markdown(elem_classes="kx-meta")
+        # The whole recipe, so the button resolves against the thing that
+        # was drawn rather than re-reading a store that may have moved on.
+        recipe_state = gr.State(None)
+        recipe_btn = gr.Button(
+            "▶️ Load these settings", variant="primary", size="sm",
+            interactive=False,
+        )
+        # Filled by _use_recipe, which is wired after the tabs — its
+        # outputs reach into every generation tab, and the last of those
+        # is built after this one.
+        recipe_status = gr.Markdown(elem_classes="kx-meta")
     gallery_zip_file = gr.File(
         label="Zip of all images", interactive=False
     )
@@ -4103,11 +4474,16 @@ def _tab_gallery(tab):
     )
     all_gallery.select(
         fn=_pick_gallery, inputs=[gallery_paths],
-        outputs=[gallery_image, gallery_video],
+        outputs=[gallery_image, gallery_video,
+                 recipe_panel, recipe_body, recipe_state, recipe_btn],
     )
     gallery_zip_btn.click(
         fn=zip_outputs, outputs=[gallery_zip_file, gallery_info]
     )
+    # The button is wired after the tabs, for the same reason the prompt
+    # library's Use buttons are: it writes into every generation tab, and
+    # this tab is not the last one built.
+    return recipe_btn, recipe_state, recipe_status
 
 
 # The tab strip, left to right. This tuple is the only thing that decides
@@ -4121,23 +4497,25 @@ def _tab_gallery(tab):
 # Library's "switch to that tab" would land on whatever happened to be
 # third that day.
 TAB_ORDER = (
-    # Explicit id so the Prompt Library can select this tab. Tabs
-    # are otherwise numbered by construction order, which shifts
-    # with the licence.
+    # Every generation tab carries an explicit id, and the ids here are the
+    # ones _recipe_view registers: the Gallery's "Load these settings"
+    # switches to whichever tab a picture came from, and that is any of
+    # them. (The Prompt Library reaches only the first two, which is why
+    # those two ids predate the rest and are not the feature keys.)
     (features.Key.KREA_T2I, _tab_krea_t2i, 'krea2'),
     (features.Key.KREA_V2_T2I, _tab_krea_v2_t2i, 'krea2v2'),
     # Its Use buttons reach into the two generation tabs, but that is
     # wired after the loop, so it may sit anywhere in this list.
-    (features.Key.KREA_INPAINT, _tab_krea_inpaint, None),
-    (features.Key.FACESWAP, _tab_faceswap, None),
-    (features.Key.KREA_EDIT, _tab_krea_edit, None),
-    (features.Key.KREA_V2_EDIT, _tab_krea_v2_edit, None),
-    (features.Key.FLUX_T2I, _tab_flux_t2i, None),
-    (features.Key.KLEIN_I2I, _tab_klein_i2i, None),
-    (features.Key.WAN_I2V, _tab_wan_i2v, None),
+    (features.Key.KREA_INPAINT, _tab_krea_inpaint, 'inpaint'),
+    (features.Key.FACESWAP, _tab_faceswap, 'faceswap'),
+    (features.Key.KREA_EDIT, _tab_krea_edit, 'edit'),
+    (features.Key.KREA_V2_EDIT, _tab_krea_v2_edit, 'v2edit'),
+    (features.Key.FLUX_T2I, _tab_flux_t2i, 'flux'),
+    (features.Key.KLEIN_I2I, _tab_klein_i2i, 'klein'),
+    (features.Key.WAN_I2V, _tab_wan_i2v, 'video'),
     (features.Key.COMMUNITY_PROMPTS, _tab_community_prompts, 'prompts'),
     (features.Key.GALLERY, _tab_gallery, None),
-    (features.Key.JSON_BATCH, _tab_json_batch, None),
+    (features.Key.JSON_BATCH, _tab_json_batch, 'json'),
 )
 
 
@@ -4221,6 +4599,19 @@ with gr.Blocks(title="Ember") as ui:
         for _slot, _button in enumerate(_lib_buttons):
             _button.click(fn=partial(_use_prompt, _slot),
                           inputs=_lib_rows, outputs=_use_outputs)
+
+    # The Gallery's "Load these settings". Wired here rather than in the
+    # tab for the same reason as the library's Use buttons — it writes into
+    # every generation tab's controls, and the JSON tab is built after the
+    # Gallery — and reading _recipe_components() only now is what lets a
+    # licence decide which of those tabs exist to be written to.
+    if features.Key.GALLERY in _exports:
+        _recipe_btn, _recipe_state, _recipe_status = _exports[
+            features.Key.GALLERY]
+        _recipe_btn.click(
+            fn=_use_recipe, inputs=_recipe_state,
+            outputs=[*_recipe_components(), main_tabs, _recipe_status],
+        )
 
     # The settings half of the same idea: each generation tab's dropdown is
     # built already showing the preset the server marks as that tab's

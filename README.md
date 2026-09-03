@@ -835,6 +835,114 @@ the click that asked for it has returned. So `presets.save` tells the
 queue (`jobqueue.note_preset_saved`), and the same poll that carries the
 images back refills the preset dropdown.
 
+## Recipes — "how was this made?"
+
+An image in the Gallery tab used to be a dead end. It was the one that
+worked, and everything behind it — the prompt, the model, the LoRA stack,
+and above all the **seed** that a ticked *🎲 Random seed* threw away — had
+left the UI the moment the next click overwrote the controls.
+
+So every finished prompt now writes a **recipe** beside its output. Click
+a tile in the Gallery and a *🧾 How this was made* panel opens under it,
+showing the prompt as a quote and the settings as a table, with the seed
+the picture actually ran on in the heading. **▶️ Load these settings**
+puts the whole lot back into the tab it came from and switches to that
+tab.
+
+Two values are deliberately not restored as recorded: **Seed** becomes the
+seed that particular picture ran on rather than whatever was in the box,
+and **🎲 Random seed** is switched off. Together they are the difference
+between "the same settings" and "the same image", which is what someone
+clicking that button is asking for.
+
+### What is in one
+
+A recipe is the *UI's* values, not the resolved ComfyUI graph — the same
+call `prompts.py` and `presets.py` make. The dropdown label is what goes
+back into a dropdown; the filename it resolved to on this pod is not, and
+would be wrong on the next one.
+
+A tab's recipe **is its Generate click's `inputs` list** — that is the
+trick that makes this one implementation rather than ten. Recording it is
+zipping that list against the values Gradio just handed over; restoring it
+is writing them back into the very same components. A tab that grows a
+control gets it in its recipes with no change anywhere:
+
+```python
+    generate_btn.click(
+        fn=_enqueue(features.Key.KREA_T2I, generate_single, prompt_arg=0),
+        inputs=_recipe_view(features.Key.KREA_T2I, "krea2", [
+            prompt_box, negative_box, seed_box, randomize_cb, ...]),
+        outputs=[_queue_timer, status_box],
+    )
+```
+
+`_recipe_view` registers the list and hands it straight back, so what is
+recorded cannot drift from what is submitted.
+
+Three things are deliberately left out:
+
+- **Uploaded files** — a source image, an inpaint mask, a JSON batch file.
+  Storing those would turn a few hundred bytes a picture into a second
+  copy of the input; the panel says how many a recipe needed so you know
+  to pick them again.
+- **The publish and save-preset boxes**, via `_recipe_skip`. They are
+  per-run decisions rather than settings (see `_reset_after_generate`), so
+  putting them in a recipe would mean loading one silently re-arms a
+  publish.
+- **Empty LoRA slots**, from the *panel* only. They are recorded — a slot
+  has to restore whole — but a dropdown reading "None" beside a weight of
+  0.8 is a row of noise, so `_recipe_gate` pairs each weight with the
+  dropdown that decides whether it means anything.
+
+### Where it is kept
+
+One append-only JSONL file next to the images: `<output>/.recipes.jsonl`.
+No database, no licence server, nothing to configure — and it survives a
+restart because it is a file.
+
+- **Append-only**, because the alternative is rewriting the whole map
+  after every picture. Later lines win, so an update is just another line,
+  and the file is compacted at most once per process (when it holds twice
+  as many lines as live recipes).
+- **Beside the images**, so a recipe lives and dies on the same disk as
+  the file it describes. The leading dot means `gallery_index` already
+  skips it, which keeps it out of the gallery grid and out of the Zip
+  button's archive for free.
+- **Keyed by the path relative to the output dir**, so moving the tree, or
+  mounting it somewhere else on the next pod, does not orphan everything
+  in it.
+- **Bounded** at `MAX_RECIPES` (5000), oldest dropped on compaction.
+
+### How the seed is captured
+
+`_run_jobs` and `_run_wan_jobs` call `recipes.stamp(seed=...)` before each
+prompt, because the executor is the only place the real seed is known — a
+batch of four walks four consecutive seeds, and a random tick ignores the
+box entirely. Since `client.on_output` fires once per ComfyUI prompt, a
+batch of four writes four recipes differing in exactly the field that
+matters.
+
+The recipe itself is announced from the *worker* thread (`_recording` in
+`ui.py` wraps the tab's handler), and `recipes.py` keys it by thread. That
+is what lets the output hook deep inside `client.run` find it without
+every executor having to pass it down.
+
+### Reading one back safely
+
+A recipe is a file on a pod's disk that outlives the build that wrote it,
+so `_use_recipe` treats every stored row as data of unknown shape —
+exactly the guarding the prompt library's `_pick` and `_num` already do:
+
+- a value is only written when the **label still matches** the control at
+  that position, so a build that reordered its controls loses that one
+  field rather than scrambling the tab
+- a dropdown handed a choice this pod does not have is **left alone**, not
+  broken
+- a number outside this build's slider range is **clamped into it**
+- a recipe for a tab this licence does not grant can be **read but not
+  loaded**, and the panel says so
+
 ## Model swapping and crash recovery
 
 With Krea 2 V1 (turbo/raw), V2 (turbo mxfp8/raw), Flux and Wan all
@@ -908,6 +1016,7 @@ error in the log points at a custom node instead.
 - `workflow_reactor.py` — ReActor face-swap workflow builder + availability checks
 - `client.py` — ComfyUI HTTP/websocket client (queue, progress, image upload, interrupt)
 - `jobqueue.py` — the visible job queue behind every Generate button (worker per lane, cancel, history)
+- `recipes.py` — what each generated file was made with, so the Gallery can load it back
 - `ui.py` — Gradio UI (single/batch, edit, V2 edit, inpaint, face swap, flux, klein edit, video, JSON batch, gallery tabs), the `/pricing` page, and launch logic
 
 ### Tab order

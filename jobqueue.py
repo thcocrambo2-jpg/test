@@ -105,7 +105,7 @@ class JobView:
     status: str
     progress: str
     submitted: float
-    place: int          # 1-based position among the jobs still waiting, 0 if not
+    place: int          # 1-based place among those waiting, 0 if not one
 
 
 # One lock for everything. The critical sections are all "read or write a
