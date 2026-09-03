@@ -42,6 +42,13 @@ publish one; everyone else reads. The preset each tab marks as its
 default is applied on page load, so what a fresh session starts on is a
 row in Atlas rather than something compiled into the binary.
 
+Each **Edit** tab carries that same dropdown, filled from its generation
+tab: Krea2's presets are offered in Krea2 Edit and V2's in V2 Edit, each
+applying the part of the blob that tab has controls for. A preset is
+still saved from a generation tab and belongs to it — nothing is written
+twice — but the dials are the same dials, and re-entering a recipe by
+hand to edit with it was the friction worth removing.
+
 Alongside the tabs there is one other view: the pricing panel, which is
 the plan catalogue read from the licence server (plans.py) and rendered by
 theme.pricing_html. "Plans & pricing" hides the tabs and shows it, Back
@@ -2219,7 +2226,9 @@ QUEUE_POLL_SECONDS = 1.0
 # outputs. A tab this licence does not grant never registers, so it costs
 # nothing here either.
 _QUEUE_VIEWS = []
-# (presets tab id, its dropdown) for the two tabs that can save one.
+# (presets tab id, its dropdown) for every panel that offers one — four
+# dropdowns over two tabs, since each Edit tab shows its generation tab's
+# list. Several entries may name the same tab, which _queue_tick allows for.
 _QUEUE_PRESET_VIEWS = []
 
 
@@ -2455,14 +2464,22 @@ def _queue_tick(seen):
         seen[("value", tab)] = values
         tabs.extend(updates)
 
-    presets_out = []
+    # One refill per *tab*, handed to every dropdown showing that tab —
+    # the Edit tabs' included, which is why `seen` is not stamped inside
+    # the loop: doing so would tell the second dropdown on a tab that its
+    # list was already refreshed, and it would sit on the stale one.
+    presets_out, refilled = [], {}
     for preset_tab, _dropdown in _QUEUE_PRESET_VIEWS:
         stamp = jobqueue.preset_revision(preset_tab)
         if not stamp or seen.get(("preset", preset_tab)) == stamp:
             presets_out.append(gr.update())
             continue
+        if preset_tab not in refilled:
+            refilled[preset_tab] = (stamp,
+                                    _preset_dropdown_update(preset_tab))
+        presets_out.append(refilled[preset_tab][1])
+    for preset_tab, (stamp, _update) in refilled.items():
         seen[("preset", preset_tab)] = stamp
-        presets_out.append(_preset_dropdown_update(preset_tab))
 
     # Idle means idle: the poll that observed the last job finish also
     # pushed its results, so there is nothing left to ask about. A Generate
@@ -2712,16 +2729,17 @@ def _v2_updates(entry):
     ]
 
 
-def _v2_setting_updates(settings):
-    """The settings half of the above — what a preset carries."""
-    sampler = _sub(settings, "sampler")
-    variance = _sub(settings, "variance")
+def _v2_lora_updates(settings):
+    """(enables, names, weights) updates for a V2 LoRA stack.
 
-    # V2's rows carry an on/off checkbox, so they are triples rather than
-    # the pairs _lora_updates handles. A row naming a file this pod does
-    # not have is switched off as well as blanked — leaving it ticked
-    # would apply "None" at a strength, which reads as a stack that did
-    # not load.
+    V2's rows carry an on/off checkbox, so they are triples rather than
+    the pairs _lora_updates handles. A row naming a file this pod does
+    not have is switched off as well as blanked — leaving it ticked would
+    apply "None" at a strength, which reads as a stack that did not load.
+
+    Its own function because the V2 Edit tab carries the same eleven rows,
+    and a preset applied there has to fill them the same way.
+    """
     rows = _rows(settings)
     enables, names, weights = [], [], []
     for index in range(len(V2_LORA_SLOTS)):
@@ -2731,6 +2749,14 @@ def _v2_setting_updates(settings):
         enables.append(gr.update(value=bool(row[0]) if row and known else False))
         names.append(gr.update(value=name if known else "None"))
         weights.append(_num(row[2] if row and len(row) > 2 else 1.0, 0.0, 2.0))
+    return enables, names, weights
+
+
+def _v2_setting_updates(settings):
+    """The settings half of the above — what a preset carries."""
+    sampler = _sub(settings, "sampler")
+    variance = _sub(settings, "variance")
+    enables, names, weights = _v2_lora_updates(settings)
 
     return [
         _pick(settings.get("model"), V2_MODEL_CHOICES),
@@ -2767,21 +2793,120 @@ def _v2_setting_updates(settings):
     ]
 
 
+def _krea_edit_setting_updates(settings):
+    """A 🎨 Krea2 preset → updates for the ✨ Krea2 Edit tab's controls.
+
+    The same blob, applied to the dials this tab actually has. Model,
+    steps, CFG, sampler, seed, randomize, batch count and the LoRA stack
+    are the same control under the same name on both tabs, which is the
+    whole reason one preset can serve them both. What is dropped is
+    `resolution`: an edit sizes its output from the source image, so
+    there is no control for it to write into.
+
+    Grounding, reference fidelity and the second-reference switch are the
+    other direction — controls this tab has and no preset carries — so
+    they are left exactly where the customer set them.
+    """
+    names, weights = _lora_updates(_rows(settings), MAX_LORA_SLOTS,
+                                   LORA_CHOICES)
+    return [
+        _pick(settings.get("model"), MODEL_CHOICES),
+        _num(settings.get("steps"), 1, 60),
+        _num(settings.get("cfg"), 0.5, 8.0),
+        _pick(settings.get("sampler"), SAMPLERS),
+        _num(settings.get("seed"), 0, 2**32 - 1),
+        gr.update(value=bool(settings.get("randomize", True))),
+        _num(settings.get("batch_count", 1), 1, 20),
+        *names, *weights,
+    ]
+
+
+def _v2_edit_setting_updates(settings):
+    """A 🔶 Krea2 V2 preset → updates for the ✨ Krea2 V2 Edit tab.
+
+    The same idea as _krea_edit_setting_updates over the V2 panel: the
+    ClownsharKSampler block, the Smart Seed Variance block and the
+    eleven-row LoRA stack all transfer as they stand. Dropped are the
+    four values an edit has no control for — the aspect/megapixels/
+    multiple trio, because the source image sets the output size, and the
+    sampler's `denoise`, because the source reaches the model through
+    conditioning rather than the starting latent — along with the two
+    post-process toggles, which live on the generation tab alone.
+    """
+    sampler = _sub(settings, "sampler")
+    variance = _sub(settings, "variance")
+    enables, names, weights = _v2_lora_updates(settings)
+
+    return [
+        _pick(settings.get("model"), V2_MODEL_CHOICES),
+        _num(settings.get("seed"), 0, 2**32 - 1),
+        gr.update(value=bool(settings.get("randomize", True))),
+        _num(settings.get("batch_count", 1), 1, 20),
+        _num(sampler.get("eta"), 0.0, 2.0),
+        # allow_custom_value dropdowns, as on the V2 tab — see there.
+        gr.update(value=sampler["sampler_name"]) if sampler.get("sampler_name")
+        else gr.update(),
+        gr.update(value=sampler["scheduler"]) if sampler.get("scheduler")
+        else gr.update(),
+        _num(sampler.get("steps"), 1, 100),
+        _num(sampler.get("cfg"), 0.0, 20.0),
+        _pick(sampler.get("sampler_mode"), V2_SAMPLER_MODES),
+        gr.update(value=bool(sampler.get("bongmath", True))),
+        _pick(variance.get("variance_preset"), V2_VARIANCE_PRESETS),
+        _num(variance.get("fine_tune_variance"), 0, 100),
+        _pick(variance.get("model_type"), V2_VARIANCE_MODEL_TYPES),
+        _pick(variance.get("variance_schedule"), V2_VARIANCE_SCHEDULES),
+        _num(variance.get("cutoff_step"), 0, 100),
+        _num(variance.get("total_steps"), 1, 100),
+        _num(variance.get("cutoff_strength"), 0.0, 1.0),
+        _num(variance.get("shift_strength"), 0, 200),
+        *enables, *names, *weights,
+    ]
+
+
 # ---------------------------------------------------------- settings presets
-# The dropdown at the top of the two generation tabs. A preset is one of
-# those tabs' control panels saved under a name on the licence server
-# (presets.py), so this section is the prompt library's machinery pointed at
-# a different source: the same _pick/_num/_lora_updates guarding, the same
-# "apply a settings blob to a list of components" shape, minus the two
-# prompt boxes.
+# The dropdown at the top of the two generation tabs and their two Edit
+# tabs. A preset is a generation tab's control panel saved under a name on
+# the licence server (presets.py), so this section is the prompt library's
+# machinery pointed at a different source: the same _pick/_num/_lora_updates
+# guarding, the same "apply a settings blob to a list of components" shape,
+# minus the two prompt boxes.
 #
-# Which builder belongs to which tab. Read at apply time rather than
-# branched on with an if, so adding a third tab is an entry here plus its
-# targets — the same trick TAB_ORDER plays.
-_PRESET_UPDATES = {
-    presets.TAB_KREA2: _krea_setting_updates,
-    presets.TAB_KREA2_V2: _v2_setting_updates,
+# A preset is *saved from* a generation tab and belongs to it — presets.TABS
+# is still those two — but it is *applied to* wherever those dials exist,
+# which includes the matching Edit tab. Krea2's presets fill Krea2 Edit and
+# V2's fill V2 Edit, each writing the subset of the blob that tab has
+# controls for: a recipe is a recipe whether the pixels come from noise or
+# from an uploaded image, and re-dialling one by hand to edit with it was
+# the whole friction.
+#
+# Hence a *view* rather than a tab: which tab's presets this panel offers,
+# how to spend one here, and what its dropdown says under itself. Read at
+# apply time rather than branched on with an if, so a fifth panel is an
+# entry here plus its targets — the same trick TAB_ORDER plays.
+VIEW_KREA2 = "krea2"
+VIEW_KREA2_EDIT = "krea2_edit"
+VIEW_KREA2_V2 = "krea2_v2"
+VIEW_KREA2_V2_EDIT = "krea2_v2_edit"
+
+_GEN_INFO = "Loads every setting below. Your prompt is left alone."
+_EDIT_INFO = ("The {} tab's presets, minus the dials an edit does not have. "
+              "Your image and instruction are left alone.")
+
+_PRESET_VIEWS = {
+    VIEW_KREA2: (presets.TAB_KREA2, _krea_setting_updates, _GEN_INFO),
+    VIEW_KREA2_V2: (presets.TAB_KREA2_V2, _v2_setting_updates, _GEN_INFO),
+    VIEW_KREA2_EDIT: (presets.TAB_KREA2, _krea_edit_setting_updates,
+                      _EDIT_INFO.format("🎨 Krea2")),
+    VIEW_KREA2_V2_EDIT: (presets.TAB_KREA2_V2, _v2_edit_setting_updates,
+                         _EDIT_INFO.format("🔶 Krea2 V2")),
 }
+
+# (view, [the controls its dropdown writes into]), appended by _wire_preset
+# as each panel is built. Read once after the tabs, to apply every panel's
+# default preset on page load — a tab this licence does not grant builds no
+# panel and contributes nothing to either end of that.
+_PRESET_PANELS = []
 
 # How many of a tab's targets are prompt boxes. Both lists start with the
 # positive prompt and the negative, and everything after them is settings —
@@ -2817,8 +2942,8 @@ def _preset_settings(tab, name):
     return None
 
 
-def _apply_preset(tab, count, name):
-    """A preset name → updates for that tab's settings controls.
+def _apply_preset(view, count, name):
+    """A preset name → updates for that panel's settings controls.
 
     `count` is how many controls the caller wired as outputs, which is what
     the "nothing to apply" answer has to be as long as. A name that is not
@@ -2830,41 +2955,46 @@ def _apply_preset(tab, count, name):
     preset that names a *different* model fires the Model dropdown's own
     change handler, which resets Steps and CFG to that model's variant
     defaults — so those two land on the model's values rather than the
-    preset's. Everything else applies as stored. A preset for the model
-    already selected (the ordinary case, and the only one when a registry
-    holds a single model) is unaffected, because a value that does not
-    change fires nothing.
+    preset's, and on the Krea 2 tabs that handler also swaps the model's
+    trigger words into the prompt box. Everything else applies as stored.
+    A preset for the model already selected (the ordinary case, and the
+    only one when a registry holds a single model) is unaffected, because
+    a value that does not change fires nothing.
     """
+    tab, updates, _info = _PRESET_VIEWS[view]
     settings = _preset_settings(tab, name) if name else None
     if not isinstance(settings, dict):
         return [gr.update()] * count
-    return _PRESET_UPDATES[tab](settings)
+    return updates(settings)
 
 
 def _load_default_presets():
-    """Page load → each tab's default preset applied to its controls.
+    """Page load → each panel's default preset applied to its controls.
 
-    Both tabs every time, in the order the outputs list is built after the
-    TAB_ORDER loop; a tab this licence does not grant contributes nothing
-    to that list and nothing here. With no default flagged, or with the
-    server unreachable, every update is a no-op and the controls keep the
-    values config.py built them with.
+    Every panel that was built, in the order _PRESET_PANELS registered
+    them, which is the order the outputs list below is flattened in; a tab
+    this licence does not grant registered none and contributes nothing to
+    either. With no default flagged, or with the server unreachable, every
+    update is a no-op and the controls keep the values config.py built
+    them with.
+
+    An Edit tab opens on its generation tab's default for the same reason
+    it can be handed any of that tab's presets: they are the same dials,
+    and a pod whose Krea2 default says 12 steps should not edit at 8.
 
     This is what makes "the defaults" editable from Atlas: seed the shipped
     values as a preset, mark it default, and a fresh session opens on
     whatever that row says instead of on what the binary was compiled with.
     """
     updates = []
-    for tab, targets in ((presets.TAB_KREA2, _krea_preset_targets),
-                         (presets.TAB_KREA2_V2, _v2_preset_targets)):
-        if not targets:
-            continue
+    for view, targets in _PRESET_PANELS:
+        tab, _updates, _info = _PRESET_VIEWS[view]
         _choices, default = _preset_choices(tab)
-        updates += _apply_preset(tab, len(targets), default)
+        updates += _apply_preset(view, len(targets), default)
     return updates
 
 
-def _refresh_presets(tab, current):
+def _refresh_presets(view, current):
     """🔄 next to the dropdown — refetch the list, keep the selection.
 
     force=True skips presets.TTL_SECONDS, which is the whole point of the
@@ -2873,13 +3003,14 @@ def _refresh_presets(tab, current):
     offer and is cleared if it is not, rather than being left naming a
     preset this dropdown no longer has.
     """
+    tab, _updates, _info = _PRESET_VIEWS[view]
     choices, _default = _preset_choices(tab, force=True)
     return gr.update(choices=choices,
                      value=current if current in choices else None)
 
 
-def _preset_row(tab):
-    """The preset dropdown and its refresh button, for one tab.
+def _preset_row(view):
+    """The preset dropdown and its refresh button, for one panel.
 
     Built at the top of the control column because it is the control that
     moves every other one. Filled at build time rather than lazily: the
@@ -2888,14 +3019,36 @@ def _preset_row(tab):
     ui.py is imported. A server that is unreachable costs the list and
     nothing else — see _preset_choices.
     """
+    tab, _updates, info = _PRESET_VIEWS[view]
     choices, default = _preset_choices(tab)
     with gr.Row():
         dropdown = gr.Dropdown(
             choices=choices, value=default, label="⚙️ Preset", scale=1,
-            info="Loads every setting below. Your prompt is left alone.",
+            info=info,
         )
         refresh = gr.Button("🔄", scale=0, min_width=60)
     return dropdown, refresh
+
+
+def _wire_preset(view, dropdown, refresh, targets):
+    """Point a panel's dropdown at the controls it writes into.
+
+    Called at the *bottom* of a tab rather than next to _preset_row: the
+    dropdown sits at the top of the column and its targets are most of
+    what is built after it, so only here do both ends exist. `targets` is
+    in the order that view's builder returns updates — the two lists are
+    read by position and nothing checks them against each other, so the
+    call is kept next to the list it has to agree with.
+
+    Registering the panel is what lets the page load apply every default
+    preset without naming a tab; see _load_default_presets.
+    """
+    targets = list(targets)
+    dropdown.change(fn=partial(_apply_preset, view, len(targets)),
+                    inputs=dropdown, outputs=targets)
+    refresh.click(fn=partial(_refresh_presets, view),
+                  inputs=dropdown, outputs=dropdown)
+    _PRESET_PANELS.append((view, targets))
 
 
 def _card_chips(entry) -> str:
@@ -3066,7 +3219,7 @@ def _tab_krea_t2i(tab):
     """The KREA_T2I tab body."""
     with gr.Row():
         with gr.Column(scale=2, elem_classes="kx-panel"):
-            preset_dd, preset_refresh = _preset_row(presets.TAB_KREA2)
+            preset_dd, preset_refresh = _preset_row(VIEW_KREA2)
             prompt_box = gr.Textbox(
                 label="Prompt", lines=5,
                 value="A photorealistic golden-hour portrait, natural "
@@ -3137,15 +3290,8 @@ def _tab_krea_t2i(tab):
     # _krea_setting_updates. Wired here rather than after the TAB_ORDER
     # loop because, unlike the library's Use buttons, both ends of this
     # live in this tab.
-    _preset_targets = _krea_targets[PROMPT_BOXES:]
-    preset_dd.change(
-        fn=partial(_apply_preset, presets.TAB_KREA2, len(_preset_targets)),
-        inputs=preset_dd, outputs=_preset_targets,
-    )
-    preset_refresh.click(
-        fn=partial(_refresh_presets, presets.TAB_KREA2),
-        inputs=preset_dd, outputs=preset_dd,
-    )
+    _wire_preset(VIEW_KREA2, preset_dd, preset_refresh,
+                 _krea_targets[PROMPT_BOXES:])
 
     return _krea_targets
 
@@ -3167,7 +3313,7 @@ def _tab_krea_v2_t2i(tab):
     )
     with gr.Row():
         with gr.Column(scale=2, elem_classes="kx-panel"):
-            v2_preset_dd, v2_preset_refresh = _preset_row(presets.TAB_KREA2_V2)
+            v2_preset_dd, v2_preset_refresh = _preset_row(VIEW_KREA2_V2)
             v2_prompt = gr.Textbox(
                 label="Positive Prompt", lines=6,
                 placeholder="The source workflow ships this box "
@@ -3388,15 +3534,8 @@ def _tab_krea_v2_t2i(tab):
     ]
     # Same split as the Krea 2 tab: everything past the two prompt boxes
     # is what a preset carries.
-    _preset_targets = _v2_targets[PROMPT_BOXES:]
-    v2_preset_dd.change(
-        fn=partial(_apply_preset, presets.TAB_KREA2_V2, len(_preset_targets)),
-        inputs=v2_preset_dd, outputs=_preset_targets,
-    )
-    v2_preset_refresh.click(
-        fn=partial(_refresh_presets, presets.TAB_KREA2_V2),
-        inputs=v2_preset_dd, outputs=v2_preset_dd,
-    )
+    _wire_preset(VIEW_KREA2_V2, v2_preset_dd, v2_preset_refresh,
+                 _v2_targets[PROMPT_BOXES:])
 
     return _v2_targets
 
@@ -3511,6 +3650,11 @@ def _tab_krea_edit(tab):
     )
     with gr.Row():
         with gr.Column(scale=2, elem_classes="kx-panel"):
+            # The 🎨 Krea2 tab's presets, offered here as well: the two
+            # tabs run the same model on the same dials, so a recipe
+            # saved over there is one you would want to edit with.
+            edit_preset_dd, edit_preset_refresh = _preset_row(
+                VIEW_KREA2_EDIT)
             edit_image = gr.Image(
                 label="Source image (paste with Ctrl+V)", type="pil",
                 sources=["upload", "clipboard"],
@@ -3606,7 +3750,8 @@ def _tab_krea_edit(tab):
                 label="Base seed used", interactive=False, precision=0
             )
     _queue_view(features.Key.KREA_EDIT,
-                [edit_gallery, edit_status, edit_seed_out])
+                [edit_gallery, edit_status, edit_seed_out],
+                preset_tab=presets.TAB_KREA2, preset_dd=edit_preset_dd)
     edit_btn.click(
         fn=_enqueue(features.Key.KREA_EDIT, generate_edit, prompt_arg=3),
         inputs=_recipe_view(features.Key.KREA_EDIT, "edit", [
@@ -3618,6 +3763,12 @@ def _tab_krea_edit(tab):
             *_lora_inputs(edit_lora_dds, edit_lora_ws)]),
         outputs=[_queue_timer, edit_status],
     )
+    # In _krea_edit_setting_updates' order — a Krea2 preset minus the
+    # resolution, which an edit takes from the source image.
+    _wire_preset(VIEW_KREA2_EDIT, edit_preset_dd, edit_preset_refresh, [
+        edit_model_dd, edit_steps, edit_cfg, edit_sampler,
+        edit_seed, edit_random, edit_batch,
+        *edit_lora_dds, *edit_lora_ws])
 
 
 def _tab_krea_v2_edit(tab):
@@ -3638,6 +3789,10 @@ def _tab_krea_v2_edit(tab):
     )
     with gr.Row():
         with gr.Column(scale=2, elem_classes="kx-panel"):
+            # The 🔶 Krea2 V2 tab's presets — same argument as the Krea2
+            # Edit tab above, over the V2 panel.
+            v2e_preset_dd, v2e_preset_refresh = _preset_row(
+                VIEW_KREA2_V2_EDIT)
             v2e_image = gr.Image(
                 label="Source image (paste with Ctrl+V)",
                 type="pil", sources=["upload", "clipboard"],
@@ -3827,7 +3982,8 @@ def _tab_krea_v2_edit(tab):
                      v2e_ws[V2_TURBO_SLOT]],
         )
     _queue_view(features.Key.KREA_V2_EDIT,
-                [v2e_gallery, v2e_status_box, v2e_seed_out])
+                [v2e_gallery, v2e_status_box, v2e_seed_out],
+                preset_tab=presets.TAB_KREA2_V2, preset_dd=v2e_preset_dd)
     v2e_btn.click(
         fn=_enqueue(features.Key.KREA_V2_EDIT, generate_v2_edit,
                     prompt_arg=3),
@@ -3845,6 +4001,16 @@ def _tab_krea_v2_edit(tab):
             *_lora_triples(v2e_cbs, v2e_dds, v2e_ws)]),
         outputs=[_queue_timer, v2e_status_box],
     )
+    # In _v2_edit_setting_updates' order — a V2 preset minus the output
+    # size, the denoise and the two post-process toggles.
+    _wire_preset(VIEW_KREA2_V2_EDIT, v2e_preset_dd, v2e_preset_refresh, [
+        v2e_model_dd, v2e_seed, v2e_randomize, v2e_batch,
+        v2e_eta, v2e_sampler_name, v2e_scheduler, v2e_steps,
+        v2e_cfg, v2e_sampler_mode, v2e_bongmath,
+        v2e_variance_preset, v2e_fine_tune, v2e_variance_model,
+        v2e_variance_schedule, v2e_cutoff_step, v2e_total_steps,
+        v2e_cutoff_strength, v2e_shift_strength,
+        *v2e_cbs, *v2e_dds, *v2e_ws])
 
 
 def _tab_krea_inpaint(tab):
@@ -4653,18 +4819,19 @@ with gr.Blocks(title="Ember") as ui:
             outputs=[*_recipe_components(), main_tabs, _recipe_status],
         )
 
-    # The settings half of the same idea: each generation tab's dropdown is
-    # built already showing the preset the server marks as that tab's
-    # default, so the values behind it have to be applied for the two to
-    # agree. Done on page load rather than at build time because the
-    # components carry config.py's values as their `value=` — that is the
-    # floor a pod with no server keeps, and this writes over it when there
-    # is one.
-    _krea_preset_targets = (_krea_targets or [])[PROMPT_BOXES:]
-    _v2_preset_targets = (_v2_targets or [])[PROMPT_BOXES:]
-    if _krea_preset_targets or _v2_preset_targets:
+    # The settings half of the same idea: every preset dropdown is built
+    # already showing the preset the server marks as its tab's default, so
+    # the values behind it have to be applied for the two to agree. Done on
+    # page load rather than at build time because the components carry
+    # config.py's values as their `value=` — that is the floor a pod with
+    # no server keeps, and this writes over it when there is one.
+    #
+    # _PRESET_PANELS filled itself as the tabs were built, so this reaches
+    # the Edit tabs' dropdowns as well without naming them.
+    if _PRESET_PANELS:
         ui.load(fn=_load_default_presets,
-                outputs=[*_krea_preset_targets, *_v2_preset_targets])
+                outputs=[component for _view, _targets in _PRESET_PANELS
+                         for component in _targets])
 
     # Outside the Tabs: one line under every tab, carrying the Ctrl+Enter
     # hint (theme.JS binds it) — a shortcut nobody would find otherwise —

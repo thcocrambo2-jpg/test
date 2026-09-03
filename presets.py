@@ -52,11 +52,17 @@ from dataclasses import dataclass
 
 from config import LICENSE_API_URL, LICENSE_KEY, log
 
-# Tabs a preset can be written for and applied to. The same two the prompt
-# library replays into, and necessarily so: applying a preset means writing
-# values into a specific set of form controls, which is exactly what
-# replaying a prompt does. A tab joins this list in the commit that teaches
-# ui.py to load settings back into it.
+# Tabs a preset can be written for. The same two the prompt library
+# replays into, and necessarily so: applying a preset means writing values
+# into a specific set of form controls, which is exactly what replaying a
+# prompt does. A tab joins this list in the commit that teaches ui.py to
+# load settings back into it.
+#
+# Written for, not applied to: which panels *offer* a tab's presets is
+# ui.py's business, and it offers each of these two in its generation tab
+# and again in that tab's Edit tab, where the same dials exist under the
+# same names. Nothing here changes for that — one row, read by more than
+# one dropdown.
 TAB_KREA2 = "krea_t2i"
 TAB_KREA2_V2 = "krea_v2_t2i"
 TABS = (TAB_KREA2, TAB_KREA2_V2)

@@ -643,6 +643,39 @@ same settings blob, same guarding, minus the words.
 Presets live on the licence server, so changing one changes it for every
 customer without shipping a binary.
 
+### The Edit tabs read the same list
+
+**✨ Krea2 Edit** shows 🎨 Krea2's presets, and **✨ Krea2 V2 Edit** shows
+🔶 Krea2 V2's — the same dropdown, at the top of the same column, filled
+from the generation tab it shares a pipeline with. A recipe is a recipe
+whether the pixels come from noise or from an uploaded image, and dialling
+one back in by hand to edit with it was the whole friction.
+
+Nothing is saved twice. A preset still belongs to the tab it was saved
+from — `presets.TABS` is still those two, one row in one collection — and
+an Edit tab simply reads it and writes the part it has controls for:
+
+| Not applied on ✨ Krea2 Edit | Not applied on ✨ Krea2 V2 Edit |
+| --- | --- |
+| `resolution` — the source image sets the output size | `aspect`, `megapixels`, `multiple` — likewise |
+| | `denoise` — the source reaches the model through conditioning, not the starting latent |
+| | Sharpen and film grain — generation-tab controls |
+
+Everything else transfers as stored: model, steps, CFG, sampler, seed,
+randomize, batch count and the LoRA stack on Krea2 Edit; the whole
+ClownsharKSampler and Smart Seed Variance blocks and the eleven-row stack
+on V2 Edit. The controls that belong to editing alone — grounding,
+reference fidelity, the second-reference switch, the fit mode — are left
+exactly where you set them, because no preset carries them.
+
+The `is_default` preset is applied to the Edit tabs on page load too, so a
+pod whose Krea2 default says 12 steps does not open its Edit tab at 8. The
+🔄 button and the save-from-the-queue refill work there as they do on the
+generation tabs.
+
+Saving is unchanged: the `💾 Save these settings as a preset` tickbox is a
+generation-tab control, so an Edit tab reads presets and never writes one.
+
 ### Only an admin can write one
 
 Same gesture as publishing a prompt, and the same rule behind it. An admin
@@ -715,8 +748,9 @@ Two flags decide what customers see:
   nothing retyped. `--delete` is for the preset that should never have
   existed.
 - **`is_default`** — at most one per tab, and it is the one a **fresh page
-  load applies.** Setting it on one clears it on every other preset for that
-  tab, so there is only ever one answer to "what does this tab open on".
+  load applies** — to that tab and to its Edit tab. Setting it on one clears
+  it on every other preset for that tab, so there is only ever one answer to
+  "what does this tab open on".
 
 `npm run seed-presets` writes the values compiled into `config.py` as a
 preset called `Default` on each tab and marks it `is_default`. Nothing about
@@ -833,7 +867,8 @@ are per-run decisions rather than modes.
 The preset save itself now happens wherever the job runs, which is after
 the click that asked for it has returned. So `presets.save` tells the
 queue (`jobqueue.note_preset_saved`), and the same poll that carries the
-images back refills the preset dropdown.
+images back refills the preset dropdown — every dropdown showing that
+tab's list, which since the Edit tabs joined in is two of them.
 
 ## Recipes — "how was this made?"
 
