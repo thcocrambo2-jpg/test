@@ -172,6 +172,55 @@ def note_new(paths) -> None:
         _submit_thumb(path)
 
 
+def delete(path) -> bool:
+    """Delete one generated file and its thumbnail. Returns whether it went.
+
+    Permanent — there is no trash to fish it back out of, which is what
+    the caller's confirm step is for.
+
+    Deliberately narrow about what it will touch: the path has to resolve
+    to a media file *inside* OUTPUT_DIR, the same two rules the index uses
+    to decide what it lists in the first place. The caller resolves a
+    gallery click against a gr.State, i.e. against client-supplied data,
+    so a stale or forged path must not be able to reach `.recipes.jsonl`,
+    the zip, or anything outside the output tree at all.
+
+    Never raises. A file that has already gone counts as success — the
+    caller asked for it not to be there — and every other OSError comes
+    back as False for the caller to report.
+    """
+    try:
+        target = Path(path).resolve()
+        target.relative_to(Path(OUTPUT_DIR).resolve())   # raises if outside
+        if not target.name.lower().endswith(MEDIA_EXT):
+            raise ValueError("not a generated output")
+    except (ValueError, OSError) as exc:
+        log.warning("Refusing to delete %s (%s)", path, exc)
+        return False
+
+    try:
+        target.unlink(missing_ok=True)
+    except OSError as exc:
+        log.warning("Could not delete %s: %s", target, exc)
+        return False
+    try:
+        thumb_path(target).unlink(missing_ok=True)
+    except (ValueError, OSError) as exc:
+        # Nothing lists .thumbs, so a leftover thumbnail is invisible
+        # rather than wrong — not worth failing a delete that has already
+        # happened and cannot be undone.
+        log.warning("Could not delete the thumbnail for %s: %s", target, exc)
+
+    # The whole cache rather than the one directory: _DIRS is keyed on the
+    # paths os.scandir built walking down from OUTPUT_DIR, and `target` has
+    # been through resolve(), so the two spellings are not guaranteed to
+    # match. A delete is a rare, deliberate gesture — one extra walk of the
+    # tree is the right price for not having to reason about that.
+    invalidate()
+    log.info("Gallery: deleted %s", target)
+    return True
+
+
 def invalidate() -> None:
     """Forget everything — the next listing walks the tree from scratch."""
     global _ORDER

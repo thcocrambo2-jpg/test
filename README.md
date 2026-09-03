@@ -978,6 +978,41 @@ exactly the guarding the prompt library's `_pick` and `_num` already do:
 - a recipe for a tab this licence does not grant can be **read but not
   loaded**, and the panel says so
 
+### Deleting a file
+
+The viewer under the grid carries a **🗑️ Delete**, which removes the
+selected file for good — the pod's disk is ephemeral and there is no trash
+to fish anything back out of, so it is two clicks: 🗑️ arms it, and a
+confirm button in a row that only exists while it is armed does it.
+Selecting a different picture disarms, because arming is a property of the
+selection rather than of the tab.
+
+Three things go, in that order:
+
+1. **The file**, via `gallery_index.delete()`. It will only touch a path
+   that resolves to a media file *inside* the output dir — the same two
+   rules the index uses to decide what it lists. A gallery click resolves
+   against a `gr.State`, i.e. against client-supplied data, so a stale or
+   forged path must not be able to reach `.recipes.jsonl`, the zip, or
+   anything outside the tree at all.
+2. **Its thumbnail**, best-effort. Nothing lists `.thumbs`, so a leftover
+   is invisible rather than wrong, and it is not worth failing a delete
+   that has already happened and cannot be undone.
+3. **Its recipe**, via `recipes.forget()`, which compacts the store on the
+   spot. The JSONL is append-only and later lines win, so rewriting the
+   file without the key is the only way to make it stop existing —
+   otherwise it would come back on the next restart describing a picture
+   that is gone. A rewrite is O(everything), which is affordable for a
+   deliberate one-at-a-time gesture behind a confirm step.
+
+The grid is then rebuilt from the state list minus that one path rather
+than by re-scanning, for the same reason **Load more** pages out of state:
+a rescan jumps back to page one, and someone who has paged four screens
+down to tidy up would lose their place on every delete. A file that was
+already gone from disk counts as a success — it is not there, which is
+what was asked for. A path the index refuses, or one the OS will not let
+go of, leaves the list alone and says so.
+
 ## Model swapping and crash recovery
 
 With Krea 2 V1 (turbo/raw), V2 (turbo mxfp8/raw), Flux and Wan all

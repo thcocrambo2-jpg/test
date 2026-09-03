@@ -1579,7 +1579,8 @@ def _pick_gallery(paths, evt: gr.SelectData):
         # gr.State, whose value is whatever it is handed, update object
         # and all.
         return (gr.Image(), gr.Video(), gr.update(visible=False),
-                gr.update(), None, gr.update(interactive=False))
+                gr.update(), None, gr.update(interactive=False),
+                None, *_delete_row(None))
     path = paths[idx]
     is_video = path.lower().endswith(gallery_index.VIDEO_EXT)
     # Read on the click rather than kept per tile: a gallery page is ten
@@ -1593,7 +1594,85 @@ def _pick_gallery(paths, evt: gr.SelectData):
                       label=f"🧾 How this was made — {Path(path).name}"),
             _recipe_body(recipe, path),
             recipe,
-            gr.update(interactive=usable))
+            gr.update(interactive=usable),
+            # The path itself, so the Delete button resolves against the
+            # file that is on screen rather than re-reading a grid that
+            # may have been refreshed under it.
+            path, *_delete_row(path))
+
+
+# ── deleting ───────────────────────────────────────────────────────────
+# Permanent, and the only destructive control in the app — the pod's disk
+# is ephemeral and there is no trash to fish a file back out of. So it is
+# two clicks: 🗑️ arms it, and a second button in a row that only exists
+# while it is armed actually does it. A modal would be Gradio-shaped work
+# for the same guarantee.
+
+
+def _delete_row(path):
+    """(delete button, confirm row) updates for a selection, or for none.
+
+    Every handler that changes what is selected goes through here, which
+    is what keeps a half-confirmed delete from surviving the click that
+    selected a different picture: arming is a property of the selection,
+    so a new selection disarms.
+    """
+    return (gr.update(visible=path is not None), gr.update(visible=False))
+
+
+def _arm_delete():
+    """🗑️ Delete — swap the button for the confirm row."""
+    return gr.update(visible=False), gr.update(visible=True)
+
+
+def _cancel_delete():
+    """Cancel — put the confirm row away and the button back."""
+    return gr.update(visible=True), gr.update(visible=False)
+
+
+def _delete_selected(selected, paths, shown):
+    """Confirmed: delete the selected file, then redraw around the gap.
+
+    The grid is rebuilt from the state list minus that one path rather
+    than by re-scanning, for the same reason _more_gallery pages out of
+    state: a rescan would jump back to page one, and someone who has just
+    paged four screens down to tidy up would lose their place on every
+    delete.
+
+    `shown` is kept where it was and clamped, so the tiles below close up
+    by one and the page depth someone chose survives the delete.
+
+    A file that was already gone is a success, not a refusal — it is not
+    there, which is what was asked for. What comes back as a refusal is a
+    path gallery_index would not touch (outside OUTPUT_DIR, or not a
+    generated output) or one the OS would not let go of; that leaves the
+    list alone and says so.
+
+    The viewer is cleared either way: whatever it is showing, this was a
+    click that said "I do not want to look at that any more".
+    """
+    paths = list(paths or [])
+    name = Path(selected).name if selected else ""
+    if selected and gallery_index.delete(selected):
+        # Only once the file is actually gone: a recipe outliving its
+        # picture is untidy, one whose picture is still there is wrong.
+        recipes.forget(selected)
+        paths = [p for p in paths if p != selected]
+        note = f"🗑️ Deleted `{name}` — "
+    else:
+        note = f"⚠️ Could not delete `{name}` — it may already be gone. "
+    shown = min(max(0, int(shown or 0)), len(paths))
+    grid, more_btn, info = _gallery_view(paths, shown)
+    return (
+        paths, shown, grid, more_btn, note + info,
+        # Nothing is selected any more, so every control that describes a
+        # selection goes away with it — including the recipe panel, which
+        # would otherwise sit under a heading naming a deleted file.
+        gr.Image(value=None, visible=False),
+        gr.Video(value=None, visible=False),
+        gr.update(visible=False), gr.update(), None,
+        gr.update(interactive=False), None, *_delete_row(None),
+    )
 
 
 def zip_outputs():
@@ -4622,6 +4701,10 @@ def _tab_gallery(tab):
     # cannot resolve against a different list than the one it was made on.
     gallery_paths = gr.State([])
     gallery_shown = gr.State(0)
+    # The original behind whatever the viewer is showing. Its own state
+    # because Delete has to resolve against the file on screen, and the
+    # grid it was clicked in may have been refreshed since.
+    gallery_selected = gr.State(None)
     all_gallery = gr.Gallery(
         label="All generated images & videos (newest first)",
         # Filled when the tab is opened, never at build time: this used to
@@ -4650,6 +4733,22 @@ def _tab_gallery(tab):
     gallery_video = gr.Video(
         label="Selected video", visible=False, interactive=False,
     )
+    # Under the viewer, not over the grid: it deletes the file being
+    # looked at, and putting it next to the tiles would read as "delete
+    # the gallery". Hidden until something is selected, for the same
+    # reason the recipe panel is — see _delete_row.
+    with gr.Row(elem_classes="kx-navrow"):
+        gallery_delete_btn = gr.Button(
+            "🗑️ Delete", size="sm", visible=False,
+            elem_classes="kx-danger",
+        )
+    with gr.Row(visible=False, elem_classes="kx-navrow") as gallery_confirm:
+        gr.Markdown("**Delete this file permanently?**",
+                    elem_classes="kx-meta")
+        gallery_cancel_btn = gr.Button("Cancel", size="sm")
+        gallery_confirm_btn = gr.Button(
+            "🗑️ Yes, delete", size="sm", variant="stop",
+        )
     # What the selected file was made with, and the way to make it again.
     # Hidden until something is picked, because an empty panel saying
     # "nothing selected" is a row of chrome that is wrong most of the time.
@@ -4678,10 +4777,25 @@ def _tab_gallery(tab):
         fn=_more_gallery, inputs=[gallery_paths, gallery_shown],
         outputs=[gallery_shown, all_gallery, gallery_more_btn, gallery_info],
     )
+    # Everything a selection decides, in one list: the two viewers, the
+    # recipe panel, and the two delete controls. _pick_gallery and
+    # _delete_selected both write all of it, which is what keeps "nothing
+    # is selected" a single state rather than a combination of them.
+    selection_outputs = [gallery_image, gallery_video,
+                         recipe_panel, recipe_body, recipe_state, recipe_btn,
+                         gallery_selected, gallery_delete_btn,
+                         gallery_confirm]
     all_gallery.select(
-        fn=_pick_gallery, inputs=[gallery_paths],
-        outputs=[gallery_image, gallery_video,
-                 recipe_panel, recipe_body, recipe_state, recipe_btn],
+        fn=_pick_gallery, inputs=[gallery_paths], outputs=selection_outputs,
+    )
+    gallery_delete_btn.click(
+        fn=_arm_delete, outputs=[gallery_delete_btn, gallery_confirm])
+    gallery_cancel_btn.click(
+        fn=_cancel_delete, outputs=[gallery_delete_btn, gallery_confirm])
+    gallery_confirm_btn.click(
+        fn=_delete_selected,
+        inputs=[gallery_selected, gallery_paths, gallery_shown],
+        outputs=[*open_outputs, *selection_outputs],
     )
     gallery_zip_btn.click(
         fn=zip_outputs, outputs=[gallery_zip_file, gallery_info]

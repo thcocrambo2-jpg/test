@@ -868,6 +868,20 @@ CSS = f"""
   .kx-undo-btn svg {{ width: 17px; height: 17px; }}
 }}
 
+/* The Gallery tab's Delete button. Quiet until it is pointed at: the
+   control is permanent and unrecoverable, so it should be findable
+   without being the loudest thing next to a picture someone is enjoying.
+   The confirm button beside it is Gradio's own `variant="stop"`, which is
+   red from the start — by then the warning is the point. */
+.kx-danger button, button.kx-danger {{
+  color: var(--kx-err) !important;
+  border-color: var(--kx-err-border) !important;
+}}
+.kx-danger button:hover, button.kx-danger:hover {{
+  background: var(--kx-err-soft) !important;
+  border-color: var(--kx-err) !important;
+}}
+
 /* ---------------------------------------------------------------- recipe */
 /* The Gallery tab's "how this was made" panel. Its body is a settings
    table plus the prompt as a quote, so it is read rather than scanned —

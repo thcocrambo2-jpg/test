@@ -249,6 +249,34 @@ def for_path(path) -> dict | None:
         return _load().get(key)
 
 
+def forget(path) -> None:
+    """Drop the recipe for a file that has just been deleted.
+
+    Compacts on the spot rather than appending a tombstone. The store is
+    append-only and later lines win, so rewriting the file without the key
+    is the only way to make it stop existing — a tombstone would mean
+    every reader in this module learning a second row shape to recognise
+    a row that says nothing.
+
+    A rewrite is O(everything) and this one is not amortised the way
+    _append's is. That is affordable because a delete is a deliberate,
+    one-at-a-time gesture behind a confirm step, and the alternative is a
+    recipe that comes back on the next restart describing a picture that
+    is no longer there.
+
+    Never raises, and a path with no recipe is a no-op: most of the
+    gallery predates this store, and "it was not recorded" is the ordinary
+    answer rather than a problem.
+    """
+    key = _key(path)
+    if key is None:
+        return
+    with _LOCK:
+        if _load().pop(key, None) is None:
+            return
+        _compact()
+
+
 def count() -> int:
     with _LOCK:
         return len(_load())
