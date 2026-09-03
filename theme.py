@@ -794,6 +794,37 @@ CSS = f"""
   resize: none;
 }}
 
+/* ----------------------------------------------------------------- queue */
+/* The job queue sits under the tabs, so it is chrome on every screen and
+   has to read as a list rather than as another panel of controls. Rows are
+   flat and separated by a rule; the row body is the only thing that grows,
+   which keeps every ✕ in the same column no matter how long a prompt is. */
+.kx-queue {{ margin-top: 10px; }}
+.kx-queue .kx-queue-row {{
+  align-items: center;
+  gap: 10px;
+  padding: 8px 2px;
+  border-top: 1px solid var(--kx-border);
+  margin: 0 !important;
+}}
+.kx-queue .kx-queue-row:first-of-type {{ border-top: none; }}
+.kx-queue .kx-queue-body {{ min-width: 0; flex: 1 1 auto !important; }}
+/* Three lines of markdown per row — what it is, its prompt, how it is
+   going — tightened up so a full queue is still one screen. */
+.kx-queue .kx-queue-body p {{
+  margin: 0 0 2px !important;
+  font-size: .78rem;
+  line-height: 1.45;
+  overflow-wrap: anywhere;
+}}
+.kx-queue .kx-queue-body p:last-child {{ margin-bottom: 0 !important; }}
+.kx-queue .kx-queue-body small {{
+  font-family: var(--font-mono);
+  font-size: .68rem;
+  color: var(--kx-muted);
+}}
+.kx-queue .kx-queue-row button {{ flex: none !important; }}
+
 /* --------------------------------------------------------- sticky actions */
 /* The control columns are long — several run past two screens with the LoRA
    stack open — so the tab's primary button stays pinned to the bottom of

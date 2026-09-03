@@ -82,6 +82,7 @@ from PIL import Image, ImageChops, ImageFilter
 
 import features
 import gallery_index
+import jobqueue
 import licensing
 import plans
 import presets
@@ -228,6 +229,20 @@ FLUX_LORA_CHOICES = ["None"] + list_flux_lora_files()
 _f_steps, _f_guidance, _ = flux_model_defaults(resolve_flux_model(None))
 SWAP_MODEL_CHOICES = list_swap_models() or [default_swap_model()]
 RESTORE_CHOICES = list_restore_models()
+
+# The queue's lanes, and the ComfyUI instance each one is stopped through.
+# One worker per lane, which is the same "one at a time" rule the
+# concurrency_id on every click used to state — and the video lane is
+# separate for the same reason it had its own concurrency_id: when
+# KREA2_WAN_PARALLEL gives it a ComfyUI of its own, a five-minute render
+# must not sit in front of a picture. Registered here, at import, because
+# the workers only park on a condition variable until something is
+# submitted; nothing touches ComfyUI before the first job runs.
+COMFY_LANE = "comfy"
+WAN_LANE = "wan" if WAN_PARALLEL else COMFY_LANE
+jobqueue.register_lane(COMFY_LANE, client.interrupt)
+if WAN_LANE != COMFY_LANE:
+    jobqueue.register_lane(WAN_LANE, wan_client.interrupt)
 
 
 def _snap(value, lo: int = 512, hi: int = 2048) -> int:
@@ -487,11 +502,18 @@ def _save_preset(tab, save, name, settings) -> str:
     Never raises and never blocks the generation: presets.save returns
     (ok, message) for everything that can go wrong, including a licence
     the server refuses.
+
+    It also tells the job queue, because this runs on a worker thread now
+    rather than on the click that asked for it — so the dropdown listing
+    the presets has no other way to learn that what it is showing just
+    went stale. See jobqueue.note_preset_saved and _queue_tick.
     """
     if not save:
         return ""
     ok, message = presets.save(tab, name, settings)
     (log.info if ok else log.warning)("Preset: %s", message)
+    if ok:
+        jobqueue.note_preset_saved(tab)
     return ("✅ " if ok else "⚠️ ") + message + "\n"
 
 
@@ -1791,9 +1813,9 @@ def _preset_save_row():
     return checkbox, name
 
 
-def _reset_after_generate(event, tab, publish, publish_title,
-                          save_preset, preset_name, preset_dd):
-    """Disarm the publish and preset boxes once a generation has finished.
+def _reset_after_generate(event, publish, publish_title,
+                          save_preset, preset_name):
+    """Disarm the publish and preset boxes once the click has been taken.
 
     Both are per-run decisions, not modes. Left ticked they are silent —
     nothing on the next run says "this one is going to the library too" —
@@ -1801,38 +1823,312 @@ def _reset_after_generate(event, tab, publish, publish_title,
     remember. The two text boxes go with them, otherwise the next publish
     quietly inherits the last card's name.
 
-    The dropdown is refreshed in the same breath, but **only when a preset
-    was actually saved**: that is the one moment the list on the server is
-    known to have changed, and forcing a refetch on every generation would
-    put a request on every customer's Generate click for nothing.
-
     Chained off the generate click rather than registered as a second
     click handler, so it cannot land between the click and the payload the
-    generate handler reads its `publish` value from.
+    generate handler reads its `publish` value from. That ordering became
+    *more* important once the click only queued the work: the values are
+    copied into the job at submit time, so clearing the controls
+    immediately afterwards is both safe and exactly right — the boxes are
+    disarmed before the next click rather than at the end of a render
+    that may be minutes away.
+
+    Refreshing the preset dropdown is no longer part of this. The save now
+    happens wherever the job runs, which is after this returns, so the
+    poll that carries a job's images back into its tab refills the
+    dropdown too — see _queue_tick.
     """
     return event.then(
-        fn=partial(_after_generate, tab), inputs=[save_preset, preset_name],
-        outputs=[publish, publish_title, save_preset, preset_name, preset_dd],
+        fn=_after_generate,
+        outputs=[publish, publish_title, save_preset, preset_name],
     )
 
 
-def _after_generate(tab, saved, saved_name):
+def _after_generate():
     """The reset itself — see _reset_after_generate."""
-    if not saved:
-        return False, "", False, "", gr.update()
-    # force=True: presets.save already dropped the cache, so this is the
-    # read that fills it again with the preset that was just written.
+    return False, "", False, ""
+
+
+def _preset_dropdown_update(tab):
+    """Refill a tab's preset dropdown after a background job saved one.
+
+    force=True: presets.save already dropped the cache, so this is the
+    read that fills it again with the preset that was just written.
+
+    Choices only, deliberately: naming a value here would move a
+    selection the admin did not touch. A save never overwrites — a name
+    already in use is stored as "… (2)" — so guessing which choice the new
+    preset became would be wrong as often as right, and the dropdown
+    naming the preset that is actually *loaded* stays true either way.
+    """
     choices, _default = _preset_choices(tab, force=True)
-    # The typed name is selected only when it *is* the stored one. A save
-    # never overwrites, so a name already in use was stored as "… (2)" —
-    # and the status line names it. Rather than guess which of the choices
-    # that was, the selection is left where it is: the dropdown says which
-    # preset was loaded, which is still true, and the new one is in the
-    # list either way.
-    name = (saved_name or "").strip()
-    return (False, "", False, "",
-            gr.update(choices=choices, value=name) if name in choices
-            else gr.update(choices=choices))
+    return gr.update(choices=choices)
+
+
+# ------------------------------------------------------------------- queue
+# Clicking Generate does not generate. It writes the click down — the
+# handler, the values every control held, the tab it came from — and hands
+# it to jobqueue, which runs one job at a time per lane on a worker
+# thread. Three things follow from that, and all three are the point:
+#
+#   * the button comes back immediately, so a second idea can be queued
+#     while the first renders instead of waiting for a human to be sitting
+#     there when it finishes
+#   * the queue is a list of real objects, so it can be shown
+#   * and a thing that can be shown can have a ✕ next to it
+#
+# What a click cannot do any more is push its own results, because it is
+# over long before there are any. So the panel below carries a gr.Timer,
+# and one poll a second redraws the queue *and* writes each job's latest
+# output back into the tab that submitted it (_queue_tick). Every tab
+# registers its output components here on the way past.
+
+# The row pool. Fixed, because a Blocks tree is built once at import and
+# cannot grow a component later — the same constraint, and the same
+# answer, as the prompt library's LIBRARY_CARDS.
+QUEUE_ROWS = 12
+# How often the browser asks what happened. Fast enough that a status line
+# reads as live, and the timer stops itself the moment nothing is running
+# (see _queue_tick), so an idle pod is not polled at all.
+QUEUE_POLL_SECONDS = 1.0
+
+# (feature key, [components the tab's handler yields into]), filled as the
+# tabs are built and read once, after the loop, to lay out _queue_tick's
+# outputs. A tab this licence does not grant never registers, so it costs
+# nothing here either.
+_QUEUE_VIEWS = []
+# (presets tab id, its dropdown) for the two tabs that can save one.
+_QUEUE_PRESET_VIEWS = []
+
+
+def _queue_view(key, outputs, preset_tab=None, preset_dd=None):
+    """Register a tab's outputs as where its jobs' results are written."""
+    _QUEUE_VIEWS.append((str(key), list(outputs)))
+    if preset_dd is not None:
+        _QUEUE_PRESET_VIEWS.append((preset_tab, preset_dd))
+
+
+def _job_title(args, index):
+    """A one-line name for a queued job — its prompt, where it has one.
+
+    Truncated hard: the queue is a list to scan, not a place to read a
+    prompt back. Tabs whose work has no prompt at all (Face Swap, the JSON
+    batch) pass index=None and get a dash, which is honest — what
+    identifies those jobs is their tab and their place in the line.
+    """
+    if index is None or index >= len(args):
+        return "—"
+    text = " ".join(str(args[index] or "").split())
+    if not text:
+        return "—"
+    return text[:59] + "…" if len(text) > 60 else text
+
+
+def _enqueue(key, fn, *, prompt_arg=None, status_index=1, lane=None):
+    """Turn a tab's handler into the click that only queues it.
+
+    `fn` is untouched — the same generator the click used to consume — so
+    what a tab does once its turn comes is exactly what it always did. All
+    this adds is the recording, and the recording is a copy: the values
+    are read out of the controls now, so changing them afterwards cannot
+    reach a job that is already in the line.
+
+    Returns two values because every tab has a status box to say where the
+    work landed, and because the timer has to be switched on — a poll that
+    is off would leave the queue looking empty until something else woke
+    it.
+    """
+    lane = lane or COMFY_LANE
+
+    def submit(*args):
+        view = jobqueue.submit(
+            lane=lane, tab=str(key), tab_label=features.label_for(key),
+            title=_job_title(args, prompt_arg), fn=fn, args=args,
+            status_index=status_index,
+        )
+        ahead = max(0, view.place - 1)
+        line = ("🕑 Queued — it starts as soon as the GPU is free."
+                if ahead == 0 else
+                f"🕑 Queued — {ahead} job(s) ahead of it.")
+        return gr.Timer(QUEUE_POLL_SECONDS, active=True), line
+
+    return submit
+
+
+_QUEUE_ICONS = {
+    jobqueue.QUEUED: "🕑",
+    jobqueue.RUNNING: "⚡",
+    jobqueue.DONE: "✅",
+    jobqueue.FAILED: "❌",
+    jobqueue.CANCELLED: "🚫",
+}
+
+
+def _queue_row_body(view) -> str:
+    """One row's markup: what it is, where it came from, how it is going."""
+    where = (f"#{view.place} in line" if view.status == jobqueue.QUEUED
+             else view.status.capitalize())
+    detail = " ".join((view.progress or "").split())
+    if len(detail) > 110:
+        detail = detail[:109].rstrip() + "…"
+    return (f"{_QUEUE_ICONS.get(view.status, '•')} **{view.tab_label}** · "
+            f"{where}\n\n{view.title}\n\n<small>{detail}</small>")
+
+
+def _queue_row_button(view):
+    """The ✕. What it means depends entirely on what the job is doing.
+
+    A waiting job is simply forgotten. A running one has a prompt on the
+    ComfyUI server that has to be interrupted, which is slower and less
+    certain — so it says Stop rather than pretending otherwise. A finished
+    job's button only tidies the list.
+    """
+    if view.status == jobqueue.QUEUED:
+        return gr.update(value="✕ Remove", variant="secondary")
+    if view.status == jobqueue.RUNNING:
+        return gr.update(value="🛑 Stop", variant="stop")
+    return gr.update(value="✕ Clear", variant="secondary")
+
+
+def _queue_panel(rows, waiting, running):
+    """The whole panel for one snapshot, in _queue_tick's output order."""
+    # Newest end of the list: the pool is smaller than jobqueue.HISTORY, and
+    # what has just been queued matters more than what finished an hour ago.
+    shown = rows[-QUEUE_ROWS:]
+    if running and waiting:
+        label = f"🗂️ Queue — {running} running · {waiting} waiting"
+    elif running:
+        label = f"🗂️ Queue — {running} running"
+    elif waiting:
+        label = f"🗂️ Queue — {waiting} waiting"
+    else:
+        label = "🗂️ Queue — nothing running"
+
+    if not rows:
+        info = ("Nothing queued. Every **Generate** click is added here, so "
+                "several can be lined up at once — and any of them taken "
+                "back out again.")
+    elif len(rows) > QUEUE_ROWS:
+        info = f"Showing the most recent **{QUEUE_ROWS}** of {len(rows)}."
+    else:
+        info = f"**{len(rows)}** job(s)."
+
+    groups, bodies, buttons = [], [], []
+    for slot in range(QUEUE_ROWS):
+        view = shown[slot] if slot < len(shown) else None
+        groups.append(gr.update(visible=view is not None))
+        bodies.append(gr.update(value=_queue_row_body(view)) if view
+                      else gr.update())
+        buttons.append(_queue_row_button(view) if view else gr.update())
+
+    return (gr.update(label=label), [view.id for view in shown],
+            gr.update(value=info), *groups, *bodies, *buttons)
+
+
+def _changed(previous, current) -> bool:
+    """Is this output value different from the one already on screen?
+
+    Guards the gallery specifically. A running job stamps a new revision
+    on every sampler step, so without this each poll would hand the
+    gallery the same list of paths again and it would re-render a second
+    later — a visible flicker under a job that has produced no new image
+    in a minute. Anything that cannot be compared counts as changed, which
+    costs at worst one wasted update.
+    """
+    try:
+        return previous != current
+    except Exception:      # noqa: BLE001 - an odd value is not worth raising over
+        return True
+
+
+def _queue_tick(seen):
+    """One poll: redraw the queue, and carry results back into their tabs.
+
+    `seen` is per-browser-session state — the revisions this session has
+    already drawn, and the values it last pushed to each tab. The queue
+    itself is process-wide, because there is one GPU behind it; what a
+    given page has rendered is not, so every open page keeps its own.
+
+    Returns gr.update() for everything that has not moved, which is nearly
+    everything on nearly every poll: a tab whose job finished ten minutes
+    ago must not have its gallery rewritten once a second.
+    """
+    seen = dict(seen or {})
+    revision, rows, waiting, running = jobqueue.snapshot()
+
+    if seen.get("queue") == revision:
+        panel = (gr.update(), [view.id for view in rows[-QUEUE_ROWS:]],
+                 gr.update(), *([gr.update()] * (3 * QUEUE_ROWS)))
+    else:
+        seen["queue"] = revision
+        panel = _queue_panel(rows, waiting, running)
+
+    tabs = []
+    for tab, components in _QUEUE_VIEWS:
+        stamp, result = jobqueue.display_for(tab)
+        if result is None or seen.get(("tab", tab)) == stamp:
+            tabs.extend([gr.update()] * len(components))
+            continue
+        seen[("tab", tab)] = stamp
+        previous = seen.get(("value", tab)) or []
+        # A handler may yield fewer values than the tab has outputs — an
+        # early "❌ that model is not downloaded" bails before it knows a
+        # seed — and those trailing components keep what they are showing.
+        values, updates = [], []
+        for index in range(len(components)):
+            if index >= len(result):
+                values.append(previous[index] if index < len(previous)
+                              else None)
+                updates.append(gr.update())
+                continue
+            value = result[index]
+            values.append(value)
+            updates.append(
+                value if index >= len(previous)
+                or _changed(previous[index], value) else gr.update()
+            )
+        seen[("value", tab)] = values
+        tabs.extend(updates)
+
+    presets_out = []
+    for preset_tab, _dropdown in _QUEUE_PRESET_VIEWS:
+        stamp = jobqueue.preset_revision(preset_tab)
+        if not stamp or seen.get(("preset", preset_tab)) == stamp:
+            presets_out.append(gr.update())
+            continue
+        seen[("preset", preset_tab)] = stamp
+        presets_out.append(_preset_dropdown_update(preset_tab))
+
+    # Idle means idle: the poll that observed the last job finish also
+    # pushed its results, so there is nothing left to ask about. A Generate
+    # click switches the timer back on, and so does opening the page.
+    ticking = gr.Timer(QUEUE_POLL_SECONDS,
+                       active=bool(waiting or running))
+    return (seen, ticking, *panel, *tabs, *presets_out)
+
+
+def _queue_cancel(slot, ids, seen):
+    """A row's ✕ — see jobqueue.cancel, then redraw from the new truth."""
+    if ids and slot < len(ids):
+        log.info("Queue: %s", jobqueue.cancel(ids[slot]))
+    return _queue_tick(seen)
+
+
+def _queue_clear(seen):
+    """🧹 Clear finished — drops the finished rows, touches nothing live."""
+    message = jobqueue.clear_finished()
+    if message:
+        log.info("Queue: %s", message)
+    return _queue_tick(seen)
+
+
+def _queue_wake():
+    """Page load: start polling, in case work is already running.
+
+    The queue outlives any one page — it is the pod's, not the browser's —
+    so a page opened while a job is half done has to find that out, and a
+    timer that starts off would never ask.
+    """
+    return gr.Timer(QUEUE_POLL_SECONDS, active=True)
 
 
 def _cta(label: str):
@@ -1881,15 +2177,17 @@ def _open_pricing():
     """
     return (gr.update(visible=False),      # the header's "Plans & pricing"
             gr.update(visible=False),      #   button, and the tabs
-            gr.update(visible=False),      # the footer, whose hint is
-            gr.update(visible=True),       #   about running a tab
+            gr.update(visible=False),      # the queue panel, which is about
+            gr.update(visible=False),      #   running tabs, and the footer,
+            gr.update(visible=True),       #   whose hint is too
             _pricing_body())
 
 
 def _close_pricing():
     """Put the tabs back. The panel keeps its markup for the next open."""
     return (gr.update(visible=True), gr.update(visible=True),
-            gr.update(visible=True), gr.update(visible=False))
+            gr.update(visible=True), gr.update(visible=True),
+            gr.update(visible=False))
 
 
 # ------------------------------------------------------------ prompt library
@@ -2423,20 +2721,20 @@ def _tab_krea_t2i(tab):
             seed_out = gr.Number(
                 label="Base seed used", interactive=False, precision=0
             )
+    _queue_view(features.Key.KREA_T2I, [gallery, status_box, seed_out],
+                preset_tab=presets.TAB_KREA2, preset_dd=preset_dd)
     _krea_run = generate_btn.click(
-        fn=generate_single,
+        fn=_enqueue(features.Key.KREA_T2I, generate_single, prompt_arg=0),
         inputs=[prompt_box, negative_box, seed_box, randomize_cb,
                 steps_slider, cfg_slider, resolution_dd, sampler_dd,
                 model_dd, batch_slider,
                 krea_publish, krea_publish_title,
                 krea_save_preset, krea_preset_name,
                 *_lora_inputs(lora_dds, lora_ws)],
-        outputs=[gallery, status_box, seed_out],
-        concurrency_id="comfy",
+        outputs=[_queue_timer, status_box],
     )
-    _reset_after_generate(_krea_run, presets.TAB_KREA2,
-                          krea_publish, krea_publish_title,
-                          krea_save_preset, krea_preset_name, preset_dd)
+    _reset_after_generate(_krea_run, krea_publish, krea_publish_title,
+                          krea_save_preset, krea_preset_name)
     # Same order as _krea_settings writes them, so loading a
     # prompt is a zip rather than a lookup.
     _krea_targets = [prompt_box, negative_box, model_dd,
@@ -2663,8 +2961,11 @@ def _tab_krea_v2_t2i(tab):
             outputs=[v2_steps, v2_cfg, v2_model_info,
                      v2_cbs[V2_TURBO_SLOT], v2_ws[V2_TURBO_SLOT]],
         )
+    _queue_view(features.Key.KREA_V2_T2I,
+                [v2_gallery, v2_status_box, v2_seed_out],
+                preset_tab=presets.TAB_KREA2_V2, preset_dd=v2_preset_dd)
     _v2_run = v2_generate_btn.click(
-        fn=generate_v2,
+        fn=_enqueue(features.Key.KREA_V2_T2I, generate_v2, prompt_arg=0),
         inputs=[v2_prompt, v2_negative, v2_seed, v2_randomize,
                 v2_model_dd,
                 v2_aspect, v2_megapixels, v2_multiple,
@@ -2678,12 +2979,10 @@ def _tab_krea_v2_t2i(tab):
                 v2_publish, v2_publish_title,
                 v2_save_preset, v2_preset_name,
                 *_lora_triples(v2_cbs, v2_dds, v2_ws)],
-        outputs=[v2_gallery, v2_status_box, v2_seed_out],
-        concurrency_id="comfy",
+        outputs=[_queue_timer, v2_status_box],
     )
-    _reset_after_generate(_v2_run, presets.TAB_KREA2_V2,
-                          v2_publish, v2_publish_title,
-                          v2_save_preset, v2_preset_name, v2_preset_dd)
+    _reset_after_generate(_v2_run, v2_publish, v2_publish_title,
+                          v2_save_preset, v2_preset_name)
     _v2_targets = [
         v2_prompt, v2_negative, v2_model_dd,
         v2_aspect, v2_megapixels, v2_multiple,
@@ -2915,16 +3214,17 @@ def _tab_krea_edit(tab):
             edit_seed_out = gr.Number(
                 label="Base seed used", interactive=False, precision=0
             )
+    _queue_view(features.Key.KREA_EDIT,
+                [edit_gallery, edit_status, edit_seed_out])
     edit_btn.click(
-        fn=generate_edit,
+        fn=_enqueue(features.Key.KREA_EDIT, generate_edit, prompt_arg=3),
         inputs=[edit_image, edit_use_image2, edit_image2,
                 edit_prompt, edit_negative, edit_seed,
                 edit_random, edit_steps, edit_cfg, edit_sampler,
                 edit_grounding, edit_ref_boost, edit_ref_boost_a,
                 edit_model_dd, edit_batch,
                 *_lora_inputs(edit_lora_dds, edit_lora_ws)],
-        outputs=[edit_gallery, edit_status, edit_seed_out],
-        concurrency_id="comfy",
+        outputs=[_queue_timer, edit_status],
     )
 
 
@@ -3134,8 +3434,11 @@ def _tab_krea_v2_edit(tab):
                      v2e_cbs[V2_TURBO_SLOT],
                      v2e_ws[V2_TURBO_SLOT]],
         )
+    _queue_view(features.Key.KREA_V2_EDIT,
+                [v2e_gallery, v2e_status_box, v2e_seed_out])
     v2e_btn.click(
-        fn=generate_v2_edit,
+        fn=_enqueue(features.Key.KREA_V2_EDIT, generate_v2_edit,
+                    prompt_arg=3),
         inputs=[v2e_image, v2e_use_image2, v2e_image2,
                 v2e_prompt, v2e_negative, v2e_seed,
                 v2e_randomize, v2e_model_dd, v2e_grounding,
@@ -3148,8 +3451,7 @@ def _tab_krea_v2_edit(tab):
                 v2e_cutoff_strength, v2e_shift_strength,
                 v2e_batch,
                 *_lora_triples(v2e_cbs, v2e_dds, v2e_ws)],
-        outputs=[v2e_gallery, v2e_status_box, v2e_seed_out],
-        concurrency_id="comfy",
+        outputs=[_queue_timer, v2e_status_box],
     )
 
 
@@ -3240,16 +3542,18 @@ def _tab_krea_inpaint(tab):
             inpaint_seed_out = gr.Number(
                 label="Base seed used", interactive=False, precision=0
             )
+    _queue_view(features.Key.KREA_INPAINT,
+                [inpaint_gallery, inpaint_status, inpaint_seed_out])
     inpaint_btn.click(
-        fn=generate_inpaint,
+        fn=_enqueue(features.Key.KREA_INPAINT, generate_inpaint,
+                    prompt_arg=1),
         inputs=[inpaint_editor, inpaint_prompt, inpaint_negative,
                 inpaint_seed, inpaint_random, inpaint_steps,
                 inpaint_cfg, inpaint_denoise, inpaint_sampler,
                 inpaint_grow, inpaint_blur, inpaint_model_dd,
                 inpaint_batch,
                 *_lora_inputs(inpaint_lora_dds, inpaint_lora_ws)],
-        outputs=[inpaint_gallery, inpaint_status, inpaint_seed_out],
-        concurrency_id="comfy",
+        outputs=[_queue_timer, inpaint_status],
     )
 
 
@@ -3327,14 +3631,14 @@ def _tab_faceswap(tab):
                 label="Swapped output", columns=1, height=600
             )
             swap_status = _status_box()
+    _queue_view(features.Key.FACESWAP, [swap_gallery, swap_status])
     swap_btn.click(
-        fn=generate_faceswap,
+        fn=_enqueue(features.Key.FACESWAP, generate_faceswap),
         inputs=[swap_base, swap_face, swap_model_dd,
                 swap_detector_dd, swap_restore_dd, swap_visibility,
                 swap_codeformer_w, swap_input_idx,
                 swap_source_idx],
-        outputs=[swap_gallery, swap_status],
-        concurrency_id="comfy",
+        outputs=[_queue_timer, swap_status],
     )
 
 
@@ -3415,14 +3719,15 @@ def _tab_flux_t2i(tab):
                 label="Base seed used", interactive=False,
                 precision=0,
             )
+    _queue_view(features.Key.FLUX_T2I,
+                [flux_gallery, flux_status, flux_seed_out])
     flux_btn.click(
-        fn=generate_flux,
+        fn=_enqueue(features.Key.FLUX_T2I, generate_flux, prompt_arg=0),
         inputs=[flux_prompt, flux_seed, flux_random, flux_steps,
                 flux_guidance, flux_resolution, flux_sampler,
                 flux_model_dd, flux_batch,
                 *_lora_inputs(flux_lora_dds, flux_lora_ws)],
-        outputs=[flux_gallery, flux_status, flux_seed_out],
-        concurrency_id="comfy",
+        outputs=[_queue_timer, flux_status],
     )
 
 
@@ -3561,8 +3866,11 @@ def _tab_klein_i2i(tab):
                 label="Base seed used", interactive=False,
                 precision=0,
             )
+    _queue_view(features.Key.KLEIN_I2I,
+                [klein_gallery, klein_status_box, klein_seed_out])
     klein_btn.click(
-        fn=generate_klein_edit,
+        fn=_enqueue(features.Key.KLEIN_I2I, generate_klein_edit,
+                    prompt_arg=3),
         inputs=[klein_image, klein_use_image2, klein_image2,
                 klein_prompt, klein_seed, klein_random,
                 klein_model_dd, klein_steps, klein_cfg,
@@ -3571,8 +3879,7 @@ def _tab_klein_i2i(tab):
                 klein_output_mp, klein_custom_w, klein_custom_h,
                 klein_batch,
                 *_lora_triples(klein_cbs, klein_dds, klein_ws)],
-        outputs=[klein_gallery, klein_status_box, klein_seed_out],
-        concurrency_id="comfy",
+        outputs=[_queue_timer, klein_status_box],
     )
 
 
@@ -3690,17 +3997,18 @@ def _tab_wan_i2v(tab):
         fn=wan_mode_changed, inputs=[wan_model, wan_mode],
         outputs=[wan_steps, wan_cfg],
     )
+    _queue_view(features.Key.WAN_I2V,
+                [wan_files_out, wan_video_out, wan_status, wan_seed_out])
     wan_btn.click(
-        fn=generate_wan_video,
+        # status_index=2: this tab yields two output components before its
+        # status text, where every other tab yields one.
+        fn=_enqueue(features.Key.WAN_I2V, generate_wan_video, prompt_arg=1,
+                    status_index=2, lane=WAN_LANE),
         inputs=[wan_image, wan_prompt, wan_negative, wan_model,
                 wan_mode, wan_seed, wan_random, wan_steps,
                 wan_cfg, wan_resolution, wan_seconds, wan_sampler,
                 wan_batch],
-        outputs=[wan_files_out, wan_video_out, wan_status,
-                 wan_seed_out],
-        # Its own group only when it has its own ComfyUI to
-        # run on; sharing one instance means sharing the queue.
-        concurrency_id="wan" if WAN_PARALLEL else "comfy",
+        outputs=[_queue_timer, wan_status],
     )
 
 
@@ -3730,11 +4038,11 @@ def _tab_json_batch(tab):
                 label="Batch output", columns=2, height=600
             )
             json_status = _status_box()
+    _queue_view(features.Key.JSON_BATCH, [json_gallery, json_status])
     json_btn.click(
-        fn=generate_from_json,
+        fn=_enqueue(features.Key.JSON_BATCH, generate_from_json),
         inputs=[json_file_in, json_text_in],
-        outputs=[json_gallery, json_status],
-        concurrency_id="comfy",
+        outputs=[_queue_timer, json_status],
     )
 
 
@@ -3871,6 +4179,16 @@ with gr.Blocks(title="Ember") as ui:
         pricing_open_btn = gr.Button("💳 Plans & pricing", size="sm",
                                      elem_classes="kx-navbtn", scale=0)
 
+    # The queue's clock, and the per-page record of what it has already
+    # drawn. Both are declared *before* the tabs because every Generate
+    # button lists the timer in its outputs to switch it on, and a click
+    # can only name a component that already exists. Its .tick() is
+    # registered after the panel below, once every output it writes to is
+    # known — Gradio is happy to have the event added later, only not the
+    # component.
+    _queue_timer = gr.Timer(QUEUE_POLL_SECONDS, active=False)
+    _queue_seen = gr.State({})
+
     with gr.Tabs() as main_tabs:
         # Build order is TAB_ORDER's order. Each builder's return value is
         # kept so the cross-tab wiring below can find it.
@@ -3927,6 +4245,67 @@ with gr.Blocks(title="Ember") as ui:
         elem_id="kx-footer", container=False, padding=False,
     )
 
+    # ------------------------------------------------------------- queue
+    # Under the tabs rather than inside any one of them, because the queue
+    # is the pod's and not a tab's: a Krea job and a video are waiting on
+    # the same GPU, and seeing that from whichever tab you are on is most
+    # of the value.
+    #
+    # Open by default. A queue whose whole purpose is to be looked at
+    # should not have to be found first, and it is one line tall when
+    # empty. Closing it is not fought over either — the counts live in the
+    # label, so a collapsed panel still says how deep the queue is.
+    with gr.Accordion("🗂️ Queue — nothing running", open=True,
+                      elem_classes="kx-queue") as queue_panel:
+        with gr.Row(elem_classes="kx-navrow"):
+            queue_clear_btn = gr.Button("🧹 Clear finished", size="sm")
+        queue_info = gr.Markdown(
+            "Nothing queued. Every **Generate** click is added here, so "
+            "several can be lined up at once — and any of them taken back "
+            "out again.",
+            elem_classes="kx-meta",
+        )
+        # The ids currently on screen, in row order. Client state, like the
+        # library's rows: the ✕ in slot 3 has to resolve to a job, and the
+        # slot number alone stops meaning anything the moment the list
+        # under it moves.
+        queue_ids = gr.State([])
+        queue_groups, queue_bodies, queue_buttons = [], [], []
+        for _slot in range(QUEUE_ROWS):
+            with gr.Row(visible=False,
+                        elem_classes="kx-queue-row") as _queue_row:
+                queue_bodies.append(
+                    gr.Markdown(elem_classes="kx-queue-body")
+                )
+                queue_buttons.append(
+                    gr.Button("✕ Remove", size="sm", scale=0, min_width=110)
+                )
+            queue_groups.append(_queue_row)
+
+    # Everything a poll writes, in the order _queue_tick returns it. Built
+    # here, after the tabs, because the per-tab half of that list is
+    # whatever those tabs registered on their way past — a licence that
+    # grants three tabs polls three tabs.
+    _queue_outputs = [
+        _queue_seen, _queue_timer,
+        queue_panel, queue_ids, queue_info,
+        *queue_groups, *queue_bodies, *queue_buttons,
+        *[component for _key, components in _QUEUE_VIEWS
+          for component in components],
+        *[dropdown for _tab, dropdown in _QUEUE_PRESET_VIEWS],
+    ]
+    _queue_timer.tick(fn=_queue_tick, inputs=_queue_seen,
+                      outputs=_queue_outputs, show_progress="hidden")
+    queue_clear_btn.click(fn=_queue_clear, inputs=_queue_seen,
+                          outputs=_queue_outputs, show_progress="hidden")
+    for _slot, _button in enumerate(queue_buttons):
+        _button.click(fn=partial(_queue_cancel, _slot),
+                      inputs=[queue_ids, _queue_seen],
+                      outputs=_queue_outputs, show_progress="hidden")
+    # A page opened while the pod is mid-job has to find that out, and a
+    # timer that starts off would never ask.
+    ui.load(fn=_queue_wake, outputs=_queue_timer)
+
     # ----------------------------------------------------------- pricing panel
     # The plan catalogue, as a view of this same page: opening it hides the
     # tabs and the footer, and the Back button puts them back. Not a tenth
@@ -3958,7 +4337,8 @@ with gr.Blocks(title="Ember") as ui:
         gr.HTML(theme.showcase_html(showcase.showcase()),
                 container=False, padding=False)
 
-    _pricing_views = [pricing_open_btn, main_tabs, footer, pricing_view]
+    _pricing_views = [pricing_open_btn, main_tabs, queue_panel, footer,
+                      pricing_view]
     pricing_open_btn.click(fn=_open_pricing,
                            outputs=[*_pricing_views, pricing_body])
     pricing_back_btn.click(fn=_close_pricing, outputs=_pricing_views)

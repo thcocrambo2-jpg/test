@@ -753,6 +753,88 @@ rather than the preset's. Everything else applies as stored, and a preset
 for the model already selected — the ordinary case, and the only one when a
 registry holds a single model — is unaffected.
 
+## The job queue
+
+Clicking **Generate** does not generate. It writes the click down — the
+handler, the values every control held at that moment, the tab it came
+from — hands it to `jobqueue.py` and returns in a few milliseconds. A
+worker thread per lane then runs the recorded jobs one at a time, in the
+order they arrived.
+
+That indirection buys three things:
+
+- **The button comes straight back.** Queue a second idea while the first
+  is still rendering. Previously the whole render happened inside the
+  Gradio event the click fired, and Gradio's default `trigger_mode="once"`
+  left the button dead until it finished — so the pod idled between jobs
+  whenever nobody was sitting there to click again.
+- **The queue is visible.** Gradio's own queue serialised the work
+  perfectly well, but nothing could see into it. The panel under the tabs
+  lists every job, live, with its tab, its prompt and its progress.
+- **And it can be edited.** Each row carries a button, and what it does
+  depends on the job: **✕ Remove** forgets one that is still waiting,
+  **🛑 Stop** interrupts one that is already running, **✕ Clear** tidies a
+  finished one off the list. **🧹 Clear finished** does the last of those
+  in bulk.
+
+The panel sits under the tabs rather than inside any of them, because the
+queue belongs to the pod and not to a tab: a Krea job and a video are
+waiting on the same GPU. Its label carries the counts (`🗂️ Queue — 1
+running · 3 waiting`), so a collapsed panel still says how deep the queue
+is.
+
+### Lanes
+
+A lane is one worker, which makes it exactly the "only one of these at a
+time" rule that `concurrency_id` used to state:
+
+| Lane | Jobs | ComfyUI instance |
+| --- | --- | --- |
+| `comfy` | every image tab, and video when it shares an instance | the main one |
+| `wan` | video, only when `KREA2_WAN_PARALLEL=1` | the second one |
+
+A running job is stopped through `ComfyClient.interrupt()` — ComfyUI's
+`POST /interrupt` — on its lane's instance. Stopping is asynchronous by
+nature: the interrupt aborts the prompt ComfyUI is executing *now*, and
+the worker sees the cancel flag at the job's next yield and stops feeding
+it the rest of its batch. So a batch of eight can finish the picture it is
+on before the queue lets go of it, which is why the row says *stopping*
+rather than *stopped* until it is.
+
+### How results get back to a tab
+
+The click is long over by the time there are any, so it cannot push them.
+Instead the panel carries a `gr.Timer`; one poll a second redraws the
+queue and writes each job's latest yield into the components that
+submitted it (`_queue_tick` in `ui.py`). Every generation tab registers
+those components on the way past with `_queue_view`, so a licence granting
+three tabs polls three tabs.
+
+Two details keep that cheap. The poll returns `gr.update()` — a no-op —
+for everything that has not moved since the browser last drew it, so a tab
+whose job finished ten minutes ago is not rewritten once a second. And the
+timer **switches itself off** when nothing is queued or running: an idle
+pod is not polled at all. A Generate click switches it back on, and so
+does opening the page, which is what lets a browser opened mid-job find
+the job already running.
+
+A tab shows the newest job *that has begun* — so it switches to a new run
+when that run starts, not when it was queued, and goes on showing the last
+finished run while three more wait behind it.
+
+### What a queued job is frozen against
+
+The arguments are read out of the controls at click time and copied into
+the job, so moving a slider afterwards cannot reach work already in the
+line. That extends to the two per-run tickboxes: **publish** and **save as
+preset** are read on the click, then disarmed immediately, because they
+are per-run decisions rather than modes.
+
+The preset save itself now happens wherever the job runs, which is after
+the click that asked for it has returned. So `presets.save` tells the
+queue (`jobqueue.note_preset_saved`), and the same poll that carries the
+images back refills the preset dropdown.
+
 ## Model swapping and crash recovery
 
 With Krea 2 V1 (turbo/raw), V2 (turbo mxfp8/raw), Flux and Wan all
@@ -785,14 +867,16 @@ Two mechanisms handle this:
 
   Set `KREA2_KEEP_MODELS_LOADED=1` to disable on a machine with room to
   spare, where keeping models warm is faster.
-- **One job at a time.** Every generation event shares the
-  `concurrency_id="comfy"` group, so a second tab's Generate queues rather
-  than running alongside. They all feed one single-threaded ComfyUI prompt
-  worker anyway, so nothing real is lost — but without it a second handler
-  runs far enough to call `/free` while the first job still holds the
-  models, stalling on the VRAM-settle wait and corrupting the
-  what-is-loaded bookkeeping. Video keeps its own group when
-  `KREA2_WAN_PARALLEL` gives it a separate ComfyUI instance.
+- **One job at a time.** Every generation runs on a *lane* in
+  `jobqueue.py`, and a lane is one worker thread — so a second tab's
+  Generate queues rather than running alongside. They all feed one
+  single-threaded ComfyUI prompt worker anyway, so nothing real is lost —
+  but without it a second handler runs far enough to call `/free` while
+  the first job still holds the models, stalling on the VRAM-settle wait
+  and corrupting the what-is-loaded bookkeeping. Video keeps its own lane
+  when `KREA2_WAN_PARALLEL` gives it a separate ComfyUI instance. (This
+  used to be Gradio's own `concurrency_id="comfy"` group, which enforced
+  the same rule invisibly — see **The job queue** below for why it moved.)
 - **Restart if it died anyway.** `comfy.ensure_alive()` runs before every
   batch: if the API does not answer it restarts ComfyUI (preserving the
   instance's `--reserve-vram` flags) and reports **the last 20 lines of
@@ -822,7 +906,8 @@ error in the log points at a custom node instead.
 - `workflow_klein.py` — Flux 2 Klein 9B edit builder (the Klein advanced Klein Edit graph)
 - `workflow_wan.py` — Wan 2.2 image-to-video workflow builder (two-expert A14B)
 - `workflow_reactor.py` — ReActor face-swap workflow builder + availability checks
-- `client.py` — ComfyUI HTTP/websocket client (queue, progress, image upload)
+- `client.py` — ComfyUI HTTP/websocket client (queue, progress, image upload, interrupt)
+- `jobqueue.py` — the visible job queue behind every Generate button (worker per lane, cancel, history)
 - `ui.py` — Gradio UI (single/batch, edit, V2 edit, inpaint, face swap, flux, klein edit, video, JSON batch, gallery tabs), the `/pricing` page, and launch logic
 
 ### Tab order

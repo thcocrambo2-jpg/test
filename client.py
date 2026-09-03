@@ -147,6 +147,31 @@ class ComfyClient:
             raise ComfyUIError(f"No prompt_id in ComfyUI response: {result}")
         return prompt_id
 
+    def interrupt(self) -> None:
+        """Abort the prompt this instance is executing right now.
+
+        How a running job is stopped from the queue panel. ComfyUI answers
+        by aborting the *current* prompt only — anything else already
+        submitted stays in its queue — which is exactly the granularity
+        wanted here, because jobqueue submits one prompt at a time and
+        stops feeding a batch the moment its job is cancelled.
+
+        run() sees the abort as an `execution_interrupted` frame and
+        raises ComfyUIError, so a cancel unwinds through the same path a
+        failed node does.
+
+        Never raises. A cancel that cannot reach ComfyUI has still taken
+        the job off the queue, and turning that into a traceback would
+        lose the part that did work.
+        """
+        req = urllib.request.Request(self.base + "/interrupt", data=b"",
+                                     method="POST")
+        try:
+            with urllib.request.urlopen(req, timeout=15):
+                pass
+        except Exception as exc:      # noqa: BLE001 - best effort by design
+            log.warning("Could not interrupt ComfyUI on %s: %s", self.base, exc)
+
     def upload_image(self, data: bytes, name: str) -> str:
         """Upload PNG bytes to ComfyUI's input folder.
 
