@@ -108,7 +108,9 @@ export function Lightbox({
               onIndex(index - 1)
             }}
           >
-            ‹
+            <svg viewBox="0 0 24 24" aria-hidden="true">
+              <path d="m15 5-7 7 7 7" />
+            </svg>
           </button>
         )}
         {item.kind === 'video' ? (
@@ -137,7 +139,9 @@ export function Lightbox({
               onIndex(index + 1)
             }}
           >
-            ›
+            <svg viewBox="0 0 24 24" aria-hidden="true">
+              <path d="m9 5 7 7-7 7" />
+            </svg>
           </button>
         )}
       </div>
