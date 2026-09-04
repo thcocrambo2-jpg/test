@@ -1,0 +1,466 @@
+[
+  {
+    "clip": {
+      "class_type": "CLIPLoader",
+      "inputs": {
+        "clip_name": "qwen3vl_4b_fp8_scaled.safetensors",
+        "device": "default",
+        "type": "krea2"
+      }
+    },
+    "decode": {
+      "class_type": "VAEDecode",
+      "inputs": {
+        "samples": [
+          "sampler",
+          0
+        ],
+        "vae": [
+          "vae",
+          0
+        ]
+      }
+    },
+    "edit_lora": {
+      "class_type": "LoraLoaderModelOnly",
+      "inputs": {
+        "lora_name": "krea2_identity_edit_v1_2.safetensors",
+        "model": [
+          "unet",
+          0
+        ],
+        "strength_model": 1.0
+      }
+    },
+    "edit_model": {
+      "class_type": "Krea2EditModelPatch",
+      "inputs": {
+        "fit_mode": "crop (legacy)",
+        "model": [
+          "edit_lora",
+          0
+        ],
+        "ref_boost": 3.5,
+        "ref_boost_a": 2.5,
+        "source_image": [
+          "source",
+          0
+        ],
+        "source_image_b": [
+          "source_b",
+          0
+        ],
+        "source_latent": [
+          "encode",
+          0
+        ],
+        "source_latent_b": [
+          "encode_b",
+          0
+        ],
+        "target_latent": [
+          "latent",
+          0
+        ],
+        "vae": [
+          "vae",
+          0
+        ]
+      }
+    },
+    "encode": {
+      "class_type": "VAEEncode",
+      "inputs": {
+        "pixels": [
+          "source",
+          0
+        ],
+        "vae": [
+          "vae",
+          0
+        ]
+      }
+    },
+    "encode_b": {
+      "class_type": "VAEEncode",
+      "inputs": {
+        "pixels": [
+          "source_b",
+          0
+        ],
+        "vae": [
+          "vae",
+          0
+        ]
+      }
+    },
+    "latent": {
+      "class_type": "EmptySD3LatentImage",
+      "inputs": {
+        "batch_size": 1,
+        "height": 416,
+        "width": 640
+      }
+    },
+    "negative": {
+      "class_type": "Krea2EditGroundedEncode",
+      "inputs": {
+        "clip": [
+          "clip",
+          0
+        ],
+        "grounding_px": 640,
+        "image": [
+          "source",
+          0
+        ],
+        "image_b": [
+          "source_b",
+          0
+        ],
+        "prompt": "blurry, watermark"
+      }
+    },
+    "positive": {
+      "class_type": "Krea2EditGroundedEncode",
+      "inputs": {
+        "clip": [
+          "clip",
+          0
+        ],
+        "grounding_px": 640,
+        "image": [
+          "source",
+          0
+        ],
+        "image_b": [
+          "source_b",
+          0
+        ],
+        "prompt": "put a red hat on the person"
+      }
+    },
+    "sampler": {
+      "class_type": "ClownsharKSampler_Beta",
+      "inputs": {
+        "bongmath": false,
+        "cfg": 2.4,
+        "denoise": 1.0,
+        "eta": 0.35,
+        "latent_image": [
+          "latent",
+          0
+        ],
+        "model": [
+          "edit_model",
+          0
+        ],
+        "negative": [
+          "negative",
+          0
+        ],
+        "positive": [
+          "variance",
+          0
+        ],
+        "sampler_mode": "resample",
+        "sampler_name": "res_3m",
+        "scheduler": "normal",
+        "seed": 5678901,
+        "steps": 13,
+        "steps_to_run": -1
+      }
+    },
+    "save": {
+      "class_type": "SaveImage",
+      "inputs": {
+        "filename_prefix": "Krea2V2Edit",
+        "images": [
+          "decode",
+          0
+        ]
+      }
+    },
+    "source": {
+      "class_type": "LoadImage",
+      "inputs": {
+        "image": "golden_upload.png"
+      }
+    },
+    "source_b": {
+      "class_type": "LoadImage",
+      "inputs": {
+        "image": "golden_upload.png"
+      }
+    },
+    "unet": {
+      "class_type": "UNETLoader",
+      "inputs": {
+        "unet_name": "krea2_turbo_mxfp8.safetensors",
+        "weight_dtype": "default"
+      }
+    },
+    "vae": {
+      "class_type": "VAELoader",
+      "inputs": {
+        "vae_name": "wan21-vae.safetensors"
+      }
+    },
+    "variance": {
+      "class_type": "RBG_Smart_Seed_Variance",
+      "inputs": {
+        "conditioning": [
+          "positive",
+          0
+        ],
+        "cutoff_step": 7,
+        "cutoff_strength": 0.65,
+        "direction_shift": "🚫 None",
+        "fade_curve": "Instant",
+        "fine_tune_variance": 61,
+        "model_type": "🔮 Flux (Dev/Schnell)",
+        "noise_injection": "Beginning Steps",
+        "protect_mode": "🚫 None",
+        "protect_regions": "",
+        "seed": 5678901,
+        "shift_strength": 140,
+        "total_steps": 23,
+        "variance_preset": "🪴 Creative",
+        "variance_schedule": "step_cutoff",
+        "vibe_blend": 0.5
+      }
+    }
+  },
+  {
+    "clip": {
+      "class_type": "CLIPLoader",
+      "inputs": {
+        "clip_name": "qwen3vl_4b_fp8_scaled.safetensors",
+        "device": "default",
+        "type": "krea2"
+      }
+    },
+    "decode": {
+      "class_type": "VAEDecode",
+      "inputs": {
+        "samples": [
+          "sampler",
+          0
+        ],
+        "vae": [
+          "vae",
+          0
+        ]
+      }
+    },
+    "edit_lora": {
+      "class_type": "LoraLoaderModelOnly",
+      "inputs": {
+        "lora_name": "krea2_identity_edit_v1_2.safetensors",
+        "model": [
+          "unet",
+          0
+        ],
+        "strength_model": 1.0
+      }
+    },
+    "edit_model": {
+      "class_type": "Krea2EditModelPatch",
+      "inputs": {
+        "fit_mode": "crop (legacy)",
+        "model": [
+          "edit_lora",
+          0
+        ],
+        "ref_boost": 3.5,
+        "ref_boost_a": 2.5,
+        "source_image": [
+          "source",
+          0
+        ],
+        "source_image_b": [
+          "source_b",
+          0
+        ],
+        "source_latent": [
+          "encode",
+          0
+        ],
+        "source_latent_b": [
+          "encode_b",
+          0
+        ],
+        "target_latent": [
+          "latent",
+          0
+        ],
+        "vae": [
+          "vae",
+          0
+        ]
+      }
+    },
+    "encode": {
+      "class_type": "VAEEncode",
+      "inputs": {
+        "pixels": [
+          "source",
+          0
+        ],
+        "vae": [
+          "vae",
+          0
+        ]
+      }
+    },
+    "encode_b": {
+      "class_type": "VAEEncode",
+      "inputs": {
+        "pixels": [
+          "source_b",
+          0
+        ],
+        "vae": [
+          "vae",
+          0
+        ]
+      }
+    },
+    "latent": {
+      "class_type": "EmptySD3LatentImage",
+      "inputs": {
+        "batch_size": 1,
+        "height": 416,
+        "width": 640
+      }
+    },
+    "negative": {
+      "class_type": "Krea2EditGroundedEncode",
+      "inputs": {
+        "clip": [
+          "clip",
+          0
+        ],
+        "grounding_px": 640,
+        "image": [
+          "source",
+          0
+        ],
+        "image_b": [
+          "source_b",
+          0
+        ],
+        "prompt": "blurry, watermark"
+      }
+    },
+    "positive": {
+      "class_type": "Krea2EditGroundedEncode",
+      "inputs": {
+        "clip": [
+          "clip",
+          0
+        ],
+        "grounding_px": 640,
+        "image": [
+          "source",
+          0
+        ],
+        "image_b": [
+          "source_b",
+          0
+        ],
+        "prompt": "put a red hat on the person"
+      }
+    },
+    "sampler": {
+      "class_type": "ClownsharKSampler_Beta",
+      "inputs": {
+        "bongmath": false,
+        "cfg": 2.4,
+        "denoise": 1.0,
+        "eta": 0.35,
+        "latent_image": [
+          "latent",
+          0
+        ],
+        "model": [
+          "edit_model",
+          0
+        ],
+        "negative": [
+          "negative",
+          0
+        ],
+        "positive": [
+          "variance",
+          0
+        ],
+        "sampler_mode": "resample",
+        "sampler_name": "res_3m",
+        "scheduler": "normal",
+        "seed": 5678902,
+        "steps": 13,
+        "steps_to_run": -1
+      }
+    },
+    "save": {
+      "class_type": "SaveImage",
+      "inputs": {
+        "filename_prefix": "Krea2V2Edit",
+        "images": [
+          "decode",
+          0
+        ]
+      }
+    },
+    "source": {
+      "class_type": "LoadImage",
+      "inputs": {
+        "image": "golden_upload.png"
+      }
+    },
+    "source_b": {
+      "class_type": "LoadImage",
+      "inputs": {
+        "image": "golden_upload.png"
+      }
+    },
+    "unet": {
+      "class_type": "UNETLoader",
+      "inputs": {
+        "unet_name": "krea2_turbo_mxfp8.safetensors",
+        "weight_dtype": "default"
+      }
+    },
+    "vae": {
+      "class_type": "VAELoader",
+      "inputs": {
+        "vae_name": "wan21-vae.safetensors"
+      }
+    },
+    "variance": {
+      "class_type": "RBG_Smart_Seed_Variance",
+      "inputs": {
+        "conditioning": [
+          "positive",
+          0
+        ],
+        "cutoff_step": 7,
+        "cutoff_strength": 0.65,
+        "direction_shift": "🚫 None",
+        "fade_curve": "Instant",
+        "fine_tune_variance": 61,
+        "model_type": "🔮 Flux (Dev/Schnell)",
+        "noise_injection": "Beginning Steps",
+        "protect_mode": "🚫 None",
+        "protect_regions": "",
+        "seed": 5678902,
+        "shift_strength": 140,
+        "total_steps": 23,
+        "variance_preset": "🪴 Creative",
+        "variance_schedule": "step_cutoff",
+        "vibe_blend": 0.5
+      }
+    }
+  }
+]

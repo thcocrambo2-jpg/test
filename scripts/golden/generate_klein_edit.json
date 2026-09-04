@@ -1,0 +1,404 @@
+[
+  {
+    "clip": {
+      "class_type": "CLIPLoader",
+      "inputs": {
+        "clip_name": "qwen_3_8b_fp8mixed_abliterated.safetensors",
+        "device": "default",
+        "type": "flux2"
+      }
+    },
+    "decode": {
+      "class_type": "VAEDecode",
+      "inputs": {
+        "samples": [
+          "sampler",
+          0
+        ],
+        "vae": [
+          "vae",
+          0
+        ]
+      }
+    },
+    "encode1": {
+      "class_type": "VAEEncode",
+      "inputs": {
+        "pixels": [
+          "scale1",
+          0
+        ],
+        "vae": [
+          "vae",
+          0
+        ]
+      }
+    },
+    "encode2": {
+      "class_type": "VAEEncode",
+      "inputs": {
+        "pixels": [
+          "scale2",
+          0
+        ],
+        "vae": [
+          "vae",
+          0
+        ]
+      }
+    },
+    "guidance": {
+      "class_type": "FluxGuidance",
+      "inputs": {
+        "conditioning": [
+          "reference2",
+          0
+        ],
+        "guidance": 2.7
+      }
+    },
+    "latent": {
+      "class_type": "EmptyFlux2LatentImage",
+      "inputs": {
+        "batch_size": 1,
+        "height": 688,
+        "width": 912
+      }
+    },
+    "load1": {
+      "class_type": "LoadImage",
+      "inputs": {
+        "image": "golden_upload.png"
+      }
+    },
+    "load2": {
+      "class_type": "LoadImage",
+      "inputs": {
+        "image": "golden_upload.png"
+      }
+    },
+    "negative": {
+      "class_type": "ConditioningZeroOut",
+      "inputs": {
+        "conditioning": [
+          "guidance",
+          0
+        ]
+      }
+    },
+    "positive": {
+      "class_type": "CLIPTextEncode",
+      "inputs": {
+        "clip": [
+          "clip",
+          0
+        ],
+        "text": "put a red hat on the person"
+      }
+    },
+    "reference1": {
+      "class_type": "ReferenceLatent",
+      "inputs": {
+        "conditioning": [
+          "positive",
+          0
+        ],
+        "latent": [
+          "encode1",
+          0
+        ]
+      }
+    },
+    "reference2": {
+      "class_type": "ReferenceLatent",
+      "inputs": {
+        "conditioning": [
+          "reference1",
+          0
+        ],
+        "latent": [
+          "encode2",
+          0
+        ]
+      }
+    },
+    "sampler": {
+      "class_type": "KSamplerAdvanced",
+      "inputs": {
+        "add_noise": "enable",
+        "cfg": 1.3,
+        "end_at_step": 10000,
+        "latent_image": [
+          "latent",
+          0
+        ],
+        "model": [
+          "unet",
+          0
+        ],
+        "negative": [
+          "negative",
+          0
+        ],
+        "noise_seed": 3456789,
+        "positive": [
+          "guidance",
+          0
+        ],
+        "return_with_leftover_noise": "disable",
+        "sampler_name": "euler",
+        "scheduler": "karras",
+        "start_at_step": 0,
+        "steps": 6
+      }
+    },
+    "save": {
+      "class_type": "SaveImage",
+      "inputs": {
+        "filename_prefix": "KleinEdit",
+        "images": [
+          "decode",
+          0
+        ]
+      }
+    },
+    "scale1": {
+      "class_type": "ImageScaleToTotalPixels",
+      "inputs": {
+        "image": [
+          "load1",
+          0
+        ],
+        "megapixels": 1.25,
+        "resolution_steps": 1,
+        "upscale_method": "lanczos"
+      }
+    },
+    "scale2": {
+      "class_type": "ImageScaleToTotalPixels",
+      "inputs": {
+        "image": [
+          "load2",
+          0
+        ],
+        "megapixels": 1.25,
+        "resolution_steps": 1,
+        "upscale_method": "lanczos"
+      }
+    },
+    "unet": {
+      "class_type": "UNETLoader",
+      "inputs": {
+        "unet_name": "flux-2-klein-9b-fp8.safetensors",
+        "weight_dtype": "default"
+      }
+    },
+    "vae": {
+      "class_type": "VAELoader",
+      "inputs": {
+        "vae_name": "flux2-vae.safetensors"
+      }
+    }
+  },
+  {
+    "clip": {
+      "class_type": "CLIPLoader",
+      "inputs": {
+        "clip_name": "qwen_3_8b_fp8mixed_abliterated.safetensors",
+        "device": "default",
+        "type": "flux2"
+      }
+    },
+    "decode": {
+      "class_type": "VAEDecode",
+      "inputs": {
+        "samples": [
+          "sampler",
+          0
+        ],
+        "vae": [
+          "vae",
+          0
+        ]
+      }
+    },
+    "encode1": {
+      "class_type": "VAEEncode",
+      "inputs": {
+        "pixels": [
+          "scale1",
+          0
+        ],
+        "vae": [
+          "vae",
+          0
+        ]
+      }
+    },
+    "encode2": {
+      "class_type": "VAEEncode",
+      "inputs": {
+        "pixels": [
+          "scale2",
+          0
+        ],
+        "vae": [
+          "vae",
+          0
+        ]
+      }
+    },
+    "guidance": {
+      "class_type": "FluxGuidance",
+      "inputs": {
+        "conditioning": [
+          "reference2",
+          0
+        ],
+        "guidance": 2.7
+      }
+    },
+    "latent": {
+      "class_type": "EmptyFlux2LatentImage",
+      "inputs": {
+        "batch_size": 1,
+        "height": 688,
+        "width": 912
+      }
+    },
+    "load1": {
+      "class_type": "LoadImage",
+      "inputs": {
+        "image": "golden_upload.png"
+      }
+    },
+    "load2": {
+      "class_type": "LoadImage",
+      "inputs": {
+        "image": "golden_upload.png"
+      }
+    },
+    "negative": {
+      "class_type": "ConditioningZeroOut",
+      "inputs": {
+        "conditioning": [
+          "guidance",
+          0
+        ]
+      }
+    },
+    "positive": {
+      "class_type": "CLIPTextEncode",
+      "inputs": {
+        "clip": [
+          "clip",
+          0
+        ],
+        "text": "put a red hat on the person"
+      }
+    },
+    "reference1": {
+      "class_type": "ReferenceLatent",
+      "inputs": {
+        "conditioning": [
+          "positive",
+          0
+        ],
+        "latent": [
+          "encode1",
+          0
+        ]
+      }
+    },
+    "reference2": {
+      "class_type": "ReferenceLatent",
+      "inputs": {
+        "conditioning": [
+          "reference1",
+          0
+        ],
+        "latent": [
+          "encode2",
+          0
+        ]
+      }
+    },
+    "sampler": {
+      "class_type": "KSamplerAdvanced",
+      "inputs": {
+        "add_noise": "enable",
+        "cfg": 1.3,
+        "end_at_step": 10000,
+        "latent_image": [
+          "latent",
+          0
+        ],
+        "model": [
+          "unet",
+          0
+        ],
+        "negative": [
+          "negative",
+          0
+        ],
+        "noise_seed": 3456790,
+        "positive": [
+          "guidance",
+          0
+        ],
+        "return_with_leftover_noise": "disable",
+        "sampler_name": "euler",
+        "scheduler": "karras",
+        "start_at_step": 0,
+        "steps": 6
+      }
+    },
+    "save": {
+      "class_type": "SaveImage",
+      "inputs": {
+        "filename_prefix": "KleinEdit",
+        "images": [
+          "decode",
+          0
+        ]
+      }
+    },
+    "scale1": {
+      "class_type": "ImageScaleToTotalPixels",
+      "inputs": {
+        "image": [
+          "load1",
+          0
+        ],
+        "megapixels": 1.25,
+        "resolution_steps": 1,
+        "upscale_method": "lanczos"
+      }
+    },
+    "scale2": {
+      "class_type": "ImageScaleToTotalPixels",
+      "inputs": {
+        "image": [
+          "load2",
+          0
+        ],
+        "megapixels": 1.25,
+        "resolution_steps": 1,
+        "upscale_method": "lanczos"
+      }
+    },
+    "unet": {
+      "class_type": "UNETLoader",
+      "inputs": {
+        "unet_name": "flux-2-klein-9b-fp8.safetensors",
+        "weight_dtype": "default"
+      }
+    },
+    "vae": {
+      "class_type": "VAELoader",
+      "inputs": {
+        "vae_name": "flux2-vae.safetensors"
+      }
+    }
+  }
+]

@@ -140,6 +140,17 @@ def snapshot():
 
     import ui
 
+    # The generators moved to handlers.py, and ui.py imports back only the
+    # ones its tab builders name — the two executors behind them are called
+    # by the handlers and by nothing else, so they are no longer attributes
+    # of ui. Asked for here first, and ui is the fallback, so the baseline
+    # keeps recording the same twelve names under the same twelve keys and
+    # the split is not a diff.
+    try:
+        import handlers as impl
+    except ImportError:
+        impl = ui
+
     tabs = {}
     for key, (tab_id, components) in ui._RECIPE_VIEWS.items():
         tabs[str(key)] = {
@@ -149,7 +160,7 @@ def snapshot():
 
     handlers = {}
     for name in HANDLERS:
-        fn = getattr(ui, name, None)
+        fn = getattr(impl, name, None) or getattr(ui, name, None)
         if fn is None:
             # Recorded as null rather than skipped: a handler that stops
             # existing is exactly the kind of change this is here to catch.

@@ -1,0 +1,310 @@
+[
+  {
+    "clip": {
+      "class_type": "CLIPLoader",
+      "inputs": {
+        "clip_name": "qwen3vl_4b_fp8_scaled.safetensors",
+        "device": "default",
+        "type": "krea2"
+      }
+    },
+    "decode": {
+      "class_type": "VAEDecode",
+      "inputs": {
+        "samples": [
+          "sampler",
+          0
+        ],
+        "vae": [
+          "vae",
+          0
+        ]
+      }
+    },
+    "grain": {
+      "class_type": "FilmGrain",
+      "inputs": {
+        "image": [
+          "sharpen",
+          0
+        ],
+        "intensity": 0.05,
+        "scale": 1.0,
+        "temperature": 0.0,
+        "vignette": 0.0
+      }
+    },
+    "latent": {
+      "class_type": "EmptyLatentImage",
+      "inputs": {
+        "batch_size": 1,
+        "height": 1152,
+        "width": 2048
+      }
+    },
+    "negative": {
+      "class_type": "CLIPTextEncode",
+      "inputs": {
+        "clip": [
+          "clip",
+          0
+        ],
+        "text": "blurry, watermark"
+      }
+    },
+    "positive": {
+      "class_type": "CLIPTextEncode",
+      "inputs": {
+        "clip": [
+          "clip",
+          0
+        ],
+        "text": "a lighthouse in a storm, 35mm"
+      }
+    },
+    "sampler": {
+      "class_type": "ClownsharKSampler_Beta",
+      "inputs": {
+        "bongmath": false,
+        "cfg": 2.4,
+        "denoise": 0.85,
+        "eta": 0.35,
+        "latent_image": [
+          "latent",
+          0
+        ],
+        "model": [
+          "unet",
+          0
+        ],
+        "negative": [
+          "negative",
+          0
+        ],
+        "positive": [
+          "variance",
+          0
+        ],
+        "sampler_mode": "unsample",
+        "sampler_name": "res_2m",
+        "scheduler": "beta57",
+        "seed": 4567890,
+        "steps": 13,
+        "steps_to_run": -1
+      }
+    },
+    "save": {
+      "class_type": "SaveImage",
+      "inputs": {
+        "filename_prefix": "Krea2V2",
+        "images": [
+          "grain",
+          0
+        ]
+      }
+    },
+    "sharpen": {
+      "class_type": "ImageSharpen",
+      "inputs": {
+        "alpha": 1.0,
+        "image": [
+          "decode",
+          0
+        ],
+        "sharpen_radius": 1,
+        "sigma": 0.35
+      }
+    },
+    "unet": {
+      "class_type": "UNETLoader",
+      "inputs": {
+        "unet_name": "krea2_turbo_mxfp8.safetensors",
+        "weight_dtype": "default"
+      }
+    },
+    "vae": {
+      "class_type": "VAELoader",
+      "inputs": {
+        "vae_name": "wan21-vae.safetensors"
+      }
+    },
+    "variance": {
+      "class_type": "RBG_Smart_Seed_Variance",
+      "inputs": {
+        "conditioning": [
+          "positive",
+          0
+        ],
+        "cutoff_step": 7,
+        "cutoff_strength": 0.65,
+        "direction_shift": "🚫 None",
+        "fade_curve": "Instant",
+        "fine_tune_variance": 37,
+        "model_type": "🖼️ Qwen-Image",
+        "noise_injection": "Beginning Steps",
+        "protect_mode": "🚫 None",
+        "protect_regions": "",
+        "seed": 4567890,
+        "shift_strength": 140,
+        "total_steps": 23,
+        "variance_preset": "🌿 Balanced",
+        "variance_schedule": "decreasing",
+        "vibe_blend": 0.5
+      }
+    }
+  },
+  {
+    "clip": {
+      "class_type": "CLIPLoader",
+      "inputs": {
+        "clip_name": "qwen3vl_4b_fp8_scaled.safetensors",
+        "device": "default",
+        "type": "krea2"
+      }
+    },
+    "decode": {
+      "class_type": "VAEDecode",
+      "inputs": {
+        "samples": [
+          "sampler",
+          0
+        ],
+        "vae": [
+          "vae",
+          0
+        ]
+      }
+    },
+    "grain": {
+      "class_type": "FilmGrain",
+      "inputs": {
+        "image": [
+          "sharpen",
+          0
+        ],
+        "intensity": 0.05,
+        "scale": 1.0,
+        "temperature": 0.0,
+        "vignette": 0.0
+      }
+    },
+    "latent": {
+      "class_type": "EmptyLatentImage",
+      "inputs": {
+        "batch_size": 1,
+        "height": 1152,
+        "width": 2048
+      }
+    },
+    "negative": {
+      "class_type": "CLIPTextEncode",
+      "inputs": {
+        "clip": [
+          "clip",
+          0
+        ],
+        "text": "blurry, watermark"
+      }
+    },
+    "positive": {
+      "class_type": "CLIPTextEncode",
+      "inputs": {
+        "clip": [
+          "clip",
+          0
+        ],
+        "text": "a lighthouse in a storm, 35mm"
+      }
+    },
+    "sampler": {
+      "class_type": "ClownsharKSampler_Beta",
+      "inputs": {
+        "bongmath": false,
+        "cfg": 2.4,
+        "denoise": 0.85,
+        "eta": 0.35,
+        "latent_image": [
+          "latent",
+          0
+        ],
+        "model": [
+          "unet",
+          0
+        ],
+        "negative": [
+          "negative",
+          0
+        ],
+        "positive": [
+          "variance",
+          0
+        ],
+        "sampler_mode": "unsample",
+        "sampler_name": "res_2m",
+        "scheduler": "beta57",
+        "seed": 4567891,
+        "steps": 13,
+        "steps_to_run": -1
+      }
+    },
+    "save": {
+      "class_type": "SaveImage",
+      "inputs": {
+        "filename_prefix": "Krea2V2",
+        "images": [
+          "grain",
+          0
+        ]
+      }
+    },
+    "sharpen": {
+      "class_type": "ImageSharpen",
+      "inputs": {
+        "alpha": 1.0,
+        "image": [
+          "decode",
+          0
+        ],
+        "sharpen_radius": 1,
+        "sigma": 0.35
+      }
+    },
+    "unet": {
+      "class_type": "UNETLoader",
+      "inputs": {
+        "unet_name": "krea2_turbo_mxfp8.safetensors",
+        "weight_dtype": "default"
+      }
+    },
+    "vae": {
+      "class_type": "VAELoader",
+      "inputs": {
+        "vae_name": "wan21-vae.safetensors"
+      }
+    },
+    "variance": {
+      "class_type": "RBG_Smart_Seed_Variance",
+      "inputs": {
+        "conditioning": [
+          "positive",
+          0
+        ],
+        "cutoff_step": 7,
+        "cutoff_strength": 0.65,
+        "direction_shift": "🚫 None",
+        "fade_curve": "Instant",
+        "fine_tune_variance": 37,
+        "model_type": "🖼️ Qwen-Image",
+        "noise_injection": "Beginning Steps",
+        "protect_mode": "🚫 None",
+        "protect_regions": "",
+        "seed": 4567891,
+        "shift_strength": 140,
+        "total_steps": 23,
+        "variance_preset": "🌿 Balanced",
+        "variance_schedule": "decreasing",
+        "vibe_blend": 0.5
+      }
+    }
+  }
+]

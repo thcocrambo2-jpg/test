@@ -1,0 +1,394 @@
+[
+  {
+    "clip": {
+      "class_type": "CLIPLoader",
+      "inputs": {
+        "clip_name": "umt5_xxl_fp8_e4m3fn_scaled.safetensors",
+        "device": "default",
+        "type": "wan"
+      }
+    },
+    "decode": {
+      "class_type": "VAEDecode",
+      "inputs": {
+        "samples": [
+          "sampler_low",
+          0
+        ],
+        "vae": [
+          "vae",
+          0
+        ]
+      }
+    },
+    "i2v": {
+      "class_type": "WanImageToVideo",
+      "inputs": {
+        "batch_size": 1,
+        "height": 784,
+        "length": 53,
+        "negative": [
+          "negative",
+          0
+        ],
+        "positive": [
+          "positive",
+          0
+        ],
+        "start_image": [
+          "source",
+          0
+        ],
+        "vae": [
+          "vae",
+          0
+        ],
+        "width": 1184
+      }
+    },
+    "negative": {
+      "class_type": "CLIPTextEncode",
+      "inputs": {
+        "clip": [
+          "clip",
+          0
+        ],
+        "text": "static, blurry"
+      }
+    },
+    "positive": {
+      "class_type": "CLIPTextEncode",
+      "inputs": {
+        "clip": [
+          "clip",
+          0
+        ],
+        "text": "the waves roll in"
+      }
+    },
+    "sampler_high": {
+      "class_type": "KSamplerAdvanced",
+      "inputs": {
+        "add_noise": "enable",
+        "cfg": 3.1,
+        "end_at_step": 8,
+        "latent_image": [
+          "i2v",
+          2
+        ],
+        "model": [
+          "shift_high",
+          0
+        ],
+        "negative": [
+          "i2v",
+          1
+        ],
+        "noise_seed": 6789012,
+        "positive": [
+          "i2v",
+          0
+        ],
+        "return_with_leftover_noise": "enable",
+        "sampler_name": "dpmpp_2m",
+        "scheduler": "simple",
+        "start_at_step": 0,
+        "steps": 17
+      }
+    },
+    "sampler_low": {
+      "class_type": "KSamplerAdvanced",
+      "inputs": {
+        "add_noise": "disable",
+        "cfg": 3.1,
+        "end_at_step": 10000,
+        "latent_image": [
+          "sampler_high",
+          0
+        ],
+        "model": [
+          "shift_low",
+          0
+        ],
+        "negative": [
+          "i2v",
+          1
+        ],
+        "noise_seed": 0,
+        "positive": [
+          "i2v",
+          0
+        ],
+        "return_with_leftover_noise": "disable",
+        "sampler_name": "dpmpp_2m",
+        "scheduler": "simple",
+        "start_at_step": 8,
+        "steps": 17
+      }
+    },
+    "save": {
+      "class_type": "SaveVideo",
+      "inputs": {
+        "codec": "h264",
+        "filename_prefix": "wan/Wan22I2V",
+        "format": "mp4",
+        "video": [
+          "video",
+          0
+        ]
+      }
+    },
+    "shift_high": {
+      "class_type": "ModelSamplingSD3",
+      "inputs": {
+        "model": [
+          "unet_high",
+          0
+        ],
+        "shift": 8.0
+      }
+    },
+    "shift_low": {
+      "class_type": "ModelSamplingSD3",
+      "inputs": {
+        "model": [
+          "unet_low",
+          0
+        ],
+        "shift": 8.0
+      }
+    },
+    "source": {
+      "class_type": "LoadImage",
+      "inputs": {
+        "image": "golden_upload.png"
+      }
+    },
+    "unet_high": {
+      "class_type": "UNETLoader",
+      "inputs": {
+        "unet_name": "wan2.2_i2v_high_noise_14B_fp8_scaled.safetensors",
+        "weight_dtype": "default"
+      }
+    },
+    "unet_low": {
+      "class_type": "UNETLoader",
+      "inputs": {
+        "unet_name": "wan2.2_i2v_low_noise_14B_fp8_scaled.safetensors",
+        "weight_dtype": "default"
+      }
+    },
+    "vae": {
+      "class_type": "VAELoader",
+      "inputs": {
+        "vae_name": "wan_2.1_vae.safetensors"
+      }
+    },
+    "video": {
+      "class_type": "CreateVideo",
+      "inputs": {
+        "fps": 16.0,
+        "images": [
+          "decode",
+          0
+        ]
+      }
+    }
+  },
+  {
+    "clip": {
+      "class_type": "CLIPLoader",
+      "inputs": {
+        "clip_name": "umt5_xxl_fp8_e4m3fn_scaled.safetensors",
+        "device": "default",
+        "type": "wan"
+      }
+    },
+    "decode": {
+      "class_type": "VAEDecode",
+      "inputs": {
+        "samples": [
+          "sampler_low",
+          0
+        ],
+        "vae": [
+          "vae",
+          0
+        ]
+      }
+    },
+    "i2v": {
+      "class_type": "WanImageToVideo",
+      "inputs": {
+        "batch_size": 1,
+        "height": 784,
+        "length": 53,
+        "negative": [
+          "negative",
+          0
+        ],
+        "positive": [
+          "positive",
+          0
+        ],
+        "start_image": [
+          "source",
+          0
+        ],
+        "vae": [
+          "vae",
+          0
+        ],
+        "width": 1184
+      }
+    },
+    "negative": {
+      "class_type": "CLIPTextEncode",
+      "inputs": {
+        "clip": [
+          "clip",
+          0
+        ],
+        "text": "static, blurry"
+      }
+    },
+    "positive": {
+      "class_type": "CLIPTextEncode",
+      "inputs": {
+        "clip": [
+          "clip",
+          0
+        ],
+        "text": "the waves roll in"
+      }
+    },
+    "sampler_high": {
+      "class_type": "KSamplerAdvanced",
+      "inputs": {
+        "add_noise": "enable",
+        "cfg": 3.1,
+        "end_at_step": 8,
+        "latent_image": [
+          "i2v",
+          2
+        ],
+        "model": [
+          "shift_high",
+          0
+        ],
+        "negative": [
+          "i2v",
+          1
+        ],
+        "noise_seed": 6789013,
+        "positive": [
+          "i2v",
+          0
+        ],
+        "return_with_leftover_noise": "enable",
+        "sampler_name": "dpmpp_2m",
+        "scheduler": "simple",
+        "start_at_step": 0,
+        "steps": 17
+      }
+    },
+    "sampler_low": {
+      "class_type": "KSamplerAdvanced",
+      "inputs": {
+        "add_noise": "disable",
+        "cfg": 3.1,
+        "end_at_step": 10000,
+        "latent_image": [
+          "sampler_high",
+          0
+        ],
+        "model": [
+          "shift_low",
+          0
+        ],
+        "negative": [
+          "i2v",
+          1
+        ],
+        "noise_seed": 0,
+        "positive": [
+          "i2v",
+          0
+        ],
+        "return_with_leftover_noise": "disable",
+        "sampler_name": "dpmpp_2m",
+        "scheduler": "simple",
+        "start_at_step": 8,
+        "steps": 17
+      }
+    },
+    "save": {
+      "class_type": "SaveVideo",
+      "inputs": {
+        "codec": "h264",
+        "filename_prefix": "wan/Wan22I2V",
+        "format": "mp4",
+        "video": [
+          "video",
+          0
+        ]
+      }
+    },
+    "shift_high": {
+      "class_type": "ModelSamplingSD3",
+      "inputs": {
+        "model": [
+          "unet_high",
+          0
+        ],
+        "shift": 8.0
+      }
+    },
+    "shift_low": {
+      "class_type": "ModelSamplingSD3",
+      "inputs": {
+        "model": [
+          "unet_low",
+          0
+        ],
+        "shift": 8.0
+      }
+    },
+    "source": {
+      "class_type": "LoadImage",
+      "inputs": {
+        "image": "golden_upload.png"
+      }
+    },
+    "unet_high": {
+      "class_type": "UNETLoader",
+      "inputs": {
+        "unet_name": "wan2.2_i2v_high_noise_14B_fp8_scaled.safetensors",
+        "weight_dtype": "default"
+      }
+    },
+    "unet_low": {
+      "class_type": "UNETLoader",
+      "inputs": {
+        "unet_name": "wan2.2_i2v_low_noise_14B_fp8_scaled.safetensors",
+        "weight_dtype": "default"
+      }
+    },
+    "vae": {
+      "class_type": "VAELoader",
+      "inputs": {
+        "vae_name": "wan_2.1_vae.safetensors"
+      }
+    },
+    "video": {
+      "class_type": "CreateVideo",
+      "inputs": {
+        "fps": 16.0,
+        "images": [
+          "decode",
+          0
+        ]
+      }
+    }
+  }
+]
