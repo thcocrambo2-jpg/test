@@ -872,43 +872,59 @@ tab's list, which since the Edit tabs joined in is two of them.
 
 ## The Gallery, as a browser
 
-The tab used to be one column: tiles on top, and whichever one you clicked
-drawn underneath them. Looking at two pictures in a row meant scrolling
-down to see one, back up to click the next, and down again — per picture,
-forever, and worse the taller the picture was.
+The tab was two columns: a grid of large tiles where the other tabs put
+their controls, and the picture you had clicked where they put their
+output. Choosing and looking competed for the width of the screen, and on
+a phone the two halves stacked into one tall column that was mostly empty
+— a 600px grid, then a 600px picture, then the name of the file under it.
 
-Now the two halves sit **side by side** — the grid in the column the other
-tabs put their controls in, the viewer where they put their output — and
-the viewer is what you drive:
+So it is **one stage with the picture on it and a filmstrip of small
+tiles under that**, top to bottom, at every width. It is the shape a
+picture viewer settles on because it is the one where the picture gets
+the room and everything else stays a glance away.
 
-- **◀ Prev / Next ▶**, and the **← →** arrow keys, walk the whole list.
-  The keys are bound in `theme.JS`, resolve the two buttons by `elem_id`,
-  and only fire while they are on screen (`offsetParent` is `null` inside
-  a hidden tab) and while nothing is being typed into — so they cost
-  nothing and do nothing on any other tab.
-- **The grid follows the viewer**, highlighting the tile being shown, and
-  the arrows are not bound by it: walking past the bottom of the loaded
-  page pulls the next one in, so a long walk down leaves the grid where
-  the walk got to rather than back at the top.
-- **A position line** — `12 of 340 · Krea2_00042_.png` — sits between the
-  two buttons, and the ends of the list are a dead button rather than a
-  wrap-around. Landing back at the top after walking off the end of a few
-  hundred files reads as a bug.
-- **Refresh opens on the newest file** instead of an empty panel, which
-  used to take a further click to fill.
-- **Delete steps onto the next file** rather than emptying the viewer —
+- **The picture is the control.** Click its left half for the file before
+  it, its right half for the one after. The chevrons appear under the
+  pointer, are drawn permanently on a touch screen, and are not drawn at
+  all at the ends of the list — the zones are real buttons, so an end of
+  the list disables one and CSS takes its chevron with it. The old
+  ◀ Prev / Next ▶ pair is gone.
+- **← →** still walk the list. They resolve a second, off-screen pair of
+  buttons by `elem_id` (`.kx-sr-nav` — clipped rather than
+  `display: none`, so `offsetParent` still answers "is the Gallery tab on
+  screen?"), because the click zones stand down over a **video**, where
+  the middle of the picture belongs to the player's own controls.
+- **The strip follows the picture**, highlighting the tile being shown
+  and scrolling it back into view when a walk takes it near an edge —
+  its own container only, never the page. The steps are not bound by
+  what is loaded: walking past the end of the strip pulls the next page
+  in, so a long walk leaves the strip where the walk got to.
+- **A count**, `12 / 340`, and nothing else. The filename used to ride
+  along there: it named a file whose picture was directly above it, and
+  changed length on every step.
+- **The bin** is an icon, next to the count, under the picture it deletes
+  — and its confirm step shares that row rather than taking one of its
+  own, so arming a delete does not shove the filmstrip down the page.
+- **Refresh opens on the newest file** instead of an empty stage.
+- **Delete steps onto the next file** rather than emptying the stage —
   see below.
 
 One rule holds all of it together: **the cursor is the state, and
-everything else is drawn from it.** A tile click, an arrow, a delete and a
+everything else is drawn from it.** A tile click, a step, a delete and a
 refresh all end in the same `_view_at()`, so there is no arrangement in
-which the picture, the position line, the recipe panel and the highlighted
-tile disagree about which file is selected.
+which the picture, the count, the recipe panel and the highlighted tile
+disagree about which file is selected.
 
 The tiles are only re-sent to the browser when the page actually grows.
 Every other step is a highlight move: handing `gr.Gallery` the same list
 again makes it rebuild the grid, which throws away the scroll position of
 the very thing being scrolled through.
+
+The stage is a **fixed height** — `min(58vh, 560px)`, and 46vh on a
+phone. Fitting it to each picture would move the filmstrip up and down
+the page on every step, and the strip is the thing being aimed at. One
+CSS variable carries that number, so the phone layout is this one with
+smaller numbers rather than a second arrangement to keep working.
 
 ## Recipes — "how was this made?"
 
@@ -1020,12 +1036,13 @@ exactly the guarding the prompt library's `_pick` and `_num` already do:
 
 ### Deleting a file
 
-The viewer carries a **🗑️ Delete**, which removes the selected file for
-good — the pod's disk is ephemeral and there is no trash to fish anything
-back out of, so it is two clicks: 🗑️ arms it, and a confirm button in a
-row that only exists while it is armed does it. Anything that changes the
-selection disarms, because arming is a property of the selection rather
-than of the tab.
+The bar under the picture carries a **🗑**, which removes the file being
+shown for good — the pod's disk is ephemeral and there is no trash to
+fish anything back out of, so it is two clicks: the bin arms it, and a
+confirm button that only exists while it is armed does it. Both live in
+that same bar, so arming does not resize the tab. Anything that changes
+the selection disarms, because arming is a property of the selection
+rather than of the tab.
 
 Three things go, in that order:
 
@@ -1045,14 +1062,14 @@ Three things go, in that order:
    that is gone. A rewrite is O(everything), which is affordable for a
    deliberate one-at-a-time gesture behind a confirm step.
 
-The grid is then rebuilt from the state list minus that one path rather
+The strip is then rebuilt from the state list minus that one path rather
 than by re-scanning, for the same reason **Load more** pages out of state:
 a rescan jumps back to page one, and someone who has paged four screens
 down to tidy up would lose their place on every delete.
 
 **The cursor does not move**, which is the point. Culling a batch is
 look-bin-look-bin, and a viewer that empties itself after every delete
-turns each of those into a click back into the grid. Keeping the index
+turns each of those into a click back into the strip. Keeping the index
 means the file that was below the deleted one slides up into it — and at
 the end of the list it steps back rather than off.
 

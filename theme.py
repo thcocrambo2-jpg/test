@@ -868,17 +868,246 @@ CSS = f"""
   .kx-undo-btn svg {{ width: 17px; height: 17px; }}
 }}
 
-/* The Gallery tab's viewer header: ◀ Prev, where you are, Next ▶. The
-   two buttons take their own width and the position line takes the rest,
-   so it stays centred between them however long a filename gets. */
-.kx-viewer-nav {{
-  align-items: center !important;
-  gap: 8px;
-  margin-bottom: 6px !important;
+/* ------------------------------------------------------- the gallery tab */
+/* The Gallery tab is a viewer, not a form: a stage with one picture on
+   it, a slim bar under that, and a filmstrip of small tiles under that.
+   One column all the way down, so the phone layout is this one with
+   smaller numbers rather than a second arrangement to keep working.
+
+   The stage is a fixed height on purpose. Sizing it to each picture
+   would move the filmstrip up and down the page on every step, and the
+   strip is the thing being aimed at. */
+.kx-stage {{
+  --kx-stage-h: min(58vh, 560px);
+  position: relative;
+  border: 1px solid var(--kx-border);
+  border-radius: 14px;
+  background: var(--kx-sunken);
+  overflow: hidden;
+  padding: 0 !important;
+  gap: 0 !important;
+  /* With nothing selected both the image and the video are hidden and
+     the stage has no content at all. An empty stage should look like an
+     empty stage rather than like a stray horizontal rule. */
+  min-height: 140px;
 }}
-.kx-viewer-nav > button {{ flex: none !important; width: auto !important; }}
-.kx-viewer-nav > *:not(button) {{ flex: 1 1 auto !important; min-width: 0; }}
-.kx-viewer-nav .kx-meta p {{ text-align: center; }}
+
+/* The picture sits *on* the stage — its own card chrome would be a box
+   drawn inside a box. */
+.kx-stage .block {{
+  background: transparent !important;
+  border: 0 !important;
+  box-shadow: none !important;
+  padding: 0 !important;
+}}
+
+/* max-height, not height: it outranks the inline height Gradio writes
+   from the component's own `height=`, so the media query at the foot of
+   this file re-sizes the stage on a phone without the Python having to
+   carry a second number for it. */
+.kx-stage .image-container,
+.kx-stage .image-frame,
+.kx-stage .video-container,
+.kx-stage img,
+.kx-stage video {{
+  max-height: var(--kx-stage-h) !important;
+}}
+.kx-stage img, .kx-stage video {{ object-fit: contain; }}
+
+/* Gradio's own download and fullscreen buttons live in the picture's top
+   right corner, and the click zones below would otherwise be laid over
+   them. Lift them out — and because that depends on Gradio's class
+   names, also keep the zones off the top of the stage entirely, so the
+   buttons stay reachable even if a version renames their wrapper. */
+.kx-stage .icon-button-wrapper,
+.kx-stage .icon-buttons,
+.kx-stage .top-panel {{ z-index: 5 !important; }}
+
+/* Click the left or right of the picture to walk the list — where the
+   pointer already is, rather than a Prev/Next pair somewhere above it.
+   These are real buttons on the same handler as the arrow keys, so an
+   end of the list disables one; the chevron is drawn on :enabled, so a
+   zone that would do nothing stops offering itself. */
+.kx-zones {{
+  position: absolute !important;
+  inset: 42px 0 0 0;
+  display: flex !important;
+  flex-wrap: nowrap !important;
+  gap: 0 !important;
+  margin: 0 !important;
+  padding: 0 !important;
+  pointer-events: none;
+  z-index: 3;
+}}
+.kx-zones > * {{
+  flex: 1 1 50% !important;
+  min-width: 0 !important;
+  display: flex !important;
+}}
+.kx-zones button {{
+  flex: 1 1 auto !important;
+  width: 100% !important;
+  min-width: 0 !important;
+  height: 100% !important;
+  display: flex !important;
+  align-items: center;
+  padding: 0 14px !important;
+  border: 0 !important;
+  border-radius: 0 !important;
+  background: transparent !important;
+  box-shadow: none !important;
+  pointer-events: auto;
+  opacity: 0;
+  transition: opacity .15s;
+  /* The label is there for a screen reader; the chevron below is what a
+     pointer gets. */
+  font-size: 0 !important;
+}}
+.kx-zones button > * {{ font-size: 0 !important; }}
+.kx-zones button::before {{
+  content: "❮";
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 38px;
+  height: 38px;
+  font-size: 14px;
+  line-height: 1;
+  border-radius: 999px;
+  border: 1px solid rgba(255, 255, 255, .18);
+  background: rgba(15, 16, 24, .55);
+  backdrop-filter: blur(6px);
+  color: #fff;
+}}
+.kx-zone-next button, button.kx-zone-next {{ justify-content: flex-end; }}
+.kx-zone-next button::before, button.kx-zone-next::before {{ content: "❯"; }}
+.kx-zones button:hover:not(:disabled),
+.kx-zones button:focus-visible {{ opacity: 1; }}
+.kx-zones button:disabled {{ opacity: 0 !important; pointer-events: none; }}
+/* There is no hover on a touch screen, so the chevrons have to be there
+   without one — quiet enough to stay out of the picture's way. */
+@media (pointer: coarse) {{
+  .kx-zones button:not(:disabled) {{ opacity: .8; }}
+}}
+
+/* The bar under the picture: where you are on the left, the bin on the
+   right, and the confirm step in between rather than in a row of its own
+   — arming a delete should not shove the filmstrip down the page. */
+.kx-gal-bar {{
+  align-items: center !important;
+  flex-wrap: wrap;
+  gap: 8px !important;
+  margin: 10px 0 !important;
+}}
+.kx-gal-bar > * {{
+  flex: none !important;
+  width: auto !important;
+  /* The confirm step is a .kx-navrow, which carries a bottom margin for
+     the pricing panel it was written for. In a row that centres its
+     children that margin is a shove upwards. */
+  margin-bottom: 0 !important;
+}}
+.kx-gal-bar > .kx-gal-pos {{ flex: 1 1 auto !important; min-width: 0; }}
+.kx-gal-pos p {{
+  margin: 0 !important;
+  /* The count changes on every step and sits next to nothing else that
+     moves — proportional digits would make it twitch. */
+  font-variant-numeric: tabular-nums;
+}}
+.kx-gal-pos strong {{ font-size: .8125rem; }}
+
+/* A bin, not a labelled button: it acts on the picture directly above
+   it, which is the only thing it could act on. */
+.kx-icon-btn, .kx-icon-btn button, button.kx-icon-btn {{
+  flex: none !important;
+  width: 38px !important;
+  min-width: 38px !important;
+  padding: 0 !important;
+  font-size: 15px !important;
+}}
+
+/* The filmstrip. Gradio lays a Gallery out as a wrapping grid; this is
+   one row that scrolls sideways instead, which is what keeps it a way
+   *to* the picture rather than a second screenful of pictures competing
+   with the one above it. Heights are left to the tiles so the strip is
+   exactly as tall as one of them at either screen size. */
+.kx-strip, .kx-strip .grid-wrap, .kx-strip .grid-container {{
+  height: auto !important;
+  min-height: 0 !important;
+}}
+/* Both containers get the row treatment, because which one holds the
+   tiles is Gradio's business and has moved between versions: a flex row
+   that ends up with a single child is a flex row with one child in it,
+   and the sizing below goes on the tiles themselves rather than on
+   whatever happens to be their parent. */
+.kx-strip .grid-wrap,
+.kx-strip .grid-container {{
+  display: flex !important;
+  flex-wrap: nowrap !important;
+  grid-template-columns: none !important;
+  gap: 8px !important;
+}}
+.kx-strip .grid-wrap {{
+  overflow-x: auto !important;
+  overflow-y: hidden !important;
+  padding: 2px !important;
+}}
+.kx-strip .grid-container {{ flex: 1 0 auto !important; padding: 0 !important; }}
+.kx-strip .grid-container > *,
+.kx-strip .thumbnail-item,
+.kx-strip .gallery-item {{
+  flex: 0 0 auto !important;
+  width: var(--kx-tile, 78px) !important;
+  height: var(--kx-tile, 78px) !important;
+}}
+.kx-strip .thumbnail-item img,
+.kx-strip .gallery-item img {{
+  width: 100% !important;
+  height: 100% !important;
+}}
+/* The tile being shown is the only one at full strength: the strip is
+   read out of the corner of the eye while the picture has the middle of
+   it. */
+.kx-strip .thumbnail-item,
+.kx-strip .gallery-item {{ opacity: .7; transition: opacity .15s; }}
+.kx-strip .thumbnail-item:hover,
+.kx-strip .gallery-item:hover {{ opacity: 1; }}
+.kx-strip .selected,
+.kx-strip [aria-selected="true"] {{
+  opacity: 1 !important;
+  outline: 2px solid var(--kx-accent) !important;
+  outline-offset: -2px;
+}}
+
+/* The count of what is loaded, and the button that loads more of it. */
+.kx-strip-bar {{
+  align-items: center !important;
+  gap: 8px !important;
+  margin-top: 6px !important;
+}}
+.kx-strip-bar > * {{ flex: none !important; width: auto !important; }}
+.kx-strip-bar > *:first-child {{ flex: 1 1 auto !important; min-width: 0; }}
+
+/* The ← → keys' buttons. Off screen but *rendered*: the JS below refuses
+   to fire while they are not on screen, which is what stops the arrow
+   keys doing anything on another tab, and `visible=False` would take
+   that test away along with them. Clipped rather than display: none for
+   the same reason — and being real, focusable buttons they are also the
+   keyboard way through the list, which the click zones over the picture
+   are not. */
+.kx-sr-nav {{
+  position: absolute !important;
+  top: 0;
+  left: 0;
+  width: 1px !important;
+  height: 1px !important;
+  min-width: 0 !important;
+  margin: 0 !important;
+  padding: 0 !important;
+  overflow: hidden !important;
+  clip-path: inset(50%);
+  white-space: nowrap;
+}}
 
 /* The Gallery tab's Delete button. Quiet until it is pointed at: the
    control is permanent and unrecoverable, so it should be findable
@@ -2296,6 +2525,18 @@ a.kx-shot {{ cursor: zoom-in; text-decoration: none !important; }}
 @media (max-width: 860px) {{
   .gradio-container .row {{ flex-wrap: wrap; }}
   .kx-panel, .kx-panel-out {{ flex: 1 1 100% !important; min-width: 100% !important; }}
+  /* The Gallery tab, smaller rather than rearranged — it is one column
+     at every width, so a phone needs a few numbers rather than a second
+     layout. A stage taller than about half the viewport pushes the
+     filmstrip off the bottom, which is the half of the tab that says
+     there is anything else to look at. */
+  .kx-stage {{ --kx-stage-h: 46vh; }}
+  .kx-strip {{ --kx-tile: 62px; }}
+  /* The chevrons are drawn without being hovered here (see the
+     coarse-pointer rule above), so they sit closer in, and the corner
+     they have to stay clear of is a smaller one. */
+  .kx-zones {{ inset: 36px 0 0 0; }}
+  .kx-zones button {{ padding: 0 10px !important; }}
 }}
 
 /* The showcase blocks, which are laid out by their own grids rather than by
@@ -2427,6 +2668,12 @@ JS = r"""
   // through them one at a time. The two buttons are found by id and only
   // ever clicked while they are on screen (offsetParent is null inside a
   // hidden tab), so this costs nothing and does nothing on any other tab.
+  //
+  // They are the off-screen pair (.kx-sr-nav), not the click zones over
+  // the picture: the zones are hidden while a video is playing, and the
+  // keys have to keep walking straight past one. Clipped rather than
+  // display: none precisely so that on-screen test still means "the
+  // Gallery tab is the tab you are looking at".
   document.addEventListener("keydown", (event) => {
     if (event.key !== "ArrowLeft" && event.key !== "ArrowRight") return;
     if (event.ctrlKey || event.metaKey || event.altKey || event.shiftKey) {
@@ -2447,6 +2694,65 @@ JS = r"""
     event.preventDefault();
     button.click();
   });
+
+  // ------------------------------------------------------- the filmstrip
+  // Keep the highlighted tile inside the Gallery tab's strip. Stepping
+  // through the list moves the highlight without touching the strip, so
+  // a walk of a dozen files would otherwise leave the tile being shown
+  // somewhere off to the left of a strip that never moved — and with it
+  // any sense of where in the list you are.
+  //
+  // Scrolls the strip's own container rather than calling
+  // scrollIntoView, which would take the page with it and drag the
+  // picture off the top of the screen. Only when the tile is near an
+  // edge: re-centring on a tile someone has just clicked is the strip
+  // moving out from under the pointer for no reason.
+  const followStrip = (strip) => {
+    const wrap = strip.querySelector(".grid-wrap") || strip;
+    const tile = strip.querySelector('.selected, [aria-selected="true"]');
+    if (!tile) return;
+    const box = tile.getBoundingClientRect();
+    const view = wrap.getBoundingClientRect();
+    if (!box.width || !view.width) return;
+    const edge = box.width * 0.75;
+    if (box.left >= view.left + edge && box.right <= view.right - edge) {
+      return;
+    }
+    wrap.scrollBy({
+      left: (box.left + box.width / 2) - (view.left + view.width / 2),
+      behavior: "smooth",
+    });
+  };
+
+  // The strip is inside a tab that is built with the page but may never
+  // be opened, so this waits for the element rather than assuming it is
+  // there when the script runs — and stops watching for it the moment it
+  // is. Redraws are batched through one frame: Gradio rewrites the whole
+  // grid when a page of tiles is added, which is a burst of mutations
+  // for one move of the highlight.
+  const watchStrip = () => {
+    const strip = document.getElementById("kx-gallery-strip");
+    if (!strip) return false;
+    let queued = false;
+    new MutationObserver(() => {
+      if (queued) return;
+      queued = true;
+      requestAnimationFrame(() => {
+        queued = false;
+        followStrip(strip);
+      });
+    }).observe(strip, {
+      childList: true, subtree: true,
+      attributes: true, attributeFilter: ["class"],
+    });
+    return true;
+  };
+  if (!watchStrip()) {
+    const boot = new MutationObserver(() => {
+      if (watchStrip()) boot.disconnect();
+    });
+    boot.observe(document.documentElement, {childList: true, subtree: true});
+  }
 
   // Click the output-path pill in the footer to copy it. The pod's disk is
   // ephemeral, so this path gets typed into scp/rsync often enough to be
