@@ -35,8 +35,12 @@ sys.path.insert(0, str(Path(__file__).resolve().parent))
 
 import gen_webui_bundle as gen                              # noqa: E402
 
+# ASCII in every message below, like check_build_args.py: build.ps1 runs
+# this in a Windows console, which decodes with the OEM code page, where
+# an em-dash arrives as a replacement character in the middle of the one
+# sentence that has to be readable.
 STALE = """\
-The React bundle is stale — webui_bundle.py was generated from a different
+The React bundle is stale - webui_bundle.py was generated from a different
 front end than the one in webui/src.
 
     committed  %s
@@ -54,7 +58,7 @@ whatever the UI looked like the last time somebody remembered.
 
 MISSING = """\
 webui_bundle.py does not exist, so the binary would have no front end at
-all — it would start, serve the API, and answer every page request with a
+all - it would start, serve the API, and answer every page request with a
 "front end not built" notice.
 
 Generate it on a machine with Node, and commit the result:
@@ -65,7 +69,7 @@ Generate it on a machine with Node, and commit the result:
 NO_SOURCES = """\
 webui/ is missing %s.
 
-That is not a stale bundle, it is an incomplete checkout — this check
+That is not a stale bundle, it is an incomplete checkout - this check
 cannot tell whether the committed module is current, so it fails rather
 than passing by default.
 """
@@ -92,14 +96,11 @@ def main() -> int:
     current = gen.source_hash()
     committed = getattr(webui_bundle, "SOURCE_HASH", None)
     if committed != current:
-        print(STALE % (committed or "(none — regenerate it)", current),
+        print(STALE % (committed or "(none - regenerate it)", current),
               file=sys.stderr)
         return 1
 
     if not args.quiet:
-        # ASCII on purpose, like check_build_args.py: this runs in a
-        # Windows console as often as in WSL, and there it is decoded with
-        # the OEM code page.
         print("webui bundle is current: %d assets, built %s"
               % (len(webui_bundle.ASSETS),
                  getattr(webui_bundle, "BUILT_AT", "?")))
