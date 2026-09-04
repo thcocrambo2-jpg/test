@@ -208,15 +208,27 @@
     overflow: hidden;
   }
 
-  /* The page head keeps its natural height; whatever the route rendered
-     takes the rest and scrolls. Gallery, Pricing and the Prompt Library are
-     that last child too, so they scroll in place instead of scrolling the
-     window — the same picture, minus a window scrollbar. */
-  .main > :last-child {
+  /* The page head keeps its natural height; `.pageBody` takes the rest and
+     scrolls. Gallery, Pricing and the Prompt Library scroll in place rather
+     than scrolling the window — the same picture, minus a window scrollbar.
+
+     A named element and not `.main > :last-child`, which is what this was
+     and which was wrong. That selector assumed every route renders exactly
+     [page head, content]; Gallery renders a *fragment* of two elements, so
+     the last child was its picture grid — and a grid handed a definite
+     height stretches its rows to fill it. 182px rows, 361px tiles, every
+     tile overlapping the next. Nothing about that is visible in the rule
+     that caused it, which is the argument for naming the box. */
+  .pageBody {
     flex: 1 1 auto;
     min-height: 0;
     overflow-y: auto;
   }
+}
+
+/* Below the breakpoint this is an ordinary block and the window scrolls. */
+.pageBody {
+  display: block;
 }
 
 .pageHead {

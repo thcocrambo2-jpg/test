@@ -78,7 +78,17 @@ export function App() {
                 </Page>
               }
             />
-            <Route path="/pricing" element={<Pricing />} />
+            <Route
+              path="/pricing"
+              element={
+                // Wrapped like every other route's content, because the
+                // scroll region is `.pageBody` and Pricing does not go
+                // through `Page` to get one — it brings its own heading.
+                <div className={s.pageBody}>
+                  <Pricing />
+                </div>
+              }
+            />
             <Route path="*" element={<NotFound />} />
           </Routes>
         )}
@@ -121,7 +131,12 @@ function Page({
           <p className={s.pageBlurb}>{blurb}</p>
         </div>
       </div>
-      {children}
+      {/* One element around the content, so the stylesheet has something to
+       *  name. Above 1101px this is the scrolling region under a fixed page
+       *  head; below it, an ordinary block. Without it the rule has to guess
+       *  which child is the content, and a page that renders a fragment —
+       *  Gallery does — hands it the wrong one. */}
+      <div className={s.pageBody}>{children}</div>
     </>
   )
 }

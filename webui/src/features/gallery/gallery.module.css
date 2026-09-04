@@ -95,6 +95,15 @@
   backdrop-filter: blur(6px);
   display: grid;
   grid-template-rows: auto minmax(0, 1fr) auto;
+  /* The column, which was never declared, and that was the bug.
+     `grid-template-rows` alone leaves the single column implicit and
+     therefore *content*-sized: with a long prompt in the header the track
+     came out 1656px wide inside a 1530px screen, so the header never had to
+     fit and its buttons — "Load these settings", Delete, the close ✕ — sat
+     past the right edge of a `position: fixed` element there is no scrolling
+     to. `minmax(0, 1fr)` says the column is the screen, and everything
+     inside it now has to negotiate for that width. */
+  grid-template-columns: minmax(0, 1fr);
   animation: fade var(--d-base) var(--e-out);
 }
 
@@ -113,12 +122,35 @@
   color: var(--c-text);
 }
 
+/* Whichever side has to give, it is this one.
+ *
+ * The prompt is long and the controls are not optional — the gallery's
+ * lightbox carries a Delete the output panel's does not, and that one extra
+ * button is the width that pushed "Load these settings" and the close ✕ off
+ * the right of the screen. So the title takes what is left and ellipsises,
+ * and the actions keep their size. */
 .lightboxTitle {
+  flex: 1 1 auto;
+  min-width: 0;
   font-size: var(--t-sm);
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
   color: var(--c-text-muted);
+}
+
+.lightboxActions {
+  flex: none;
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: var(--s-2);
+  /* The last resort, on a screen too narrow for the buttons themselves.
+     Wrapping here and not on the header: flex breaks lines using each item's
+     *max-content*, so a wrapping header would give the long title a whole row
+     to itself and drop the buttons below it long before either needed to
+     move. Here the title ellipsises first, which is what it is for. */
+  flex-wrap: wrap;
 }
 
 /* Flex, and that is the whole fix.

@@ -65,7 +65,7 @@ export function Lightbox({
     <div className={s.lightbox} role="dialog" aria-modal="true" aria-label="Image viewer">
       <header className={s.lightboxHead}>
         <span className={s.lightboxTitle}>{item.prompt || item.path}</span>
-        <div style={{ display: 'flex', gap: 'var(--s-2)', alignItems: 'center' }}>
+        <div className={s.lightboxActions}>
           <Pill>
             {index + 1} / {items.length}
           </Pill>
