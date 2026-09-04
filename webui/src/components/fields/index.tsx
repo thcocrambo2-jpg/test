@@ -86,12 +86,16 @@ export function TextAreaField({
   placeholder,
   lines = 3,
   mono,
+  collapsed,
 }: Common & {
   value: string
   onChange: (next: string) => void
   placeholder?: string
   lines?: number
   mono?: boolean
+  /** Fold the box away entirely until it is asked for, rather than showing
+   *  its first `lines` rows. Set by the schema; see `Field.collapsed`. */
+  collapsed?: boolean
 }) {
   const id = useId()
   const [expanded, setExpanded] = useState(false)
@@ -99,8 +103,15 @@ export function TextAreaField({
   // default is 1,300 characters) get a collapse toggle rather than a box that
   // eats the sidebar.
   const long = (value ?? '').length > 320
+  // Two different collapses, and the difference is the point. A merely long
+  // box keeps its rows and grows when expanded. One the schema marks
+  // `collapsed` has no box at all until it is opened — showing two rows of a
+  // negative prompt is showing two rows of noise, so it shows none.
+  const folds = Boolean(collapsed)
+  const open = expanded || !folds
   const rows = expanded ? Math.max(lines, 14) : lines
   const history = useUndoHistory(value ?? '', onChange)
+  const characters = (value ?? '').length
   return (
     <FieldShell
       id={id}
@@ -108,13 +119,30 @@ export function TextAreaField({
       hint={hint}
       wide={wide}
       trailing={
-        long && (
-          <Button variant="ghost" size="sm" onClick={() => setExpanded((open) => !open)}>
+        (folds || long) && (
+          <Button variant="ghost" size="sm" onClick={() => setExpanded((value) => !value)}>
             {expanded ? 'Collapse' : 'Expand'}
           </Button>
         )
       }
     >
+      {!open ? (
+        /* What is left when the box goes: how much is in there, and a way
+         * back in. Silence would be worse — a label with nothing under it
+         * reads as a control that failed to render. */
+        <button
+          type="button"
+          className={s.collapsedBox}
+          onClick={() => setExpanded(true)}
+          aria-expanded={false}
+          aria-controls={id}
+        >
+          {characters > 0
+            ? `${characters.toLocaleString()} characters — click to edit`
+            : 'Empty — click to write one'}
+        </button>
+      ) : (
+        <>
       <textarea
         id={id}
         rows={rows}
@@ -159,6 +187,8 @@ export function TextAreaField({
           </svg>
         </button>
       </div>
+        </>
+      )}
     </FieldShell>
   )
 }

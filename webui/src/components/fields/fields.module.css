@@ -483,3 +483,26 @@
   opacity: 0.35;
   cursor: default;
 }
+
+/* What stands in for a textarea the schema folds away. A control, not a
+   label: it is the way back into the box, so it is focusable and it says
+   what is inside without showing it. */
+.collapsedBox {
+  display: block;
+  width: 100%;
+  text-align: left;
+  padding: var(--s-2) var(--s-3);
+  border: 1px dashed var(--c-border);
+  border-radius: var(--r-md);
+  background: var(--c-bg-sunken);
+  color: var(--c-text-faint);
+  font-size: var(--t-xs);
+  font-family: inherit;
+  cursor: pointer;
+  transition: border-color var(--d-fast) var(--e-out), color var(--d-fast) var(--e-out);
+}
+
+.collapsedBox:hover {
+  border-color: var(--c-accent);
+  color: var(--c-text-muted);
+}

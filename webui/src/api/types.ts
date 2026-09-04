@@ -61,6 +61,11 @@ export interface Field {
   /** Full-width inside a two-up group row. */
   wide?: boolean
   accept?: string
+  /** Folds away entirely rather than showing its first rows. The negative
+   *  prompt wears this: two of the tabs default it to ~1,300 characters of
+   *  boilerplate, and a couple of rows of that is a couple of rows of noise
+   *  above the box anybody actually came for. */
+  collapsed?: boolean
 }
 
 /** How a tab's LoRA tail is shaped.

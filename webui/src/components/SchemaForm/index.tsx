@@ -211,6 +211,7 @@ function FieldRenderer({
           wide
           lines={field.lines}
           placeholder={field.placeholder}
+          collapsed={field.collapsed}
           value={String(value ?? '')}
           onChange={set}
         />

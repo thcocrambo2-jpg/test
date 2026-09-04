@@ -243,6 +243,17 @@ class Field:
     show_if: tuple | None = None     # (other field name, value it must hold)
     wide: bool = False
     accept: str | None = None
+    # Folds away entirely rather than showing its first few rows.
+    #
+    # For the negative prompt, which is the only thing wearing it. Two of
+    # the tabs default it to ~1,300 characters of comma-separated
+    # boilerplate nobody reads twice, and a textarea showing two rows of
+    # that is two rows of noise above the control anybody actually came
+    # for. Gradio put it in a closed gr.Accordion for the same reason.
+    #
+    # Distinct from the length-triggered Expand on every long textarea:
+    # that one keeps the box and grows it, this one removes the box.
+    collapsed: bool = False
     # RES4LYF builds its sampler and scheduler lists at load time, so a
     # name this build does not list is still a name the node may accept.
     # The two V2 dropdowns are gr.Dropdown(allow_custom_value=True); this
@@ -373,6 +384,8 @@ class Field:
             row["wide"] = True
         if self.accept:
             row["accept"] = self.accept
+        if self.collapsed:
+            row["collapsed"] = True
         return row
 
 
@@ -1062,7 +1075,7 @@ SCHEMAS = (
                   "A photorealistic golden-hour portrait, natural skin "
                   "texture, shallow depth of field", lines=5, group="prompt"),
             Field("negative", "Negative prompt (only used when CFG > 1)",
-                  "textarea", "", lines=2, group="prompt"),
+                  "textarea", "", lines=2, group="prompt", collapsed=True),
             *_seed_fields(),
             Field("steps", "Steps", "slider",
                   lambda: handlers.DEFAULTS["steps"], lo=1, hi=60, step=1,
@@ -1107,7 +1120,7 @@ SCHEMAS = (
             Field("prompt", "Positive Prompt", "textarea", "", lines=6,
                   group="prompt"),
             Field("negative", "Negatives", "textarea", V2_DEFAULT_NEGATIVE,
-                  lines=6, group="prompt"),
+                  lines=6, group="prompt", collapsed=True),
             # The seed the source workflow shipped with, kept as-is.
             *_seed_fields(default=370102505887178),
             Field("model", "Model", "select",
@@ -1161,7 +1174,7 @@ SCHEMAS = (
             Field("prompt", "Prompt (describes the masked region)",
                   "textarea", "", lines=3, group="prompt"),
             Field("negative", "Negative prompt (only used when CFG > 1)",
-                  "textarea", "", lines=2, group="prompt"),
+                  "textarea", "", lines=2, group="prompt", collapsed=True),
             *_seed_fields(),
             Field("steps", "Steps", "slider",
                   lambda: handlers.DEFAULTS["steps"], lo=1, hi=60, step=1,
@@ -1215,7 +1228,7 @@ SCHEMAS = (
                   "tits. dont change her face",
                   lines=3, group="prompt"),
             Field("negative", "Negative prompt (only used when CFG > 1)",
-                  "textarea", "", lines=2, group="prompt"),
+                  "textarea", "", lines=2, group="prompt", collapsed=True),
             *_seed_fields(),
             Field("steps", "Steps", "slider",
                   lambda: handlers.DEFAULTS["steps"], lo=1, hi=60, step=1,
@@ -1254,7 +1267,7 @@ SCHEMAS = (
             Field("prompt", "Edit instruction", "textarea", "", lines=3,
                   group="prompt"),
             Field("negative", "Negatives (only used when CFG > 1)",
-                  "textarea", V2_DEFAULT_NEGATIVE, lines=4, group="prompt"),
+                  "textarea", V2_DEFAULT_NEGATIVE, lines=4, group="prompt", collapsed=True),
             *_seed_fields(),
             Field("model", "Model", "select",
                   lambda: handlers.V2_MODEL_CHOICES[0],
@@ -1428,7 +1441,7 @@ SCHEMAS = (
                               "push-in, wind in the hair"),
             Field("negative",
                   "Negative prompt (only used when CFG > 1, i.e. Raw mode)",
-                  "textarea", WAN_DEFAULT_NEGATIVE, lines=2, group="prompt"),
+                  "textarea", WAN_DEFAULT_NEGATIVE, lines=2, group="prompt", collapsed=True),
             Field("model", "Model", "radio", WAN_MODEL_CHOICES[0],
                   choices=WAN_MODEL_CHOICES, group="core", wide=True),
             Field("mode", "Mode (14B only — the 5B has no Lightning)",

@@ -172,7 +172,16 @@ export function GenerateTab({ schema }: { schema: TabSchema }) {
       left={
         <>
           <PresetBar schema={schema} onApply={apply} />
+          {/* Keyed by tab, for the same reason the effect above resets the
+            * values: a tab switch is a different form. React Router renders
+            * the matched route into the same position, so without a key
+            * React reconciles `TabPage` with `TabPage` and every control
+            * keeps its local state — a negative prompt expanded on Krea2
+            * arrives expanded on V2, a LoRA stack opened on one tab is open
+            * on the next. The values were already handled; this is the rest
+            * of it. */}
           <SchemaForm
+            key={schema.key}
             schema={schema}
             values={values}
             setValue={set}
@@ -204,6 +213,7 @@ export function GenerateTab({ schema }: { schema: TabSchema }) {
       right={
         <>
           <SchemaForm
+            key={schema.key}
             schema={schema}
             values={values}
             setValue={set}
