@@ -100,6 +100,14 @@ def main() -> None:
         "--share", action="store_true",
         help="expose a public gradio.live link (default: localhost only)",
     )
+    parser.add_argument(
+        "--api-only", action="store_true",
+        help="run the FastAPI app instead of the Gradio one, with no "
+             "tunnel and no access token. This is the mode `npm run dev` "
+             "proxies to: Vite owns the HTML and the hot reload, and this "
+             "answers /api, /media and /thumbs. Without it you get the "
+             "Gradio UI, which is still the reference to compare against.",
+    )
     args = parser.parse_args()
 
     import features
@@ -120,6 +128,19 @@ def main() -> None:
     log.info("Features — %s", features.summary())
 
     stub_comfy()
+
+    if args.api_only:
+        # No token, because the alternative during development is pasting
+        # one on every restart and the alternative to *that* is somebody
+        # commenting the auth out. Set before api is imported: it reads
+        # the variable once, at import.
+        os.environ["KREA2_UI_ALLOW_ANON"] = "1"
+        import serve
+
+        log.info("Starting the API on http://127.0.0.1:%d "
+                 "(run `npm run dev` in webui/ for the UI)", args.port)
+        serve.serve(port=args.port, host="127.0.0.1", tunnel=False)
+        return
 
     # Imported last, and only now: ui.py builds its gr.Blocks at import
     # time, so this line is where the tabs are decided.
