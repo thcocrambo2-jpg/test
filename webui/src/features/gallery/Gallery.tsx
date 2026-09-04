@@ -281,7 +281,17 @@ function Tile({
         }
       }}
     >
-      <img className={s.image} src={item.url} alt={item.prompt ?? ''} loading="lazy" />
+      {/* The 512px WebP, not the multi-megabyte original: a page of tiles is
+          the one place the size difference is measured in tens of megabytes.
+          `?? item.url` is gallery_index's no-backfill policy showing through
+          — a video, or anything generated before thumbnails existed, has no
+          thumb and serves the original, exactly as it did before. */}
+      <img
+        className={s.image}
+        src={item.thumbUrl ?? item.url}
+        alt={item.prompt ?? ''}
+        loading="lazy"
+      />
       <label
         className={cx(s.pick, (selected || anySelected) && s.pickShown)}
         onClick={(event) => event.stopPropagation()}

@@ -309,6 +309,20 @@ def thumb_for(path) -> str:
     return str(thumb) if thumb.exists() else path
 
 
+def has_thumb(path) -> bool:
+    """Whether `path` has a thumbnail encoded, as opposed to a fallback.
+
+    The question `thumb_for` answers implicitly and the API has to answer
+    out loud: a caller handed a thumbnail URL will fetch it, so offering
+    one that resolves back to the original is offering to send the whole
+    file twice.
+    """
+    try:
+        return thumb_path(path).exists()
+    except ValueError:              # not under OUTPUT_DIR
+        return False
+
+
 def thumbs_for(paths) -> list[str]:
     """thumb_for over a page of paths, order preserved."""
     return [thumb_for(p) for p in paths]

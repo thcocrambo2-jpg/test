@@ -332,7 +332,6 @@ def _media(path, recipe=None) -> dict:
         "id": key,
         "path": key,
         "url": "%s/media/%s" % (PREFIX, quoted),
-        "thumbUrl": "%s/thumbs/%s" % (PREFIX, quoted),
         "kind": "video" if is_video else "image",
         # A placeholder ratio for video, so a grid of tiles does not
         # collapse to nothing while the browser loads metadata. Reading
@@ -348,6 +347,15 @@ def _media(path, recipe=None) -> dict:
             "%Y-%m-%dT%H:%M:%S", time.localtime(stat.st_mtime))
     except OSError:
         pass
+    # Only when there is really a thumbnail on disk. /thumbs falls back to
+    # the original for anything gallery_index never encoded — a video, or
+    # anything from before the module existed — and a caller told "here is
+    # a thumbnail" fetches it, so the fallback would hand the same
+    # multi-megabyte file down a second time, under a second cache key, to
+    # be shown at 512px. Absent is the honest answer, and `thumbUrl?` on
+    # the TypeScript side has always said it was one of the possible ones.
+    if not is_video and gallery_index.has_thumb(path):
+        row["thumbUrl"] = "%s/thumbs/%s" % (PREFIX, quoted)
     if not is_video:
         try:
             # Header-only: PIL does not decode pixels until you ask it to,

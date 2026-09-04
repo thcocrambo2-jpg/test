@@ -160,7 +160,14 @@ function Tile({ item, onOpen }: { item: MediaItem; onOpen: () => void }) {
         if (event.key === 'Enter') onOpen()
       }}
     >
-      <img className={s.tileImage} src={item.url} alt={item.prompt ?? ''} loading="lazy" />
+      {/* Thumbnail, for the same reason the gallery grid uses one — see the
+          note there. The lightbox this opens still shows the original. */}
+      <img
+        className={s.tileImage}
+        src={item.thumbUrl ?? item.url}
+        alt={item.prompt ?? ''}
+        loading="lazy"
+      />
       <div className={s.tileBar}>
         <span className={s.tileMeta}>
           {item.width} × {item.height}

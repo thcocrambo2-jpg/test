@@ -17,6 +17,39 @@ import s from './gallery.module.css'
  * here, so this one has arrow keys, Escape, a filmstrip that scrolls the
  * active thumb into view, and a delete that asks first.
  */
+/** How far either side of the current picture to warm the cache.
+ *
+ *  Two, not ten: these are multi-megabyte lossless PNGs, and a lookahead
+ *  wider than anyone arrows in the time one takes to arrive is bandwidth
+ *  spent on pictures that will be evicted before they are looked at. */
+const PREFETCH_AHEAD = 2
+
+/** URLs already handed to the browser to fetch, so no picture is asked for
+ *  twice however fast the arrow key is held.
+ *
+ *  Bookkeeping only — a set of strings. The bytes live in the HTTP cache,
+ *  where `/media` puts them for a day (`Cache-Control: private,
+ *  max-age=86400`), which is both a better cache than anything kept here
+ *  and one that does not hold decoded bitmaps at ~4 bytes a pixel.
+ *
+ *  Capped so a long browse does not grow it without end. Evicting a URL
+ *  does not evict the file: the worst an eviction costs is one re-request
+ *  that the HTTP cache answers immediately. */
+const PREFETCHED = new Set<string>()
+const PREFETCH_MEMORY = 200
+
+function prefetch(url: string): void {
+  if (PREFETCHED.has(url)) return
+  if (PREFETCHED.size >= PREFETCH_MEMORY) {
+    // A Set iterates in insertion order, so the first key is the oldest.
+    const oldest = PREFETCHED.values().next().value
+    if (oldest !== undefined) PREFETCHED.delete(oldest)
+  }
+  PREFETCHED.add(url)
+  const image = new Image()
+  image.src = url
+}
+
 export function Lightbox({
   items,
   index,
@@ -32,8 +65,18 @@ export function Lightbox({
 }) {
   const item = items[index]
   const stripRef = useRef<HTMLDivElement>(null)
+  const stageRef = useRef<HTMLImageElement>(null)
   const { copied, copy } = useCopy()
   const reuse = useReuse(item)
+
+  /* Which full-resolution file is actually on screen.
+   *
+   * Held as the URL rather than a boolean so it falsifies itself in the
+   * same render that `index` changes: a `useEffect` resetting a flag runs
+   * *after* paint, which is one frame of the previous picture's `ready`
+   * state applied to the next picture's `src` — a flash of nothing. */
+  const [loaded, setLoaded] = useState<string | null>(null)
+  const ready = item?.kind === 'video' || loaded === item?.url
 
   useEffect(() => {
     function onKeyDown(event: KeyboardEvent) {
@@ -58,6 +101,38 @@ export function Lightbox({
     const active = strip?.children[index] as HTMLElement | undefined
     active?.scrollIntoView({ block: 'nearest', inline: 'center' })
   }, [index])
+
+  // A cached picture can finish loading before React attaches `onLoad`, and
+  // then the event never fires and the stage stays at opacity 0 forever.
+  // `complete` is the same question asked after the fact.
+  useEffect(() => {
+    if (item && stageRef.current?.complete) setLoaded(item.url)
+  }, [item])
+
+  /* Fetch the neighbours, so arrowing lands on something already in the
+   * browser's cache instead of starting a multi-megabyte download.
+   *
+   * Deliberately *after* the current picture has loaded: these share one
+   * connection with the thing being looked at, and starving that to warm
+   * something nobody has asked for yet would trade the visible wait for a
+   * longer one. `ready` is also set on error, so a file that 404s does not
+   * wedge the lookahead.
+   *
+   * Nothing is cancelled on the way out. A prefetch that is still in flight
+   * when you arrow past it is one you very likely still want — the browser
+   * caps its own concurrency, and `prefetch` refuses to ask twice. */
+  useEffect(() => {
+    if (!ready) return
+    for (let offset = -PREFETCH_AHEAD; offset <= PREFETCH_AHEAD; offset += 1) {
+      if (offset === 0) continue
+      const neighbour = items[index + offset]
+      // A video's `url` is the whole file and its `thumbUrl` is that same
+      // file again (gallery_index does not frame-grab), so prefetching one
+      // means pulling the entire clip to show a tile. Left to the <video>.
+      if (!neighbour || neighbour.kind === 'video') continue
+      prefetch(neighbour.url)
+    }
+  }, [ready, index, items])
 
   if (!item) return null
 
@@ -122,12 +197,40 @@ export function Lightbox({
             onClick={(event) => event.stopPropagation()}
           />
         ) : (
-          <img
-            className={s.lightboxImage}
-            src={item.url}
-            alt={item.prompt ?? ''}
+          /* Two layers, and the order matters.
+           *
+           * Underneath, the 512px thumbnail as a *background* — already in
+           * cache because the grid tile that opened this used the same URL,
+           * so it paints on the first frame and the stage is never blank.
+           * A background and not an <img> on purpose: backgrounds are not
+           * hit-test targets, so "Copy image" in the moment before the
+           * full-resolution file lands cannot quietly hand over a 512px
+           * WebP. The only thing right-clickable here is the original.
+           *
+           * On top, the original, revealed once it has decoded. The frame
+           * carries the aspect ratio so neither layer moves during the
+           * swap — it is a sharpen, not a reflow. */
+          <div
+            className={s.stageFrame}
+            style={{ ['--ratio' as string]: `${item.width} / ${item.height}` }}
             onClick={(event) => event.stopPropagation()}
-          />
+          >
+            {item.thumbUrl && (
+              <div
+                className={s.stageThumb}
+                style={{ backgroundImage: `url("${item.thumbUrl}")` }}
+                aria-hidden="true"
+              />
+            )}
+            <img
+              ref={stageRef}
+              className={cx(s.lightboxImage, s.stageFull, ready && s.stageReady)}
+              src={item.url}
+              alt={item.prompt ?? ''}
+              onLoad={() => setLoaded(item.url)}
+              onError={() => setLoaded(item.url)}
+            />
+          </div>
         )}
         {index < items.length - 1 && (
           <button

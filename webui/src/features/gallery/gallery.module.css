@@ -253,6 +253,70 @@
   box-shadow: var(--sh-lg);
 }
 
+/* The still image's stage: a box the exact shape of the picture, holding the
+   thumbnail and the original stacked on one another.
+
+   It needs the ratio because the <img> inside has no intrinsic size until it
+   loads, and a box that sizes itself from its content would be zero high for
+   exactly as long as there is something to show underneath. Full height,
+   width derived from the ratio, and `max-width` clamping the landscape case
+   back — at which point the ratio re-derives the height. */
+.stageFrame {
+  position: relative;
+  aspect-ratio: var(--ratio, 1);
+  height: 100%;
+  width: auto;
+  max-width: 100%;
+  max-height: 100%;
+  min-width: 0;
+  min-height: 0;
+  border-radius: var(--r-md);
+  overflow: hidden;
+  box-shadow: var(--sh-lg);
+}
+
+/* The thumbnail, blurred.
+   Blurred because it is a 512px WebP being shown several times its own size,
+   and a picture that is softly out of focus reads as one still arriving,
+   where the same picture merely rescaled reads as a bad copy. The scale hides
+   the transparent margin `blur()` leaves at the edges. */
+.stageThumb {
+  position: absolute;
+  inset: 0;
+  background-position: center;
+  background-repeat: no-repeat;
+  background-size: cover;
+  filter: blur(12px);
+  transform: scale(1.06);
+}
+
+.stageFull {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  max-width: none;
+  max-height: none;
+  /* The frame already carries them, and rounding the same corner twice
+     leaves a rim of blurred thumbnail outside the sharp image. */
+  border-radius: 0;
+  box-shadow: none;
+  opacity: 0;
+  transition: opacity var(--d-base) var(--e-out);
+}
+
+.stageReady {
+  opacity: 1;
+}
+
+/* Someone who has asked not to be shown motion is not asking to be shown a
+   blurred picture for longer. No crossfade; the original simply appears. */
+@media (prefers-reduced-motion: reduce) {
+  .stageFull {
+    transition: none;
+  }
+}
+
 .arrow {
   position: absolute;
   top: 50%;
