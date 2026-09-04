@@ -1300,7 +1300,7 @@ SCHEMAS = (
         category="generate", route="/generate/flux", submit_label="Generate",
         groups=(G_PROMPT, Group("core", "Output", dense=True), G_SEED),
         fields=(
-            Field("prompt", "Prompt", "textarea",
+            Field("prompt", "Positive Prompt", "textarea",
                   "A photorealistic golden-hour portrait, natural skin "
                   "texture, shallow depth of field", lines=5, group="prompt"),
             *_seed_fields(),
