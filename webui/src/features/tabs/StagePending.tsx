@@ -1,6 +1,6 @@
 import type { TabSchema } from '@/api/types'
 import { Alert, Card, Pill } from '@/components/ui'
-import { argumentCount } from '@/lib/schema'
+import { controlCount } from '@/lib/schema'
 import s from './tabs.module.css'
 
 /*
@@ -35,7 +35,7 @@ export function StagePending({ schema }: { schema: TabSchema }) {
             <b>{schema.fields.length}</b> named controls
           </Pill>
           <Pill>
-            <b>{argumentCount(schema)}</b> positional arguments
+            <b>{controlCount(schema)}</b> controls in all
           </Pill>
           {schema.lora ? (
             <Pill tone="accent">

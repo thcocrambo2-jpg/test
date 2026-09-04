@@ -1,0 +1,11 @@
+/* The preset dropdown's own row, above the form.
+ *
+ * It sits apart from the schema-driven fields on purpose: a preset is not a
+ * control the handler receives, it is a way of setting all of them at once.
+ * Gradio put it inside the same column with no separation, and it read as one
+ * more dropdown among thirty. */
+.bar {
+  padding-bottom: var(--s-3);
+  margin-bottom: var(--s-3);
+  border-bottom: 1px solid var(--border);
+}

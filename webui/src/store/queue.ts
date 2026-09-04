@@ -1,17 +1,26 @@
 import { create } from 'zustand'
 import { useShallow } from 'zustand/react/shallow'
 import { api } from '@/api/client'
-import type { JobEvent, MediaItem, SubmitValues } from '@/api/types'
+import type {
+  DisplayResult,
+  MediaItem,
+  QueueJob,
+  StreamEvent,
+  SubmitValues,
+  TabSchema,
+} from '@/api/types'
 
 /*
  * The job queue.
  *
- * Three of the six UX defects this rewrite is meant to fix live in this file:
+ * Three of the six UX defects this rewrite exists to fix live in this file:
  *
  *   * There is no progress bar today. Status is a string in a textbox polled
  *     once a second, even though client.py:270 has been yielding
  *     {"type":"progress","step","total"} the whole time. `progress` below is
- *     that pair, kept per job, and the bar is determinate as a result.
+ *     that pair and the bar is determinate as a result. The server parses it
+ *     back out of the status line for now — see api._progress_pair, which
+ *     says plainly that it is a bridge.
  *
  *   * Errors are invisible today. Every failure is a `❌ …` string written
  *     into the same textbox the next poll overwrites. Here an error is a
@@ -20,6 +29,14 @@ import type { JobEvent, MediaItem, SubmitValues } from '@/api/types'
  *
  *   * The queue itself was never visible. Jobs are addressable by id, so an
  *     alert can be keyed to the run that produced it.
+ *
+ * What changed in Section 2: the queue is no longer this store's own idea.
+ * It is process-wide on the server, because there is one GPU behind it, and
+ * two browser tabs open on the same pod see one queue — which is the truthful
+ * picture. So `connect()` opens one SSE stream, the `queue` event *is* the
+ * job list, and this store's job is to merge the server's truth with the two
+ * things only the browser knows: which run each tab is looking at, and which
+ * errors have been dismissed.
  */
 
 export type JobStatus = 'queued' | 'running' | 'done' | 'error' | 'cancelled'
@@ -48,11 +65,16 @@ export interface Job {
 
 interface QueueState {
   jobs: Job[]
+  connected: boolean
   /** Per-tab pointer at the run whose output the tab is showing. */
   activeByTab: Record<string, string | undefined>
+  /** Bumped when a background job saves a preset, so a dropdown showing a
+   *  stale list can refill. The save happens on the worker thread, so
+   *  nothing else is in a position to notice. */
+  presetRevision: Record<string, number>
+  connect(): () => void
   submit(input: {
-    tabKey: string
-    tabLabel: string
+    schema: TabSchema
     prompt: string
     values: SubmitValues
   }): Promise<string>
@@ -63,21 +85,64 @@ interface QueueState {
   select(tabKey: string, jobId: string): void
 }
 
-const unsubscribers = new Map<string, () => void>()
-
 /** Cap the list so a long session does not accumulate hundreds of finished
- *  jobs (and their image URLs) in memory. Running jobs are never dropped. */
+ *  jobs (and their image URLs) in memory. The server keeps 20 (jobqueue.
+ *  HISTORY); this is looser because a job the server has forgotten is still
+ *  worth showing in the run picker until the page is reloaded. */
 const MAX_JOBS = 40
+
+const STATUS: Record<QueueJob['status'], JobStatus> = {
+  queued: 'queued',
+  running: 'running',
+  done: 'done',
+  failed: 'error',
+  cancelled: 'cancelled',
+}
 
 function trim(jobs: Job[]): Job[] {
   if (jobs.length <= MAX_JOBS) return jobs
-  const keep: Job[] = []
-  for (const job of jobs) {
-    if (keep.length < MAX_JOBS || job.status === 'running' || job.status === 'queued') {
-      keep.push(job)
-    }
+  return jobs.filter(
+    (job, index) => index < MAX_JOBS || job.status === 'running' || job.status === 'queued',
+  )
+}
+
+/** One server row plus whatever the browser already knew about that job.
+ *
+ *  `errorDismissed`, `images`, `seed` and `prompt` are kept from the local
+ *  copy: the queue event does not carry images (they arrive on `display`,
+ *  which is per tab), and whether an alert has been dismissed is nobody's
+ *  business but this browser's. */
+function merge(row: QueueJob, previous: Job | undefined): Job {
+  const status = STATUS[row.status] ?? 'queued'
+  return {
+    id: row.id,
+    tabKey: row.tab,
+    tabLabel: row.tabLabel,
+    status: row.error ? 'error' : status,
+    statusText: row.progress,
+    progress: row.step,
+    preview: previous?.preview ?? null,
+    queuePosition: row.status === 'queued' ? row.place : null,
+    images: previous?.images ?? [],
+    error: row.error,
+    errorDismissed: previous?.errorDismissed ?? false,
+    seed: previous?.seed ?? null,
+    prompt: previous?.prompt ?? (row.title === '—' ? '' : row.title),
+    startedAt: previous?.startedAt ?? row.submitted * 1000,
+    endedAt:
+      status === 'queued' || status === 'running' ? null : (previous?.endedAt ?? Date.now()),
   }
-  return keep
+}
+
+/** The media out of one tab's latest yield.
+ *
+ *  Keyed by the tab's own `resultKeys`, so the video tab's "videos" arrives
+ *  under that name rather than as position 0 — which is the whole reason
+ *  jobqueue stopped carrying a status_index int. */
+function mediaOf(result: DisplayResult): MediaItem[] {
+  if (Array.isArray(result.videos)) return result.videos
+  if (Array.isArray(result.images)) return result.images
+  return []
 }
 
 export const useQueue = create<QueueState>((set, get) => {
@@ -87,78 +152,124 @@ export const useQueue = create<QueueState>((set, get) => {
     }))
   }
 
-  function apply(id: string, event: JobEvent) {
-    switch (event.type) {
-      case 'queued':
-        patch(id, {
-          status: 'queued',
-          queuePosition: event.position,
-          statusText: event.position > 0 ? `${event.position} job(s) ahead` : 'Waiting for the GPU',
-        })
-        break
-      case 'status':
-        patch(id, { statusText: event.text, status: 'running', queuePosition: null })
-        break
-      case 'progress':
-        patch(id, {
-          status: 'running',
-          queuePosition: null,
-          progress: { step: event.step, total: event.total },
-          preview: event.preview ?? null,
-        })
-        break
-      case 'done':
-        patch(id, {
-          status: 'done',
-          statusText: `${event.images.length} image${event.images.length === 1 ? '' : 's'}`,
-          images: event.images,
-          seed: event.seed ?? null,
-          preview: null,
-          endedAt: Date.now(),
-        })
-        release(id)
-        break
-      case 'error': {
-        const cancelled = event.message === 'Cancelled.'
-        patch(id, {
-          status: cancelled ? 'cancelled' : 'error',
-          statusText: cancelled ? 'Cancelled' : 'Failed',
-          error: cancelled ? null : event.message,
-          preview: null,
-          endedAt: Date.now(),
-        })
-        release(id)
-        break
-      }
+  function onEvent(event: StreamEvent) {
+    if (event.type === 'queue') {
+      set((state) => {
+        const known = new Map(state.jobs.map((job) => [job.id, job]))
+        // Newest first, which is the order every list in the UI reads in;
+        // the server sends oldest first because that is the order they run.
+        const jobs = [...event.queue.jobs]
+          .reverse()
+          .map((row) => merge(row, known.get(row.id)))
+        // A job this browser submitted a moment ago may not be in the
+        // snapshot yet, and a job the server has aged out of its 20-deep
+        // history is still worth showing in the run picker.
+        const seen = new Set(jobs.map((job) => job.id))
+        const orphans = state.jobs.filter((job) => !seen.has(job.id))
+        return { jobs: trim([...jobs, ...orphans]) }
+      })
+      return
     }
-  }
 
-  function release(id: string) {
-    unsubscribers.get(id)?.()
-    unsubscribers.delete(id)
+    if (event.type === 'display') {
+      const images = mediaOf(event.result)
+      set((state) => {
+        // `display_for` points at the newest job for that tab that has
+        // actually begun — not the newest queued one — so the target here
+        // is the same job the server meant.
+        const target = state.jobs.find(
+          (job) => job.tabKey === event.tab && job.status !== 'queued',
+        )
+        if (!target) return {}
+        return {
+          jobs: state.jobs.map((job) =>
+            job.id === target.id
+              ? {
+                  ...job,
+                  images,
+                  seed: typeof event.result.seed === 'number' ? event.result.seed : job.seed,
+                  statusText: event.result.status ?? job.statusText,
+                }
+              : job,
+          ),
+        }
+      })
+      return
+    }
+
+    if (event.type === 'presets') {
+      set((state) => ({
+        presetRevision: { ...state.presetRevision, [event.tab]: event.revision },
+      }))
+    }
   }
 
   return {
     jobs: [],
+    connected: false,
     activeByTab: {},
+    presetRevision: {},
 
-    async submit({ tabKey, tabLabel, prompt, values }) {
-      let jobId: string
+    connect() {
+      const stop = api.subscribe(onEvent)
+      set({ connected: true })
+      // Belt and braces: the stream sends everything on connect, but a
+      // reconnect after a dropped tunnel might land mid-flight. GET /queue
+      // is the documented fallback and costs one request.
+      void api
+        .getQueue()
+        .then((snapshot) => onEvent({ type: 'queue', queue: snapshot }))
+        .catch(() => {})
+      return () => {
+        stop()
+        set({ connected: false })
+      }
+    },
+
+    async submit({ schema, prompt, values }) {
       try {
-        const result = await api.submit(tabKey, values)
-        jobId = result.jobId
+        const result = await api.submit(schema, values)
+        // Optimistic, and replaced by the next `queue` event a moment
+        // later. Without it the button appears to do nothing for up to
+        // half a second, which is exactly the feedback gap this rewrite
+        // is meant to close.
+        set((state) => ({
+          jobs: trim([
+            {
+              id: result.jobId,
+              tabKey: schema.key,
+              tabLabel: schema.label,
+              status: 'queued',
+              statusText: 'Queued',
+              progress: null,
+              preview: null,
+              queuePosition: null,
+              images: [],
+              error: null,
+              errorDismissed: false,
+              seed: null,
+              prompt,
+              startedAt: Date.now(),
+              endedAt: null,
+            },
+            ...state.jobs.filter((job) => job.id !== result.jobId),
+          ]),
+          activeByTab: { ...state.activeByTab, [schema.key]: result.jobId },
+        }))
+        return result.jobId
       } catch (error) {
         // A submit that never became a job still has to be visible, or the
-        // button just does nothing — which is what the old UI did.
+        // button just does nothing — which is what the old UI did. A 422
+        // from the schema arrives here naming the control it refused.
         const id = `local-${Date.now()}`
         set((state) => ({
           jobs: trim([
             {
               id,
-              tabKey,
-              tabLabel,
+              tabKey: schema.key,
+              tabLabel: schema.label,
               status: 'error',
-              statusText: 'Failed',
+              statusText: 'Rejected',
               progress: null,
               preview: null,
               queuePosition: null,
@@ -172,46 +283,16 @@ export const useQueue = create<QueueState>((set, get) => {
             },
             ...state.jobs,
           ]),
-          activeByTab: { ...state.activeByTab, [tabKey]: id },
+          activeByTab: { ...state.activeByTab, [schema.key]: id },
         }))
         return id
       }
-
-      set((state) => ({
-        jobs: trim([
-          {
-            id: jobId,
-            tabKey,
-            tabLabel,
-            status: 'queued',
-            statusText: 'Queued',
-            progress: null,
-            preview: null,
-            queuePosition: null,
-            images: [],
-            error: null,
-            errorDismissed: false,
-            seed: null,
-            prompt,
-            startedAt: Date.now(),
-            endedAt: null,
-          },
-          ...state.jobs,
-        ]),
-        activeByTab: { ...state.activeByTab, [tabKey]: jobId },
-      }))
-
-      unsubscribers.set(
-        jobId,
-        api.subscribe(jobId, (event) => apply(jobId, event)),
-      )
-      return jobId
     },
 
     cancel(id) {
       const job = get().jobs.find((candidate) => candidate.id === id)
       if (!job || job.status === 'done' || job.status === 'error') return
-      void api.cancel(id)
+      void api.cancel(id).catch(() => {})
     },
 
     dismissError(id) {
@@ -219,11 +300,11 @@ export const useQueue = create<QueueState>((set, get) => {
     },
 
     remove(id) {
-      release(id)
       set((state) => ({ jobs: state.jobs.filter((job) => job.id !== id) }))
     },
 
     clearFinished() {
+      void api.clearFinished().catch(() => {})
       set((state) => ({
         jobs: state.jobs.filter((job) => job.status === 'running' || job.status === 'queued'),
       }))

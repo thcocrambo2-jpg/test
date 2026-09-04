@@ -406,3 +406,30 @@ export function ToastHost({ children }: { children: ReactNode }) {
     </ToastContext.Provider>
   )
 }
+
+// ------------------------------------------------------------------- inline
+
+/** `**bold**` and `` `code` `` inside one line, and nothing else.
+ *
+ *  Not a markdown library. Exactly one string in this application arrives
+ *  with markup in it: the model info line, which handlers._model_info_text
+ *  and its three siblings build for a `gr.Markdown` under the dropdown —
+ *  "**Turbo** · defaults: 8 steps, CFG 1 · ⚠️ **not downloaded yet**". It is
+ *  worth rendering rather than stripping, because the emphasis is on the half
+ *  that matters, and it is not worth 40 KB of parser. */
+export function Inline({ text }: { text: string }) {
+  const parts = text.split(/(\*\*[^*]+\*\*|`[^`]+`)/g)
+  return (
+    <>
+      {parts.map((part, index) => {
+        if (part.startsWith('**') && part.endsWith('**')) {
+          return <strong key={index}>{part.slice(2, -2)}</strong>
+        }
+        if (part.startsWith('`') && part.endsWith('`') && part.length > 1) {
+          return <code key={index}>{part.slice(1, -1)}</code>
+        }
+        return <span key={index}>{part}</span>
+      })}
+    </>
+  )
+}

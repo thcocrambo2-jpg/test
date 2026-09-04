@@ -1,0 +1,65 @@
+/* The prompt library.
+ *
+ * Gradio's version was twelve fixed gr.Column cards in a grid whose column
+ * count is a build-time constant (LIBRARY_CARDS), because a Blocks tree is
+ * constructed once at import and cannot grow a component later. Here the grid
+ * is auto-fill, so the page uses whatever width it is given. */
+
+.filters {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--s-3);
+  align-items: flex-end;
+  margin-bottom: var(--s-4);
+}
+
+.search {
+  flex: 1 1 220px;
+  min-width: 200px;
+}
+
+.grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(300px, 1fr));
+  gap: var(--s-4);
+}
+
+.prompt {
+  margin: 0;
+  font-size: var(--fs-sm);
+  line-height: 1.55;
+  color: var(--text);
+  white-space: pre-wrap;
+  /* Long enough to judge the prompt, short enough that a page of cards is a
+   * page rather than a scroll. The whole text is in the title attribute. */
+  display: -webkit-box;
+  -webkit-line-clamp: 6;
+  line-clamp: 6;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+}
+
+.negative {
+  margin: var(--s-3) 0 0;
+  font-size: var(--fs-xs);
+  line-height: 1.5;
+  color: var(--text-muted);
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  line-clamp: 2;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+}
+
+.pager {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: var(--s-4);
+  margin-top: var(--s-5);
+}
+
+.pagerCount {
+  font-size: var(--fs-sm);
+  color: var(--text-muted);
+}

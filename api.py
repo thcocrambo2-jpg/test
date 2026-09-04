@@ -65,6 +65,7 @@ import io
 import json
 import mimetypes
 import os
+import re
 import secrets
 import threading
 import time
@@ -289,6 +290,23 @@ def _mask_value(value):
 
 # ─────────────────────────────────────────────────────────── media
 
+# mimetypes reads the Windows registry, where .webp is often absent and
+# .mp4 sometimes is too — a thumbnail served as application/octet-stream
+# downloads instead of rendering. Stated here rather than left to the
+# machine the app happens to be running on.
+_TYPES = {
+    ".webp": "image/webp", ".png": "image/png", ".jpg": "image/jpeg",
+    ".jpeg": "image/jpeg", ".mp4": "video/mp4", ".webm": "video/webm",
+}
+
+
+def _media_type(name: str) -> str:
+    known = _TYPES.get(Path(name).suffix.lower())
+    if known:
+        return known
+    return mimetypes.guess_type(name)[0] or "application/octet-stream"
+
+
 def _media(path, recipe=None) -> dict:
     """One generated file, as the UI's MediaItem.
 
@@ -306,8 +324,12 @@ def _media(path, recipe=None) -> dict:
         "url": "%s/media/%s" % (PREFIX, quoted),
         "thumbUrl": "%s/thumbs/%s" % (PREFIX, quoted),
         "kind": "video" if is_video else "image",
-        "width": 0,
-        "height": 0,
+        # A placeholder ratio for video, so a grid of tiles does not
+        # collapse to nothing while the browser loads metadata. Reading
+        # the real dimensions needs a container parse, and gallery_index
+        # does not thumbnail video either — same reason, same trade.
+        "width": 16 if is_video else 0,
+        "height": 9 if is_video else 0,
         "createdAt": "",
     }
     try:
@@ -553,8 +575,7 @@ def create_app() -> FastAPI:
             raise HTTPException(404, "No such file.")
         if thumb:
             target = Path(gallery_index.thumb_for(str(target)))
-        media_type = mimetypes.guess_type(target.name)[0] \
-            or "application/octet-stream"
+        media_type = _media_type(target.name)
         # Generated files never change under a name — ComfyUI counts up —
         # so they are safe to cache hard. The zip is the one thing that
         # would not be, and it is not indexed, so it cannot be served here.
@@ -713,6 +734,54 @@ def create_app() -> FastAPI:
     return app
 
 
+# "step 3/8" inside a handler's status line. The handlers build that text
+# in _run_jobs / _run_wan_jobs, so the format is this app's own and not a
+# guess about somebody else's output.
+_STEP = re.compile(r"step (\d+)\s*/\s*(\d+)")
+
+
+def _progress_pair(text: str):
+    """(step, total) out of a status line, or None.
+
+    A bridge, and worth naming as one. client.py:270 already yields
+    `{"type": "progress", "step", "total"}` as structured data; _run_jobs
+    formats it into a sentence and jobqueue records the sentence, because
+    a Gradio textbox could hold nothing else. Reading it back out here is
+    a regex over text this repository writes, which is safe but is not
+    where this wants to end up.
+
+    The structural version is to carry step/total on the Job alongside
+    the line, which is also what a live latent preview would ride on
+    (context.md 4.12). Until then, one regex in one place beats a
+    determinate progress bar that nobody can have.
+    """
+    found = _STEP.search(text or "")
+    if not found:
+        return None
+    step, total = int(found.group(1)), int(found.group(2))
+    return {"step": step, "total": total} if total else None
+
+
+def _failure(status: str, text: str):
+    """The error out of a job, or None.
+
+    Not simply `status == FAILED`. A handler that refuses a run — no
+    model downloaded, nothing painted, ComfyUI not up — yields a line
+    beginning with a cross and then *returns normally*, so the job
+    finishes DONE carrying a message that is plainly a failure. jobqueue
+    is right not to call that a crash; the UI would be wrong to render it
+    as a success. FAILED itself is the narrower case: the handler raised.
+
+    The cross is the whole convention and it is used consistently across
+    all twelve handlers, so matching on it is matching on a rule this app
+    already keeps rather than on a coincidence.
+    """
+    line = (text or "").strip()
+    if status == jobqueue.FAILED:
+        return line or "The handler raised."
+    return line if line.startswith("❌") else None
+
+
 def _queue_json() -> dict:
     revision, rows, waiting, running = jobqueue.snapshot()
     return {
@@ -723,6 +792,8 @@ def _queue_json() -> dict:
             "id": row.id, "lane": row.lane, "tab": row.tab,
             "tabLabel": row.tab_label, "title": row.title,
             "status": row.status, "progress": row.progress,
+            "step": _progress_pair(row.progress),
+            "error": _failure(row.status, row.progress),
             "submitted": row.submitted, "place": row.place,
         } for row in rows],
     }

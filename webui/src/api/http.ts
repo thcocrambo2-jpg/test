@@ -1,32 +1,92 @@
 import type {
   ApiClient,
+  AppCatalog,
   Catalogue,
+  DisplayResult,
   GalleryPage,
-  JobEvent,
+  PresetList,
+  PromptPage,
+  PromptQuery,
+  QueueSnapshot,
   Session,
   Showcase,
+  StoredRecipe,
+  StreamEvent,
   SubmitResult,
   SubmitValues,
   TabSchema,
 } from './types'
 
 /*
- * The real client — the thing `serve.py` answers in Section 2.
+ * The real client. This is the whole of what the app knows about the server.
  *
- * It is written now, against the same `ApiClient` interface the mock
- * implements, so that switching over is a flag and not a refactor. Nothing in
- * here is exercised while VITE_USE_MOCK=1; what it is for is to pin down the
- * endpoint shapes the FastAPI adapter has to provide, in the same file the
- * mock's behaviour was specified against.
+ * Section 1 wrote this file against a mock so that switching over would be a
+ * deletion rather than an excavation, and that is what it turned out to be:
+ * `src/mock/` is gone, the ternary in `client.ts` is gone, and no component
+ * changed. What did change is here — the endpoint names, and three things the
+ * mock could not have taught us.
+ *
+ *   * **Uploads are their own round trip.** An image goes up once, to
+ *     `POST /uploads`, and the submission references it by id. The mask
+ *     editor sends a background and one PNG per painted layer, and a batch of
+ *     four runs against the same source should not re-send it four times.
+ *
+ *   * **Progress is one stream for the whole app, not one per job.** The
+ *     server's queue is process-wide because there is one GPU behind it, so a
+ *     connection per job would be several sockets watching the same object.
+ *
+ *   * **The positional call happens on the server.** The form sends a flat
+ *     value bag and `tabschema.call_args` turns it into the handler's
+ *     arguments, checked at import against `inspect.signature`. The browser
+ *     no longer builds an argument array, which is one fewer place for a
+ *     31-argument signature to be got wrong.
  */
 
 const BASE = import.meta.env.VITE_API_BASE || '/api/v1'
+
+/** The access token, taken out of the URL fragment and traded for a cookie.
+ *
+ *  It arrives as `https://….trycloudflare.com/#k=<token>`. The fragment is
+ *  the point: fragments are never sent to servers, so the token stays out of
+ *  Cloudflare's logs, out of every proxy in between and out of `Referer`
+ *  headers. A query parameter would be in all three.
+ *
+ *  Stripped from the address bar immediately afterwards so a screenshot or a
+ *  shared URL does not carry it. */
+export async function exchangeToken(): Promise<void> {
+  const match = /[#&]k=([^&]+)/.exec(window.location.hash)
+  if (!match) return
+  const token = decodeURIComponent(match[1])
+  history.replaceState(null, '', window.location.pathname + window.location.search)
+  try {
+    await fetch(`${BASE}/auth`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ token }),
+    })
+  } catch {
+    // A failed exchange is not fatal here: every route answers 401 and the
+    // shell renders that as one sentence, which is more useful than a blank
+    // page thrown from a bootstrap step.
+  }
+}
 
 async function get<T>(path: string): Promise<T> {
   const response = await fetch(`${BASE}${path}`, {
     headers: { Accept: 'application/json' },
   })
   if (!response.ok) throw new Error(await errorText(response))
+  return (await response.json()) as T
+}
+
+async function send<T>(path: string, body?: unknown, method = 'POST'): Promise<T> {
+  const response = await fetch(`${BASE}${path}`, {
+    method,
+    headers: body === undefined ? {} : { 'Content-Type': 'application/json' },
+    body: body === undefined ? undefined : JSON.stringify(body),
+  })
+  if (!response.ok) throw new Error(await errorText(response))
+  if (response.status === 204) return undefined as T
   return (await response.json()) as T
 }
 
@@ -37,79 +97,185 @@ async function errorText(response: Response): Promise<string> {
   } catch {
     /* not JSON — fall through to the status line */
   }
+  if (response.status === 401) return 'This link is missing its access key.'
   return `${response.status} ${response.statusText}`
 }
 
-/** Split the form values into a JSON part and the blobs.
- *
- *  Images and masks go up as multipart because they are megabytes and base64
- *  in a JSON body would inflate them by a third for no reason. Everything
- *  else rides in one `values` field so the server sees exactly the object the
- *  form produced. */
-function toFormData(values: SubmitValues): FormData {
+/** Send one blob and get the id the submission references it by. */
+async function upload(blob: Blob, name: string): Promise<string> {
   const form = new FormData()
-  const plain: Record<string, unknown> = {}
-  for (const [key, value] of Object.entries(values)) {
-    if (value instanceof Blob) {
-      form.append(`file:${key}`, value, key)
-    } else if (Array.isArray(value) && value.every((item) => item instanceof Blob)) {
-      value.forEach((blob, index) => form.append(`file:${key}[${index}]`, blob, `${key}-${index}`))
-    } else {
-      plain[key] = value
+  form.append('file', blob, name)
+  const response = await fetch(`${BASE}/uploads`, { method: 'POST', body: form })
+  if (!response.ok) throw new Error(await errorText(response))
+  const body = (await response.json()) as { id: string }
+  return body.id
+}
+
+/** Replace every blob in a submission with the id of its upload.
+ *
+ *  Driven off the schema rather than off the shape of each value: `field.type`
+ *  already says which of the three kinds a control is, and guessing from the
+ *  value would mean deciding what a `{background, layers}` object is by
+ *  looking at it.
+ *
+ *  The mask contract is the one to be careful with. `{background, layers}` is
+ *  the same pair `gr.ImageEditor` produced, and `_prepare_inpaint_inputs`
+ *  (ui.py:926, now handlers.py) is unchanged on the other side: it still
+ *  takes the union of the layers' alpha channels, dilates, blurs, caps the
+ *  long side at 2048 and snaps both images to multiples of 16 for the VAE.
+ *  `prepare.ts` in the mask editor is for the preview and the size readout
+ *  only. */
+async function resolveUploads(
+  schema: TabSchema,
+  values: SubmitValues,
+): Promise<Record<string, unknown>> {
+  const out: Record<string, unknown> = { ...values }
+  for (const field of schema.fields) {
+    const value = values[field.name]
+    if (field.type === 'image' || field.type === 'file') {
+      out[field.name] = value instanceof Blob ? await upload(value, field.name) : null
+    } else if (field.type === 'mask') {
+      out[field.name] = await uploadMask(value)
     }
   }
-  form.append('values', JSON.stringify(plain))
-  return form
+  return out
+}
+
+async function uploadMask(value: unknown): Promise<unknown> {
+  if (!value || typeof value !== 'object') return null
+  const editor = value as { background?: Blob; layers?: Blob[] }
+  if (!(editor.background instanceof Blob)) return null
+  const background = await upload(editor.background, 'background.png')
+  const layers: string[] = []
+  for (const [index, layer] of (editor.layers ?? []).entries()) {
+    if (layer instanceof Blob) layers.push(await upload(layer, `layer-${index}.png`))
+  }
+  return { background, layers }
 }
 
 export const httpClient: ApiClient = {
   getSession: () => get<Session>('/session'),
   getSchemas: () => get<TabSchema[]>('/schemas'),
   getCatalogue: () => get<Catalogue>('/plans'),
+  getAppCatalog: () => get<AppCatalog>('/catalog'),
   getShowcase: () => get<Showcase | null>('/showcase'),
+  getQueue: () => get<QueueSnapshot>('/queue'),
+  getPresets: (tab) => get<PresetList>(`/presets/${encodeURIComponent(tab)}`),
+
   getGallery: (cursor) =>
     get<GalleryPage>(`/gallery${cursor ? `?cursor=${encodeURIComponent(cursor)}` : ''}`),
 
   async deleteMedia(id: string) {
-    const response = await fetch(`${BASE}/gallery/${encodeURIComponent(id)}`, {
-      method: 'DELETE',
-    })
-    if (!response.ok) throw new Error(await errorText(response))
+    await send<void>(`/gallery/${encodePathId(id)}`, undefined, 'DELETE')
   },
 
-  async submit(tabKey: string, values: SubmitValues): Promise<SubmitResult> {
-    const response = await fetch(`${BASE}/tabs/${encodeURIComponent(tabKey)}/run`, {
-      method: 'POST',
-      body: toFormData(values),
+  async submit(schema: TabSchema, values: SubmitValues): Promise<SubmitResult> {
+    const resolved = await resolveUploads(schema, values)
+    return send<SubmitResult>(`/tabs/${encodeURIComponent(schema.key)}/generate`, {
+      values: resolved,
     })
-    if (!response.ok) throw new Error(await errorText(response))
-    return (await response.json()) as SubmitResult
   },
 
   async cancel(jobId: string) {
-    const response = await fetch(`${BASE}/jobs/${encodeURIComponent(jobId)}/cancel`, {
-      method: 'POST',
-    })
-    if (!response.ok) throw new Error(await errorText(response))
+    await send<unknown>(`/jobs/${encodeURIComponent(jobId)}/cancel`)
   },
 
-  /** SSE, because client.py:270 already yields exactly these dicts — the
-   *  stream is a re-encoding of a generator that exists, not a new protocol. */
-  subscribe(jobId: string, onEvent: (event: JobEvent) => void) {
-    const source = new EventSource(`${BASE}/jobs/${encodeURIComponent(jobId)}/events`)
-    source.onmessage = (message) => {
-      try {
-        onEvent(JSON.parse(message.data) as JobEvent)
-      } catch {
-        onEvent({ type: 'error', message: 'The server sent an event this app could not read.' })
-      }
+  async clearFinished() {
+    await send<unknown>('/jobs/clear')
+  },
+
+  async applyPreset(tabKey: string, preset: string) {
+    const body = await send<{ values: Record<string, unknown> }>(
+      `/schema/${encodeURIComponent(tabKey)}/apply`,
+      { preset },
+    )
+    return body.values
+  },
+
+  async applySettings(tabKey: string, settings: Record<string, unknown>) {
+    const body = await send<{ values: Record<string, unknown> }>(
+      `/schema/${encodeURIComponent(tabKey)}/apply`,
+      { settings },
+    )
+    return body.values
+  },
+
+  getPrompts(query: PromptQuery) {
+    const params = new URLSearchParams()
+    for (const [key, value] of Object.entries(query)) {
+      if (value !== undefined && value !== '') params.set(key, String(value))
     }
+    const suffix = params.toString()
+    return get<PromptPage>(`/prompts${suffix ? `?${suffix}` : ''}`)
+  },
+
+  getRecipe(pathId: string) {
+    return get<{ recipe: StoredRecipe | null; canLoad?: boolean }>(
+      `/recipe/${encodePathId(pathId)}`,
+    )
+  },
+
+  async applyRecipe(tabKey: string, pathId: string) {
+    const body = await send<{ values: Record<string, unknown> }>(
+      `/schema/${encodeURIComponent(tabKey)}/apply`,
+      { recipe: pathId },
+    )
+    return body.values
+  },
+
+  /* One EventSource for the whole application.
+   *
+   * SSE and not websockets, and the reason is the server rather than taste:
+   * `jobqueue` is thread-based and pull-oriented with a `revision()` counter,
+   * so something polls it either way and a socket would be a second protocol
+   * around the same loop. What EventSource brings is reconnection, which is
+   * the part a hand-written client always gets wrong, on a tunnel that drops
+   * idle connections.
+   *
+   * Named events rather than one `onmessage`, so a stream that gains a fourth
+   * kind does not break the three that exist. */
+  subscribe(onEvent: (event: StreamEvent) => void) {
+    const source = new EventSource(`${BASE}/stream`)
+
+    function on<T>(name: string, build: (data: T) => StreamEvent) {
+      source.addEventListener(name, (message) => {
+        try {
+          onEvent(build(JSON.parse((message as MessageEvent).data) as T))
+        } catch {
+          /* A frame this build cannot read is not a reason to tear the
+           * connection down — the next one is probably fine. */
+        }
+      })
+    }
+
+    on<QueueSnapshot>('queue', (data) => ({ type: 'queue', queue: data }))
+    on<{ tab: string; revision: number; result: DisplayResult }>('display', (data) => ({
+      type: 'display',
+      tab: data.tab,
+      revision: data.revision,
+      result: data.result,
+    }))
+    on<{ tab: string; revision: number }>('presets', (data) => ({
+      type: 'presets',
+      tab: data.tab,
+      revision: data.revision,
+    }))
+
+    // EventSource retries on its own, so an error is only worth acting on
+    // when it is terminal. Leaving the socket open is what makes a dropped
+    // tunnel heal by itself.
     source.onerror = () => {
-      // EventSource retries on its own; a socket that closes after `done` is
-      // ordinary, so only a stream that never delivered anything is an error
-      // worth showing — the queue store decides that, not this transport.
-      source.close()
+      if (source.readyState === EventSource.CLOSED) source.close()
     }
     return () => source.close()
   },
+}
+
+/** A path_id is an OUTPUT_DIR-relative posix path, so it can contain `/`.
+ *  `encodeURIComponent` would escape those into %2F, which the server's
+ *  `{path_id:path}` converter then hands back as one segment — correct, but
+ *  it also means a proxy that normalises %2F breaks it. Encoding each segment
+ *  keeps the slashes as slashes. */
+function encodePathId(id: string): string {
+  return id.split('/').map(encodeURIComponent).join('/')
 }

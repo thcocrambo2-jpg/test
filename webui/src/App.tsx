@@ -1,5 +1,7 @@
+import { useEffect } from 'react'
 import { Navigate, Route, Routes, useLocation } from 'react-router-dom'
 import { useSchemas } from '@/api/queries'
+import { useQueue } from '@/store/queue'
 import { Header } from '@/features/shell/Header'
 import { Footer } from '@/features/shell/Footer'
 import { Nav } from '@/features/shell/Nav'
@@ -7,6 +9,7 @@ import { QueuePanel } from '@/features/queue/QueuePanel'
 import { GenerateTab } from '@/features/tabs/GenerateTab'
 import { StagePending } from '@/features/tabs/StagePending'
 import { Gallery } from '@/features/gallery/Gallery'
+import { PromptLibrary } from '@/features/library/PromptLibrary'
 import { Pricing } from '@/features/pricing/Pricing'
 import { EmptyState, Skeleton } from '@/components/ui'
 import type { TabSchema } from '@/api/types'
@@ -21,15 +24,31 @@ import s from '@/features/shell/shell.module.css'
  * group you are in as well as which tab.
  */
 export function App() {
-  const { data: schemas, isLoading } = useSchemas()
+  const { data: schemas, isLoading, error } = useSchemas()
+  const connect = useQueue((state) => state.connect)
+
+  /* One SSE connection for the whole application, opened once and closed on
+   * unmount. Not one per job and not one per tab: the queue is process-wide
+   * on the server because there is one GPU behind it, so two connections
+   * would be two sockets watching the same object. */
+  useEffect(() => connect(), [connect])
 
   return (
     <div className={s.app}>
       <Header />
       <Nav />
       <main className={s.main}>
-        {isLoading || !schemas ? (
+        {error ? (
+          <EmptyState icon="🔑" title="This app is not answering">
+            {error instanceof Error ? error.message : String(error)}
+          </EmptyState>
+        ) : isLoading || !schemas ? (
           <PageSkeleton />
+        ) : schemas.length === 0 ? (
+          <EmptyState icon="🎫" title="This licence grants no tabs">
+            The features array on this licence is empty, so there is nothing to
+            build. Nothing is wrong with the app.
+          </EmptyState>
         ) : (
           <Routes>
             <Route path="/" element={<Navigate to={schemas[0].route} replace />} />
@@ -54,10 +73,7 @@ export function App() {
               path="/library/prompts"
               element={
                 <Page title="Prompt Library" icon="🌟" blurb="Prompts that already work.">
-                  <EmptyState icon="🌟" title="Stage B">
-                    The prompt library is one of the three genuinely bespoke pages, and it
-                    is not part of Stage A.
-                  </EmptyState>
+                  <PromptLibrary />
                 </Page>
               }
             />

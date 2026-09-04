@@ -1,7 +1,11 @@
-import { useEffect, useRef } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { createPortal } from 'react-dom'
+import { useNavigate } from 'react-router-dom'
+import { api } from '@/api/client'
+import { useSchemas } from '@/api/queries'
 import type { MediaItem } from '@/api/types'
-import { Button, Pill } from '@/components/ui'
+import { Button, Pill, useToast } from '@/components/ui'
+import { useHandoff } from '@/store/handoff'
 import { cx, relativeTime, useCopy } from '@/lib/util'
 import s from './gallery.module.css'
 
@@ -29,6 +33,7 @@ export function Lightbox({
   const item = items[index]
   const stripRef = useRef<HTMLDivElement>(null)
   const { copied, copy } = useCopy()
+  const reuse = useReuse(item)
 
   useEffect(() => {
     function onKeyDown(event: KeyboardEvent) {
@@ -64,6 +69,17 @@ export function Lightbox({
           <Pill>
             {index + 1} / {items.length}
           </Pill>
+          {reuse.can && (
+            <Button
+              size="sm"
+              variant="primary"
+              loading={reuse.busy}
+              onClick={() => void reuse.load()}
+              title={`Load the settings this was made with into ${reuse.label}`}
+            >
+              ▶️ Load these settings
+            </Button>
+          )}
           {onDelete && (
             <Button
               size="sm"
@@ -156,4 +172,50 @@ export function Lightbox({
     </div>,
     document.body,
   )
+}
+
+/** "Load these settings" for one generated file.
+ *
+ *  Every finished prompt files a recipe under the path it wrote (recipes.py),
+ *  so a picture can be traced back to the controls that made it. Two values
+ *  are deliberately not restored as recorded, and it is the whole point of
+ *  the button: **Seed** becomes the seed that picture actually ran on rather
+ *  than whatever was in the box, and **Random seed** goes off. Together they
+ *  are the difference between "the same settings" and "the same image", and
+ *  the server applies both (see the apply route).
+ *
+ *  Nothing is the ordinary answer. Anything generated before this pod started
+ *  keeping recipes, or copied into the output folder by hand, has none — and
+ *  a recipe for a tab this licence does not grant can be read but not loaded,
+ *  which is what `canLoad` says.
+ */
+function useReuse(item: MediaItem | undefined) {
+  const { data: schemas } = useSchemas()
+  const navigate = useNavigate()
+  const offer = useHandoff((state) => state.offer)
+  const toast = useToast()
+  const [busy, setBusy] = useState(false)
+
+  const schema = schemas?.find((candidate) => candidate.key === item?.tab)
+  const can = Boolean(item && schema)
+
+  async function load() {
+    if (!item || !schema) return
+    setBusy(true)
+    try {
+      const values = await api.applyRecipe(schema.key, item.id)
+      if (Object.keys(values).length === 0) {
+        toast('No recipe on file for that one.')
+        return
+      }
+      offer(schema.key, values)
+      navigate(schema.route)
+    } catch (error) {
+      toast(error instanceof Error ? error.message : String(error))
+    } finally {
+      setBusy(false)
+    }
+  }
+
+  return { can, busy, load, label: schema?.label ?? '' }
 }

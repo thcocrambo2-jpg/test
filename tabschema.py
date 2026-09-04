@@ -426,6 +426,11 @@ class TabSchema:
     groups: tuple = ()
     preset_tab: str | None = None   # presets.TAB_* this tab's dropdown reads
     preset_note: str = ""
+    # Which registry in catalog()["models"] this tab's Model dropdown is
+    # naming. It is what lets the browser do what krea_model_changed and
+    # its three siblings did: pick a model, get that variant's step and
+    # CFG defaults and its trigger words, with no round trip.
+    model_registry: str | None = None
 
     # ── derived ─────────────────────────────────────────────────────
 
@@ -465,6 +470,7 @@ class TabSchema:
             "resultKeys": list(self.result_keys),
             "presetTab": self.preset_tab,
             "presetNote": self.preset_note,
+            "modelRegistry": self.model_registry,
             "fields": [f.to_json() for f in self.named()],
             "groups": [g.to_json() for g in self.groups],
             "lora": _tail_json(tail),
@@ -1042,6 +1048,7 @@ VIDEO_KEYS = ("videos", "latest", "status", "seed")
 SCHEMAS = (
 
     TabSchema(
+        model_registry='krea2',
         key=Key.KREA_T2I, handler=handlers.generate_single,
         lane=handlers.COMFY_LANE, prompt_field="prompt",
         result_keys=IMAGE_KEYS, tab_id="krea2",
@@ -1080,6 +1087,7 @@ SCHEMAS = (
     ),
 
     TabSchema(
+        model_registry='v2',
         key=Key.KREA_V2_T2I, handler=handlers.generate_v2,
         lane=handlers.COMFY_LANE, prompt_field="prompt",
         result_keys=IMAGE_KEYS, tab_id="krea2v2",
@@ -1131,6 +1139,7 @@ SCHEMAS = (
     ),
 
     TabSchema(
+        model_registry='krea2',
         key=Key.KREA_INPAINT, handler=handlers.generate_inpaint,
         lane=handlers.COMFY_LANE, prompt_field="prompt",
         result_keys=IMAGE_KEYS, tab_id="inpaint",
@@ -1183,6 +1192,7 @@ SCHEMAS = (
     ),
 
     TabSchema(
+        model_registry='krea2',
         key=Key.KREA_EDIT, handler=handlers.generate_edit,
         lane=handlers.COMFY_LANE, prompt_field="prompt",
         result_keys=IMAGE_KEYS, tab_id="edit",
@@ -1227,6 +1237,7 @@ SCHEMAS = (
     ),
 
     TabSchema(
+        model_registry='v2',
         key=Key.KREA_V2_EDIT, handler=handlers.generate_v2_edit,
         lane=handlers.COMFY_LANE, prompt_field="prompt",
         result_keys=IMAGE_KEYS, tab_id="v2edit",
@@ -1268,6 +1279,7 @@ SCHEMAS = (
     ),
 
     TabSchema(
+        model_registry='flux',
         key=Key.FLUX_T2I, handler=handlers.generate_flux,
         lane=handlers.COMFY_LANE, prompt_field="prompt",
         result_keys=IMAGE_KEYS, tab_id="flux",
@@ -1300,6 +1312,7 @@ SCHEMAS = (
     ),
 
     TabSchema(
+        model_registry='klein',
         key=Key.KLEIN_I2I, handler=handlers.generate_klein_edit,
         lane=handlers.COMFY_LANE, prompt_field="prompt",
         result_keys=IMAGE_KEYS, tab_id="klein",
@@ -1582,19 +1595,6 @@ def catalog() -> dict:
                     for k, v in V2_ASPECT_RATIOS.items()},
         "samplers": list(SAMPLERS),
     }
-
-
-def model_trigger(registry: str, model: str, text: str) -> str:
-    """Trigger words swapped into a prompt — ui._swap_trigger, over HTTP.
-
-    Left server-side rather than shipped with the catalogue because the
-    rule is "remove any *other* registered model's trigger first", which
-    needs the whole registry and is one line here against a loop there.
-    """
-    table = {"krea2": (KREA2_MODELS, handlers.resolve_model_entry),
-             "flux": (FLUX_MODELS, handlers.resolve_flux_model)}
-    entries, resolve = table.get(registry, table["krea2"])
-    return handlers._swap_trigger(text, resolve(model), entries)
 
 
 # ═════════════════════════════════════════════════════ the assertions

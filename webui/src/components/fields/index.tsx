@@ -15,7 +15,11 @@ import s from './fields.module.css'
 interface Common {
   id?: string
   label: string
-  hint?: string
+  /* ReactNode rather than string: the Model dropdown's hint is the info line
+   * the Gradio app printed under it — "Turbo · defaults: 8 steps, CFG 1 ·
+   * not downloaded yet" — which carries emphasis and is built from the
+   * registry rather than from the schema. */
+  hint?: ReactNode
   wide?: boolean
   children?: ReactNode
 }

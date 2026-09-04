@@ -36,6 +36,11 @@ export interface SchemaFormProps {
   values: Record<string, unknown>
   setValue: (name: string, value: unknown) => void
   column: FieldColumn
+  /* Hints that are not a property of the field. There is exactly one today:
+   * the model info line, which reads the registry *and this pod's disk* —
+   * "not downloaded yet" is a fact the schema cannot carry because it is not
+   * about the control. */
+  hints?: Record<string, ReactNode>
 }
 
 /** Whether a field's `showIf` is satisfied. */
@@ -44,14 +49,22 @@ function visible(field: Field, values: Record<string, unknown>): boolean {
   return values[field.showIf.field] === field.showIf.equals
 }
 
-export function SchemaForm({ schema, values, setValue, column }: SchemaFormProps) {
+export function SchemaForm({ schema, values, setValue, column, hints }: SchemaFormProps) {
   const groups = schema.groups ?? []
 
   const inColumn = schema.fields.filter((field) => field.column === column)
 
   function renderField(field: Field): ReactNode {
     if (!visible(field, values)) return null
-    return <FieldRenderer key={field.name} field={field} values={values} setValue={setValue} />
+    return (
+      <FieldRenderer
+        key={field.name}
+        field={field}
+        values={values}
+        setValue={setValue}
+        hint={hints?.[field.name] ?? field.hint}
+      />
+    )
   }
 
   // Fields with no group render first, in order, so a control added to the
@@ -168,10 +181,12 @@ function FieldRenderer({
   field,
   values,
   setValue,
+  hint,
 }: {
   field: Field
   values: Record<string, unknown>
   setValue: (name: string, value: unknown) => void
+  hint?: ReactNode
 }) {
   const value = values[field.name]
   const set = (next: unknown) => setValue(field.name, next)
@@ -181,7 +196,7 @@ function FieldRenderer({
       return (
         <TextField
           label={field.label}
-          hint={field.hint}
+          hint={hint}
           wide={field.wide}
           placeholder={field.placeholder}
           value={String(value ?? '')}
@@ -192,7 +207,7 @@ function FieldRenderer({
       return (
         <TextAreaField
           label={field.label}
-          hint={field.hint}
+          hint={hint}
           wide
           lines={field.lines}
           placeholder={field.placeholder}
@@ -204,7 +219,7 @@ function FieldRenderer({
       return (
         <NumberField
           label={field.label}
-          hint={field.hint}
+          hint={hint}
           wide={field.wide}
           value={Number(value ?? 0)}
           step={field.step}
@@ -215,13 +230,18 @@ function FieldRenderer({
       )
     case 'slider':
       return (
-        <SliderFieldBound field={field} value={Number(value ?? field.min ?? 0)} onChange={set} />
+        <SliderFieldBound
+          field={field}
+          value={Number(value ?? field.min ?? 0)}
+          onChange={set}
+          hint={hint}
+        />
       )
     case 'select':
       return (
         <SelectField
           label={field.label}
-          hint={field.hint}
+          hint={hint}
           wide={field.wide}
           value={String(value ?? '')}
           choices={field.choices ?? []}
@@ -232,7 +252,7 @@ function FieldRenderer({
       return (
         <RadioField
           label={field.label}
-          hint={field.hint}
+          hint={hint}
           wide
           value={String(value ?? '')}
           choices={field.choices ?? []}
@@ -243,7 +263,7 @@ function FieldRenderer({
       return (
         <BoolField
           label={field.label}
-          hint={field.hint}
+          hint={hint}
           wide={field.wide}
           value={Boolean(value)}
           onChange={set}
@@ -253,7 +273,7 @@ function FieldRenderer({
       return (
         <ImageDropField
           label={field.label}
-          hint={field.hint}
+          hint={hint}
           wide
           value={(value as File | null) ?? null}
           onChange={set}
@@ -263,7 +283,7 @@ function FieldRenderer({
       return (
         <FileField
           label={field.label}
-          hint={field.hint}
+          hint={hint}
           wide
           accept={field.accept}
           value={(value as File | null) ?? null}
@@ -288,15 +308,17 @@ function SliderFieldBound({
   field,
   value,
   onChange,
+  hint,
 }: {
   field: Field
   value: number
   onChange: (next: number) => void
+  hint?: ReactNode
 }) {
   return (
     <SliderField
       label={field.label}
-      hint={field.hint}
+      hint={hint}
       wide={field.wide}
       value={value}
       min={field.min}
