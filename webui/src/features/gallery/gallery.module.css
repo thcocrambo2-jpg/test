@@ -320,19 +320,25 @@
   box-shadow: var(--sh-lg);
 }
 
-/* The thumbnail, blurred.
-   Blurred because it is a 512px WebP being shown several times its own size,
-   and a picture that is softly out of focus reads as one still arriving,
-   where the same picture merely rescaled reads as a bad copy. The scale hides
-   the transparent margin `blur()` leaves at the edges. */
+/* The thumbnail, shown as it is.
+   It was blurred here, on the reasoning that a 512px thumbnail is being shown
+   at several times its own size and a picture softly out of focus reads as
+   one still arriving. The reasoning was right and the measurement was not:
+   the stage renders a 341x512 thumbnail at about 525x790, which is 1.54x —
+   mildly soft, entirely legible, and nothing that needs covering up. A
+   blur-up earns its place over a 20px placeholder at 40x, where the raw
+   pixels would read as a broken image. Over this it only destroyed the
+   picture somebody opened the lightbox to look at.
+
+   No `transform` either: the scale existed solely to crop the transparent
+   margin `blur()` leaves behind, and left in on its own it would show as a
+   6% jump at the moment the original takes over. */
 .stageThumb {
   position: absolute;
   inset: 0;
   background-position: center;
   background-repeat: no-repeat;
   background-size: cover;
-  filter: blur(12px);
-  transform: scale(1.06);
 }
 
 .stageFull {
