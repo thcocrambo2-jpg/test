@@ -1527,78 +1527,180 @@ def _recent_picker(target_image):
 GALLERY_PAGE = 10
 
 
-def _gallery_view(paths, shown):
-    """The grid, the Load-more button and the count line, for a page depth."""
+# ---------------------------------------------------- the gallery browser
+# The tab used to be one column: tiles on top, and whichever one you
+# clicked drawn underneath them. Looking at two pictures in a row meant
+# scrolling down to see one, back up to click the next, and down again —
+# per picture, forever, and worse the taller the picture was.
+#
+# So the two halves sit side by side and the *viewer* is what you drive.
+# The grid is a way in rather than the only way through: ◀ / ▶ (and the
+# arrow keys) walk the whole list without touching it, the grid follows
+# along by highlighting the tile being shown, and Delete steps onto the
+# next file instead of emptying the panel — which is what culling a batch
+# actually looks like.
+#
+# One rule holds all of it together: **the cursor is the state and
+# everything else is drawn from it.** A tile click, an arrow, a delete and
+# a refresh all end in the same _view_at(), so there is no arrangement in
+# which the picture, the position line, the recipe panel and the
+# highlighted tile disagree about which file is selected.
+
+
+def _cursor_at(paths, cursor):
+    """`cursor` clamped onto `paths`, or None when there is nothing to show.
+
+    Every entry point launders its cursor through here, because all of
+    them can arrive with one that no longer fits: a gr.State survives a
+    refresh that shortened the list, and a delete shortens it underfoot.
+    """
+    if not paths:
+        return None
+    try:
+        return max(0, min(int(cursor), len(paths) - 1))
+    except (TypeError, ValueError):
+        return None
+
+
+def _grid_updates(paths, shown, cursor, redraw=True):
+    """The tiles, the Load-more button and the count line, at a page depth.
+
+    `redraw=False` sends the highlight *without* re-sending the tile list.
+    The arrows move the highlight far more often than they extend the
+    page, and handing gr.Gallery the same list again makes the browser
+    rebuild the grid — which throws away the scroll position of the thing
+    being scrolled through.
+    """
     shown = max(0, min(int(shown or 0), len(paths)))
     remaining = len(paths) - shown
     return (
-        gr.Gallery(value=gallery_index.thumbs_for(paths[:shown])),
+        gr.update(value=gallery_index.thumbs_for(paths[:shown]),
+                  selected_index=cursor) if redraw
+        else gr.update(selected_index=cursor),
         gr.Button(value=f"⬇️ Load {min(GALLERY_PAGE, remaining)} more",
                   visible=remaining > 0),
         f"{len(paths)} file(s) in `{OUTPUT_DIR}` — showing {shown}",
     )
 
 
-def refresh_gallery():
-    """Tab opened, or Refresh clicked: re-scan and show the newest page.
+def _view_at(paths, cursor):
+    """Everything the viewer shows at one cursor position.
 
-    Deliberately back to page one. The list is newest-first, so anything
-    generated since the last look is at the top — which is what someone
-    pressing Refresh is looking for.
+    Returns the tab's `selection_outputs` in order — the cursor itself
+    first, because it is a gr.State this writes as much as it reads.
+
+    A cursor of None is the "nothing selected" state: an empty gallery, or
+    a click that resolved to nothing. Every control that describes a
+    selection goes away with it rather than being left describing the
+    previous one — a recipe panel under a heading naming a file that is
+    not on screen is worse than no recipe panel.
+    """
+    total = len(paths or [])
+    if cursor is None:
+        return (None, "", gr.update(interactive=False),
+                gr.update(interactive=False),
+                gr.Image(value=None, visible=False),
+                gr.Video(value=None, visible=False),
+                *_delete_row(None),
+                gr.update(visible=False), gr.update(), None,
+                gr.update(interactive=False))
+    path = paths[cursor]
+    is_video = path.lower().endswith(gallery_index.VIDEO_EXT)
+    # Read on the move rather than kept per tile: the store is a dict, so
+    # this is a lookup, and doing it here means a recipe written since the
+    # page was drawn is still found.
+    recipe = recipes.for_path(path)
+    usable = bool(recipe) and str(recipe.get("tab")) in _RECIPE_VIEWS
+    return (
+        cursor,
+        f"**{cursor + 1} of {total}** · `{Path(path).name}`",
+        # The ends of the list are a dead button rather than a wrap-around:
+        # walking off the end of a few hundred files and landing back at
+        # the top reads as a bug, and "there is no next one" is a thing
+        # worth being told.
+        gr.update(interactive=cursor > 0),
+        gr.update(interactive=cursor < total - 1),
+        # One of these at a time, chosen by what is being shown — a video
+        # cannot go in a gr.Image, and this tab is the only place a Wan
+        # render can be watched again once its own tab has moved on.
+        gr.Image(value=None if is_video else path, visible=not is_video),
+        gr.Video(value=path if is_video else None, visible=is_video),
+        *_delete_row(path),
+        gr.update(visible=True), _recipe_body(recipe, path), recipe,
+        gr.update(interactive=usable),
+    )
+
+
+def refresh_gallery():
+    """Tab opened, or Refresh clicked: re-scan and open on the newest file.
+
+    Deliberately back to page one, and onto the *first* file rather than
+    to an empty viewer. The list is newest-first, so page one is what
+    someone pressing Refresh came to see — and the picture they came to
+    see is the one at the top of it, which used to take a further click.
     """
     paths = list_output_images()
-    return (paths, min(GALLERY_PAGE, len(paths)),
-            *_gallery_view(paths, GALLERY_PAGE))
+    shown = min(GALLERY_PAGE, len(paths))
+    cursor = 0 if paths else None
+    return (paths, shown, *_grid_updates(paths, shown, cursor),
+            *_view_at(paths, cursor))
 
 
-def _more_gallery(paths, shown):
-    """Load-more: show one more page of what the last scan found.
+def _more_gallery(paths, shown, cursor):
+    """Load more: show one more page of what the last scan found.
 
     Pages out of the state rather than re-scanning, so paging back through
-    a long history cannot renumber the tiles under a click.
+    a long history cannot renumber the tiles under a click. The cursor
+    comes in only so the redraw can put the highlight back where it was —
+    a gr.Gallery handed a value with no selected_index clears it.
     """
     shown = min(len(paths), int(shown or 0) + GALLERY_PAGE)
-    return (shown, *_gallery_view(paths, shown))
+    return (shown, *_grid_updates(paths, shown, _cursor_at(paths, cursor)))
 
 
 def _pick_gallery(paths, evt: gr.SelectData):
-    """Grid click → the full-resolution original behind the clicked tile.
+    """Grid click → show that file in the viewer.
 
     This is the whole point of the tab: tiles are 512px WebP, and the
-    several-MB original is fetched only for the one image someone asked to
+    several-MB original is fetched only for the one file someone asked to
     see. Resolved by index against the state that built the grid — see
     _picked_recent for why the clicked tile's own path is not trustworthy.
+
+    An index that does not fit (a tile clicked after a refresh renumbered
+    the grid) clears the viewer rather than leaving it on the previous
+    file: the grid it was clicked in is gone, so there is nothing honest
+    left to say about what is selected.
     """
     idx = evt.index
     if not isinstance(idx, int) or not 0 <= idx < len(paths or []):
-        # Stale click, e.g. a tile clicked after a refresh renumbered the
-        # grid. The viewers keep what they have; the recipe panel is put
-        # away, because the one thing worse than no recipe is a recipe
-        # sitting under a heading naming a different picture. Cleared with
-        # a real None rather than a gr.update() — this output is a
-        # gr.State, whose value is whatever it is handed, update object
-        # and all.
-        return (gr.Image(), gr.Video(), gr.update(visible=False),
-                gr.update(), None, gr.update(interactive=False),
-                None, *_delete_row(None))
-    path = paths[idx]
-    is_video = path.lower().endswith(gallery_index.VIDEO_EXT)
-    # Read on the click rather than kept per tile: a gallery page is ten
-    # files and the store is a dict, so this is a lookup, and doing it here
-    # means a recipe written since the page was drawn is still found.
-    recipe = recipes.for_path(path)
-    usable = bool(recipe) and str(recipe.get("tab")) in _RECIPE_VIEWS
-    return (gr.Image(value=None if is_video else path, visible=not is_video),
-            gr.Video(value=path if is_video else None, visible=is_video),
-            gr.update(visible=True,
-                      label=f"🧾 How this was made — {Path(path).name}"),
-            _recipe_body(recipe, path),
-            recipe,
-            gr.update(interactive=usable),
-            # The path itself, so the Delete button resolves against the
-            # file that is on screen rather than re-reading a grid that
-            # may have been refreshed under it.
-            path, *_delete_row(path))
+        return _view_at(paths, None)
+    return _view_at(paths, idx)
+
+
+def _step_gallery(delta, paths, shown, cursor):
+    """◀ / ▶ — one file along the whole list, not just the loaded page.
+
+    The grid is a window onto `paths`; the arrows are not. Walking past
+    the bottom of that window pulls the next page in, so the file being
+    shown is always one the grid actually holds — which is what lets the
+    highlight keep up, and means a long walk down leaves the grid where
+    the walk got to rather than back at the top.
+
+    The tiles are only re-sent when that happens. Every other step is a
+    highlight move, which costs the browser nothing — see _grid_updates.
+    """
+    paths = list(paths or [])
+    cursor = _cursor_at(paths, cursor)
+    if cursor is None:
+        return (int(shown or 0), gr.update(), gr.update(), gr.update(),
+                *_view_at(paths, None))
+    cursor = max(0, min(cursor + delta, len(paths) - 1))
+    was = max(0, min(int(shown or 0), len(paths)))
+    shown = was
+    while shown <= cursor:
+        shown = min(len(paths), shown + GALLERY_PAGE)
+    return (shown, *_grid_updates(paths, shown, cursor, redraw=shown != was),
+            *_view_at(paths, cursor))
 
 
 # ── deleting ───────────────────────────────────────────────────────────
@@ -1613,9 +1715,9 @@ def _delete_row(path):
     """(delete button, confirm row) updates for a selection, or for none.
 
     Every handler that changes what is selected goes through here, which
-    is what keeps a half-confirmed delete from surviving the click that
-    selected a different picture: arming is a property of the selection,
-    so a new selection disarms.
+    is what keeps a half-confirmed delete from surviving the move that
+    put a different picture on screen: arming is a property of the
+    selection, so anything that changes the selection disarms.
     """
     return (gr.update(visible=path is not None), gr.update(visible=False))
 
@@ -1630,8 +1732,14 @@ def _cancel_delete():
     return gr.update(visible=True), gr.update(visible=False)
 
 
-def _delete_selected(selected, paths, shown):
-    """Confirmed: delete the selected file, then redraw around the gap.
+def _delete_selected(paths, shown, cursor):
+    """Confirmed: delete the file being shown, then step onto the next one.
+
+    Not moving is the point. Culling a batch is look-bin-look-bin, and a
+    viewer that empties itself after every delete turns each of those into
+    a click back into the grid. The cursor keeps its *position*, so the
+    file that was below the deleted one slides up into it — and at the end
+    of the list it steps back rather than off.
 
     The grid is rebuilt from the state list minus that one path rather
     than by re-scanning, for the same reason _more_gallery pages out of
@@ -1639,40 +1747,34 @@ def _delete_selected(selected, paths, shown):
     paged four screens down to tidy up would lose their place on every
     delete.
 
-    `shown` is kept where it was and clamped, so the tiles below close up
-    by one and the page depth someone chose survives the delete.
-
     A file that was already gone is a success, not a refusal — it is not
     there, which is what was asked for. What comes back as a refusal is a
     path gallery_index would not touch (outside OUTPUT_DIR, or not a
     generated output) or one the OS would not let go of; that leaves the
     list alone and says so.
-
-    The viewer is cleared either way: whatever it is showing, this was a
-    click that said "I do not want to look at that any more".
     """
     paths = list(paths or [])
-    name = Path(selected).name if selected else ""
-    if selected and gallery_index.delete(selected):
+    cursor = _cursor_at(paths, cursor)
+    if cursor is None:
+        return (paths, int(shown or 0), *_grid_updates(paths, shown, None),
+                *_view_at(paths, None))
+    victim = paths[cursor]
+    name = Path(victim).name
+    if gallery_index.delete(victim):
         # Only once the file is actually gone: a recipe outliving its
         # picture is untidy, one whose picture is still there is wrong.
-        recipes.forget(selected)
-        paths = [p for p in paths if p != selected]
+        recipes.forget(victim)
+        paths = [p for p in paths if p != victim]
         note = f"🗑️ Deleted `{name}` — "
     else:
-        note = f"⚠️ Could not delete `{name}` — it may already be gone. "
-    shown = min(max(0, int(shown or 0)), len(paths))
-    grid, more_btn, info = _gallery_view(paths, shown)
-    return (
-        paths, shown, grid, more_btn, note + info,
-        # Nothing is selected any more, so every control that describes a
-        # selection goes away with it — including the recipe panel, which
-        # would otherwise sit under a heading naming a deleted file.
-        gr.Image(value=None, visible=False),
-        gr.Video(value=None, visible=False),
-        gr.update(visible=False), gr.update(), None,
-        gr.update(interactive=False), None, *_delete_row(None),
-    )
+        note = f"⚠️ Could not delete `{name}` — "
+    shown = max(0, min(int(shown or 0), len(paths)))
+    # The same index against a shorter list: the next file, or the last
+    # one if what went was the end of it.
+    cursor = _cursor_at(paths, cursor)
+    grid, more_btn, info = _grid_updates(paths, shown, cursor)
+    return (paths, shown, grid, more_btn, note + info,
+            *_view_at(paths, cursor))
 
 
 def zip_outputs():
@@ -4686,116 +4788,158 @@ def _tab_json_batch(tab):
 
 
 def _tab_gallery(tab):
-    """The GALLERY tab body."""
-    with gr.Row():
-        gallery_refresh_btn = gr.Button("🔄 Refresh", size="sm")
-        gallery_zip_btn = gr.Button(
-            "📦 Zip all for download", size="sm"
-        )
-    gallery_info = gr.Markdown(
-        "🔄 Refresh to load the gallery.",
-        elem_classes="kx-meta",
-    )
-    # The originals, newest first, and how many of them the grid is
-    # currently showing. State rather than a recomputed scan, so a click
-    # cannot resolve against a different list than the one it was made on.
+    """The GALLERY tab body.
+
+    Two panes: the grid on the left in the same column the other tabs put
+    their controls in, and the viewer on the right where they put their
+    output. That is not just consistency — it is the fix. Both halves are
+    on screen at once, so choosing a picture and looking at it stop being
+    two ends of a scroll. See the section comment above _cursor_at.
+    """
+    # The originals, newest first; how many of them the grid is showing;
+    # and which one the viewer is on. State rather than a recomputed scan,
+    # so a click cannot resolve against a different list than the one it
+    # was made on — and the cursor is what every control on the right is
+    # drawn from.
     gallery_paths = gr.State([])
     gallery_shown = gr.State(0)
-    # The original behind whatever the viewer is showing. Its own state
-    # because Delete has to resolve against the file on screen, and the
-    # grid it was clicked in may have been refreshed since.
-    gallery_selected = gr.State(None)
-    all_gallery = gr.Gallery(
-        label="All generated images & videos (newest first)",
-        # Filled when the tab is opened, never at build time: this used to
-        # scan OUTPUT_DIR twice while the Blocks was still being built, and
-        # then serve every full-size PNG in it to anyone who loaded the page.
-        value=None, columns=5, height=520,
-        # Clicking opens the original in the viewer below rather than
-        # Gradio's lightbox, which would only enlarge the thumbnail.
-        allow_preview=False,
-        object_fit="cover",
-        # Only fullscreen. The download buttons would hand over the 512px
-        # thumbnail — silently, with nothing to say it is not the image.
-        # Downloads come from the viewer below and the Zip button.
-        buttons=["fullscreen"],
-    )
-    gallery_more_btn = gr.Button(
-        f"⬇️ Load {GALLERY_PAGE} more", size="sm", visible=False
-    )
-    # One of these at a time, chosen by what was clicked — a video cannot
-    # be shown in a gr.Image, and the Gallery tab is the only place a Wan
-    # render can be watched again once its own tab has moved on.
-    gallery_image = gr.Image(
-        label="Selected image", visible=False, interactive=False,
-        buttons=["download", "fullscreen"],
-    )
-    gallery_video = gr.Video(
-        label="Selected video", visible=False, interactive=False,
-    )
-    # Under the viewer, not over the grid: it deletes the file being
-    # looked at, and putting it next to the tiles would read as "delete
-    # the gallery". Hidden until something is selected, for the same
-    # reason the recipe panel is — see _delete_row.
-    with gr.Row(elem_classes="kx-navrow"):
-        gallery_delete_btn = gr.Button(
-            "🗑️ Delete", size="sm", visible=False,
-            elem_classes="kx-danger",
-        )
-    with gr.Row(visible=False, elem_classes="kx-navrow") as gallery_confirm:
-        gr.Markdown("**Delete this file permanently?**",
-                    elem_classes="kx-meta")
-        gallery_cancel_btn = gr.Button("Cancel", size="sm")
-        gallery_confirm_btn = gr.Button(
-            "🗑️ Yes, delete", size="sm", variant="stop",
-        )
-    # What the selected file was made with, and the way to make it again.
-    # Hidden until something is picked, because an empty panel saying
-    # "nothing selected" is a row of chrome that is wrong most of the time.
-    with gr.Accordion("🧾 How this was made", open=True,
-                      visible=False, elem_classes="kx-recipe") as recipe_panel:
-        recipe_body = gr.Markdown(elem_classes="kx-meta")
-        # The whole recipe, so the button resolves against the thing that
-        # was drawn rather than re-reading a store that may have moved on.
-        recipe_state = gr.State(None)
-        recipe_btn = gr.Button(
-            "▶️ Load these settings", variant="primary", size="sm",
-            interactive=False,
-        )
-        # Filled by _use_recipe, which is wired after the tabs — its
-        # outputs reach into every generation tab, and the last of those
-        # is built after this one.
-        recipe_status = gr.Markdown(elem_classes="kx-meta")
-    gallery_zip_file = gr.File(
-        label="Zip of all images", interactive=False
-    )
-    open_outputs = [gallery_paths, gallery_shown, all_gallery,
-                    gallery_more_btn, gallery_info]
+    gallery_cursor = gr.State(None)
+
+    with gr.Row():
+        with gr.Column(scale=2, elem_classes="kx-panel"):
+            with gr.Row(elem_classes="kx-navrow"):
+                gallery_refresh_btn = gr.Button("🔄 Refresh", size="sm")
+                gallery_zip_btn = gr.Button("📦 Zip all", size="sm")
+            all_gallery = gr.Gallery(
+                label="All generated images & videos (newest first)",
+                # Filled when the tab is opened, never at build time: this
+                # used to scan OUTPUT_DIR twice while the Blocks was still
+                # being built, and then serve every full-size PNG in it to
+                # anyone who loaded the page.
+                value=None, columns=3, height=600,
+                # Clicking loads the original into the viewer beside it,
+                # rather than opening Gradio's lightbox on the thumbnail.
+                allow_preview=False,
+                object_fit="cover",
+                # Only fullscreen. The download buttons would hand over the
+                # 512px thumbnail — silently, with nothing to say it is not
+                # the image. Downloads come from the viewer and the zip.
+                buttons=["fullscreen"],
+            )
+            gallery_more_btn = gr.Button(
+                f"⬇️ Load {GALLERY_PAGE} more", size="sm", visible=False
+            )
+            gallery_info = gr.Markdown(
+                "🔄 Refresh to load the gallery.",
+                elem_classes="kx-meta",
+            )
+            gallery_zip_file = gr.File(
+                label="Zip of all images", interactive=False
+            )
+        with gr.Column(scale=3, elem_classes="kx-panel-out"):
+            # The whole reason the grid is no longer the only way through.
+            # The elem_ids are what the arrow keys reach for — see
+            # theme.JS, which finds them only while this tab is on screen.
+            with gr.Row(elem_classes="kx-viewer-nav"):
+                gallery_prev_btn = gr.Button(
+                    "◀ Prev", size="sm", interactive=False,
+                    elem_id="kx-gallery-prev",
+                )
+                gallery_position = gr.Markdown(
+                    "Pick a picture, or use ← → to walk through them.",
+                    elem_classes="kx-meta",
+                )
+                gallery_next_btn = gr.Button(
+                    "Next ▶", size="sm", interactive=False,
+                    elem_id="kx-gallery-next",
+                )
+            # One of these at a time — see _view_at. Both are given a fixed
+            # height so that walking a mixed batch does not move the
+            # controls under them on every step.
+            gallery_image = gr.Image(
+                label="Selected image", visible=False, interactive=False,
+                height=600, buttons=["download", "fullscreen"],
+            )
+            gallery_video = gr.Video(
+                label="Selected video", visible=False, interactive=False,
+                height=600,
+            )
+            # Under the viewer, not over the grid: it deletes the file
+            # being looked at, and next to the tiles it would read as
+            # "delete the gallery". Hidden until something is selected,
+            # for the same reason the recipe panel is — see _delete_row.
+            with gr.Row(elem_classes="kx-navrow"):
+                gallery_delete_btn = gr.Button(
+                    "🗑️ Delete", size="sm", visible=False,
+                    elem_classes="kx-danger",
+                )
+            with gr.Row(visible=False,
+                        elem_classes="kx-navrow") as gallery_confirm:
+                gr.Markdown("**Delete this file permanently?**",
+                            elem_classes="kx-meta")
+                gallery_cancel_btn = gr.Button("Cancel", size="sm")
+                gallery_confirm_btn = gr.Button(
+                    "🗑️ Yes, delete", size="sm", variant="stop",
+                )
+            # What the selected file was made with, and the way to make it
+            # again. Hidden until something is picked, because an empty
+            # panel saying "nothing selected" is a row of chrome that is
+            # wrong most of the time.
+            with gr.Accordion("🧾 How this was made", open=True,
+                              visible=False,
+                              elem_classes="kx-recipe") as recipe_panel:
+                recipe_body = gr.Markdown(elem_classes="kx-meta")
+                # The whole recipe, so the button resolves against the
+                # thing that was drawn rather than re-reading a store that
+                # may have moved on.
+                recipe_state = gr.State(None)
+                recipe_btn = gr.Button(
+                    "▶️ Load these settings", variant="primary", size="sm",
+                    interactive=False,
+                )
+                # Filled by _use_recipe, which is wired after the tabs —
+                # its outputs reach into every generation tab, and the last
+                # of those is built after this one.
+                recipe_status = gr.Markdown(elem_classes="kx-meta")
+
+    # Everything the cursor decides, in the order _view_at returns it. Every
+    # handler that moves the cursor writes all of it, which is what keeps
+    # "which file is selected" one answer rather than six that can drift.
+    selection_outputs = [
+        gallery_cursor, gallery_position, gallery_prev_btn, gallery_next_btn,
+        gallery_image, gallery_video, gallery_delete_btn, gallery_confirm,
+        recipe_panel, recipe_body, recipe_state, recipe_btn,
+    ]
+    # The grid half of the same idea, minus the paths — the two handlers
+    # that rescan add that themselves.
+    grid_outputs = [gallery_shown, all_gallery, gallery_more_btn,
+                    gallery_info]
+    open_outputs = [gallery_paths, *grid_outputs, *selection_outputs]
+
     tab.select(fn=refresh_gallery, outputs=open_outputs)
     gallery_refresh_btn.click(fn=refresh_gallery, outputs=open_outputs)
     gallery_more_btn.click(
-        fn=_more_gallery, inputs=[gallery_paths, gallery_shown],
-        outputs=[gallery_shown, all_gallery, gallery_more_btn, gallery_info],
+        fn=_more_gallery,
+        inputs=[gallery_paths, gallery_shown, gallery_cursor],
+        outputs=grid_outputs,
     )
-    # Everything a selection decides, in one list: the two viewers, the
-    # recipe panel, and the two delete controls. _pick_gallery and
-    # _delete_selected both write all of it, which is what keeps "nothing
-    # is selected" a single state rather than a combination of them.
-    selection_outputs = [gallery_image, gallery_video,
-                         recipe_panel, recipe_body, recipe_state, recipe_btn,
-                         gallery_selected, gallery_delete_btn,
-                         gallery_confirm]
     all_gallery.select(
         fn=_pick_gallery, inputs=[gallery_paths], outputs=selection_outputs,
     )
+    for _button, _delta in ((gallery_prev_btn, -1), (gallery_next_btn, 1)):
+        _button.click(
+            fn=partial(_step_gallery, _delta),
+            inputs=[gallery_paths, gallery_shown, gallery_cursor],
+            outputs=[*grid_outputs, *selection_outputs],
+        )
     gallery_delete_btn.click(
         fn=_arm_delete, outputs=[gallery_delete_btn, gallery_confirm])
     gallery_cancel_btn.click(
         fn=_cancel_delete, outputs=[gallery_delete_btn, gallery_confirm])
     gallery_confirm_btn.click(
         fn=_delete_selected,
-        inputs=[gallery_selected, gallery_paths, gallery_shown],
-        outputs=[*open_outputs, *selection_outputs],
+        inputs=[gallery_paths, gallery_shown, gallery_cursor],
+        outputs=open_outputs,
     )
     gallery_zip_btn.click(
         fn=zip_outputs, outputs=[gallery_zip_file, gallery_info]

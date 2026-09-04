@@ -870,6 +870,46 @@ queue (`jobqueue.note_preset_saved`), and the same poll that carries the
 images back refills the preset dropdown — every dropdown showing that
 tab's list, which since the Edit tabs joined in is two of them.
 
+## The Gallery, as a browser
+
+The tab used to be one column: tiles on top, and whichever one you clicked
+drawn underneath them. Looking at two pictures in a row meant scrolling
+down to see one, back up to click the next, and down again — per picture,
+forever, and worse the taller the picture was.
+
+Now the two halves sit **side by side** — the grid in the column the other
+tabs put their controls in, the viewer where they put their output — and
+the viewer is what you drive:
+
+- **◀ Prev / Next ▶**, and the **← →** arrow keys, walk the whole list.
+  The keys are bound in `theme.JS`, resolve the two buttons by `elem_id`,
+  and only fire while they are on screen (`offsetParent` is `null` inside
+  a hidden tab) and while nothing is being typed into — so they cost
+  nothing and do nothing on any other tab.
+- **The grid follows the viewer**, highlighting the tile being shown, and
+  the arrows are not bound by it: walking past the bottom of the loaded
+  page pulls the next one in, so a long walk down leaves the grid where
+  the walk got to rather than back at the top.
+- **A position line** — `12 of 340 · Krea2_00042_.png` — sits between the
+  two buttons, and the ends of the list are a dead button rather than a
+  wrap-around. Landing back at the top after walking off the end of a few
+  hundred files reads as a bug.
+- **Refresh opens on the newest file** instead of an empty panel, which
+  used to take a further click to fill.
+- **Delete steps onto the next file** rather than emptying the viewer —
+  see below.
+
+One rule holds all of it together: **the cursor is the state, and
+everything else is drawn from it.** A tile click, an arrow, a delete and a
+refresh all end in the same `_view_at()`, so there is no arrangement in
+which the picture, the position line, the recipe panel and the highlighted
+tile disagree about which file is selected.
+
+The tiles are only re-sent to the browser when the page actually grows.
+Every other step is a highlight move: handing `gr.Gallery` the same list
+again makes it rebuild the grid, which throws away the scroll position of
+the very thing being scrolled through.
+
 ## Recipes — "how was this made?"
 
 An image in the Gallery tab used to be a dead end. It was the one that
@@ -980,12 +1020,12 @@ exactly the guarding the prompt library's `_pick` and `_num` already do:
 
 ### Deleting a file
 
-The viewer under the grid carries a **🗑️ Delete**, which removes the
-selected file for good — the pod's disk is ephemeral and there is no trash
-to fish anything back out of, so it is two clicks: 🗑️ arms it, and a
-confirm button in a row that only exists while it is armed does it.
-Selecting a different picture disarms, because arming is a property of the
-selection rather than of the tab.
+The viewer carries a **🗑️ Delete**, which removes the selected file for
+good — the pod's disk is ephemeral and there is no trash to fish anything
+back out of, so it is two clicks: 🗑️ arms it, and a confirm button in a
+row that only exists while it is armed does it. Anything that changes the
+selection disarms, because arming is a property of the selection rather
+than of the tab.
 
 Three things go, in that order:
 
@@ -1008,10 +1048,17 @@ Three things go, in that order:
 The grid is then rebuilt from the state list minus that one path rather
 than by re-scanning, for the same reason **Load more** pages out of state:
 a rescan jumps back to page one, and someone who has paged four screens
-down to tidy up would lose their place on every delete. A file that was
-already gone from disk counts as a success — it is not there, which is
-what was asked for. A path the index refuses, or one the OS will not let
-go of, leaves the list alone and says so.
+down to tidy up would lose their place on every delete.
+
+**The cursor does not move**, which is the point. Culling a batch is
+look-bin-look-bin, and a viewer that empties itself after every delete
+turns each of those into a click back into the grid. Keeping the index
+means the file that was below the deleted one slides up into it — and at
+the end of the list it steps back rather than off.
+
+A file that was already gone from disk counts as a success — it is not
+there, which is what was asked for. A path the index refuses, or one the
+OS will not let go of, leaves the list alone and says so.
 
 ## Model swapping and crash recovery
 

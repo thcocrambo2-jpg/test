@@ -868,6 +868,18 @@ CSS = f"""
   .kx-undo-btn svg {{ width: 17px; height: 17px; }}
 }}
 
+/* The Gallery tab's viewer header: ◀ Prev, where you are, Next ▶. The
+   two buttons take their own width and the position line takes the rest,
+   so it stays centred between them however long a filename gets. */
+.kx-viewer-nav {{
+  align-items: center !important;
+  gap: 8px;
+  margin-bottom: 6px !important;
+}}
+.kx-viewer-nav > button {{ flex: none !important; width: auto !important; }}
+.kx-viewer-nav > *:not(button) {{ flex: 1 1 auto !important; min-width: 0; }}
+.kx-viewer-nav .kx-meta p {{ text-align: center; }}
+
 /* The Gallery tab's Delete button. Quiet until it is pointed at: the
    control is permanent and unrecoverable, so it should be findable
    without being the loudest thing next to a picture someone is enjoying.
@@ -2408,6 +2420,32 @@ JS = r"""
       }
       return;
     }
+  });
+
+  // Left/right arrows walk the Gallery tab's viewer, which is the
+  // difference between browsing a few hundred generations and clicking
+  // through them one at a time. The two buttons are found by id and only
+  // ever clicked while they are on screen (offsetParent is null inside a
+  // hidden tab), so this costs nothing and does nothing on any other tab.
+  document.addEventListener("keydown", (event) => {
+    if (event.key !== "ArrowLeft" && event.key !== "ArrowRight") return;
+    if (event.ctrlKey || event.metaKey || event.altKey || event.shiftKey) {
+      return;
+    }
+    // Never take an arrow key away from something being typed in.
+    const active = document.activeElement;
+    if (active && active.closest(
+        "input, textarea, select, [contenteditable=true]")) return;
+    const host = document.getElementById(
+      event.key === "ArrowLeft" ? "kx-gallery-prev" : "kx-gallery-next");
+    if (!host || !host.offsetParent) return;
+    // Gradio hangs elem_id on the button in some versions and on its
+    // wrapper in others — ask for both rather than guess.
+    const button = host.tagName === "BUTTON" ? host
+                                             : host.querySelector("button");
+    if (!button || button.disabled) return;
+    event.preventDefault();
+    button.click();
   });
 
   // Click the output-path pill in the footer to copy it. The pod's disk is
