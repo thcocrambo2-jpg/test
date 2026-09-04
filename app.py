@@ -1,4 +1,4 @@
-"""Krea 2 on RunPod — ComfyUI + Gradio. Entry point: python app.py
+"""Krea 2 on RunPod — ComfyUI + a React web app. Entry point: python app.py
 
 Startup flow:
   1. Read configuration (config.py, imported below — also sets up logging).
@@ -9,11 +9,12 @@ Startup flow:
   5. Download the Hugging Face and CivitAI models the enabled features
      need — a feature that is off costs no disk and no download time.
   6. Start the ComfyUI server and wait until its API answers.
-  7. Launch the Gradio UI and keep running until interrupted.
+  7. Serve the React UI over uvicorn, open a Cloudflare tunnel for the
+     public URL, and keep running until interrupted.
 
-Modules that need third-party packages (huggingface_hub, gradio,
-websocket-client, ...) are imported only after step 3 has installed them,
-so the app can bootstrap itself on a bare pod.
+Modules that need third-party packages (huggingface_hub, fastapi,
+uvicorn, websocket-client, ...) are imported only after step 3 has
+installed them, so the app can bootstrap itself on a bare pod.
 """
 
 import os
@@ -141,19 +142,30 @@ def main() -> None:
             COMFY_DIR / "custom_nodes" / "comfyui-krea2edit",
         )
 
-    # 7 · Gradio UI (importing ui pulls in the workflow builder + API client).
-    # ui builds its gr.Blocks at *import* time, so this import is where the
-    # tabs are decided — it must stay below features.resolve() above, which
-    # is the call that knows which ones this license grants.
+    # 7 · The web app: uvicorn, the React bundle, and the tunnel that gives
+    # it a public URL.
+    #
+    # This import used to be load-bearing. `ui` built its gr.Blocks at
+    # *import* time and skipped any tab the licence did not grant, so where
+    # this line sat — below features.resolve() — was the licence gate: an
+    # unbuilt tab had no endpoint. Nothing about that survives here. The
+    # React client is one bundle for every licence and learns what it may
+    # show from /api/v1/session, over the wire, so a gate made of import
+    # order would gate nothing at all.
+    #
+    # What replaces it is `api._mount_tab`, which hangs a features.enabled()
+    # dependency on every per-tab route, and `scripts/check_routes.py`, which
+    # fails the build if any of them would answer a licence that grants
+    # nothing. See context.md §4.5.
+    import serve
     import workflow
-    from ui import launch_ui
 
     log.info(
         "Workflow builder ready — %d LoRA file(s) available",
         len(workflow.list_lora_files()),
     )
     if not os.environ.get("KREA2_SKIP_LAUNCH"):
-        launch_ui()
+        serve.serve()
 
 
 if __name__ == "__main__":

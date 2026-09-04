@@ -431,3 +431,55 @@
   text-overflow: ellipsis;
   white-space: nowrap;
 }
+
+/* ------------------------------------------------------------------ undo
+ * The two buttons under every prompt box. They exist for the keyboard that
+ * has no Ctrl key — see `lib/undo.ts`, which measured what the native stack
+ * does and does not cover. Small and quiet: this is a recovery control, not
+ * something to draw the eye on a form with thirty other things on it.
+ */
+.undoBar {
+  display: flex;
+  gap: var(--s-1);
+  justify-content: flex-end;
+  margin-top: var(--s-1);
+}
+
+.undoBtn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 26px;
+  height: 26px;
+  padding: 0;
+  background: transparent;
+  color: var(--c-text-muted);
+  border: 1px solid transparent;
+  border-radius: var(--r-sm);
+  cursor: pointer;
+  transition:
+    color var(--d-fast) var(--e-out),
+    background var(--d-fast) var(--e-out),
+    border-color var(--d-fast) var(--e-out);
+}
+
+.undoBtn svg {
+  width: 15px;
+  height: 15px;
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 2;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+
+.undoBtn:hover:not(:disabled) {
+  color: var(--c-text);
+  background: var(--c-elevated);
+  border-color: var(--c-border);
+}
+
+.undoBtn:disabled {
+  opacity: 0.35;
+  cursor: default;
+}

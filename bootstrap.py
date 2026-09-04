@@ -406,7 +406,7 @@ def install_comfyui() -> None:
     else:
         clone_pinned(COMFYUI_REPO, COMFY_DIR, "ComfyUI", "Cloning ComfyUI")
     # ComfyUI's requirements always install — they belong to the subprocess,
-    # not to us. The app's own (gradio, huggingface_hub, ...) are compiled
+    # not to us. The app's own (fastapi, huggingface_hub, ...) are compiled
     # into the binary by build.sh, so re-installing them on someone else's
     # pod would only cost time and bandwidth.
     reqs = ["-r", COMFY_DIR / "requirements.txt"]

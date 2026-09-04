@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Launch the Gradio UI locally, with no GPU, no ComfyUI and no weights.
+"""Launch the app locally, with no GPU, no ComfyUI and no weights.
 
 Operator tool, not part of the shipped app. The point is to look at the
 UI — which tabs a license actually grants, how they lay out, what the
@@ -12,6 +12,11 @@ card that can hold a 35 GB UNet.
     python scripts/dryrun.py --features "single,klein"   # offline, no server
     python scripts/dryrun.py --features all
 
+Serves the built React bundle from `webui/dist` at http://127.0.0.1:7860,
+the same way the shipped binary does. To work on the front end itself, run
+`npm run dev` in `webui/` as well and use Vite's port — it proxies /api,
+/media and /thumbs back here.
+
 The first form is the one worth using: it calls the real license server
 with KREA2_LICENSE_KEY, so it verifies the whole entitlement path —
 key → features array → which tabs get built — against the record you
@@ -22,7 +27,7 @@ on.
 
 What is deliberately NOT run: bootstrap (the ComfyUI clone and the pip
 install), downloads.download_everything(), and the ComfyUI server. So
-every tab builds and every control works, but pressing Generate reports
+every tab renders and every control works, but pressing Generate reports
 that ComfyUI is not running — the model dropdowns are read from the
 registry in config.py, not from disk, which is what makes a weightless
 run possible at all.
@@ -45,15 +50,15 @@ os.environ.setdefault(
     "KREA2_BASE_DIR", str(Path(__file__).resolve().parent.parent / ".dryrun"),
 )
 
-from config import OUTPUT_DIR, log  # noqa: E402
+from config import log  # noqa: E402
 
 
 def stub_comfy() -> None:
     """Make `import comfy` work on a machine ComfyUI cannot run on.
 
     comfy.py detects GPUs at import and raises when there are none, and
-    ui.py/workflow.py both import it for GPU_COUNT. A machine with a small
-    card imports it for real and only needs ensure_alive replaced; a
+    handlers.py/workflow.py both import it for GPU_COUNT. A machine with a
+    small card imports it for real and only needs ensure_alive replaced; a
     machine with no card at all needs the module faked before anything
     imports it. Either way the app's own code is untouched.
     """
@@ -79,16 +84,16 @@ def stub_comfy() -> None:
     else:
         log.info("GPU detected — using the real comfy module (server not started)")
 
-    # Patched before ui is imported: ui.py binds `from comfy import
-    # ensure_alive as comfy_ensure_alive` at import time, so a later patch
-    # would not be seen. Without this, every Generate click tries to start
-    # a ComfyUI that is not installed.
+    # Patched before handlers is imported: handlers.py binds `from comfy
+    # import ensure_alive as comfy_ensure_alive` at import time, so a later
+    # patch would not be seen. Without this, every Generate click tries to
+    # start a ComfyUI that is not installed.
     comfy.ensure_alive = ensure_alive
 
 
 def main() -> None:
     parser = argparse.ArgumentParser(
-        description="Run the Gradio UI locally with no GPU, ComfyUI or weights.",
+        description="Run the app locally with no GPU, ComfyUI or weights.",
     )
     parser.add_argument(
         "--features", metavar="LIST",
@@ -97,16 +102,15 @@ def main() -> None:
     )
     parser.add_argument("--port", type=int, default=7860)
     parser.add_argument(
-        "--share", action="store_true",
-        help="expose a public gradio.live link (default: localhost only)",
+        "--tunnel", action="store_true",
+        help="open a Cloudflare quick tunnel for a public URL (default: "
+             "localhost only). Replaces --share, which was Gradio's link.",
     )
     parser.add_argument(
         "--api-only", action="store_true",
-        help="run the FastAPI app instead of the Gradio one, with no "
-             "tunnel and no access token. This is the mode `npm run dev` "
-             "proxies to: Vite owns the HTML and the hot reload, and this "
-             "answers /api, /media and /thumbs. Without it you get the "
-             "Gradio UI, which is still the reference to compare against.",
+        help="accepted and ignored. There is only one app now, and this "
+             "script has always served it; the flag stays so the command "
+             "lines in older notes keep working.",
     )
     args = parser.parse_args()
 
@@ -129,32 +133,19 @@ def main() -> None:
 
     stub_comfy()
 
-    if args.api_only:
-        # No token, because the alternative during development is pasting
-        # one on every restart and the alternative to *that* is somebody
-        # commenting the auth out. Set before api is imported: it reads
-        # the variable once, at import.
-        os.environ["KREA2_UI_ALLOW_ANON"] = "1"
-        import serve
+    # No token, because the alternative during development is pasting one on
+    # every restart and the alternative to *that* is somebody commenting the
+    # auth out. Set before api is imported: it reads the variable once, at
+    # import. This is also why the script refuses to bind anything but
+    # loopback — an app with its auth switched off should not be reachable
+    # from the next desk.
+    os.environ["KREA2_UI_ALLOW_ANON"] = "1"
+    import serve
 
-        log.info("Starting the API on http://127.0.0.1:%d "
-                 "(run `npm run dev` in webui/ for the UI)", args.port)
-        serve.serve(port=args.port, host="127.0.0.1", tunnel=False)
-        return
-
-    # Imported last, and only now: ui.py builds its gr.Blocks at import
-    # time, so this line is where the tabs are decided.
-    import theme
-    import ui
-
-    log.info("Starting Gradio on http://127.0.0.1:%d ...", args.port)
-    # theme.launch_kwargs() is what the real launch_ui() passes too, so what
-    # you see here is what a customer sees — the point of the script.
-    ui.ui.launch(
-        server_name="127.0.0.1", server_port=args.port, share=args.share,
-        show_error=True, ssr_mode=False, allowed_paths=[str(OUTPUT_DIR)],
-        **theme.launch_kwargs(),
-    )
+    log.info("Starting on http://127.0.0.1:%d — serving webui/dist. For "
+             "front-end work run `npm run dev` in webui/ as well and use "
+             "Vite's port, which proxies /api back here.", args.port)
+    serve.serve(port=args.port, host="127.0.0.1", tunnel=args.tunnel)
 
 
 if __name__ == "__main__":

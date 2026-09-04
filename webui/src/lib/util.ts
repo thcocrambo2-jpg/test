@@ -113,3 +113,19 @@ export function useMediaQuery(query: string): boolean {
   }, [query])
   return matches
 }
+
+/** A tab label with its leading emoji removed.
+ *
+ *  `features.label_for()` returns "🎨 Krea2" — the emoji is part of the
+ *  string because a Gradio tab had nowhere else to put one. The schema
+ *  carries `icon` separately and every surface here renders the two apart,
+ *  so without this the icon appears twice: "🎨 🎨 Krea2".
+ *
+ *  Only a *leading* pictographic run is taken, and only when something is
+ *  left after it. The label is the one field an admin edits in Atlas rather
+ *  than in this repo, so a label with no emoji, or one that is nothing but
+ *  an emoji, has to come back unchanged rather than empty. */
+export function labelText(label: string): string {
+  const stripped = label.replace(/^[\p{Extended_Pictographic}\p{Emoji_Component}\uFE0F\u200D]+\s*/u, '')
+  return stripped.trim() || label
+}

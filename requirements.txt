@@ -3,7 +3,17 @@
 # `python app.py` on a bare pod also ends up satisfying it.
 # torch is intentionally NOT listed — it comes from the RunPod PyTorch base
 # image (and ComfyUI's own requirements).
-gradio>=6
+# The web app. FastAPI serves the API and the embedded React bundle;
+# uvicorn runs it. Deliberately NOT uvicorn[standard]: the extras are
+# uvloop and httptools, both compiled, and neither buys anything at one
+# customer per process — while both would have to be taught to Nuitka.
+fastapi>=0.115
+uvicorn>=0.30
+# Multipart form parsing, which FastAPI needs to accept an upload and
+# does not vendor. Every image that reaches /api/v1/uploads arrives
+# through it, so it is a hard dependency of the Inpaint and Edit tabs
+# rather than an optional extra.
+python-multipart
 websocket-client>=1.6
 requests
 huggingface_hub
@@ -15,7 +25,7 @@ huggingface_hub
 # the Nuitka bundle and cannot see a pip-installed copy on the pod.
 hf_xet
 safetensors
-# Mask compositing and input downscaling in ui.py, and the gallery
+# Mask compositing and input downscaling in handlers.py, and the gallery
 # thumbnails in gallery_index.py. Listed explicitly because the app imports
 # it unconditionally at startup: it happens to arrive with ComfyUI's own
 # requirements today, which makes a hard dependency look like a transitive

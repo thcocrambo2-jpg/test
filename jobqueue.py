@@ -17,8 +17,9 @@ edit is a waiting room, not a queue.
 So a click now only *records* the work — which function, with which
 arguments, for which tab — and returns in microseconds. The button comes
 straight back, and a worker thread per lane runs the recorded jobs one at
-a time in arrival order. ui.py polls this module on a `gr.Timer` to draw
-the queue and to carry each job's output back into the tab it came from.
+a time in arrival order. `api.py` reads this module to draw the queue and
+to carry each job's output back into the tab it came from — over SSE now,
+though it was a one-second `gr.Timer` poll while Gradio drew the page.
 
 Lanes
 -----

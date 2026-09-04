@@ -14,6 +14,7 @@ import { Pricing } from '@/features/pricing/Pricing'
 import { EmptyState, Skeleton } from '@/components/ui'
 import type { TabSchema } from '@/api/types'
 import s from '@/features/shell/shell.module.css'
+import { labelText } from '@/lib/util'
 
 /*
  * Routing.
@@ -90,7 +91,7 @@ export function App() {
 
 function TabPage({ schema }: { schema: TabSchema }) {
   return (
-    <Page title={schema.label} icon={schema.icon} blurb={schema.blurb}>
+    <Page title={labelText(schema.label)} icon={schema.icon} blurb={schema.blurb}>
       {schema.ready ? <GenerateTab schema={schema} /> : <StagePending schema={schema} />}
     </Page>
   )

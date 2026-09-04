@@ -2,7 +2,7 @@ import { NavLink } from 'react-router-dom'
 import { useSchemas, useSession } from '@/api/queries'
 import { BESPOKE_TABS, CATEGORY_LABEL, CATEGORY_ORDER } from '@/lib/nav'
 import { Skeleton } from '@/components/ui'
-import { cx } from '@/lib/util'
+import { cx, labelText } from '@/lib/util'
 import type { TabCategory } from '@/api/types'
 import s from './shell.module.css'
 
@@ -51,7 +51,7 @@ export function Nav() {
   const items: Item[] = [
     ...schemas.map((schema) => ({
       key: schema.key,
-      label: schema.label,
+      label: labelText(schema.label),
       icon: schema.icon,
       route: schema.route,
       category: schema.category,

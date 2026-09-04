@@ -42,9 +42,8 @@ services:
       PYTHONDONTWRITEBYTECODE: "1"
 
     volumes:
-      # The working tree, read-write: gradio writes .gradio/ into the
-      # working directory, and being able to see output written from
-      # inside the container is half the point of a dev loop.
+      # The working tree, read-write: being able to see output written
+      # from inside the container is half the point of a dev loop.
       - .:/src
       # Models and outputs, shared with the production service so a dev run
       # does not download another 90 GB.

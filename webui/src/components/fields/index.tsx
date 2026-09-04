@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useId, useRef, useState, type ReactNode } from 'react'
 import { cx } from '@/lib/util'
+import { useUndoHistory } from '@/lib/undo'
 import { Button } from '@/components/ui'
 import s from './fields.module.css'
 
@@ -99,6 +100,7 @@ export function TextAreaField({
   // eats the sidebar.
   const long = (value ?? '').length > 320
   const rows = expanded ? Math.max(lines, 14) : lines
+  const history = useUndoHistory(value ?? '', onChange)
   return (
     <FieldShell
       id={id}
@@ -119,8 +121,44 @@ export function TextAreaField({
         className={cx(s.textarea, mono && s.mono)}
         value={value ?? ''}
         placeholder={placeholder}
-        onChange={(event) => onChange(event.target.value)}
+        onChange={(event) => history.onChange(event.target.value)}
+        onKeyDown={history.onKeyDown}
       />
+      {/* Under the box rather than in `trailing`, so it travels with the
+        * control on a narrow screen — which is the width that needs it, a
+        * phone keyboard having no Ctrl key to press. */}
+      <div className={s.undoBar}>
+        <button
+          type="button"
+          className={s.undoBtn}
+          title="Undo (Ctrl+Z)"
+          aria-label="Undo"
+          disabled={!history.canUndo}
+          // Taking focus shuts a phone keyboard between taps; refusing it
+          // keeps the caret in the box so undo can be tapped repeatedly.
+          onPointerDown={(event) => event.preventDefault()}
+          onClick={history.undo}
+        >
+          <svg viewBox="0 0 24 24" aria-hidden="true">
+            <path d="M9 14 4 9l5-5" />
+            <path d="M4 9h8a6 6 0 0 1 0 12H9" />
+          </svg>
+        </button>
+        <button
+          type="button"
+          className={s.undoBtn}
+          title="Redo (Ctrl+Shift+Z)"
+          aria-label="Redo"
+          disabled={!history.canRedo}
+          onPointerDown={(event) => event.preventDefault()}
+          onClick={history.redo}
+        >
+          <svg viewBox="0 0 24 24" aria-hidden="true">
+            <path d="m15 14 5-5-5-5" />
+            <path d="M20 9h-8a6 6 0 0 0 0 12h3" />
+          </svg>
+        </button>
+      </div>
     </FieldShell>
   )
 }

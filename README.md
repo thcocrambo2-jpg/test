@@ -1,8 +1,14 @@
-# Krea 2 on RunPod — ComfyUI + Gradio
+# Krea 2 on RunPod — ComfyUI + a React web app
 
 A standalone Python app (converted from the Kaggle notebook) that bootstraps
 ComfyUI, downloads the Krea 2 Turbo models + LoRAs plus the Wan 2.2
-image-to-video models, and serves a Gradio UI.
+image-to-video models, and serves a React web UI over FastAPI.
+
+The front end is a React single-page app, compiled into the binary as a
+Python module and served from memory. It replaced a Gradio UI in
+`ui.py` / `theme.py`; if you are looking for how something used to be laid
+out or worded, the tag `pre-react-ui` is the last commit that still has
+both files.
 
 ## The four ways to run it
 
@@ -50,8 +56,20 @@ python app.py
 
 That single command clones ComfyUI if missing, installs requirements,
 downloads any missing models (~20 GB on first run), starts the ComfyUI
-server, waits for it, and launches the Gradio UI. A public URL is printed
-when the UI is up (`>>> OPEN THE UI HERE: ...`). Press Ctrl-C to stop.
+server, waits for it, and serves the web app. A public URL is printed when
+it is up (`>>> OPEN THE UI HERE: ...`). Press Ctrl-C to stop.
+
+That URL is a **Cloudflare quick tunnel** — `https://<words>.trycloudflare.com`,
+with an access token in the fragment. cloudflared is downloaded once on
+first launch and cached under the base directory. It needs no account and
+no signup. If the tunnel cannot be established the app says so and keeps
+running on the local port, which on a pod is still reachable through
+RunPod's own proxy. `--no-tunnel` skips it deliberately.
+
+The token rides in the URL **fragment** (`/#k=...`) rather than the query
+string, so it is never sent to a server: not to Cloudflare's edge, not to
+any proxy in between, and not in a `Referer` header. The page trades it for
+an HttpOnly cookie and removes it from the address bar.
 
 The pod filesystem is treated as ephemeral — models, outputs and logs all
 live under the base directory and are lost when the pod is destroyed.
@@ -128,6 +146,18 @@ absent, clones ComfyUI and its requirements, downloads whatever weights the
 license's features need, starts ComfyUI, then serves the UI. Every step is
 idempotent, so an interrupted run resumes rather than restarting.
 
+**The public URL on Windows comes from cloudflared**, exactly as it does on
+a pod — one code path, both platforms. This is worth stating because it was
+not always true: the old Gradio UI got its link from `share=True`, a Gradio
+service, and `scripts/windows_start.ps1` has never had any tunnel logic of
+its own. cloudflared is fetched once (~55 MB,
+`cloudflared-windows-amd64.exe`) and cached under `KREA2_BASE_DIR`.
+
+If your DNS resolver is slow to pick up a freshly minted hostname — some
+mobile hotspots cache the NXDOMAIN — the tunnel is up before the name
+resolves, and the first load can fail for a minute. The local port works
+throughout.
+
 How much it downloads depends entirely on the license — see Features. A
 `krea_t2i` + `gallery` licence pulls ~31 GB; adding `flux_t2i` or `wan_i2v`
 pulls tens of GB more.
@@ -187,7 +217,23 @@ and needs no GPU, no license and no weights:
 python scripts/dryrun.py --features all
 ```
 
-It cannot generate — it is for the interface only.
+It serves the **built** bundle from `webui/dist` on
+<http://127.0.0.1:7860>, with authentication switched off and bound to
+loopback only — which is why it refuses to bind anything else. It cannot
+generate; every Generate press reports that ComfyUI is not running. That is
+the point: the whole interface, every tab the flag grants, with no pod.
+
+While changing the front end itself, run Vite alongside it and use Vite's
+port instead — you get hot reload, and it proxies `/api`, `/media` and
+`/thumbs` back to the Python process:
+
+```powershell
+python scripts/dryrun.py --features all      # one terminal
+cd webui; npm run dev                        # another
+```
+
+`--tunnel` adds a public URL to either. `--api-only` is accepted and
+ignored: there is only one app now, and this script has always served it.
 
 ### Hardware
 
@@ -210,7 +256,9 @@ first generation.
 | `OSError: [WinError 127] The specified procedure could not be found` | `torchvision`/`torchaudio` compiled against a different torch. `ensure_torch()` repairs this automatically; it only surfaces if something installed a mismatch afterwards. |
 | `no kernel image is available for execution on the device` | torch has no kernels for this GPU. The startup check catches it and prints the install command. |
 | `IndexError: list index out of range` in `resolve_model` | A model registry in `config.py` was emptied. Trimming one to a single entry is fine; emptying it is not — several are indexed at `[0]` during import. |
-| `WinError 193` from `cloudflared` | The gradio.live tunnel did not answer and the fallback downloads a Linux binary. Everything already downloaded is cached, so a re-run skips straight past it. |
+| `WinError 193` from `cloudflared` | A Linux `cloudflared` was cached where the Windows one belongs — delete `cloudflared.exe` under `KREA2_BASE_DIR` and restart. This is what the pre-React fallback did on Windows; `serve.RELEASES` now picks the asset by `sys.platform`. |
+| No public URL, tunnel times out | cloudflared could not reach the Cloudflare edge. The app says so and keeps serving the local port; on a pod that is still reachable through RunPod's proxy. `--no-tunnel` skips the attempt. |
+| The tunnel URL will not resolve for a minute | Some resolvers cache the NXDOMAIN for a hostname that did not exist a second ago. The local port works throughout. |
 | Exits within seconds, no downloads | `KREA2_LICENSE_KEY` / `KREA2_NODE_TAG` unset — the license seat is taken before any expensive work. |
 | Weights land somewhere unexpected | `KREA2_BASE_DIR` unset, so the pod default resolved to `C:\workspace\krea2`. |
 
@@ -333,7 +381,7 @@ still taken, because that is the app's behaviour and a dev mode that skipped
 it would be testing something no customer runs. And the environment is the
 production image, so a dependency that is missing there is missing here.
 
-`docker/Dockerfile.dev` only adds `requirements.txt` — gradio and the rest,
+`docker/Dockerfile.dev` only adds `requirements.txt` — fastapi and the rest,
 which the production image has no use for because `build.sh` compiles them
 into the binary. It is an optimisation rather than a requirement: run from
 source, `config.FROZEN` is False, so `bootstrap.install_comfyui()` installs
@@ -765,9 +813,8 @@ flags** — a preset you switched off stays off — the same `$set`/
 
 ### What a preset costs at startup
 
-The list is fetched once while `ui.py` builds its Blocks (one request, all
-tabs), which is after the seat check, so the licence server is already on
-that path. A server that is slow or down costs the dropdown and nothing
+The list is fetched once, for all tabs in one request, after the seat
+check — so the licence server is already on that path. A server that is slow or down costs the dropdown and nothing
 else — every control keeps its compiled default and the tab generates
 normally. Failures are cached for 30s so a bad minute does not put a
 timeout on every page load.
@@ -798,29 +845,27 @@ order they arrived.
 That indirection buys three things:
 
 - **The button comes straight back.** Queue a second idea while the first
-  is still rendering. Previously the whole render happened inside the
-  Gradio event the click fired, and Gradio's default `trigger_mode="once"`
-  left the button dead until it finished — so the pod idled between jobs
-  whenever nobody was sitting there to click again.
+  is still rendering. In the original Gradio app the whole render happened
+  inside the event the click fired, and Gradio's default
+  `trigger_mode="once"` left the button dead until it finished — so the pod
+  idled between jobs whenever nobody was sitting there to click again.
 - **The queue is visible.** Gradio's own queue serialised the work
-  perfectly well, but nothing could see into it. The panel under the tabs
-  lists every job, live, with its tab, its prompt and its progress.
+  perfectly well, but nothing could see into it. The panel lists every job,
+  live, with its tab, its prompt and its progress.
 - **And it can be edited.** Each row carries a button, and what it does
   depends on the job: **✕ Remove** forgets one that is still waiting,
   **🛑 Stop** interrupts one that is already running, **✕ Clear** tidies a
   finished one off the list. **🧹 Clear finished** does the last of those
   in bulk.
 
-The panel sits under the tabs rather than inside any of them, because the
-queue belongs to the pod and not to a tab: a Krea job and a video are
-waiting on the same GPU. Its label carries the counts (`🗂️ Queue — 1
-running · 3 waiting`), so a collapsed panel still says how deep the queue
-is.
+The panel is outside any one tab, because the queue belongs to the pod and
+not to a tab: a Krea job and a video are waiting on the same GPU. It
+carries the counts, so a collapsed panel still says how deep the queue is.
 
 ### Lanes
 
 A lane is one worker, which makes it exactly the "only one of these at a
-time" rule that `concurrency_id` used to state:
+time" rule that Gradio's `concurrency_id` used to state:
 
 | Lane | Jobs | ComfyUI instance |
 | --- | --- | --- |
@@ -837,20 +882,26 @@ rather than *stopped* until it is.
 
 ### How results get back to a tab
 
-The click is long over by the time there are any, so it cannot push them.
-Instead the panel carries a `gr.Timer`; one poll a second redraws the
-queue and writes each job's latest yield into the components that
-submitted it (`_queue_tick` in `ui.py`). Every generation tab registers
-those components on the way past with `_queue_view`, so a licence granting
-three tabs polls three tabs.
+The submit is long over by the time there are any, so it cannot return
+them. They arrive over **server-sent events**: the browser holds one
+`GET /api/v1/stream` open for the life of the page, and every job state
+change, progress step and finished batch is pushed down it.
 
-Two details keep that cheap. The poll returns `gr.update()` — a no-op —
-for everything that has not moved since the browser last drew it, so a tab
-whose job finished ten minutes ago is not rewritten once a second. And the
-timer **switches itself off** when nothing is queued or running: an idle
-pod is not polled at all. A Generate click switches it back on, and so
-does opening the page, which is what lets a browser opened mid-job find
-the job already running.
+That is one connection for the whole app rather than a poll per tab. The
+Gradio version could not do it — a `gr.Timer` redrew the queue once a
+second and wrote each job's latest yield into the components that submitted
+it, which meant every generation tab registered its components up front and
+a licence granting three tabs polled three tabs. Most of that traffic was
+`gr.update()` no-ops for tabs whose job had finished ten minutes earlier.
+
+Progress is **determinate**. `client.py` already yielded
+`{"type": "progress", "step", "total"}` as structured data; the Gradio path
+formatted it into an English sentence because a textbox could hold nothing
+else. The event stream carries the numbers, so the bar is a real bar.
+
+A keep-alive comment every 15 seconds stops an idle proxy closing the
+stream, and the response carries `X-Accel-Buffering: no` so nothing in
+between holds events back to fill a buffer.
 
 A tab shows the newest job *that has begun* — so it switches to a new run
 when that run starts, not when it was queued, and goes on showing the last
@@ -872,87 +923,43 @@ tab's list, which since the Edit tabs joined in is two of them.
 
 ## The Gallery, as a browser
 
-The tab was two columns: a grid of large tiles where the other tabs put
-their controls, and the picture you had clicked where they put their
-output. Choosing and looking competed for the width of the screen, and on
-a phone the two halves stacked into one tall column that was mostly empty
-— a 600px grid, then a 600px picture, then the name of the file under it.
+The Gradio tab was two columns: a grid of large tiles where the other tabs
+put their controls, and the picture you had clicked where they put their
+output. Choosing and looking competed for the width of the screen, and on a
+phone the two halves stacked into one tall column that was mostly empty.
 
-So it is **one stage with the picture on it and a filmstrip of small
-tiles under that**, top to bottom, at every width. It is the shape a
-picture viewer settles on because it is the one where the picture gets
-the room and everything else stays a glance away.
+It is now **a reflowing grid, plus a lightbox over it**.
 
-- **The picture is the control.** Click its left half for the file before
-  it, its right half for the one after. Nothing is drawn for either: a
-  pair of chevrons floating in the margins is permanent furniture in aid
-  of a gesture that is discovered once and then known, and the pointer
-  turning into a hand over the picture is hint enough. The zones are
-  real buttons, so an end of the list disables one and it stops taking
-  the clicks that land on it. The old ◀ Prev / Next ▶ pair is gone.
-- **← →** still walk the list. They resolve a second, off-screen pair of
-  buttons by `elem_id` (`.kx-sr-nav` — clipped rather than
-  `display: none`, so `offsetParent` still answers "is the Gallery tab on
-  screen?"), because the click zones stand down over a **video**, where
-  the middle of the picture belongs to the player's own controls.
-- **The strip follows the picture**, highlighting the tile being shown
-  and scrolling it back into view when a walk takes it near an edge —
-  its own container only, never the page. The steps are not bound by
-  what is loaded: walking past the end of the strip pulls the next page
-  in, so a long walk leaves the strip where the walk got to.
-- **A count**, `12 / 340`, and nothing else. The filename used to ride
-  along there: it named a file whose picture was directly above it, and
-  changed length on every step.
-- **The bin** is an icon, next to the count, under the picture it deletes
-  — and its confirm step shares that row rather than taking one of its
-  own, so arming a delete does not shove the filmstrip down the page.
-- **Refresh opens on the newest file** instead of an empty stage.
-- **Delete steps onto the next file** rather than emptying the stage —
-  see below.
+- **The grid** is `aspect-ratio` tiles at a `minmax()` track width, with a
+  density control — Large / Comfortable / Compact, 320 / 220 / 150px. "How
+  many at once" is a preference, not a constant. It reflows at every width
+  down to a phone. The Gradio version was `gr.Gallery(height=600)`: a fixed
+  pixel height no media query could reach, on a page that was otherwise
+  fluid.
+- **The lightbox** is the picture, large, over a dimmed page. **Left** and
+  **Right** walk the list and **Esc** closes it. Walking past the loaded
+  page pulls the next one in, so a long walk does not stop at a page
+  boundary.
+- **The recipe panel** shows what the selected file was made with, and
+  **"load these settings"** hands them to the tab that made it — see
+  [Recipes](#recipes--how-was-this-made).
+- **The bin** is under the picture it deletes, with a confirm step. Delete
+  steps onto the next file rather than emptying the view.
+- **Videos** play in the lightbox through a real `<video>` element.
 
-One rule holds all of it together: **the cursor is the state, and
-everything else is drawn from it.** A tile click, a step, a delete and a
-refresh all end in the same `_view_at()`, so there is no arrangement in
-which the picture, the count, the recipe panel and the highlighted tile
-disagree about which file is selected.
+Tiles are **whole pictures shrunk into cells**, not square crops out of the
+middle of them: the grid is how two generations of one prompt get told
+apart, and a crop takes away the half that differs. They are served from
+`/api/v1/thumbs/<path>`, which is a 512px WebP where one exists and the
+original where it does not.
 
-The tiles are only re-sent to the browser when the page actually grows.
-Every other step is a highlight move: handing `gr.Gallery` the same list
-again makes it rebuild the grid, which throws away the scroll position of
-the very thing being scrolled through.
-
-The stage is a **fixed height** — `min(58vh, 560px)`, and 62vh on a
-phone, which is taller than it sounds for a reason: a phone screen is
-portrait and so is nearly everything this app generates, so the stage has
-to be about half again as tall as it is wide before the picture fills it
-rather than sitting pinched in the middle of it. Fitting the stage to
-each picture instead would move the filmstrip up and down the page on
-every step, and the strip is the thing being aimed at. One CSS variable
-carries that number, which is what makes the phone layout this one with
-smaller numbers rather than a second arrangement to keep working.
-
-That height lives on the stage rather than on the components, and that is
-what centres them. A `height=` on a `gr.Image` is written onto the
-component's own box, which then letterboxes the picture at the top of
-itself and leaves the whole difference as a gap underneath. The stage
-carries the height, centres what is on it on both axes, and the picture
-is only ever as large as it can be without being cropped.
-
-The strip is laid out from the DOM rather than from a stylesheet's guess
-about it. A `gr.Gallery` is a wrapping grid inside a box, and the class
-name of the element holding the tiles has moved between Gradio versions —
-a rule that guesses wrong leaves a second screenful of pictures where a
-strip should be, silently. So `theme.JS` finds a tile, takes its actual
-parent, and makes *that* the row: no wrapping, as wide as its contents,
-with every box between it and the block opened up so nothing clips it.
-The block itself — the one element with a name of our own on it — is the
-scroller. The CSS says the same thing for the names this version happens
-to use, so the strip is right before the JS runs and harmless if it never
-does.
-
-Tiles are **whole pictures shrunk into square cells**, not square crops
-out of the middle of them. The strip is how two generations of one prompt
-get told apart, and a crop takes away the half that differs.
+**The filmstrip DOM rewrite is gone.** The old strip was a `gr.Gallery`
+whose tile container had no stable class name — it moved between Gradio
+versions, and a stylesheet rule that guessed wrong left a second screenful
+of pictures where a strip should be, silently. `theme.JS` therefore found a
+tile at runtime, took its actual parent, and made *that* the row. It was a
+bet on another project's DOM, renewed at every upgrade. A CSS grid needs
+none of it.
 
 ## Recipes — "how was this made?"
 
@@ -981,9 +988,9 @@ call `prompts.py` and `presets.py` make. The dropdown label is what goes
 back into a dropdown; the filename it resolved to on this pod is not, and
 would be wrong on the next one.
 
-A tab's recipe **is its Generate click's `inputs` list** — that is the
-trick that makes this one implementation rather than ten. Recording it is
-zipping that list against the values Gradio just handed over; restoring it
+A tab's recipe **is its schema's `fields` list** — that is the trick that
+makes this one implementation rather than ten. Recording it is zipping that
+list against the values the request carried; restoring it
 is writing them back into the very same components. A tab that grows a
 control gets it in its recipes with no change anywhere:
 
@@ -1043,7 +1050,7 @@ batch of four writes four recipes differing in exactly the field that
 matters.
 
 The recipe itself is announced from the *worker* thread (`_recording` in
-`ui.py` wraps the tab's handler), and `recipes.py` keys it by thread. That
+`api.py` wraps the tab's handler), and `recipes.py` keys it by thread. That
 is what lets the output hook deep inside `client.run` find it without
 every executor having to pass it down.
 
@@ -1077,7 +1084,7 @@ Three things go, in that order:
 1. **The file**, via `gallery_index.delete()`. It will only touch a path
    that resolves to a media file *inside* the output dir — the same two
    rules the index uses to decide what it lists. A gallery click resolves
-   against a `gr.State`, i.e. against client-supplied data, so a stale or
+   against a path the browser sent, i.e. client-supplied data, so a stale or
    forged path must not be able to reach `.recipes.jsonl`, the zip, or
    anything outside the tree at all.
 2. **Its thumbnail**, best-effort. Nothing lists `.thumbs`, so a leftover
@@ -1152,7 +1159,7 @@ Two mechanisms handle this:
   instance's `--reserve-vram` flags) and reports **the last 20 lines of
   `comfyui.log`** in the tab's status box. Transport failures are also
   converted to `ComfyUIError` in `client.py`, so a dead server reads as a
-  status message rather than a Gradio traceback, and the app no longer
+  status message rather than a bare traceback, and the app no longer
   needs a manual restart to recover.
 
 If a crash persists, `comfyui.log` names the cause: `Killed process` in
@@ -1179,81 +1186,86 @@ error in the log points at a custom node instead.
 - `client.py` — ComfyUI HTTP/websocket client (queue, progress, image upload, interrupt)
 - `jobqueue.py` — the visible job queue behind every Generate button (worker per lane, cancel, history)
 - `recipes.py` — what each generated file was made with, so the Gallery can load it back
-- `ui.py` — Gradio UI (single/batch, edit, V2 edit, inpaint, face swap, flux, klein edit, video, JSON batch, gallery tabs), the `/pricing` page, and launch logic
+- `handlers.py` — the ten `generate_*` generators and the queue runners; imports no web framework at all
+- `tabschema.py` — one declarative schema per tab: every control, its label, bounds and submission order
+- `api.py` — FastAPI routes, the licence gate on each of them, uploads and the SSE event stream
+- `serve.py` — uvicorn plus the Cloudflare quick tunnel that provides the public URL
+- `webui.py` — serves the compiled React bundle from memory
+- `webui/` — the React app (Vite + TypeScript); `webui/dist` is what gets embedded
 
-### Tab order
+### Tab order and routing
 
-Each tab's body is a `_tab_*` builder in `ui.py`, and **`TAB_ORDER` is the one
-thing that decides the order they appear in** — a tuple of
-`(feature key, builder, tab id)` that a loop inside the `gr.Blocks` walks:
+Every generation tab is one entry in `tabschema.SCHEMAS`, and the schema
+carries its own `category` and `route`:
 
 ```python
-TAB_ORDER = (
-    (features.Key.KREA_T2I,          _tab_krea_t2i,          "krea2"),
-    (features.Key.KREA_V2_T2I,       _tab_krea_v2_t2i,       "krea2v2"),
-    (features.Key.COMMUNITY_PROMPTS, _tab_community_prompts, "prompts"),
-    ...
-)
+TabSchema(key="krea_t2i", ..., category="generate", route="/generate/krea2")
+TabSchema(key="krea_inpaint", ..., category="edit", route="/edit/inpaint")
+TabSchema(key="wan_i2v", ..., category="video", route="/video/wan")
 ```
 
-Move an entry and the tab moves; nothing else changes. A feature that is off is
-skipped entirely, so the remaining tabs close up with no gap. The order is fixed
-for the build — the Blocks tree is constructed once at import, so it cannot vary
-per licence.
+Two things follow from that, and both were impossible before.
 
-`tab_id` is only needed by a tab something else selects programmatically. Gradio
-otherwise numbers tabs by construction order, which shifts with the licence, so
-the Prompt Library's "switch to that tab" would land on whichever tab happened to
-be third for that customer.
+**The nav is grouped, not a flat strip.** Four groups — Generate, Edit,
+Video, Library — in `CATEGORY_ORDER` (`webui/src/lib/nav.ts`). The old strip
+was twelve flat emoji tabs with generate and edit modes interleaved, in an
+order that told you nothing about which of them made a picture from nothing
+and which changed one you already had.
 
-Note the ordering of `sort_order` in the licence server's `features` collection
-is a *different* thing: it orders the pricing page and the `features` array in an
-acquire response, and never reaches the tab strip. Likewise the `FEATURES` tuple
-in `features.py`, which drives `summary()`, `assets()` and `enabled_keys()` only.
+**Every tab has a URL.** `/generate/krea2`, `/edit/inpaint`,
+`/library/gallery`. They are bookmarkable, linkable and survive a reload;
+the browser Back button walks them. The Gradio app had one URL for all
+twelve tabs.
 
-One rule for the builders: cross-tab event wiring belongs *after* the loop, not
-inside a body. The Prompt Library's Use buttons write into the Krea 2 and Krea 2
-V2 controls, which belong to two other builders — Gradio only needs a component
-to exist before the `.click()` naming it, not before the tab it lives in, so
-lifting that one wiring block out is what keeps `TAB_ORDER` freely reorderable.
-Builders return whatever the rest of the page needs from them (the two generation
-tabs return their control lists, the library returns its state and buttons);
-everything else returns `None`.
-- `theme.py` — the UI's look: Gradio theme tokens, CSS, application header, pricing markup, page JS (see below)
-- `build.sh` — compiles the app into a single distributable binary (see below)
+A feature the licence does not grant is not in `/api/v1/session`'s `features`
+array, so its nav entry is not rendered and its routes 403 — see
+[Licensing](#licensing). The order is data, so unlike the old `TAB_ORDER`
+tuple it does not need a rebuild to change.
+
+The categories are **not invented in the front end**. The licence server
+already stores `category` per feature in the `features` collection and
+already sends it on the acquire response; `_clean_feature_info`
+(`licensing.py:200`) currently discards it, so until that four-line change
+lands the mapping is a constant on each schema.
+
+Note `sort_order` in the licence server's `features` collection is a
+*different* thing: it orders the pricing page and the `features` array in an
+acquire response. Likewise the `FEATURES` tuple in `features.py`, which
+drives `summary()`, `assets()` and `enabled_keys()` only.
 
 ### UI theme
 
-`theme.py` owns everything visual and `ui.py` owns behaviour, so the two can
-be worked on independently. `theme.launch_kwargs()` returns the
-`theme`/`css`/`head`/`js` arguments for `launch()` — Gradio 6 takes them
-there rather than on `gr.Blocks` — and both callers use it, so
-`scripts/dryrun.py` shows exactly what a customer sees.
+The palette is CSS custom properties in `webui/src/theme/tokens.css`,
+defined once on `:root` and redefined under `[data-theme="dark"]`. Light and
+dark therefore come from one list and cannot drift apart — the same
+discipline the old Gradio theme kept with its `*_dark` token pairs. No
+component carries a colour literal; the one exception is documented in place
+(`PAINT` in the mask editor, which is canvas alpha data rather than a UI
+colour).
 
-Colours are set as Gradio theme tokens, each with its `*_dark` counterpart,
-and the CSS only refers to them through `var(--...)`. That means light and
-dark come from one palette and cannot drift apart. `ui.py` contributes
-nothing but `elem_classes="kx-…"` hooks (`kx-panel`, `kx-note`, `kx-cta`,
-`kx-section`, `kx-meta`, `kx-status`, `kx-fine`) — no control's behaviour
-depends on the stylesheet, and the app still works with it stripped out.
+The theme follows the viewer: a `data-theme` attribute set before first
+paint from `localStorage`, falling back to `prefers-color-scheme`. There is
+a toggle in the header, which the Gradio app never had despite supporting
+both modes.
 
-Beyond the palette the UI adds:
+Beyond the palette:
 
 | | |
 |---|---|
-| Sticky application header | brand, the plan this license is on, when it expires (amber inside the last week), and the **Plans & pricing** button. Nothing else: the engine chips, counts and output path that used to be here were all true and none of them was read |
+| Sticky application header | brand, the plan this license is on, when it expires (amber inside the last month, red inside the last week), the theme toggle and the **Plans & pricing** link |
 | Footer | the `Ctrl`+`Enter` hint, model/GPU counts, and the output path (click it to copy) |
-| Segmented tab bar | Gradio's own overflow menu still handles tabs that do not fit |
-| One control card per tab | Gradio's per-field frames are flattened, so a 30-control tab reads as one form instead of thirty boxes |
+| Grouped nav | four categories with a route each, rather than one overflowing strip |
+| One control card per tab | a 30-control tab reads as one form rather than thirty boxes |
 | Sticky primary action | Generate / Edit / Swap stays reachable in columns that run past two screens |
-| Tab intro callouts | `_tab_intro()` tints the note amber on a ⚠️ (something is missing) and red on a ❌ (the tab cannot run) |
+| Determinate progress | a real bar driven by `{step, total}` off the event stream, not a status string |
+| Persistent errors | keyed to a job id and dismissed by hand, so a failure cannot scroll away unseen |
 | `Ctrl`/`Cmd` + `Enter` | runs the tab you are looking at; the footer says so |
 
-Two Gradio internals are worth knowing about if a future Gradio changes the
-look: the tab bar is styled through `.tab-container > button`, and Gradio
-sets `overflow: hidden` on `.gradio-container`, which the CSS relaxes to
-`clip` because otherwise nothing can be `position: sticky`. Both are in the
-`GRADIO INTERNALS` section at the bottom of `theme.py`.
+**The two Gradio-internals dependencies are gone**, along with the reason
+they existed. The old theme styled the tab bar through
+`.tab-container > button` and had to relax Gradio's `overflow: hidden` on
+`.gradio-container` to `clip` before anything could be `position: sticky`.
+Both were bets on another project's DOM. Neither has a successor here.
 
 ## Shipping a binary (Nuitka)
 
@@ -1280,7 +1292,8 @@ What the binary contains vs. what it still installs at runtime:
 | Inside the binary | Installed on first run |
 | --- | --- |
 | this app's code (compiled) | ComfyUI (`git clone`) |
-| gradio, huggingface_hub, requests, safetensors, websocket-client, Pillow | torch + ComfyUI's requirements |
+| fastapi, uvicorn, huggingface_hub, requests, safetensors, websocket-client, Pillow | torch + ComfyUI's requirements |
+| the compiled React bundle (`webui_bundle.py`) | |
 | `deps/ComfyUI-ReActor` (bundled data) | ReActor's requirements + onnxruntime |
 | | ~90 GB of models |
 
@@ -1307,10 +1320,15 @@ Two things make the compiled and uncompiled paths behave identically:
 
 Day to day nothing changes: keep running `python3 app.py`. Build only when you
 want to hand over an artifact. Nuitka caches the C compilation, so the first
-build (which compiles gradio's whole tree) is the slow one. If you add a
-dependency that works under `python3 app.py` but fails in the binary, the usual
-cause is package *data* files: add `--include-package-data=<pkg>` in
-`build.sh`.
+build is the slow one. If you add a dependency that works under
+`python3 app.py` but fails in the binary, the usual cause is package *data*
+files: add `--include-package-data=<pkg>` in `build.sh`.
+
+Both builds got **smaller** when Gradio went. Gradio 6 ships its entire
+Svelte front end as package data, and `gradio`, `gradio_client`, `safehttpx`
+and `groovy` were all pulled in whole rather than by import graph. The React
+bundle that replaced them is a few hundred KB gzipped, so the onefile
+re-extraction cost went down too.
 
 ### Building on the pod
 
@@ -1397,7 +1415,7 @@ cp -r /mnt/c/…/test ~/test && cd ~/test && ./build.sh
 ```
 
 Option 2 is the better default: WSL2 reaches `/mnt/c` over 9p, and this build
-touches ~1745 C files plus all of gradio's tree. Note that enabling `metadata`
+touches on the order of a thousand C files. Note that enabling `metadata`
 also makes git notice file-mode changes it previously ignored; if that produces
 spurious `old mode / new mode` diffs, set `git config core.fileMode false`.
 
@@ -1486,7 +1504,7 @@ runpodctl receive <code>
 ```
 
 `runpodctl` ships on pods and is peer-to-peer, so it ignores the SSH proxy's
-limitations. Failing both, serve it over the already-exposed Gradio port while
+limitations. Failing both, serve it over the already-exposed app port while
 the app is stopped:
 
 ```bash
@@ -1956,15 +1974,33 @@ how much of the original survives in the masked region (1.0 = full
 replacement); grow/blur expand and soften the mask edge for seamless blends.
 Images are snapped to multiples of 16 before encoding.
 
-The editor runs with `fixed_canvas=True` and a 1536 px canvas. That is not
-cosmetic: with Gradio's default `fixed_canvas=False` the canvas grows to the
-uploaded image's dimensions, so a 12 MP phone photo allocates a 4032×3024
-RGBA canvas *plus* a paint layer in the browser, the tab runs out of memory
-and **the page reloads on upload** ([gradio#8556](https://github.com/gradio-app/gradio/issues/8556)).
-Pinning the canvas makes Gradio rescale uploads to fit it instead, so large
-photos work — at the cost of small images being scaled up to the canvas.
-`format="png"` overrides Gradio's lossy webp default, since unmasked pixels
-are composited back from that image.
+**The mask editor** is a canvas brush tool: layers with real alpha,
+brush and eraser, brush sizing, undo/redo (Ctrl+Z / Ctrl+Shift+Z),
+add/delete layer, and loading by drop, click or paste. It shows a live
+preview of the **dilated and blurred** mask as you paint — what the model
+will actually be given, which the Gradio editor could not display at all.
+
+Its output contract is the same `{background, layers}` pair `gr.ImageEditor`
+produced, uploaded as PNGs, and `_prepare_inpaint_inputs` (now in
+`handlers.py`) still takes the union of the painted layers' alpha channels
+and does the grow, blur, downscale and snap-to-16 server-side. The client
+transform is for the preview and the size readout only.
+
+Two things about the old editor are worth recording, because they are the
+kind of problem that comes back. It ran with `fixed_canvas=True` and a
+1536 px canvas — not cosmetic: with Gradio's default `fixed_canvas=False`
+the canvas grew to the uploaded image's dimensions, so a 12 MP phone photo
+allocated a 4032×3024 RGBA canvas *plus* a paint layer in the browser, the
+tab ran out of memory and **the page reloaded on upload**
+([gradio#8556](https://github.com/gradio-app/gradio/issues/8556)). And
+`format="png"` was needed to override Gradio's lossy webp default, since
+unmasked pixels are composited back from that image. Neither applies now:
+the canvas is sized by the component and the upload is a PNG because the
+code writes one.
+
+**Still missing from the canvas:** zoom and pan. `gr.ImageEditor` had them
+and this does not, which is a real gap for detailed work on a large image.
+It is not a parity break for the mask *output*.
 
 ## Face swap (ReActor)
 
@@ -2077,7 +2113,7 @@ optional `"model"` key. A model whose download failed shows a warning
 under the dropdown and refuses to run, without affecting the others.
 
 The generate / edit / inpaint / Flux tabs each stack **`MAX_LORA_SLOTS`
-LoRA slots** (`ui.py`, currently 8). That one constant drives the UI rows,
+LoRA slots** (`tabschema.py`, currently 8). That one constant drives the rows,
 the handlers and the `LoraLoaderModelOnly` chain, so changing it is the
 whole change — the handlers take their slots as a variadic tail and the
 workflow builder already loops over the resolved list. Slots left at
@@ -2197,46 +2233,55 @@ than `UNETLoader`, which would need a builder branch and a node install.
 
 ## Prompt undo / redo
 
-Every prompt box carries a pair of small **↶ / ↷** buttons under it, plus
-Ctrl+Z and Ctrl+Y (or Ctrl+Shift+Z) while the box has focus.
+Every prompt box carries a pair of small **undo / redo** buttons under it,
+plus Ctrl+Z and Ctrl+Y (or Ctrl+Shift+Z) while the box has focus.
 
-They exist for phones. A desktop browser gives a textarea its own undo
-stack and Ctrl+Z reaches it; a phone keyboard has no Ctrl, and no mobile
-browser exposes undo for a text field any other way — so a prompt trimmed
-on a phone was simply not recoverable.
+It is tempting to assume this stops being necessary once Gradio is not
+re-rendering the box — a `<textarea>` has an undo stack of its own, and
+Ctrl+Z reaches it. That was measured against a real browser before the old
+implementation was deleted, and it covers one case of four:
 
-The history lives in the page JS (`theme.JS`) rather than leaning on the
-browser's, for three reasons:
+| | native stack | `lib/undo.ts` |
+|---|---|---|
+| Ctrl+Z / Ctrl+Shift+Z on a desktop | yes | yes |
+| one entry per typing burst | yes | yes |
+| **buttons**, for a keyboard with no Ctrl | no | yes |
+| **undo a preset / recipe / library load** | no | yes |
 
-- it is the only way a *button* can drive it
-- it survives a value written by Gradio, so loading a **preset**, a
-  **recipe** or a **library card** over a prompt is undoable — the native
-  stack knows nothing about those, because assigning `.value` from script
-  never enters it
-- the keys are routed through the same stack, so the buttons and Ctrl+Z
-  cannot drift apart the way two separate histories would
+The last two are the ones that matter.
 
-A burst of typing is one entry, the way an editor does it: a pause of
-450 ms, or finishing a word, closes the current entry and opens the next
-— stepping back one character at a time would be worse than no undo at
-all. Up to 100 entries are kept per box, and each box has its own history.
+**Buttons, because phones.** A phone keyboard has no Ctrl key, and no
+mobile browser exposes undo for a text field any other way, so without them
+a prompt trimmed on a phone is not recoverable at all.
 
-Attached to every editable `<textarea>` on the page, which is exactly the
-prompt and negative-prompt boxes plus the JSON batch box; status lines are
-`interactive=False`, so they render disabled and are skipped. New boxes are
-picked up by a `MutationObserver` (debounced to one scan a frame, because
-the queue's poll touches the DOM every second), so a tab built later or the
-pricing panel swapping sections in and out costs nothing.
+**Programmatic writes, because presets.** Loading a preset, a recipe or a
+library card over a prompt assigns the value from script, and a scripted
+assignment never enters the browser's own stack. Natively, Ctrl+Z after
+loading a preset does nothing and the prompt you spent five minutes on is
+gone. Verified, not assumed: typing a prompt, applying a preset over it and
+pressing Ctrl+Z returns the typed prompt.
 
-Two details that are easy to get wrong and are load-bearing here:
+**And granularity is not free either.** A controlled React textarea rewrites
+its value on every keystroke, which splits the native stack into one entry
+per *character* — about 200 presses to undo a real prompt. The same 450 ms
+coalesce as before is what keeps a burst of typing to one entry; a pause, or
+finishing a word, closes the current entry and opens the next. Up to 100
+entries per box, each box its own history.
 
-- stepping the history assigns `textarea.value` and then **dispatches an
-  `input` event**. Gradio's binding listens for that, and a scripted
-  assignment fires nothing on its own — without it the box would show the
-  old text while Generate still sent the new one
-- the buttons call `preventDefault()` on `pointerdown`, so pressing one
-  does not take focus. On a phone that is what keeps the keyboard open and
-  the caret in place between taps
+The history is a React hook (`webui/src/lib/undo.ts`) sitting between the
+textarea and its setter, so the buttons and the keys walk one stack rather
+than two that disagree the moment either is used.
+
+One detail that survives from the old implementation because it is still
+load-bearing: the buttons call `preventDefault()` on `pointerdown`, so
+pressing one does not take focus. On a phone that is what keeps the keyboard
+open and the caret in place between taps.
+
+What is **not** carried over is the `MutationObserver` that used to find new
+boxes, the `data-kx-undo` attribute that marked the ones already wired, and
+the synthetic `input` event that told Gradio the value had changed. All
+three existed to attach behaviour to a DOM another library owned. A React
+component owns its own textarea.
 
 ## Image input shortcuts
 
