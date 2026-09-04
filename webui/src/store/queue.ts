@@ -83,6 +83,15 @@ interface QueueState {
    *  stale list can refill. The save happens on the worker thread, so
    *  nothing else is in a position to notice. */
   presetRevision: Record<string, number>
+  /** How many generated files this session has been told about — the same
+   *  trick as `presetRevision`, for the gallery.
+   *
+   *  A finished generation writes a file into a listing the gallery has
+   *  already fetched and cached, and nothing in a `useQuery` can see that
+   *  happen. The stream can: a `display` event carries the new media, so
+   *  counting what arrives gives a list of files a number that only ever
+   *  goes up when there is genuinely something new to show. */
+  mediaRevision: number
   connect(): () => void
   submit(input: {
     schema: TabSchema
@@ -178,6 +187,35 @@ function mediaOf(result: DisplayResult): MediaItem[] {
   return []
 }
 
+/* Which files this session has already counted.
+ *
+ * `display` is not an announcement that something was made — it is one
+ * tab's *latest* output, restated. The polling fallback asks for it every
+ * 1.5 seconds, and the stream replays every tab's on connect, so counting
+ * events rather than files would have the gallery refetching itself on a
+ * timer for as long as anything was running.
+ *
+ * Capped, and eviction is safe: a display event only ever carries the
+ * newest job's output, so an evicted id is one that will not be offered
+ * again. If one somehow were, the cost is a single redundant refetch. */
+const COUNTED = new Set<string>()
+const COUNTED_MEMORY = 500
+
+function countNew(images: MediaItem[]): number {
+  let fresh = 0
+  for (const image of images) {
+    if (COUNTED.has(image.id)) continue
+    if (COUNTED.size >= COUNTED_MEMORY) {
+      // A Set iterates in insertion order, so the first key is the oldest.
+      const oldest = COUNTED.values().next().value
+      if (oldest !== undefined) COUNTED.delete(oldest)
+    }
+    COUNTED.add(image.id)
+    fresh += 1
+  }
+  return fresh
+}
+
 export const useQueue = create<QueueState>((set, get) => {
   function patch(id: string, changes: Partial<Job>) {
     set((state) => ({
@@ -206,6 +244,14 @@ export const useQueue = create<QueueState>((set, get) => {
 
     if (event.type === 'display') {
       const images = mediaOf(event.result)
+      /* Counted before the job lookup below and independently of it. A
+       * display event with no job to attach to is not a non-event: two
+       * browsers open on one pod see one queue, so the run that wrote
+       * these files may have been started somewhere this tab never saw.
+       * The files are on disk either way, and the gallery lists the
+       * disk. */
+      const fresh = countNew(images)
+      if (fresh > 0) set((state) => ({ mediaRevision: state.mediaRevision + fresh }))
       set((state) => {
         // `display_for` points at the newest job for that tab that has
         // actually begun — not the newest queued one — so the target here
@@ -243,6 +289,7 @@ export const useQueue = create<QueueState>((set, get) => {
     transport: 'off',
     activeByTab: {},
     presetRevision: {},
+    mediaRevision: 0,
 
     connect() {
       let lastEvent = Date.now()

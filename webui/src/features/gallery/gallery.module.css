@@ -90,6 +90,51 @@
 }
 
 /* The count's slot while a selection exists. */
+/* The bar's left half. `.bar` is space-between, so a third child would be
+   pushed to the middle of the row rather than sitting beside the count it
+   belongs to. */
+.barLeft {
+  display: flex;
+  align-items: center;
+  gap: var(--s-3);
+  flex-wrap: wrap;
+  min-width: 0;
+}
+
+/* Files that arrived while something was in the way of showing them.
+   Reads as an offer rather than a notification, because it is one: it does
+   nothing until it is clicked, and what it does is documented in the title. */
+.newWork {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--s-2);
+  padding: 2px var(--s-3);
+  border-radius: var(--r-full);
+  border: 1px solid var(--c-accent);
+  background: transparent;
+  color: var(--c-accent);
+  font-family: var(--font-mono);
+  font-size: var(--t-xs);
+  line-height: 1.7;
+  cursor: pointer;
+  transition:
+    background var(--d-fast) var(--e-out),
+    color var(--d-fast) var(--e-out);
+}
+
+.newWork::before {
+  content: '';
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: var(--c-accent);
+}
+
+.newWork:hover {
+  background: var(--c-accent);
+  color: var(--c-bg);
+}
+
 .selectBar {
   display: flex;
   align-items: center;

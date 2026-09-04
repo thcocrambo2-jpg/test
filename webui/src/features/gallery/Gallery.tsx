@@ -5,6 +5,7 @@ import { useGallery } from '@/api/queries'
 import type { MediaItem } from '@/api/types'
 import { Alert, Button, EmptyState, Segmented, Skeleton, useToast } from '@/components/ui'
 import { cx, fileName, relativeTime, saveFile, useCopy } from '@/lib/util'
+import { useQueue } from '@/store/queue'
 import { DownloadIcon, TrashIcon } from './icons'
 import { Lightbox } from './Lightbox'
 import s from './gallery.module.css'
@@ -89,6 +90,61 @@ export function Gallery() {
     [items],
   )
 
+  /* Noticing that a generation happened while this page was open.
+   *
+   * `useGallery` caches for 30 seconds and nothing invalidated it but a
+   * delete, so a picture finished with the gallery open never appeared —
+   * while `refetchOnWindowFocus` is off (main.tsx) on the strength of a
+   * comment claiming this already worked. It does now: the store counts
+   * the files the stream tells it about, and this watches that number.
+   *
+   * Refreshing is not always the kind thing to do, though, so there are
+   * three states it waits out rather than yanking the list:
+   *
+   *   * the lightbox is open — the list *is* its `items` and the position
+   *     into it is an index, so one new file at the front silently changes
+   *     which picture you are looking at. This is the one that would be a
+   *     bug rather than a rudeness.
+   *   * something is selected — ids survive a refetch, but a grid
+   *     reflowing under a half-made selection is its own small hostility.
+   *   * you have paged back — `cursor` is an offset into the whole
+   *     listing, so a file arriving at the front shifts every page after
+   *     it, and refreshing where someone is reading deals a different
+   *     hand mid-sentence.
+   *
+   * In those, the count is held and offered as a button. Everywhere else —
+   * the ordinary case, page one, nothing selected — the picture simply
+   * appears, which is what a gallery left open during a batch is for. */
+  const mediaRevision = useQueue((state) => state.mediaRevision)
+  const counted = useRef(mediaRevision)
+  const [pending, setPending] = useState(0)
+  const holding = lightbox !== null || selected.size > 0 || cursor !== null
+
+  useEffect(() => {
+    const delta = mediaRevision - counted.current
+    counted.current = mediaRevision
+    if (delta > 0) setPending((count) => count + delta)
+  }, [mediaRevision])
+
+  useEffect(() => {
+    if (pending === 0 || holding) return
+    setPending(0)
+    void queryClient.invalidateQueries({ queryKey: ['gallery'] })
+  }, [pending, holding, queryClient])
+
+  /** Take the held refresh, and go to the front of the listing to do it:
+   *  that is where the new files are, because the whole listing is newest
+   *  first. */
+  function showNew() {
+    setPending(0)
+    setLightbox(null)
+    setSelected(new Set())
+    anchor.current = null
+    setStack([])
+    setCursor(null)
+    void queryClient.invalidateQueries({ queryKey: ['gallery'] })
+  }
+
   async function remove(item: MediaItem) {
     await api.deleteMedia(item.id)
     await queryClient.invalidateQueries({ queryKey: ['gallery'] })
@@ -161,51 +217,63 @@ export function Gallery() {
   return (
     <>
       <div className={s.bar}>
-        {selecting ? (
-          /* The count's slot, taken over while there is a selection. A
-           * second bar would push the pictures down the moment you touched
-           * one, and the thing being counted is the same thing. */
-          <div className={s.selectBar}>
-            <span className={s.count}>{selected.size} selected</span>
-            <Button
-              size="sm"
-              variant="ghost"
-              onClick={() => setSelected(new Set((items ?? []).map((item) => item.id)))}
-              disabled={!items || selected.size === items.length}
-              /* "all" only when there is nothing else to be all of. It
-               * selects what is on screen, and a gallery with an Older
-               * button has more than that. */
-              title="Select every file on this page"
+        <div className={s.barLeft}>
+          {selecting ? (
+            /* The count's slot, taken over while there is a selection. A
+             * second bar would push the pictures down the moment you touched
+             * one, and the thing being counted is the same thing. */
+            <div className={s.selectBar}>
+              <span className={s.count}>{selected.size} selected</span>
+              <Button
+                size="sm"
+                variant="ghost"
+                onClick={() => setSelected(new Set((items ?? []).map((item) => item.id)))}
+                disabled={!items || selected.size === items.length}
+                /* "all" only when there is nothing else to be all of. It
+                 * selects what is on screen, and a gallery with an Older
+                 * button has more than that. */
+                title="Select every file on this page"
+              >
+                {data?.nextCursor || stack.length > 0 ? 'Select page' : 'Select all'}
+              </Button>
+              <Button size="sm" variant="ghost" onClick={() => setSelected(new Set())}>
+                Clear
+              </Button>
+              <Button
+                size="sm"
+                variant="ghost"
+                loading={busy}
+                onClick={() => void downloadSelected()}
+                title={`Download ${selected.size} file${selected.size === 1 ? '' : 's'}`}
+              >
+                <DownloadIcon /> Download
+              </Button>
+              <Button
+                size="sm"
+                variant="danger"
+                loading={busy}
+                onClick={() => void removeSelected()}
+                title={`Delete ${selected.size} file${selected.size === 1 ? '' : 's'}`}
+              >
+                <TrashIcon /> Delete
+              </Button>
+            </div>
+          ) : (
+            <span className={s.count}>
+              {data ? `${data.total} file${data.total === 1 ? '' : 's'}` : ' '}
+            </span>
+          )}
+          {pending > 0 && (
+            <button
+              type="button"
+              className={s.newWork}
+              onClick={showNew}
+              title="Reload the gallery and go back to the newest files"
             >
-              {data?.nextCursor || stack.length > 0 ? 'Select page' : 'Select all'}
-            </Button>
-            <Button size="sm" variant="ghost" onClick={() => setSelected(new Set())}>
-              Clear
-            </Button>
-            <Button
-              size="sm"
-              variant="ghost"
-              loading={busy}
-              onClick={() => void downloadSelected()}
-              title={`Download ${selected.size} file${selected.size === 1 ? '' : 's'}`}
-            >
-              <DownloadIcon /> Download
-            </Button>
-            <Button
-              size="sm"
-              variant="danger"
-              loading={busy}
-              onClick={() => void removeSelected()}
-              title={`Delete ${selected.size} file${selected.size === 1 ? '' : 's'}`}
-            >
-              <TrashIcon /> Delete
-            </Button>
-          </div>
-        ) : (
-          <span className={s.count}>
-            {data ? `${data.total} file${data.total === 1 ? '' : 's'}` : ' '}
-          </span>
-        )}
+              {pending === 1 ? '1 new file' : `${pending} new files`}
+            </button>
+          )}
+        </div>
         <Segmented
           value={density}
           ariaLabel="Tile size"
