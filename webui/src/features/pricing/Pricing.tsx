@@ -3,6 +3,7 @@ import { useCatalogue, useShowcase } from '@/api/queries'
 import type { Catalogue, Plan } from '@/api/types'
 import { Alert, Button, Modal, Pill, Segmented, Skeleton } from '@/components/ui'
 import { cx, money } from '@/lib/util'
+import { useTabState } from '@/store/tabState'
 import { ShowcaseSections } from './Showcase'
 import s from './pricing.module.css'
 
@@ -30,7 +31,9 @@ import s from './pricing.module.css'
 export function Pricing() {
   const { data: catalogue, isLoading, error } = useCatalogue()
   const { data: showcase } = useShowcase()
-  const [cycle, setCycle] = useState<string | null>(null)
+  // Kept per tab: losing it falls back to the derived default below, which
+  // reads as the prices having changed on their own while you were away.
+  const [cycle, setCycle] = useTabState<string | null>('pricing.cycle', null)
   const [contact, setContact] = useState(false)
 
   const cycles = catalogue?.cycles ?? []

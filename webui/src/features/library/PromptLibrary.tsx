@@ -7,6 +7,7 @@ import type { PromptCard, TabSchema } from '@/api/types'
 import { Alert, Button, Card, EmptyState, Pill, Segmented, Skeleton, useToast } from '@/components/ui'
 import { TextField } from '@/components/fields'
 import { useHandoff } from '@/store/handoff'
+import { useTabState } from '@/store/tabState'
 import s from './library.module.css'
 
 /*
@@ -40,10 +41,14 @@ const SOURCES = [
 ]
 
 export function PromptLibrary() {
-  const [tab, setTab] = useState('')
-  const [source, setSource] = useState('')
-  const [search, setSearch] = useState('')
-  const [skip, setSkip] = useState(0)
+  /* All four in `tabState`, because all four are things you typed or chose and
+   * this page unmounts as soon as you leave it — the search box most of
+   * all. They are also the whole query key below, so restoring them inside the
+   * minute repaints the same cards without asking the server again. */
+  const [tab, setTab] = useTabState('prompts.tab', '')
+  const [source, setSource] = useTabState('prompts.source', '')
+  const [search, setSearch] = useTabState('prompts.search', '')
+  const [skip, setSkip] = useTabState('prompts.skip', 0)
 
   const { data, isLoading, error } = useQuery({
     queryKey: ['prompts', tab, source, search, skip],

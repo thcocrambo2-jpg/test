@@ -9,6 +9,7 @@ import { serializeEditor, type InpaintEditorValue } from '@/components/fields/Ma
 import { defaultsFor } from '@/lib/schema'
 import { useActiveJob, useJobsForTab, useQueue, isLive } from '@/store/queue'
 import { useHandoff } from '@/store/handoff'
+import { useTabState } from '@/store/tabState'
 import { useSubmitHotkey } from '@/lib/util'
 import { OutputPanel } from './OutputPanel'
 import s from '@/components/SchemaForm/form.module.css'
@@ -46,8 +47,18 @@ export function GenerateTab({ schema }: { schema: TabSchema }) {
    * library goes instead, which costs nothing: this component only ever used
    * watch/setValue/reset. It never registered an input, never validated and
    * never took a ref — every control here is driven through `setValue` from
-   * SchemaForm's own onChange. */
-  const [values, setValues] = useState<Record<string, unknown>>(defaults)
+   * SchemaForm's own onChange.
+   *
+   * The bag itself is held in `tabState` rather than in this component, keyed
+   * by tab. React Router unmounts a route the moment you leave it and a bag in
+   * `useState` goes with it — which is why every prompt and every slider
+   * used to come back at its default after a look at another tab. The key is
+   * `schema.key`, so Krea2 and Krea2 V2 keep their own despite naming their
+   * fields identically. */
+  const [values, setValues] = useTabState<Record<string, unknown>>(
+    `form.${schema.key}`,
+    defaults,
+  )
 
   const submitJob = useQueue((state) => state.submit)
   const job = useActiveJob(schema.key)
@@ -81,19 +92,21 @@ export function GenerateTab({ schema }: { schema: TabSchema }) {
     return row ? { model: <Inline text={row.info} /> } : undefined
   }, [models, values.model])
 
-  // A tab switch is a different form. Without this, react-hook-form keeps the
-  // previous tab's values under the same field names.
-  //
   // A handoff — the Prompt Library's Use button, the Gallery's "load these
-  // settings" — is drained in the same effect and applied *over* the
-  // defaults, so arriving on a tab with a recipe in hand is one render rather
-  // than a form that flashes its defaults first. `take` clears as it reads,
-  // so coming back later does not re-apply it over what has been typed since.
+  // settings" — is drained on arrival and applied *over the defaults*, never
+  // over whatever this tab was left holding: a recipe means "these values,
+  // together", and merged into a half-filled form it would produce a set
+  // nobody chose. `take` clears as it reads, so coming back later does not
+  // re-apply it over what has been typed since.
+  //
+  // Without one this does nothing at all. It used to re-seed the whole bag
+  // from `defaults` on every mount, which is exactly what threw away the form
+  // you had filled in the moment you looked at another tab.
   const take = useHandoff((state) => state.take)
   useEffect(() => {
     const handed = take(schema.key)
-    setValues(handed ? { ...defaults, ...handed } : defaults)
-  }, [schema.key, defaults, take])
+    if (handed) setValues({ ...defaults, ...handed })
+  }, [schema.key, defaults, take, setValues])
 
   const set = useCallback((name: string, value: unknown) => {
     setValues((previous) =>
@@ -172,14 +185,14 @@ export function GenerateTab({ schema }: { schema: TabSchema }) {
       left={
         <>
           <PresetBar schema={schema} onApply={apply} />
-          {/* Keyed by tab, for the same reason the effect above resets the
-            * values: a tab switch is a different form. React Router renders
-            * the matched route into the same position, so without a key
-            * React reconciles `TabPage` with `TabPage` and every control
-            * keeps its local state — a negative prompt expanded on Krea2
-            * arrives expanded on V2, a LoRA stack opened on one tab is open
-            * on the next. The values were already handled; this is the rest
-            * of it. */}
+          {/* Keyed by tab, because a tab switch is a different form. React
+            * Router renders the matched route into the same position, so
+            * without a key React reconciles `TabPage` with `TabPage` and
+            * every control keeps its own *local* state — a negative
+            * prompt expanded on Krea2 arrives expanded on V2, a LoRA stack
+            * opened on one tab is open on the next. The values live per tab
+            * in `tabState` and survive this remount; what it resets is the
+            * chrome around them, which is the part that should reset. */}
           <SchemaForm
             key={schema.key}
             schema={schema}

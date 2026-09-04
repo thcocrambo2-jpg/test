@@ -6,6 +6,7 @@ import type { MediaItem } from '@/api/types'
 import { Alert, Button, EmptyState, Segmented, Skeleton, useToast } from '@/components/ui'
 import { cx, fileName, relativeTime, saveFile, useCopy } from '@/lib/util'
 import { useQueue } from '@/store/queue'
+import { useTabState } from '@/store/tabState'
 import { DownloadIcon, TrashIcon } from './icons'
 import { Lightbox } from './Lightbox'
 import s from './gallery.module.css'
@@ -18,6 +19,9 @@ const TILE: Record<Density, string> = {
   compact: '150px',
 }
 
+// Hoisted because `useTabState` holds its initial value in a dependency list.
+const NO_STACK: string[] = []
+
 /** Everything that has been made, browsable.
  *
  *  The Gradio gallery is `gr.Gallery(height=600)` — a fixed pixel height no
@@ -25,9 +29,20 @@ const TILE: Record<Density, string> = {
  *  of `aspect-ratio` tiles that reflows, plus a density control, because
  *  "how many at once" is a preference and not a constant. */
 export function Gallery() {
-  const [cursor, setCursor] = useState<string | null>(null)
-  const [stack, setStack] = useState<string[]>([])
-  const [density, setDensity] = useState<Density>('comfortable')
+  /* Where you were, and how you had it looking.
+   *
+   * Paging to the fourth screen and picking a density is work, and this page
+   * unmounts the instant you glance at a generate tab, so both live in
+   * `tabState`. The cursor pays for itself twice: `useGallery` is keyed by it,
+   * so returning inside the 30s staleTime repaints from cache with no request
+   * at all.
+   *
+   * The lightbox is deliberately not among them. Arriving on a page to find a
+   * full-screen viewer already open is a jump-scare, and it would re-take the
+   * `document.body` scroll lock on the way in. */
+  const [cursor, setCursor] = useTabState<string | null>('gallery.cursor', null)
+  const [stack, setStack] = useTabState<string[]>('gallery.stack', NO_STACK)
+  const [density, setDensity] = useTabState<Density>('gallery.density', 'comfortable')
   const [lightbox, setLightbox] = useState<number | null>(null)
   const { data, isLoading, error } = useGallery(cursor)
   const queryClient = useQueryClient()
@@ -41,7 +56,10 @@ export function Gallery() {
    *
    * Cleared when the page turns. Ids are absolute so a selection *could*
    * span pages, but "3 selected" over a screen showing none of them is a
-   * count nobody can act on. */
+   * count nobody can act on.
+   *
+   * Not kept across tab switches either, unlike the cursor and the density
+   * above: a selection is a gesture about to be acted on, not a setting. */
   const [selected, setSelected] = useState<Set<string>>(() => new Set())
   const [busy, setBusy] = useState(false)
   const anchor = useRef<number | null>(null)
