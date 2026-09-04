@@ -4,7 +4,8 @@ import { api } from '@/api/client'
 import { useGallery } from '@/api/queries'
 import type { MediaItem } from '@/api/types'
 import { Alert, Button, EmptyState, Segmented, Skeleton, useToast } from '@/components/ui'
-import { cx, relativeTime, useCopy } from '@/lib/util'
+import { cx, fileName, relativeTime, saveFile, useCopy } from '@/lib/util'
+import { DownloadIcon, TrashIcon } from './icons'
 import { Lightbox } from './Lightbox'
 import s from './gallery.module.css'
 
@@ -95,6 +96,41 @@ export function Gallery() {
     toast('Deleted')
   }
 
+  /** Save the selection, one file at a time.
+   *
+   *  Serially and not `Promise.all`: a browser handed forty downloads in one
+   *  tick drops most of them, and it also means `busy` clears when the last
+   *  file has been taken rather than when the first fetch resolved. The
+   *  browser asks once, up front, whether this site may save several files —
+   *  answering no is why the count is reported rather than assumed.
+   *
+   *  Only what is on this page can be saved, which is the same rule the
+   *  selection itself follows: it is cleared when the page turns. */
+  async function downloadSelected() {
+    const chosen = (items ?? []).filter((item) => selected.has(item.id))
+    if (chosen.length === 0 || busy) return
+    setBusy(true)
+    let saved = 0
+    try {
+      for (const item of chosen) {
+        try {
+          await saveFile(item.url, fileName(item.id))
+          saved += 1
+        } catch {
+          /* Counted, not thrown: one unreadable file should not cost the
+           * other thirty-nine. */
+        }
+      }
+    } finally {
+      setBusy(false)
+    }
+    toast(
+      saved === chosen.length
+        ? `Saved ${saved} file${saved === 1 ? '' : 's'}`
+        : `Saved ${saved} of ${chosen.length}; the rest could not be read`,
+    )
+  }
+
   /** Delete the selection. One request, one confirmation, one refetch. */
   async function removeSelected() {
     const ids = [...selected]
@@ -145,6 +181,15 @@ export function Gallery() {
             </Button>
             <Button size="sm" variant="ghost" onClick={() => setSelected(new Set())}>
               Clear
+            </Button>
+            <Button
+              size="sm"
+              variant="ghost"
+              loading={busy}
+              onClick={() => void downloadSelected()}
+              title={`Download ${selected.size} file${selected.size === 1 ? '' : 's'}`}
+            >
+              <DownloadIcon /> Download
             </Button>
             <Button
               size="sm"
@@ -321,19 +366,5 @@ function Tile({
         </Button>
       </div>
     </div>
-  )
-}
-
-/** The bin. Inline because it is the only icon this page has, and one
- *  24-line path is cheaper than a dependency that would arrive with a
- *  thousand more. */
-function TrashIcon() {
-  return (
-    <svg className={s.trash} viewBox="0 0 24 24" aria-hidden="true">
-      <path d="M4 7h16" />
-      <path d="M10 11v6M14 11v6" />
-      <path d="M6 7l1 12a2 2 0 0 0 2 2h6a2 2 0 0 0 2-2l1-12" />
-      <path d="M9 7V5a1 1 0 0 1 1-1h4a1 1 0 0 1 1 1v2" />
-    </svg>
   )
 }

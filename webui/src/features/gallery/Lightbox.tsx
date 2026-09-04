@@ -6,7 +6,8 @@ import { useSchemas } from '@/api/queries'
 import type { MediaItem } from '@/api/types'
 import { Button, Pill, useToast } from '@/components/ui'
 import { useHandoff } from '@/store/handoff'
-import { cx, relativeTime, useCopy } from '@/lib/util'
+import { cx, fileName, relativeTime, saveFile, useCopy } from '@/lib/util'
+import { DownloadIcon } from './icons'
 import s from './gallery.module.css'
 
 /*
@@ -68,6 +69,21 @@ export function Lightbox({
   const stageRef = useRef<HTMLImageElement>(null)
   const { copied, copy } = useCopy()
   const reuse = useReuse(item)
+  const [saving, setSaving] = useState(false)
+
+  /** Save the file on screen. The button exists because the alternative is
+   *  right-click → Save image as…, which is not a gesture a phone has. */
+  async function save() {
+    setSaving(true)
+    try {
+      await saveFile(item.url, fileName(item.id))
+    } catch {
+      /* Nothing to say that the browser's own failed-download row does not
+       * already say, and this dialog has no toast of its own. */
+    } finally {
+      setSaving(false)
+    }
+  }
 
   /* Which full-resolution file is actually on screen.
    *
@@ -155,6 +171,15 @@ export function Lightbox({
               ▶️ Load these settings
             </Button>
           )}
+          <Button
+            size="sm"
+            variant="ghost"
+            loading={saving}
+            onClick={() => void save()}
+            title={`Download ${fileName(item.id)}`}
+          >
+            <DownloadIcon /> Download
+          </Button>
           {onDelete && (
             <Button
               size="sm"

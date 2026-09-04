@@ -78,6 +78,42 @@ export function useCopy(resetMs = 1600) {
   return { copied, copy }
 }
 
+/** The name a generated file should land on disk under.
+ *
+ *  A MediaItem's `id` is the OUTPUT_DIR-relative posix key (api._media), so
+ *  the last segment is the name ComfyUI already gave it — which carries the
+ *  tab and the counter and is therefore worth keeping. */
+export function fileName(id: string): string {
+  return id.split('/').pop() || id
+}
+
+/** Save one file to disk, and resolve once the browser has taken it.
+ *
+ *  Fetched to a blob rather than pointed at with `<a download href={url}>`,
+ *  for two reasons that both end in the picture replacing the gallery:
+ *  `/media` answers with no `Content-Disposition` (api.py `_send`, which
+ *  serves the same bytes to the <img> on screen), and `download` is honoured
+ *  only same-origin — which is true today and is a `VITE_API_BASE` away from
+ *  not being. A blob URL is same-origin by construction.
+ *
+ *  Awaitable so a caller saving a selection can hand the browser one file at
+ *  a time; forty anchors clicked in one tick is forty files it drops most
+ *  of. */
+export async function saveFile(url: string, name: string): Promise<void> {
+  const response = await fetch(url)
+  if (!response.ok) throw new Error(`${response.status} ${response.statusText}`)
+  const href = URL.createObjectURL(await response.blob())
+  const anchor = document.createElement('a')
+  anchor.href = href
+  anchor.download = name
+  document.body.append(anchor)
+  anchor.click()
+  anchor.remove()
+  // Not revoked synchronously: the click is queued, not done, and a URL
+  // revoked before the browser reads it saves a zero-byte file.
+  setTimeout(() => URL.revokeObjectURL(href), 60_000)
+}
+
 /** Ctrl/Cmd+Enter runs the tab you are on — the shortcut the footer advertises
  *  and the one thing from the old header worth keeping literally. */
 export function useSubmitHotkey(onSubmit: () => void, enabled = true) {
