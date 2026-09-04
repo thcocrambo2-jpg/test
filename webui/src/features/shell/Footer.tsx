@@ -1,4 +1,5 @@
 import { useSession } from '@/api/queries'
+import { useQueue } from '@/store/queue'
 import { Pill } from '@/components/ui'
 import { useCopy } from '@/lib/util'
 import s from './shell.module.css'
@@ -15,6 +16,7 @@ import s from './shell.module.css'
 export function Footer() {
   const { data: session } = useSession()
   const { copied, copy } = useCopy()
+  const transport = useQueue((state) => state.transport)
 
   const models = session?.modelCount ?? 0
   const gpus = session?.gpuCount ?? 0
@@ -30,6 +32,18 @@ export function Footer() {
       </div>
 
       <div className={s.footerRight}>
+        {/* Only when it is not live. A page that is up to date says nothing
+         *  about how it got that way; a page that has fallen back to polling
+         *  has to say so, because the failure this replaced looked exactly
+         *  like a healthy page that had quietly stopped listening. */}
+        {transport === 'polling' && (
+          <Pill
+            tone="warning"
+            title="The event stream is not delivering — something between this browser and the app is holding it. Falling back to polling; everything still updates, about a second slower."
+          >
+            polling
+          </Pill>
+        )}
         <Pill>
           <b>{models}</b> model{models === 1 ? '' : 's'}
         </Pill>

@@ -44,6 +44,11 @@ import type {
 
 const BASE = import.meta.env.VITE_API_BASE || '/api/v1'
 
+/** How long to wait before rebuilding an EventSource that closed for good,
+ *  and the ceiling that doubling walks up to. See `subscribe`. */
+const RECONNECT_MIN_MS = 2_000
+const RECONNECT_MAX_MS = 30_000
+
 /** The access token, taken out of the URL fragment and traded for a cookie.
  *
  *  It arrives as `https://….trycloudflare.com/#k=<token>`. The fragment is
@@ -160,6 +165,11 @@ export const httpClient: ApiClient = {
   getAppCatalog: () => get<AppCatalog>('/catalog'),
   getShowcase: () => get<Showcase | null>('/showcase'),
   getQueue: () => get<QueueSnapshot>('/queue'),
+
+  getDisplay: (tab) =>
+    get<{ revision: number; result: DisplayResult }>(
+      `/tabs/${encodeURIComponent(tab)}/display`,
+    ),
   getPresets: (tab) => get<PresetList>(`/presets/${encodeURIComponent(tab)}`),
 
   getGallery: (cursor) =>
@@ -233,41 +243,79 @@ export const httpClient: ApiClient = {
    * idle connections.
    *
    * Named events rather than one `onmessage`, so a stream that gains a fourth
-   * kind does not break the three that exist. */
+   * kind does not break the three that exist.
+   *
+   * EventSource's own retry covers a connection that *drops*. It does not
+   * cover one that never opened — a non-2xx first response is terminal by
+   * spec, `readyState` goes CLOSED and nothing tries again — which is a
+   * frozen page with no way back. So a terminal close schedules its own
+   * reconnect, with backoff so a server that is genuinely down is not being
+   * hammered by every open tab.
+   *
+   * What this deliberately does NOT try to solve is a connection that opens
+   * and then delivers nothing, which is what a buffering proxy produces. The
+   * socket is healthy; reconnecting to it changes nothing. That case belongs
+   * to the watchdog in `store/queue.ts`, which watches for *events* rather
+   * than for a socket. */
   subscribe(onEvent: (event: StreamEvent) => void) {
-    const source = new EventSource(`${BASE}/stream`)
+    let source: EventSource | null = null
+    let timer: ReturnType<typeof setTimeout> | undefined
+    let backoff = RECONNECT_MIN_MS
+    let stopped = false
 
-    function on<T>(name: string, build: (data: T) => StreamEvent) {
-      source.addEventListener(name, (message) => {
-        try {
-          onEvent(build(JSON.parse((message as MessageEvent).data) as T))
-        } catch {
-          /* A frame this build cannot read is not a reason to tear the
-           * connection down — the next one is probably fine. */
-        }
-      })
+    function open() {
+      if (stopped) return
+      const stream = new EventSource(`${BASE}/stream`)
+      source = stream
+
+      function on<T>(name: string, build: (data: T) => StreamEvent) {
+        stream.addEventListener(name, (message) => {
+          // A frame that arrives is proof the path works, whatever the
+          // last error said, so the next outage starts from the bottom of
+          // the backoff again rather than from wherever this one ended.
+          backoff = RECONNECT_MIN_MS
+          try {
+            onEvent(build(JSON.parse((message as MessageEvent).data) as T))
+          } catch {
+            /* A frame this build cannot read is not a reason to tear the
+             * connection down — the next one is probably fine. */
+          }
+        })
+      }
+
+      on<QueueSnapshot>('queue', (data) => ({ type: 'queue', queue: data }))
+      on<{ tab: string; revision: number; result: DisplayResult }>('display', (data) => ({
+        type: 'display',
+        tab: data.tab,
+        revision: data.revision,
+        result: data.result,
+      }))
+      on<{ tab: string; revision: number }>('presets', (data) => ({
+        type: 'presets',
+        tab: data.tab,
+        revision: data.revision,
+      }))
+
+      stream.onerror = () => {
+        // CONNECTING means EventSource is already retrying this one itself,
+        // which it does better than this code would. Only a terminal close
+        // is ours to answer.
+        if (stream.readyState !== EventSource.CLOSED) return
+        stream.close()
+        if (source === stream) source = null
+        if (stopped) return
+        timer = setTimeout(open, backoff)
+        backoff = Math.min(backoff * 2, RECONNECT_MAX_MS)
+      }
     }
 
-    on<QueueSnapshot>('queue', (data) => ({ type: 'queue', queue: data }))
-    on<{ tab: string; revision: number; result: DisplayResult }>('display', (data) => ({
-      type: 'display',
-      tab: data.tab,
-      revision: data.revision,
-      result: data.result,
-    }))
-    on<{ tab: string; revision: number }>('presets', (data) => ({
-      type: 'presets',
-      tab: data.tab,
-      revision: data.revision,
-    }))
-
-    // EventSource retries on its own, so an error is only worth acting on
-    // when it is terminal. Leaving the socket open is what makes a dropped
-    // tunnel heal by itself.
-    source.onerror = () => {
-      if (source.readyState === EventSource.CLOSED) source.close()
+    open()
+    return () => {
+      stopped = true
+      if (timer !== undefined) clearTimeout(timer)
+      source?.close()
+      source = null
     }
-    return () => source.close()
   },
 }
 

@@ -1,5 +1,4 @@
-import { useCallback, useEffect, useMemo, useRef } from 'react'
-import { useForm } from 'react-hook-form'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import type { ModelRow, TabSchema } from '@/api/types'
 import { useModels } from '@/api/queries'
 import { TwoColumn } from '@/components/TwoColumn'
@@ -31,10 +30,24 @@ import s from '@/components/SchemaForm/form.module.css'
  */
 export function GenerateTab({ schema }: { schema: TabSchema }) {
   const defaults = useMemo(() => defaultsFor(schema), [schema])
-  const { watch, setValue, reset } = useForm<Record<string, unknown>>({
-    defaultValues: defaults,
-  })
-  const values = watch()
+
+  /* A plain value bag, deliberately not react-hook-form.
+   *
+   * RHF was here and it silently broke the LoRA stack. Its `setValue` reads a
+   * field name as a *path*: `setValue("lora.0.name", x)` writes
+   * `{lora: [{name: x}]}` and leaves the flat `"lora.0.name"` key — the one
+   * `defaultsFor` created and the one `tabschema.call_args` reads back —
+   * untouched. So the dropdown snapped back to None, the header stayed
+   * "0/8 active", and every generation went to ComfyUI with no LoRAs on it.
+   * `tmp/output/.recipes.jsonl` recorded exactly that: `loras: []`.
+   *
+   * The dots cannot move — they are the wire format `RepeatSpec.value_key`
+   * defines and `call_args` reassembles the *varargs tail from. So the form
+   * library goes instead, which costs nothing: this component only ever used
+   * watch/setValue/reset. It never registered an input, never validated and
+   * never took a ref — every control here is driven through `setValue` from
+   * SchemaForm's own onChange. */
+  const [values, setValues] = useState<Record<string, unknown>>(defaults)
 
   const submitJob = useQueue((state) => state.submit)
   const job = useActiveJob(schema.key)
@@ -62,22 +75,25 @@ export function GenerateTab({ schema }: { schema: TabSchema }) {
   const take = useHandoff((state) => state.take)
   useEffect(() => {
     const handed = take(schema.key)
-    reset(handed ? { ...defaults, ...handed } : defaults)
-  }, [schema.key, defaults, reset, take])
+    setValues(handed ? { ...defaults, ...handed } : defaults)
+  }, [schema.key, defaults, take])
 
-  const set = useCallback(
-    (name: string, value: unknown) => {
-      setValue(name, value, { shouldDirty: true })
-    },
-    [setValue],
-  )
+  const set = useCallback((name: string, value: unknown) => {
+    setValues((previous) =>
+      Object.is(previous[name], value) ? previous : { ...previous, [name]: value },
+    )
+  }, [])
 
-  const apply = useCallback(
-    (patch: Record<string, unknown>) => {
-      for (const [name, value] of Object.entries(patch)) set(name, value)
-    },
-    [set],
-  )
+  /* A whole patch in one update rather than one per key.
+   *
+   * A preset writes ~30 values including all eight LoRA slots, and applying
+   * them through `set` in a loop is 30 renders of a form that is not cheap to
+   * draw. It also has to be a single merge for a second reason: `apply` is
+   * what `PresetBar` hands the server's answer to, and a preset means "these
+   * values, together". */
+  const apply = useCallback((patch: Record<string, unknown>) => {
+    setValues((previous) => ({ ...previous, ...patch }))
+  }, [])
 
   /* Picking a model resets the dials that belong to it.
    *

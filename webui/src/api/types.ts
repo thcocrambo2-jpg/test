@@ -460,6 +460,10 @@ export interface ApiClient {
   cancel(jobId: string): Promise<void>
   clearFinished(): Promise<void>
   getQueue(): Promise<QueueSnapshot>
+  /** One tab's latest yield, over plain HTTP. The `display` stream event's
+   *  twin, and the half of the polling fallback that carries images —
+   *  `getQueue` carries statuses and no media at all. */
+  getDisplay(tab: string): Promise<{ revision: number; result: DisplayResult }>
   getPresets(tab: string): Promise<PresetList>
   /** A preset name or a stored recipe -> the values it is safe to write
    *  into this tab. Server-side, because guarding a value means knowing

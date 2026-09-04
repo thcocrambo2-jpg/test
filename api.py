@@ -135,6 +135,10 @@ MAX_UPLOAD = 64 * 1024 * 1024
 POLL_SECONDS = 0.5
 HEARTBEAT_SECONDS = 15
 
+# How much comment padding opens the stream. See _events — it exists to
+# push past a size-triggered proxy buffer, not to say anything.
+PREAMBLE_BYTES = 2048
+
 
 # ─────────────────────────────────────────────────────────────── auth
 
@@ -714,17 +718,36 @@ def create_app() -> FastAPI:
         Three event types, and a heartbeat comment every 15 seconds so
         that neither Cloudflare nor a corporate proxy decides a quiet
         stream is a dead one.
+
+        The headers below are the ones that decide whether any of it
+        arrives. `X-Accel-Buffering` was here on its own and it is an
+        **nginx** header: Cloudflare has never read it. Through a quick
+        tunnel the connection opened, stayed open, and delivered nothing
+        — DevTools showed one `stream` request with an empty EventStream
+        panel — while everything the page displayed came from the single
+        `GET /queue` that `connect()` fires on load. Statuses were right
+        and no image ever appeared, because images only ride the
+        `display` event.
+
+        `no-transform` is the header that fixes it. It forbids an
+        intermediary from recompressing the body, and recompressing is
+        what makes an edge buffer it. `identity` says the same thing from
+        the other side.
         """
         return StreamingResponse(
             _events(request), media_type="text/event-stream",
             headers={
-                "Cache-Control": "no-cache",
+                # no-transform is load-bearing; no-cache alone is not.
+                "Cache-Control": "no-cache, no-transform",
                 "Connection": "keep-alive",
+                # Belt to no-transform's braces: an edge that would have
+                # gzipped the stream (and therefore buffered it) is being
+                # told the body is already in its final encoding.
+                "Content-Encoding": "identity",
                 # Nginx and several corporate proxies buffer a response
                 # body by default, which turns a live stream into one
-                # delivery when it ends. This is the header that stops it,
-                # and its absence is what makes an SSE bug look like "the
-                # queue only updates when I reload".
+                # delivery when it ends. Kept — it is the right header for
+                # nginx, it is simply not the one Cloudflare reads.
                 "X-Accel-Buffering": "no",
             },
         )
@@ -1018,6 +1041,14 @@ async def _events(request: Request):
     # first pass of the loop does not send it a second time.
     seen = {"queue": jobqueue.revision()}
     last_beat = 0.0
+    # Padding, sent before anything that matters, and it is not
+    # superstition. A proxy that buffers by *size* releases nothing until
+    # its buffer fills, and the whole of this stream's first minute can be
+    # a few hundred bytes — so the events sit in an intermediary that is
+    # behaving exactly as configured. Two kilobytes of comment pushes past
+    # the common thresholds. EventSource discards comment lines, so this
+    # costs one write and reaches no application code.
+    yield ":" + " " * PREAMBLE_BYTES + "\n\n"
     yield _sse("queue", _queue_json())
 
     while True:

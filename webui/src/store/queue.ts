@@ -63,9 +63,20 @@ export interface Job {
   endedAt: number | null
 }
 
+/** How the app is learning about the queue right now.
+ *
+ *  `live` is the stream working. `polling` is the fallback carrying the app
+ *  because the stream is open but silent, or shut. `off` is before connect
+ *  and after unmount. The distinction is shown to the user, because a page
+ *  that has quietly stopped hearing from the server must not look identical
+ *  to one that is up to date — that is the failure this whole fallback
+ *  exists to answer. */
+export type Transport = 'off' | 'live' | 'polling'
+
 interface QueueState {
   jobs: Job[]
   connected: boolean
+  transport: Transport
   /** Per-tab pointer at the run whose output the tab is showing. */
   activeByTab: Record<string, string | undefined>
   /** Bumped when a background job saves a preset, so a dropdown showing a
@@ -90,6 +101,28 @@ interface QueueState {
  *  HISTORY); this is looser because a job the server has forgotten is still
  *  worth showing in the run picker until the page is reloaded. */
 const MAX_JOBS = 40
+
+/* The watchdog, and why it is a watchdog rather than an error handler.
+ *
+ * Through a Cloudflare quick tunnel this app's stream opened, stayed open and
+ * delivered nothing: one `stream` request in DevTools, no retries, no error,
+ * and an empty EventStream panel. The socket was healthy. The bytes were in
+ * an intermediary's buffer. Nothing the client could ask the EventSource
+ * would have revealed that, because by every measure it had, it was fine.
+ *
+ * So the client stops trusting the socket and watches for *events*. Silence
+ * past the deadline means the stream is not delivering, whatever it claims,
+ * and the app switches to polling the two endpoints the events duplicate.
+ * The first event to arrive switches it straight back.
+ *
+ * The deadline is comfortably past the server's 15s heartbeat, so an idle
+ * app — nothing queued, nothing running — is not mistaken for a broken one.
+ * The heartbeat is a comment and EventSource never surfaces it, which is why
+ * this is 25 seconds and not 20: the newest thing this can see is the queue
+ * event that follows the next real change. */
+const SILENCE_MS = 25_000
+const WATCHDOG_MS = 5_000
+const POLL_MS = 1_500
 
 const STATUS: Record<QueueJob['status'], JobStatus> = {
   queued: 'queued',
@@ -207,22 +240,87 @@ export const useQueue = create<QueueState>((set, get) => {
   return {
     jobs: [],
     connected: false,
+    transport: 'off',
     activeByTab: {},
     presetRevision: {},
 
     connect() {
-      const stop = api.subscribe(onEvent)
-      set({ connected: true })
-      // Belt and braces: the stream sends everything on connect, but a
-      // reconnect after a dropped tunnel might land mid-flight. GET /queue
-      // is the documented fallback and costs one request.
+      let lastEvent = Date.now()
+      let stopped = false
+      let polling: ReturnType<typeof setInterval> | undefined
+
+      /* Every event, from either transport, lands here.
+       *
+       * It is also the only thing that resets the watchdog, which is the
+       * point: an event is the one piece of evidence that the path from the
+       * server to this tab actually carries bytes. */
+      function arrived(event: StreamEvent) {
+        lastEvent = Date.now()
+        if (get().transport !== 'live') {
+          if (polling !== undefined) {
+            clearInterval(polling)
+            polling = undefined
+          }
+          set({ transport: 'live' })
+        }
+        onEvent(event)
+      }
+
+      /* One round of the fallback.
+       *
+       * Two requests, because the two stream events are not interchangeable:
+       * `/queue` carries every job's status and no media whatsoever, and the
+       * images live only behind `/tabs/{key}/display`. Polling the first and
+       * not the second is exactly the half-working state the bug produced —
+       * statuses correct, "No images yet" underneath them. */
+      async function pollOnce() {
+        if (stopped) return
+        try {
+          const snapshot = await api.getQueue()
+          if (!stopped) onEvent({ type: 'queue', queue: snapshot })
+        } catch {
+          return
+        }
+        for (const tab of tabsNeedingDisplay(get().jobs)) {
+          try {
+            const body = await api.getDisplay(tab)
+            if (!stopped) {
+              onEvent({ type: 'display', tab, revision: body.revision, result: body.result })
+            }
+          } catch {
+            /* One tab's display failing is not a reason to skip the rest. */
+          }
+        }
+      }
+
+      const stop = api.subscribe(arrived)
+      set({ connected: true, transport: 'live' })
+
+      // The stream sends everything on connect, but this costs one request
+      // and means the page is populated even when the stream turns out to
+      // be delivering nothing — which is the whole failure mode below.
       void api
         .getQueue()
         .then((snapshot) => onEvent({ type: 'queue', queue: snapshot }))
         .catch(() => {})
+
+      const watchdog = setInterval(() => {
+        const silent = Date.now() - lastEvent > SILENCE_MS
+        if (silent && polling === undefined) {
+          // Demote, and start polling immediately rather than one interval
+          // from now — the user has already waited SILENCE_MS.
+          set({ transport: 'polling' })
+          void pollOnce()
+          polling = setInterval(() => void pollOnce(), POLL_MS)
+        }
+      }, WATCHDOG_MS)
+
       return () => {
+        stopped = true
+        clearInterval(watchdog)
+        if (polling !== undefined) clearInterval(polling)
         stop()
-        set({ connected: false })
+        set({ connected: false, transport: 'off' })
       }
     },
 
@@ -337,4 +435,36 @@ export function useJobsForTab(tabKey: string): Job[] {
 
 export function isLive(job: Job): boolean {
   return job.status === 'queued' || job.status === 'running'
+}
+
+/** Which tabs the polling fallback should fetch `display` for.
+ *
+ *  Not "every tab": that is one request per entitled tab per 1.5 seconds for
+ *  media that has not changed since the page loaded. A tab is worth asking
+ *  about when it has a run in flight, or when its newest finished run has no
+ *  images and finished recently enough that they are probably still coming.
+ *
+ *  The recency bound is what stops a genuinely empty run — a handler that
+ *  refused, a cancelled job — from being polled for as long as the tab is
+ *  open. After the grace period it is accepted as having produced nothing,
+ *  which is the truth. */
+const DISPLAY_GRACE_MS = 60_000
+
+function tabsNeedingDisplay(jobs: Job[]): string[] {
+  const wanted = new Set<string>()
+  const settled = new Set<string>()
+  // Newest first, so the first job seen for a tab is the one `display_for`
+  // means on the server: its newest run that has actually begun.
+  for (const job of jobs) {
+    if (job.status === 'queued') continue
+    if (isLive(job)) {
+      wanted.add(job.tabKey)
+      continue
+    }
+    if (settled.has(job.tabKey) || wanted.has(job.tabKey)) continue
+    settled.add(job.tabKey)
+    const age = Date.now() - (job.endedAt ?? job.startedAt)
+    if (job.images.length === 0 && age < DISPLAY_GRACE_MS) wanted.add(job.tabKey)
+  }
+  return [...wanted]
 }
