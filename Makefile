@@ -104,7 +104,7 @@ fi
 endef
 
 .PHONY: help check check-args compile publish release health builds promote \
-        start-ps1 image image-dev image-push
+        start-ps1 image image-dev image-push webui webui-dev
 
 help:
 	@echo
@@ -115,7 +115,10 @@ help:
 	echo "  make compile    build $(ARTIFACT) for LINUX, publish nothing"
 	echo "  make publish    upload $(ARTIFACT) and point \"stable\" at it"
 	echo "  make release    compile, then publish"
-	echo "  make check-args build.sh and build.ps1 must bundle the same things"
+	echo "  make check-args everything a build must agree about, checked"
+	echo
+	echo "  make webui      rebuild the React bundle - THE ONLY TARGET NEEDING NODE"
+	echo "  make webui-dev  Vite's dev server, proxying the API to :7860"
 	echo
 	echo "  make promote SHA=<sha256>    roll a channel back to a build"
 	echo
@@ -202,13 +205,52 @@ builds:
 	     "$$API/v1/admin/builds" | python3 -m json.tool 2>/dev/null || \
 	    echo "could not list builds - try 'make check'"
 
-# Cheap, credential-free, and a dependency of both build targets: the two
-# scripts each hold their own copy of the Nuitka --include-* list, and a
-# flag added to one and not the other produces a build that compiles, runs,
-# and is quietly missing something. Catching that costs a fraction of a
-# second here against noticing it in a customer's log.
+# The React front end. The ONLY target that needs Node — run it on a
+# machine with Node >= 20 (the same one that runs license-validator/), then
+# COMMIT webui_bundle.py.
+#
+# Committing a generated file is the whole answer to constraint 5 in
+# context.md: neither build host has Node, and neither ever will. The
+# alternative is a toolchain on a RunPod pod and on a Windows box, kept in
+# step with this one, to turn TSX into JavaScript that is identical either
+# way. It also means a fresh clone runs scripts/dryrun.py immediately,
+# without npm.
+#
+# `npm ci`, not `npm install`: it installs exactly package-lock.json, which
+# is one of the files SOURCE_HASH covers. `npm install` may resolve a newer
+# transitive dependency, rewrite the lock file, and move the hash — turning
+# "rebuild the front end" into a spurious stale-bundle failure on the next
+# build.
+webui:
+	@cd webui && npm ci && npm run build
+	python3 scripts/gen_webui_bundle.py
+
+# Vite's own server, with hot reload. It proxies /api, /media and /thumbs
+# to :7860, so run the app as well:
+#     python scripts/dryrun.py --features all
+webui-dev:
+	@cd webui && npm run dev
+
+# Cheap, credential-free, and a dependency of both build targets. Three
+# checks, one gate — widened rather than given its own target so that
+# `compile` and `release` keep their single prerequisite:
+#
+#   check_build_args  the two scripts each hold their own copy of the
+#                     Nuitka --include-* list, and a flag added to one and
+#                     not the other produces a build that compiles, runs,
+#                     and is quietly missing something.
+#   check_webui       webui_bundle.py is committed, so an edit to
+#                     webui/src that nobody rebuilt would ship the
+#                     previous front end without a word.
+#   check_routes      the API's routes against what the front end calls.
+#
+# Every one of them catches a defect that a successful compile hides,
+# which is why they cost a fraction of a second here rather than an
+# afternoon in a customer's log.
 check-args:
 	@python3 scripts/check_build_args.py
+	python3 scripts/check_webui.py
+	python3 scripts/check_routes.py
 
 compile: check-args
 	@./build.sh --no-publish

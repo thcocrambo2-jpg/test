@@ -217,9 +217,12 @@ and needs no GPU, no license and no weights:
 python scripts/dryrun.py --features all
 ```
 
-It serves the **built** bundle from `webui/dist` on
-<http://127.0.0.1:7860>, with authentication switched off and bound to
-loopback only — which is why it refuses to bind anything else. It cannot
+It serves the front end out of the committed `webui_bundle.py` on
+<http://127.0.0.1:7860> — the same source the shipped binary uses, so a
+fresh clone with no `webui/node_modules` runs this immediately.
+`webui/dist` is the fallback when that module is absent. Authentication is
+switched off and it binds loopback only — which is why it refuses to bind
+anything else. It cannot
 generate; every Generate press reports that ComfyUI is not running. That is
 the point: the whole interface, every tab the flag grants, with no pod.
 
@@ -231,6 +234,11 @@ port instead — you get hot reload, and it proxies `/api`, `/media` and
 python scripts/dryrun.py --features all      # one terminal
 cd webui; npm run dev                        # another
 ```
+
+The bundle wins over `webui/dist`, so an edit to `webui/src` does **not**
+reach `dryrun.py` until `make webui` regenerates the module. That is the
+one asymmetry worth remembering, and the startup line says which source
+was used.
 
 `--tunnel` adds a public URL to either. `--api-only` is accepted and
 ignored: there is only one app now, and this script has always served it.
@@ -1190,8 +1198,9 @@ error in the log points at a custom node instead.
 - `tabschema.py` — one declarative schema per tab: every control, its label, bounds and submission order
 - `api.py` — FastAPI routes, the licence gate on each of them, uploads and the SSE event stream
 - `serve.py` — uvicorn plus the Cloudflare quick tunnel that provides the public URL
-- `webui.py` — serves the compiled React bundle from memory
-- `webui/` — the React app (Vite + TypeScript); `webui/dist` is what gets embedded
+- `webui.py` — serves the compiled React bundle from memory: gzip straight to the browser, ETag/304 on the shell, SPA fallback
+- `webui_bundle.py` — **generated and committed** by `scripts/gen_webui_bundle.py`; every built asset as a gzip `bytes` literal, which is how the front end reaches the binary without Node on the build host
+- `webui/` — the React app (Vite + TypeScript); `webui/dist` is what `make webui` packages
 
 ### Tab order and routing
 
@@ -1435,6 +1444,9 @@ variables to retype after every reboot.
 | Command | Runs | Needs |
 | --- | --- | --- |
 | `make` | lists these | — |
+| `make webui` | `npm ci && npm run build` in `webui/`, then regenerates `webui_bundle.py` — **the only target that needs Node** | Node >= 20 |
+| `make webui-dev` | Vite's dev server, proxying the API to `:7860` | Node >= 20 |
+| `make check-args` | every check a build must pass: flag parity, bundle freshness, the licence gate on the routes | nothing |
 | `make compile` | `build.sh --no-publish` — compiles `dist/krea2app`, uploads nothing | nothing |
 | `make publish` | `build.sh --upload-only` — uploads the binary already in `dist/` and points `stable` at it | write token + admin |
 | `make release` | `build.sh -y` — compile **and** publish in one step | write token + admin |
@@ -1751,12 +1763,55 @@ make check-args          # or: python scripts/check_build_args.py
 refuses to run while the two disagree. It is worth having because every
 flag in that list is one whose absence produces a binary that **compiles
 and runs** and is then quietly wrong — no Xet acceleration, un-pinned
-weights, a missing `version.txt` that only crashes after the models have
-downloaded.
+weights, or a `uvicorn.run()` that dies on a protocol module the import
+graph never reached.
 
 Flags that genuinely belong to one platform (`--jobs`, `--mingw64`,
 `--static-libpython`, the output filename) are listed in `PLATFORM_SPECIFIC`
 in that script, with the reason.
+
+Two things in the pair are shared **logic** rather than a shared flag, so
+they cannot be diffed — each script writes them in its own language. The
+checker asserts instead that neither has lost them:
+
+- the hf_xet `.dist-info` discovery block;
+- the `strings | grep` sanity check on the built binary, whose three
+  needles are `def generate_single` (licensed Python shipping as readable
+  source), `sourceMappingURL` and `webui/src/` (a Vite build that quietly
+  ran with sourcemaps on).
+
+`make check-args` also runs two checks of its own — `check_webui.py`,
+which fails when `webui_bundle.py` is older than `webui/src`, and
+`check_routes.py`. Widening the one target rather than adding a second
+prerequisite is what keeps `compile` and `release` on a single gate.
+
+### The React bundle, and why it is committed
+
+Neither build host has Node. The Linux build runs on a RunPod pod, the
+Windows build on a Windows box, and installing a JS toolchain on both —
+kept in step, so both emit identical JavaScript — is a worse trade than
+committing what one dev machine produces.
+
+So `webui_bundle.py` is **generated and committed**: every built asset as
+a gzip `bytes` literal, in a Python module, because Nuitka follows imports
+and a data file would need its own `--include-data-files` entry.
+`theme.py` made the same choice for its CSS and JS before it was deleted.
+
+```bash
+make webui               # the only target that needs Node; commit the result
+```
+
+Both build scripts then do nothing but *verify* it — `check_webui.py`
+recomputes a hash over `webui/src`, `index.html`, `package.json`,
+`package-lock.json` and `vite.config.ts` and compares it to the
+`SOURCE_HASH` baked into the module. Without that, "someone edited a
+`.tsx` and forgot to rebuild" is a silent ship rather than a build
+failure.
+
+`.gitattributes` marks the file `linguist-generated -diff -merge`: a
+conflict in it is **always** resolved by regenerating, never by editing,
+because merging two halves of a compressed stream produces a file that
+still parses as Python and serves a corrupt asset.
 
 ### Publishing a start-script fix without a Windows machine
 

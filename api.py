@@ -1070,14 +1070,15 @@ def _mount_spa(app: FastAPI) -> None:
     useless without one — every route it calls is gated — so what an
     unauthenticated visitor gets is a page that immediately says so.
 
-    Absent in this section: `npm run dev` serves the SPA and proxies /api
-    here. Section 4 adds webui_bundle.py and this becomes the whole
-    front end.
+    This is the whole front end now. webui.mount() always registers its
+    routes — when there is no bundle it serves a notice naming `make
+    webui` rather than leaving `/` to 404, because "the page is blank"
+    and "the route does not exist" look identical from a browser.
     """
     try:
         import webui
     except ImportError:
-        log.info("No webui bundle — serving the API only "
+        log.info("No webui module — serving the API only "
                  "(run `npm run dev` in webui/ for the front end)")
         return
     webui.mount(app)

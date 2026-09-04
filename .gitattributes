@@ -36,3 +36,41 @@ Dockerfile text eol=lf
 # require one, so `make start-ps1` refuses to publish a start script that
 # has lost it.
 *.ps1 text eol=crlf
+
+# The generated React bundle. webui_bundle.py is machine-written by
+# scripts/gen_webui_bundle.py and committed because neither build host has
+# Node — see context.md constraint 5.
+#
+#   linguist-generated  keeps it out of language statistics and collapses
+#                       it in a diff view, where a few hundred KB of
+#                       escaped gzip bytes is nothing but noise.
+#   -diff               never try to produce a textual diff of it.
+#   -merge              and never try to merge one. A conflict here is
+#                       ALWAYS resolved by regenerating — take either
+#                       side, run `make webui`, commit that. Merging two
+#                       halves of a compressed stream produces a file that
+#                       still parses as Python and serves a corrupt asset.
+webui_bundle.py linguist-generated=true -diff -merge
+
+# LF for the generated module and for everything it is generated from.
+# SOURCE_HASH is a hash of those files, so a checkout that turned them
+# into CRLF would compute a different hash from the machine that wrote it
+# and fail check_webui.py with nothing wrong. (The generator normalises
+# CRLF as well — belt and braces, because this rule only takes effect on
+# the next checkout of a tree that already has CRLF in it.)
+webui_bundle.py text eol=lf
+webui/** text eol=lf
+
+# The exceptions to the rule above, and the reason it needs them: `text`
+# set explicitly turns OFF git's binary detection, so without these a
+# font, an icon or a mask fixture would have its CRLF bytes rewritten on
+# checkout and arrive corrupt. There are none tracked under webui/ today;
+# these lines are here so that adding the first one is not a bug.
+webui/**/*.ico binary
+webui/**/*.jpg binary
+webui/**/*.png binary
+webui/**/*.raw binary
+webui/**/*.ttf binary
+webui/**/*.webp binary
+webui/**/*.woff binary
+webui/**/*.woff2 binary

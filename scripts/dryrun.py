@@ -12,10 +12,16 @@ card that can hold a 35 GB UNet.
     python scripts/dryrun.py --features "single,klein"   # offline, no server
     python scripts/dryrun.py --features all
 
-Serves the built React bundle from `webui/dist` at http://127.0.0.1:7860,
-the same way the shipped binary does. To work on the front end itself, run
-`npm run dev` in `webui/` as well and use Vite's port — it proxies /api,
-/media and /thumbs back here.
+Serves the React front end at http://127.0.0.1:7860 the same way the
+shipped binary does — out of the committed `webui_bundle.py`, so a fresh
+clone with no `webui/node_modules` runs this immediately. `webui/dist` is
+the fallback when that module is absent. To work on the front end itself,
+run `npm run dev` in `webui/` as well and use Vite's port — it proxies
+/api, /media and /thumbs back here.
+
+Note which one is being served: the bundle wins, so an edit to `webui/src`
+does NOT show up here until `make webui` regenerates it. The startup line
+says which source it used.
 
 The first form is the one worth using: it calls the real license server
 with KREA2_LICENSE_KEY, so it verifies the whole entitlement path —
@@ -142,9 +148,11 @@ def main() -> None:
     os.environ["KREA2_UI_ALLOW_ANON"] = "1"
     import serve
 
-    log.info("Starting on http://127.0.0.1:%d — serving webui/dist. For "
-             "front-end work run `npm run dev` in webui/ as well and use "
-             "Vite's port, which proxies /api back here.", args.port)
+    # webui.mount() logs which source it picked — the committed bundle or
+    # webui/dist — on the next line, so this one does not guess.
+    log.info("Starting on http://127.0.0.1:%d. For front-end work run "
+             "`npm run dev` in webui/ as well and use Vite's port, which "
+             "proxies /api back here.", args.port)
     serve.serve(port=args.port, host="127.0.0.1", tunnel=args.tunnel)
 
 

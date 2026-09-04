@@ -10,8 +10,10 @@
 # The build needs no GPU: Nuitka compiles source rather than executing it, so
 # comfy.py's import-time GPU check never fires here.
 #
-# What ends up inside: this app plus everything it imports (gradio,
-# huggingface_hub, requests, safetensors, websocket-client, Pillow).
+# What ends up inside: this app plus everything it imports (fastapi,
+# uvicorn, huggingface_hub, requests, safetensors, websocket-client,
+# Pillow), and webui_bundle.py — the React front end, generated and
+# committed so that this host never needs Node.
 # What does NOT: torch and ComfyUI — the app never imports them, it installs
 # them at runtime and launches ComfyUI as a separate process. That is why
 # bootstrap.runtime_python() exists.
@@ -540,7 +542,7 @@ fi
 # the build interpreter. A pod that has already run `python3 app.py` has them;
 # a fresh one does not.
 echo ">>> Checking the app's own dependencies are present ..."
-APP_IMPORTS="import gradio, huggingface_hub, requests, safetensors, websocket, PIL, hf_xet"
+APP_IMPORTS="import fastapi, uvicorn, huggingface_hub, requests, safetensors, websocket, PIL, hf_xet"
 if "$PYTHON" -c "$APP_IMPORTS" >/dev/null 2>&1; then
     echo "    all present"
 else
@@ -587,6 +589,18 @@ echo "    mirror_manifest.json + PINS.json will be bundled"
 #
 # Fatal, not skipped: without it every Xet-backed download silently drops
 # to single-stream HTTP, turning a model fetch of seconds into minutes.
+# The React bundle is a COMMITTED generated module (webui_bundle.py), not
+# something this script builds — neither build host has Node, which is the
+# whole reason it is committed. So the only thing to check here is that it
+# was regenerated after the last edit to webui/src.
+#
+# Before the compile on purpose: a stale front end is not a build error,
+# it is a binary that compiles, runs, and serves whatever the UI looked
+# like the last time somebody remembered to run `make webui`. Finding that
+# out after twenty minutes of Nuitka is finding it out too late.
+echo ">>> Checking the React bundle is current ..."
+"$PYTHON" scripts/check_webui.py || exit 1
+
 echo ">>> Locating hf_xet's distribution metadata ..."
 xet_metadata=()
 xet_distinfo="$("$PYTHON" - <<'PY' 2>/dev/null || true
@@ -608,7 +622,7 @@ else
     exit 1
 fi
 
-echo ">>> Compiling (first build is slow — it compiles gradio's tree too) ..."
+echo ">>> Compiling (the first build is slow — every package below is compiled) ..."
 "$PYTHON" -m nuitka \
     --standalone \
     --onefile \
@@ -672,28 +686,41 @@ echo ">>> Compiling (first build is slow — it compiles gradio's tree too) ..."
     --include-distribution-metadata=hf-xet \
     ${xet_metadata[@]+"${xet_metadata[@]}"} \
     \
-    `# gradio is pulled in whole rather than by import graph: it loads` \
-    `# components dynamically, and its frontend ships as package data.` \
-    `# The metadata flags matter because gradio looks up its own version at` \
-    `# runtime, which fails in a frozen app without them.` \
-    --include-package=gradio \
-    --include-package-data=gradio \
-    --include-distribution-metadata=gradio \
-    --include-package=gradio_client \
-    --include-package-data=gradio_client \
-    --include-distribution-metadata=gradio_client \
+    `# The React front end, as a generated Python module rather than as` \
+    `# data files: Nuitka follows imports, so naming the module is enough,` \
+    `# while data files would need a correct destination for every asset` \
+    `# and a runtime path that resolves inside a onefile extraction.` \
+    `# webui_bundle.py is committed — see scripts/gen_webui_bundle.py — so` \
+    `# this host never needs Node. check_webui.py above is what stops a` \
+    `# stale one shipping.` \
+    --include-module=webui_bundle \
     \
-    `# Two of gradio's own dependencies read their version from a data file` \
-    `# rather than from metadata — safehttpx/__init__.py opens` \
-    `# version.txt next to itself at import time, and groovy does the same.` \
-    `# Nuitka compiles both packages (the import graph reaches them through` \
-    `# gradio.processing_utils) but ships no package data unless told, so` \
-    `# the binary starts, downloads every model, and only then dies with` \
-    `# FileNotFoundError: .../safehttpx/version.txt — an import-time crash,` \
-    `# so no tab of the app ever renders. --include-package-data is enough;` \
-    `# neither package looks itself up through importlib.metadata.` \
-    --include-package-data=safehttpx \
-    --include-package-data=groovy \
+    `# uvicorn is NOT optional, and its absence is the failure this whole` \
+    `# file exists to prevent: it resolves its protocol and loop backends` \
+    `# by STRING import — "uvicorn.protocols.http.h11_impl",` \
+    `# "uvicorn.loops.asyncio" — so the import graph never reaches them.` \
+    `# Without this flag the binary compiles, starts, prints its banner and` \
+    `# dies inside uvicorn.run() on a module that was never bundled.` \
+    `#` \
+    `# fastapi/starlette/h11/anyio follow the same shape less severely` \
+    `# (starlette picks middleware and response classes dynamically), and` \
+    `# naming them costs nothing next to a mistake that only shows up at` \
+    `# run time.` \
+    --include-package=uvicorn \
+    --include-package=fastapi \
+    --include-package=starlette \
+    --include-package=h11 \
+    --include-package=anyio \
+    \
+    `# pydantic builds its validators at import time from type annotations,` \
+    `# and pydantic_core is the Rust extension that runs them — the same` \
+    `# reasoning as hf_xet above: a compiled extension has to be bundled,` \
+    `# because a pip install next to the binary is invisible to the` \
+    `# pydantic inside it. --include-package-data=pydantic carries the` \
+    `# version file its own import reads.` \
+    --include-package=pydantic \
+    --include-package=pydantic_core \
+    --include-package-data=pydantic \
     \
     `# No --onefile-tempdir-spec on purpose: a fixed cache dir lets a rebuilt` \
     `# binary silently reuse the previous extraction. Re-extracting on each` \
@@ -702,10 +729,42 @@ echo ">>> Compiling (first build is slow — it compiles gradio's tree too) ..."
 
 echo
 echo ">>> Built: $OUTPUT_DIR/$OUTPUT_NAME"
+# Three needles, and they are not all the same question.
+#
+#   def generate_single   licensed Python logic shipping as readable
+#                         source. It lives in handlers.py now, not ui.py.
+#   sourceMappingURL      a Vite build with sourcemaps on, which would put
+#   webui/src/            the whole TSX tree inside the binary.
+#
+# The front-end pair is not about secrecy — a browser is handed that
+# JavaScript in cleartext by definition, and gzipping it means it is not
+# greppable here anyway. It is about `vite build` having silently run in a
+# mode nobody asked for: a sourcemap is megabytes of dead weight in a
+# onefile binary that re-extracts on every launch, and it names every
+# file in webui/src.
+#
+# scripts/check_build_args.py cannot see any of this — it diffs FLAGS
+# between the two scripts, and this is shared logic — so it checks that
+# both scripts still carry the needles, the way it already does for the
+# hf_xet discovery block.
 echo ">>> Sanity check — no source should ship:"
-if strings "$OUTPUT_DIR/$OUTPUT_NAME" | grep -q "def generate_single"; then
-    echo "    WARNING: found app source text in the binary" >&2
-else
+sanity_ok=1
+for needle in "def generate_single" "sourceMappingURL" "webui/src/"; do
+    # `grep -F ... >/dev/null` rather than `grep -qF`: -q makes grep exit
+    # at the first match, which SIGPIPEs `strings`, which under
+    # `set -o pipefail` makes the pipeline exit 141 — so a match would be
+    # read as a miss. Letting grep drain its input costs a second on a
+    # binary this size and is the difference between the check working
+    # and only ever printing OK.
+    if strings "$OUTPUT_DIR/$OUTPUT_NAME" | grep -F "$needle" >/dev/null; then
+        echo "    WARNING: found '$needle' in the binary" >&2
+        sanity_ok=0
+    fi
+done
+# An `if`, not `[[ ... ]] && echo`: this script runs under `set -e`, where
+# a trailing AND-list that evaluates false is a non-zero exit status and
+# aborts the build before publish.
+if [[ $sanity_ok -eq 1 ]]; then
     echo "    OK: no app source found"
 fi
 

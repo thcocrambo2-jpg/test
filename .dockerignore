@@ -47,3 +47,15 @@
 **/*.py[cod]
 **/.git
 **/.gitignore
+
+# webui/ and webui_bundle.py are NOT listed above, and that is deliberate.
+#
+# This image is the ENVIRONMENT — ComfyUI, its custom nodes and their
+# pinned revisions — not the app. The binary that serves the React UI is
+# built by build.sh / build.ps1 and published to R2; nothing in this image
+# ever imports webui_bundle.py or reads webui/dist.
+#
+# Allowlisting webui/ would start publishing the front-end SOURCE into a
+# public image, which is exactly what the deny-all above exists to
+# prevent. Adding webui_bundle.py alone would publish a few hundred KB of
+# compiled JavaScript that nothing in the image can serve.

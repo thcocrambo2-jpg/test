@@ -16,11 +16,16 @@ is then wrong in a way nobody notices for a while:
                                                 for a token
     --include-package=hf_xet                    every model download drops
                                                 to single-stream HTTP
-    --include-package-data=safehttpx            an import-time crash, but
-                                                only after the models have
-                                                downloaded
-    --include-distribution-metadata=gradio      gradio cannot find its own
-                                                version in a frozen app
+    --include-package=uvicorn                   uvicorn names its protocol
+                                                and loop backends as
+                                                STRINGS, so the import
+                                                graph never reaches them:
+                                                the binary compiles,
+                                                starts, and dies inside
+                                                uvicorn.run()
+    --include-module=webui_bundle               the app serves an API and
+                                                a "front end not built"
+                                                notice — no UI at all
 
 So a flag added to one script and not the other is not a cosmetic
 inconsistency: it is one platform's customers quietly getting a worse
@@ -169,6 +174,38 @@ def check_xet_discovery() -> list[str]:
     return problems
 
 
+def check_webui_needles() -> list[str]:
+    """Both scripts must still grep the binary for the same three strings.
+
+    The second piece of shared *logic* here, alongside the hf_xet block
+    above, and it cannot be diffed either: build.sh pipes `strings` into
+    grep, build.ps1 walks the bytes itself because Windows has no strings.
+
+    `def generate_single` is the original question — licensed Python logic
+    shipping as readable source. The two front-end needles are a different
+    one: a `vite build` that quietly ran with sourcemaps on puts megabytes
+    of dead weight into a binary that re-extracts on every launch, and
+    names every file in webui/src while doing it. Neither is a compile
+    error, so nothing else would notice.
+    """
+    problems = []
+    needles = ("def generate_single", "sourceMappingURL", "webui/src/")
+    for path in (BUILD_SH, BUILD_PS1):
+        text = path.read_text(encoding="utf-8-sig")
+        for needle in needles:
+            # Counted, not just found: each needle appears in the comment
+            # that explains it as well as in the check itself, so one
+            # occurrence means the check was deleted and the comment left
+            # behind.
+            if text.count(needle) < 2:
+                problems.append(
+                    f"{path.name} no longer checks the built binary for "
+                    f"{needle!r}. That check is the only thing standing "
+                    f"between a mis-built bundle and a release."
+                )
+    return problems
+
+
 def main() -> int:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--list", action="store_true",
@@ -192,7 +229,7 @@ def main() -> int:
 
     only_sh = sorted(set(sh) - set(ps1))
     only_ps1 = sorted(set(ps1) - set(sh))
-    problems = check_xet_discovery()
+    problems = check_xet_discovery() + check_webui_needles()
 
     if not only_sh and not only_ps1 and not problems:
         print(f"build args agree: {len(sh)} shared flags, "
