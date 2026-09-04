@@ -90,6 +90,7 @@ import presets
 import prompts
 import recipes
 import showcase
+import tabschema
 import theme
 from comfy import GPU_COUNT
 from config import (
@@ -1357,7 +1358,7 @@ def _job_title(args, index):
     return text[:59] + "…" if len(text) > 60 else text
 
 
-def _enqueue(key, fn, *, prompt_arg=None, status_index=1, lane=None):
+def _enqueue(key, fn, *, prompt_arg=None, lane=None):
     """Turn a tab's handler into the click that only queues it.
 
     `fn` is untouched — the same generator the click used to consume — so
@@ -1370,15 +1371,23 @@ def _enqueue(key, fn, *, prompt_arg=None, status_index=1, lane=None):
     work landed, and because the timer has to be switched on — a poll that
     is off would leave the queue looking empty until something else woke
     it.
+
+    What the handler's yields *mean* comes from tabschema rather than from
+    an argument here. It used to be `status_index`, an int each tab passed
+    to say where its status text sat in the tuple — 1 on nine tabs and 2
+    on the video one, which yields two output components first. Naming the
+    positions once, next to the handler they belong to, is what stops the
+    two answers from being kept in two places.
     """
     lane = lane or COMFY_LANE
+    result_keys = tabschema.get(key).result_keys
 
     def submit(*args):
         view = jobqueue.submit(
             lane=lane, tab=str(key), tab_label=features.label_for(key),
             title=_job_title(args, prompt_arg),
             fn=_recording(key, fn, args), args=args,
-            status_index=status_index,
+            result_keys=result_keys,
         )
         ahead = max(0, view.place - 1)
         line = ("🕑 Queued — it starts as soon as the GPU is free."
@@ -1547,17 +1556,23 @@ def _queue_tick(seen):
             continue
         seen[("tab", tab)] = stamp
         previous = seen.get(("value", tab)) or []
-        # A handler may yield fewer values than the tab has outputs — an
-        # early "❌ that model is not downloaded" bails before it knows a
-        # seed — and those trailing components keep what they are showing.
+        # The job's result is a dict keyed by the tab's result_keys, and
+        # this tab's output components are in that same order — which is
+        # the whole reason result_keys exists. A handler may yield fewer
+        # values than the tab has outputs (an early "❌ that model is not
+        # downloaded" bails before it knows a seed), and a key that is
+        # simply absent is how that arrives here; those trailing
+        # components keep what they are showing.
+        keys = tabschema.get(tab).result_keys
         values, updates = [], []
         for index in range(len(components)):
-            if index >= len(result):
+            key = keys[index] if index < len(keys) else None
+            if key not in result:
                 values.append(previous[index] if index < len(previous)
                               else None)
                 updates.append(gr.update())
                 continue
-            value = result[index]
+            value = result[key]
             values.append(value)
             updates.append(
                 value if index >= len(previous)
@@ -3660,10 +3675,8 @@ def _tab_wan_i2v(tab):
     _queue_view(features.Key.WAN_I2V,
                 [wan_files_out, wan_video_out, wan_status, wan_seed_out])
     wan_btn.click(
-        # status_index=2: this tab yields two output components before its
-        # status text, where every other tab yields one.
         fn=_enqueue(features.Key.WAN_I2V, generate_wan_video, prompt_arg=1,
-                    status_index=2, lane=WAN_LANE),
+                    lane=WAN_LANE),
         inputs=_recipe_view(features.Key.WAN_I2V, "video", [
             wan_image, wan_prompt, wan_negative, wan_model,
             wan_mode, wan_seed, wan_random, wan_steps,

@@ -142,6 +142,7 @@ class Capture:
 
     def __init__(self):
         self.workflows = []
+        self.settings = None      # the blob prompts.record was handed
 
     def run(self, workflow, timeout=None):
         self.workflows.append(workflow)
@@ -194,7 +195,13 @@ def patch(module, capture) -> None:
     module.comfy_ensure_alive = lambda *a, **k: (True, "")
 
     # Silent by contract in the app; a POST to the licence server here.
-    prompts.record = lambda *a, **k: None
+    # Kept rather than discarded: the fourth positional is the settings
+    # blob the licence server stores, and it is the thing tabschema has to
+    # reproduce byte for byte (see check_settings).
+    def record(tab, prompt, negative, settings, **_kwargs):
+        capture.settings = settings
+
+    prompts.record = record
     presets.save = lambda *a, **k: (True, "stubbed")
 
     for comfy_client in (client.client, client.wan_client):
@@ -274,6 +281,53 @@ def cases(module) -> dict:
     }
 
 
+def check_settings(name, args, settings) -> None:
+    """tabschema.settings() == what the handler stored. Raises on drift.
+
+    The other half of the preset contract, and the half that cannot be
+    checked at import: the two tabs that write a settings blob are the two
+    whose handlers guard on `v2_status()` and on the weights being
+    downloaded, so reaching the `prompts.record` call at all needs the
+    stubs this file already installs.
+
+    tabschema asserts the *Krea 2* blob against handlers._krea_settings at
+    import, because that one is a plain function. The V2 blob is built
+    inline inside generate_v2, so the only way to see it is to run the
+    handler — which is what happens here.
+
+    The inversion in the middle is worth reading twice. `Field.name` is
+    the handler parameter name and `fields` is submission order, so
+    zipping the two reconstructs exactly the value bag the API would have
+    produced from a form. If that invariant ever stops holding, this
+    reconstruction is wrong and the comparison fails, which is the
+    behaviour you want from a check whose whole premise is the invariant.
+    """
+    import tabschema
+
+    schema = next((s for s in tabschema.SCHEMAS
+                   if s.handler.__name__ == name), None)
+    if schema is None or settings is None:
+        return
+    values = {f.name: value for f, value in zip(schema.named(), args)}
+    tail = schema.tail()
+    if tail is not None:
+        rest = args[len(schema.named()):]
+        for index in range(tail.count()):
+            for offset, part in enumerate(tail.parts):
+                key = tail.value_key(index, part.name)
+                values[key] = rest[index * len(tail.parts) + offset]
+    ours = schema.settings(values)
+    if ours != settings:
+        keys = set(ours) | set(settings)
+        rows = ["  %s: %r != %r" % (k, ours.get(k), settings.get(k))
+                for k in sorted(keys) if ours.get(k) != settings.get(k)]
+        raise SystemExit(
+            "%s: tabschema.settings() does not match the blob the handler "
+            "stores. Every preset on the licence server is in that shape."
+            % name + "\n" + "\n".join(rows)
+        )
+
+
 def snapshot() -> dict:
     """Run every case and collect the workflows each one built."""
     module = handler_module()
@@ -295,6 +349,7 @@ def snapshot() -> dict:
                 "Last status: %s"
                 % (name, statuses[-1] if statuses else "(nothing)")
             )
+        check_settings(name, args, capture.settings)
         result[name] = capture.workflows
     return result
 

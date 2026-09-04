@@ -77,13 +77,19 @@ class Job:
     title: str                  # the prompt (or "—"), trimmed for the list
     fn: Callable
     args: tuple
-    status_index: int           # where the status text sits in a yield
+    # What the handler's yield tuple *means*, position by position:
+    # ("images", "status", "seed") for a picture tab, ("videos", "latest",
+    # "status", "seed") for the video one. The tab says so when it
+    # submits, so _freeze can hand back a dict instead of a tuple and
+    # nothing downstream has to know that "the status is the second one,
+    # except on the video tab where it is the third".
+    result_keys: tuple = ()
     submitted: float = field(default_factory=time.time)
     status: str = QUEUED
     progress: str = "Waiting for its turn"
-    # The last tuple `fn` yielded, ready to be splatted into the tab's
-    # outputs. None until the job has produced anything.
-    result: tuple | None = None
+    # The last thing `fn` yielded, keyed by result_keys. None until the
+    # job has produced anything.
+    result: dict | None = None
     revision: int = 0
     started: float | None = None
     finished: float | None = None
@@ -169,7 +175,8 @@ def register_lane(lane: str, interrupt: Callable[[], None]) -> None:
 
 
 def submit(*, lane: str, tab: str, tab_label: str, title: str,
-           fn: Callable, args: tuple, status_index: int = 1) -> JobView:
+           fn: Callable, args: tuple,
+           result_keys: tuple = ("images", "status")) -> JobView:
     """Record a click as a job and return its place in the queue.
 
     Returns a JobView rather than an id because the caller's next act is
@@ -178,7 +185,7 @@ def submit(*, lane: str, tab: str, tab_label: str, title: str,
     job = Job(
         id=uuid.uuid4().hex[:12], lane=lane, tab=str(tab),
         tab_label=tab_label, title=title or "—",
-        fn=fn, args=tuple(args), status_index=status_index,
+        fn=fn, args=tuple(args), result_keys=tuple(result_keys),
     )
     with _WAKE:
         _JOBS.append(job)
@@ -282,7 +289,7 @@ def _view(job: Job) -> JobView:
                    submitted=job.submitted, place=place)
 
 
-def display_for(tab: str) -> tuple[int, tuple | None]:
+def display_for(tab: str) -> tuple[int, dict | None]:
     """(revision, latest yield) for the job that tab should be showing.
 
     "Should be showing" is the newest job for that tab that has actually
@@ -355,14 +362,14 @@ def _run(job: Job) -> None:
         if hasattr(outcome, "__next__"):
             for value in outcome:
                 with _LOCK:
-                    job.result = _freeze(value)
+                    job.result = _freeze(job, value)
                     job.progress = _progress_of(job, job.result)
                     _stamp(job)
                 if job._stop.is_set():
                     break
         else:
             with _LOCK:
-                job.result = _freeze(outcome)
+                job.result = _freeze(job, outcome)
                 job.progress = _progress_of(job, job.result)
                 _stamp(job)
     except Exception as exc:                    # noqa: BLE001
@@ -391,34 +398,43 @@ def _run(job: Job) -> None:
         _stamp(job)
 
 
-def _freeze(value) -> tuple:
-    """A yield, copied so it cannot change under the poll that reads it.
+def _freeze(job: Job, value) -> dict:
+    """A yield, named and copied so it cannot change under its reader.
 
-    _run_jobs builds one gallery list and extends it in place, so the list
-    it yields after job 1 is the *same object* it yields after job 4.
-    Recorded as-is, a job would rewrite its own history — and worse, the
-    poll asking "has this tab's gallery changed since I last drew it?"
-    would be comparing a list against itself and always answering no. The
-    images from a finished batch would then never reach the screen.
+    **Named**, because a positional tuple was the one Gradio-shaped thing
+    left in this module: `result[1]` is the status on nine tabs and
+    `result[2]` on the video one, and every consumer had to be told which.
+    Zipping `job.result_keys` on removes the question.
+
+    **Copied**, and that half is load-bearing in a way that looks like
+    tidiness. _run_jobs builds one gallery list and extends it in place,
+    so the list it yields after job 1 is the *same object* it yields after
+    job 4. Recorded as-is, a job would rewrite its own history — and
+    worse, the poll asking "has this tab's gallery changed since I last
+    drew it?" would be comparing a list against itself and always
+    answering no. The images from a finished batch would then never reach
+    the screen at all.
 
     Shallow on purpose: the members are paths, strings and numbers.
+
+    A handler that yields fewer values than it has keys — an early "that
+    model is not downloaded" bails before it knows a seed — simply
+    contributes fewer keys, and the reader treats a missing key the way it
+    used to treat a short tuple.
     """
     row = value if isinstance(value, tuple) else (value,)
-    return tuple(list(item) if isinstance(item, list) else item
-                 for item in row)
+    return {key: (list(item) if isinstance(item, list) else item)
+            for key, item in zip(job.result_keys, row)}
 
 
-def _progress_of(job: Job, result: tuple | None) -> str:
+def _progress_of(job: Job, result: dict | None) -> str:
     """The status line out of a handler's yield.
 
-    Every handler yields its status text at a fixed place in the tuple —
-    second for most, third for the video tab, which yields two output
-    components before it. The tab says which when it submits, so this
-    stays a lookup rather than a guess about what a string in a tuple
-    might mean.
+    One lookup on every tab now. It used to be an index the tab had to
+    supply — second for most, third for the video tab, which yields two
+    output components before its status — and an index is exactly the kind
+    of thing that stays right until somebody adds an output.
     """
-    if not result or job.status_index >= len(result):
-        return job.progress
-    value = result[job.status_index]
+    value = (result or {}).get("status")
     return value.strip() if isinstance(value, str) and value.strip() \
         else job.progress

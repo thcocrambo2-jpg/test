@@ -172,28 +172,74 @@ def note_new(paths) -> None:
         _submit_thumb(path)
 
 
+def key_for(path) -> str | None:
+    """`path` as the store's key: relative to OUTPUT_DIR, forward slashes.
+
+    The same spelling `recipes._key` uses, deliberately — a generated file
+    has exactly one name across the index, its recipe and the API, and
+    that name is a *relative* one. None for anything outside the tree.
+
+    This is the only form of a path that is allowed to cross the wire.
+    An absolute path names the pod's filesystem, and there is no version
+    of a browser knowing `/workspace/krea2/output/...` that is useful
+    enough to be worth handing out.
+    """
+    try:
+        return Path(path).resolve().relative_to(
+            Path(OUTPUT_DIR).resolve()).as_posix()
+    except (ValueError, OSError):
+        return None
+
+
+def safe_path(path) -> Path:
+    """A caller-supplied path, resolved and proven to be a generated output.
+
+    Two rules, and they are the same two the index uses to decide what it
+    lists in the first place: the path must resolve to somewhere *inside*
+    OUTPUT_DIR, and it must end in a media extension. Accepts either an
+    absolute path or one relative to OUTPUT_DIR, so a wire `path_id` and
+    an internal path go through the same check.
+
+    **Raises** ValueError or OSError. Every caller here handles that, and
+    the raising is the point — this is the one containment check in the
+    app, and a version that returned None would be one `if` away from
+    letting a forged path through.
+
+    Extracted from delete() because two more callers arrived that need
+    exactly this and nothing else: the API serves generated files at
+    /media and /thumbs, replacing Gradio's `allowed_paths=` and
+    `gr.set_static_paths`, which did this containment invisibly. Three
+    call sites and one implementation, rather than three implementations
+    and a hope.
+    """
+    target = Path(path)
+    if not target.is_absolute():
+        target = Path(OUTPUT_DIR) / target
+    target = target.resolve()
+    target.relative_to(Path(OUTPUT_DIR).resolve())      # raises if outside
+    if not target.name.lower().endswith(MEDIA_EXT):
+        raise ValueError("not a generated output")
+    return target
+
+
 def delete(path) -> bool:
     """Delete one generated file and its thumbnail. Returns whether it went.
 
     Permanent — there is no trash to fish it back out of, which is what
     the caller's confirm step is for.
 
-    Deliberately narrow about what it will touch: the path has to resolve
-    to a media file *inside* OUTPUT_DIR, the same two rules the index uses
-    to decide what it lists in the first place. The caller resolves a
-    gallery click against a gr.State, i.e. against client-supplied data,
-    so a stale or forged path must not be able to reach `.recipes.jsonl`,
-    the zip, or anything outside the output tree at all.
+    Deliberately narrow about what it will touch — see safe_path, which is
+    the whole of that narrowness. The caller resolves a gallery click
+    against client-supplied data, so a stale or forged path must not be
+    able to reach `.recipes.jsonl`, the zip, or anything outside the
+    output tree at all.
 
     Never raises. A file that has already gone counts as success — the
     caller asked for it not to be there — and every other OSError comes
     back as False for the caller to report.
     """
     try:
-        target = Path(path).resolve()
-        target.relative_to(Path(OUTPUT_DIR).resolve())   # raises if outside
-        if not target.name.lower().endswith(MEDIA_EXT):
-            raise ValueError("not a generated output")
+        target = safe_path(path)
     except (ValueError, OSError) as exc:
         log.warning("Refusing to delete %s (%s)", path, exc)
         return False
