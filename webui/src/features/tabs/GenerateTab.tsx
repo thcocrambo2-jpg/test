@@ -189,22 +189,15 @@ export function GenerateTab({ schema }: { schema: TabSchema }) {
             >
               {submitting ? 'Queueing' : schema.submitLabel}
             </Button>
-            <div className={s.submitHint}>
-              {waiting > 0 ? (
-                // Not a warning and not a spinner: the queue accepting more
-                // work is the feature. It says what is already in it so a
-                // fourth click is an informed one.
-                <span>
-                  {waiting} in the queue
-                </span>
-              ) : (
-                <>
-                  <kbd className={s.kbd}>Ctrl</kbd>
-                  <span>+</span>
-                  <kbd className={s.kbd}>Enter</kbd>
-                </>
-              )}
-            </div>
+            {/* Only the queue depth. The Ctrl+Enter reminder that used to
+             *  sit here as well is in the footer, where it is stated once for
+             *  the whole app rather than under every tab's button.
+             *
+             *  Nothing when the queue is empty, so the button keeps its own
+             *  spacing on a form that has just loaded. */}
+            {waiting > 0 && (
+              <div className={s.submitHint}>{waiting} in the queue</div>
+            )}
           </div>
         </>
       }
