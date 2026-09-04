@@ -465,6 +465,9 @@ export interface ApiClient {
   cancel(jobId: string): Promise<void>
   clearFinished(): Promise<void>
   getQueue(): Promise<QueueSnapshot>
+  /** Delete a selection in one request. Partial success is normal — the
+   *  ids that would not go come back in `failed`. */
+  deleteMediaMany(ids: string[]): Promise<{ deleted: number; failed: string[] }>
   /** One tab's latest yield, over plain HTTP. The `display` stream event's
    *  twin, and the half of the polling fallback that carries images —
    *  `getQueue` carries statuses and no media at all. */

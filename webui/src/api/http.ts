@@ -179,6 +179,14 @@ export const httpClient: ApiClient = {
     await send<void>(`/gallery/${encodePathId(id)}`, undefined, 'DELETE')
   },
 
+  /* One request for a whole selection, and a POST rather than a DELETE
+   * carrying a body: bodies on DELETE are permitted by the letter of the
+   * spec and dropped in practice by enough proxies — there is a Cloudflare
+   * tunnel in front of this app — that it is not worth the elegance. */
+  deleteMediaMany(ids: string[]) {
+    return send<{ deleted: number; failed: string[] }>('/gallery/delete', { ids })
+  },
+
   async submit(schema: TabSchema, values: SubmitValues): Promise<SubmitResult> {
     const resolved = await resolveUploads(schema, values)
     return send<SubmitResult>(`/tabs/${encodeURIComponent(schema.key)}/generate`, {

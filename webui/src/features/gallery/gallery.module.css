@@ -45,6 +45,70 @@
   transform: translateY(-2px);
 }
 
+/* Selected reads from across the grid, which is the whole job: the border
+   alone is one pixel at compact density, so it is joined by a ring and a
+   wash of the accent over the picture. */
+.tileSelected,
+.tileSelected:hover {
+  border-color: var(--c-accent);
+  box-shadow: 0 0 0 2px var(--c-accent);
+}
+
+.tileSelected .image {
+  opacity: 0.72;
+}
+
+/* The checkbox. Hidden until the tile is hovered or something on the page
+   is selected — an unselected gallery should look like a gallery. */
+.pick {
+  position: absolute;
+  inset: var(--s-2) auto auto var(--s-2);
+  display: grid;
+  place-items: center;
+  width: 26px;
+  height: 26px;
+  border-radius: var(--r-sm);
+  background: var(--c-media-scrim);
+  cursor: pointer;
+  opacity: 0;
+  transition: opacity var(--d-fast) var(--e-out);
+  line-height: 0;
+}
+
+.tile:hover .pick,
+.tile:focus-within .pick,
+.pickShown {
+  opacity: 1;
+}
+
+.pick input {
+  width: 16px;
+  height: 16px;
+  margin: 0;
+  accent-color: var(--c-accent);
+  cursor: pointer;
+}
+
+/* The count's slot while a selection exists. */
+.selectBar {
+  display: flex;
+  align-items: center;
+  gap: var(--s-2);
+  flex-wrap: wrap;
+}
+
+.trash {
+  width: 14px;
+  height: 14px;
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 1.8;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+  margin-right: 4px;
+  vertical-align: -2px;
+}
+
 .image {
   width: 100%;
   aspect-ratio: var(--ratio, 1);

@@ -129,6 +129,12 @@ UPLOAD_TTL = 6 * 3600
 # that a stuck client cannot fill an ephemeral disk.
 MAX_UPLOAD = 64 * 1024 * 1024
 
+# The most files one bulk delete may name. A gallery page holds at most
+# 100 (the `limit` on GET /gallery) and the selection is cleared when the
+# page turns, so this is well past anything the UI can ask for — it is
+# here to bound the loop, not to constrain the feature.
+MAX_BULK_DELETE = 500
+
 # How often the SSE loop looks for something to say, and how often it
 # says nothing out loud. jobqueue is thread-based and pull-oriented with
 # a revision() counter, so this is a poll either way — see stream().
@@ -602,6 +608,48 @@ def create_app() -> FastAPI:
             "nextCursor": str(nxt) if nxt < len(paths) else None,
             "total": len(paths),
         }
+
+    @api.post("/gallery/delete",
+              dependencies=[Depends(require_auth),
+                            Depends(require_feature(features.Key.GALLERY))])
+    def gallery_delete_many(body: dict = Body(default={})):
+        """Delete a selection in one request.
+
+        POST rather than DELETE-with-a-body, and registered above the
+        single-file route so the two cannot be confused. A body on DELETE
+        is permitted by the letter of the spec and dropped in practice by
+        enough proxies — this app already has a Cloudflare tunnel in front
+        of it — that it is not worth the elegance. `/gallery/delete` is an
+        action path, which is what this is.
+
+        Partial success is the normal outcome, not an exception: a file
+        may already have gone, and one bad id in a selection of forty must
+        not take the other thirty-nine with it. Each is tried, and the
+        ones that would not go come back named so the UI can say which
+        rather than "some".
+        """
+        ids = body.get("ids")
+        if not isinstance(ids, list) or not ids:
+            raise HTTPException(400, "Send an `ids` array.")
+        if len(ids) > MAX_BULK_DELETE:
+            raise HTTPException(
+                400, "That is more than %d files in one request."
+                % MAX_BULK_DELETE)
+
+        deleted, failed = 0, []
+        for raw in ids:
+            path_id = str(raw)
+            try:
+                target = gallery_index.safe_path(path_id)
+            except (ValueError, OSError):
+                failed.append(path_id)
+                continue
+            if not gallery_index.delete(target):
+                failed.append(path_id)
+                continue
+            recipes.forget(target)
+            deleted += 1
+        return {"deleted": deleted, "failed": failed}
 
     @api.delete("/gallery/{path_id:path}",
                 dependencies=[Depends(require_auth),
