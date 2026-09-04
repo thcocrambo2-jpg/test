@@ -52,8 +52,25 @@ export function GenerateTab({ schema }: { schema: TabSchema }) {
   const submitJob = useQueue((state) => state.submit)
   const job = useActiveJob(schema.key)
   const runs = useJobsForTab(schema.key)
-  const busy = job ? isLive(job) : false
   const models = useModels(schema)
+
+  /* The button is disabled while the *submission* is in flight, and for no
+   * other reason.
+   *
+   * It used to be disabled for as long as the active run was live, which
+   * quietly reinstated the behaviour the queue was built to remove:
+   * Gradio's `trigger_mode="once"` left the button dead for the whole
+   * render, so a second idea had to wait for the first to finish and for
+   * somebody to be sitting there to click again. jobqueue exists to end
+   * that — a click only records the work and returns in microseconds, and
+   * a lane runs its jobs one at a time in arrival order. Refusing the
+   * second click is refusing to let anything queue behind the first.
+   *
+   * What remains is the round trip itself: uploads go up before the job is
+   * recorded, so on the mask editor this is a real wait and a double click
+   * would submit twice. */
+  const [submitting, setSubmitting] = useState(false)
+  const waiting = runs.filter(isLive).length
 
   /* The line under the Model dropdown — variant, its step and CFG defaults,
    * whether the weights are actually on this pod. The Gradio app had it and
@@ -126,18 +143,28 @@ export function GenerateTab({ schema }: { schema: TabSchema }) {
   }, [model, models, schema, set])
 
   const submit = useCallback(async () => {
-    const payload = await buildPayload(schema, values)
-    await submitJob({
-      schema,
-      prompt: String(schema.promptField ? (values[schema.promptField] ?? '') : ''),
-      values: payload,
-    })
+    setSubmitting(true)
+    try {
+      const payload = await buildPayload(schema, values)
+      await submitJob({
+        schema,
+        prompt: String(schema.promptField ? (values[schema.promptField] ?? '') : ''),
+        values: payload,
+      })
+    } finally {
+      // `submitJob` reports a rejected submission as a job carrying the
+      // error rather than by throwing, so this is belt and braces — but a
+      // button that is dead because an await never settled is the one
+      // failure this state can cause, and it costs a try/finally to make
+      // impossible.
+      setSubmitting(false)
+    }
   }, [schema, submitJob, values])
 
   // The shortcut the footer advertises. It was injected JS in theme.py; here
   // it is bound while this tab is mounted and unbound when it is not.
   useSubmitHotkey(() => {
-    if (!busy) void submit()
+    if (!submitting) void submit()
   })
 
   return (
@@ -157,15 +184,26 @@ export function GenerateTab({ schema }: { schema: TabSchema }) {
               variant="primary"
               size="lg"
               block
-              loading={busy}
+              loading={submitting}
               onClick={() => void submit()}
             >
-              {busy ? 'Running' : schema.submitLabel}
+              {submitting ? 'Queueing' : schema.submitLabel}
             </Button>
             <div className={s.submitHint}>
-              <kbd className={s.kbd}>Ctrl</kbd>
-              <span>+</span>
-              <kbd className={s.kbd}>Enter</kbd>
+              {waiting > 0 ? (
+                // Not a warning and not a spinner: the queue accepting more
+                // work is the feature. It says what is already in it so a
+                // fourth click is an informed one.
+                <span>
+                  {waiting} in the queue
+                </span>
+              ) : (
+                <>
+                  <kbd className={s.kbd}>Ctrl</kbd>
+                  <span>+</span>
+                  <kbd className={s.kbd}>Enter</kbd>
+                </>
+              )}
             </div>
           </div>
         </>
