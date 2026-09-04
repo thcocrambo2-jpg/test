@@ -36,12 +36,24 @@
 }
 
 /* On a tall screen the controls scroll independently of the output, so a long
-   form does not push the pictures off the bottom. */
+   form does not push the pictures off the bottom.
+
+   Each column is its own scroller and the grid is exactly as tall as the row
+   the shell gives it — no `100vh` arithmetic, because the arithmetic was
+   wrong: it did not know about the page head above it, so the left column
+   overhung the screen by that much and the sticky submit bar went with it.
+   Stretching to a row whose height is already correct cannot be off by the
+   height of something else. */
 @media (min-width: 1101px) {
-  .left {
-    position: sticky;
-    top: var(--s-4);
-    max-height: calc(100vh - var(--h-header) - var(--s-8));
+  .twoColumn {
+    height: 100%;
+    align-items: stretch;
+    overflow: hidden;
+  }
+
+  .left,
+  .right {
+    min-height: 0;
     overflow-y: auto;
     overflow-x: hidden;
     padding-right: var(--s-2);

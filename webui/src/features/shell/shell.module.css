@@ -181,6 +181,44 @@
   width: 100%;
 }
 
+/* Above the stacking breakpoint the shell owns the viewport and the content
+   region scrolls inside it, rather than the window scrolling.
+
+   This is what makes a bottom-pinned control possible at all. The submit bar
+   is `position: sticky; bottom: 0`, which pins it to the bottom of its
+   scrollport — and while the window was the scroller, that scrollport was
+   the left column, whose height was a *guess*: `100vh - header - s-8`
+   assumed the column started just under the header. It starts under the page
+   head as well, 61px lower, so its bottom sat 61px below the screen and took
+   the button with it. Nothing was wrong with the sticky; the box it was
+   sticking to was the wrong size.
+
+   Sizing it by flex instead of by arithmetic removes the guess: the row is
+   whatever is left, whatever the page head happens to be that day. Below
+   1101px none of this applies — the window scrolls, the bar sticks to the
+   viewport, and that already behaved. */
+@media (min-width: 1101px) {
+  .app {
+    height: 100dvh;
+  }
+
+  .main {
+    display: flex;
+    flex-direction: column;
+    overflow: hidden;
+  }
+
+  /* The page head keeps its natural height; whatever the route rendered
+     takes the rest and scrolls. Gallery, Pricing and the Prompt Library are
+     that last child too, so they scroll in place instead of scrolling the
+     window — the same picture, minus a window scrollbar. */
+  .main > :last-child {
+    flex: 1 1 auto;
+    min-height: 0;
+    overflow-y: auto;
+  }
+}
+
 .pageHead {
   display: flex;
   align-items: flex-start;

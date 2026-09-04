@@ -121,17 +121,37 @@
   color: var(--c-text-muted);
 }
 
+/* Flex, and that is the whole fix.
+
+   This was `display: grid; place-items: center`, and under it the picture
+   was never scaled down: a 1536x1024 rendered at 1536x1024 inside an 853px
+   stage and hung 171px past the bottom of the screen. `max-height: 100%` on
+   the image was being ignored, silently and correctly — the stage had no
+   `grid-template-rows`, so the implicit row was auto-sized to its content,
+   and a percentage height against a content-sized track is circular. CSS
+   resolves that by treating it as `none`.
+
+   A flex container has a definite height here (the lightbox grid gives it
+   `minmax(0, 1fr)`), so the same percentage now has something real to
+   resolve against and the picture fits. */
 .lightboxStage {
   position: relative;
-  display: grid;
-  place-items: center;
+  display: flex;
+  align-items: center;
+  justify-content: center;
   padding: 0 var(--s-4);
   min-height: 0;
+  overflow: hidden;
 }
 
 .lightboxImage {
+  /* Both axes, and `auto` on both so the aspect ratio comes from whichever
+     one binds first. `object-fit` is then belt and braces: nothing is being
+     stretched for it to correct. */
   max-width: 100%;
   max-height: 100%;
+  width: auto;
+  height: auto;
   object-fit: contain;
   border-radius: var(--r-md);
   box-shadow: var(--sh-lg);
