@@ -1,0 +1,227 @@
+.bar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--s-3);
+  flex-wrap: wrap;
+  margin-bottom: var(--s-4);
+}
+
+.count {
+  font-size: var(--t-xs);
+  color: var(--c-text-muted);
+  font-family: var(--font-mono);
+}
+
+/* Grid with aspect-ratio, replacing the fixed `height=600` gallery no media
+   query could reach. The tile size is a custom property so the density
+   control is one variable rather than a second grid definition. */
+.grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(var(--tile, 220px), 1fr));
+  gap: var(--s-3);
+  /* Tiles hug their own picture rather than stretching to the tallest one in
+     the row: the point of aspect-ratio tiles is that a portrait stays a
+     portrait, and a stretched tile just shows panel behind the image. */
+  align-items: start;
+}
+
+.tile {
+  position: relative;
+  height: fit-content;
+  border-radius: var(--r-md);
+  overflow: hidden;
+  border: 1px solid var(--c-border);
+  background: var(--c-bg-sunken);
+  cursor: zoom-in;
+  line-height: 0;
+  transition:
+    border-color var(--d-fast) var(--e-out),
+    transform var(--d-fast) var(--e-out);
+}
+
+.tile:hover {
+  border-color: var(--c-accent);
+  transform: translateY(-2px);
+}
+
+.image {
+  width: 100%;
+  aspect-ratio: var(--ratio, 1);
+  object-fit: cover;
+  display: block;
+}
+
+.tileBar {
+  position: absolute;
+  inset: auto 0 0 0;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--s-2);
+  padding: var(--s-2);
+  background: linear-gradient(transparent, var(--c-media-scrim));
+  opacity: 0;
+  transition: opacity var(--d-fast) var(--e-out);
+  line-height: var(--lh-normal);
+}
+
+.tile:hover .tileBar,
+.tile:focus-within .tileBar {
+  opacity: 1;
+}
+
+.meta {
+  font-family: var(--font-mono);
+  font-size: var(--t-2xs);
+  color: var(--c-on-media-soft);
+}
+
+.pager {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: var(--s-3);
+  margin-top: var(--s-5);
+}
+
+/* --------------------------------------------------------------- lightbox */
+
+.lightbox {
+  position: fixed;
+  inset: 0;
+  z-index: var(--z-modal);
+  background: var(--c-overlay);
+  backdrop-filter: blur(6px);
+  display: grid;
+  grid-template-rows: auto minmax(0, 1fr) auto;
+  animation: fade var(--d-base) var(--e-out);
+}
+
+@keyframes fade {
+  from {
+    opacity: 0;
+  }
+}
+
+.lightboxHead {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--s-4);
+  padding: var(--s-3) var(--s-4);
+  color: var(--c-text);
+}
+
+.lightboxTitle {
+  font-size: var(--t-sm);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  color: var(--c-text-muted);
+}
+
+.lightboxStage {
+  position: relative;
+  display: grid;
+  place-items: center;
+  padding: 0 var(--s-4);
+  min-height: 0;
+}
+
+.lightboxImage {
+  max-width: 100%;
+  max-height: 100%;
+  object-fit: contain;
+  border-radius: var(--r-md);
+  box-shadow: var(--sh-lg);
+}
+
+.arrow {
+  position: absolute;
+  top: 50%;
+  transform: translateY(-50%);
+  width: 40px;
+  height: 40px;
+  border-radius: 50%;
+  border: 1px solid var(--c-border);
+  background: var(--c-elevated);
+  color: var(--c-text);
+  cursor: pointer;
+  display: grid;
+  place-items: center;
+  font-size: var(--t-lg);
+}
+
+.arrow:hover {
+  border-color: var(--c-accent);
+  color: var(--c-accent);
+}
+
+.arrowLeft {
+  left: var(--s-4);
+}
+.arrowRight {
+  right: var(--s-4);
+}
+
+/* The filmstrip. Laid out by the DOM: one flex row that scrolls, with the
+   active thumb scrolled into view — no measured pixel offsets. */
+.strip {
+  display: flex;
+  gap: var(--s-2);
+  overflow-x: auto;
+  padding: var(--s-3) var(--s-4);
+  scroll-behavior: smooth;
+}
+
+.strip::-webkit-scrollbar {
+  height: 6px;
+}
+
+.thumb {
+  flex: none;
+  width: 60px;
+  height: 60px;
+  border-radius: var(--r-sm);
+  overflow: hidden;
+  border: 2px solid transparent;
+  opacity: 0.55;
+  cursor: pointer;
+  transition: opacity var(--d-fast) var(--e-out), border-color var(--d-fast) var(--e-out);
+  padding: 0;
+  background: none;
+  line-height: 0;
+}
+
+.thumb img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
+.thumb:hover {
+  opacity: 0.85;
+}
+
+.thumbActive,
+.thumbActive:hover {
+  opacity: 1;
+  border-color: var(--c-accent);
+}
+
+.lightboxMeta {
+  display: flex;
+  align-items: center;
+  gap: var(--s-3);
+  flex-wrap: wrap;
+  font-family: var(--font-mono);
+  font-size: var(--t-2xs);
+  color: var(--c-text-muted);
+}
+
+.skeletonGrid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(220px, 1fr));
+  gap: var(--s-3);
+}

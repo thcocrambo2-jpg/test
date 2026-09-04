@@ -1,0 +1,233 @@
+/* The two-column shell, the field groups, and the repeated blocks.
+   Retyped ten times in ui.py; typed once here. */
+
+/* --------------------------------------------------------------- TwoColumn */
+
+.twoColumn {
+  display: grid;
+  grid-template-columns: minmax(320px, 400px) minmax(0, 1fr);
+  gap: var(--s-5);
+  align-items: start;
+}
+
+/* The old app stacked at 860px and had a fixed height=600 gallery no media
+   query could reach. This stacks where the controls stop fitting, and the
+   output column keeps its own aspect ratios all the way down. */
+@media (max-width: 1100px) {
+  .twoColumn {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}
+
+.left,
+.right {
+  display: flex;
+  flex-direction: column;
+  gap: var(--s-4);
+  min-width: 0;
+}
+
+/* Cards keep their natural height. Without this the flex default shrinks them
+   to fit the column's max-height, and `overflow: hidden` on .group then clips
+   whatever did not fit — a textarea cut off halfway down. */
+.left > *,
+.right > * {
+  flex: none;
+}
+
+/* On a tall screen the controls scroll independently of the output, so a long
+   form does not push the pictures off the bottom. */
+@media (min-width: 1101px) {
+  .left {
+    position: sticky;
+    top: var(--s-4);
+    max-height: calc(100vh - var(--h-header) - var(--s-8));
+    overflow-y: auto;
+    overflow-x: hidden;
+    padding-right: var(--s-2);
+    margin-right: calc(var(--s-2) * -1);
+  }
+}
+
+/* ------------------------------------------------------------------- group */
+
+.group {
+  border: 1px solid var(--c-border);
+  border-radius: var(--r-lg);
+  background: var(--c-panel);
+  overflow: hidden;
+}
+
+.groupHead {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--s-3);
+  width: 100%;
+  padding: var(--s-3) var(--s-4);
+  background: none;
+  border: none;
+  text-align: left;
+  color: var(--c-text);
+  font-size: var(--t-xs);
+  font-weight: var(--fw-semibold);
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+}
+
+.groupHeadButton {
+  cursor: pointer;
+}
+.groupHeadButton:hover {
+  background: var(--c-panel-hover);
+}
+
+.groupCaret {
+  color: var(--c-text-faint);
+  font-size: var(--t-2xs);
+  transition: transform var(--d-base) var(--e-out);
+}
+.groupCaretOpen {
+  transform: rotate(90deg);
+}
+
+.groupBody {
+  padding: 0 var(--s-4) var(--s-4);
+  display: grid;
+  gap: var(--s-4);
+  grid-template-columns: minmax(0, 1fr);
+  align-items: start;
+}
+
+.groupDense {
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  column-gap: var(--s-4);
+}
+
+@media (max-width: 480px) {
+  .groupDense {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}
+
+.groupCount {
+  font-weight: var(--fw-normal);
+  letter-spacing: 0;
+  text-transform: none;
+  color: var(--c-text-faint);
+  font-size: var(--t-2xs);
+  font-family: var(--font-mono);
+}
+
+/* ----------------------------------------------------------------- SeedRow */
+
+.seedRow {
+  display: grid;
+  grid-template-columns: minmax(0, 1.4fr) auto;
+  gap: var(--s-3) var(--s-4);
+  align-items: end;
+}
+
+.seedRowLocked input[type='number'] {
+  opacity: 0.5;
+}
+
+.seedDice {
+  align-self: end;
+  padding-bottom: var(--s-2);
+}
+
+.seedBatch {
+  grid-column: 1 / -1;
+}
+
+@media (max-width: 420px) {
+  .seedRow {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}
+
+/* --------------------------------------------------------------- LoraStack */
+
+.loraSlot {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr);
+  gap: var(--s-2) var(--s-3);
+  align-items: center;
+  padding: var(--s-3);
+  border: 1px solid var(--c-border);
+  border-radius: var(--r-md);
+  background: var(--c-elevated);
+  transition: border-color var(--d-fast) var(--e-out), opacity var(--d-fast) var(--e-out);
+}
+
+.loraSlotPair {
+  grid-template-columns: minmax(0, 1fr);
+}
+
+.loraSlotIdle {
+  opacity: 0.62;
+}
+.loraSlot:hover {
+  border-color: var(--c-border-strong);
+  opacity: 1;
+}
+
+.loraWeight {
+  grid-column: 1 / -1;
+}
+
+.loraToggle {
+  align-self: center;
+}
+
+.loraList {
+  display: flex;
+  flex-direction: column;
+  gap: var(--s-2);
+}
+
+.loraSummary {
+  font-family: var(--font-mono);
+  font-size: var(--t-2xs);
+  color: var(--c-text-faint);
+}
+
+.loraEmpty {
+  font-size: var(--t-xs);
+  color: var(--c-text-faint);
+  padding: var(--s-2) 0;
+}
+
+/* -------------------------------------------------------------- submit bar */
+
+.submitBar {
+  position: sticky;
+  bottom: 0;
+  display: flex;
+  flex-direction: column;
+  gap: var(--s-2);
+  padding: var(--s-3) 0 var(--s-1);
+  background: linear-gradient(transparent, var(--c-bg) 28%);
+}
+
+.submitHint {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: var(--s-2);
+  font-size: var(--t-2xs);
+  color: var(--c-text-faint);
+}
+
+.kbd {
+  display: inline-block;
+  padding: 1px 5px;
+  border: 1px solid var(--c-border);
+  border-bottom-width: 2px;
+  border-radius: var(--r-xs);
+  background: var(--c-elevated);
+  font-family: var(--font-mono);
+  font-size: 10px;
+  color: var(--c-text-muted);
+}

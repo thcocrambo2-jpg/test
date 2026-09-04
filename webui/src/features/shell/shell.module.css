@@ -1,0 +1,323 @@
+.app {
+  display: grid;
+  grid-template-columns: var(--w-nav) minmax(0, 1fr);
+  grid-template-rows: var(--h-header) minmax(0, 1fr) auto;
+  grid-template-areas:
+    'header header'
+    'nav    main'
+    'nav    footer';
+  min-height: 100vh;
+}
+
+/* ------------------------------------------------------------------ header */
+
+.header {
+  grid-area: header;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--s-4);
+  padding: 0 var(--s-5);
+  border-bottom: 1px solid var(--c-border);
+  background: var(--c-bg);
+  position: sticky;
+  top: 0;
+  z-index: var(--z-sticky);
+}
+
+.brand {
+  display: flex;
+  align-items: center;
+  gap: var(--s-3);
+  min-width: 0;
+  color: inherit;
+}
+.brand:hover {
+  text-decoration: none;
+}
+
+.logo {
+  width: 30px;
+  height: 30px;
+  border-radius: var(--r-md);
+  display: grid;
+  place-items: center;
+  background: var(--c-accent);
+  color: var(--c-text-on-accent);
+  font-weight: var(--fw-bold);
+  font-size: var(--t-lg);
+  flex: none;
+  line-height: 1;
+}
+
+.name {
+  display: block;
+  font-size: var(--t-lg);
+  font-weight: var(--fw-semibold);
+  letter-spacing: -0.02em;
+  line-height: 1.1;
+}
+
+.tagline {
+  display: block;
+  font-size: var(--t-2xs);
+  color: var(--c-text-faint);
+  line-height: 1.2;
+}
+
+.headerRight {
+  display: flex;
+  align-items: center;
+  gap: var(--s-2);
+}
+
+@media (max-width: 720px) {
+  .tagline {
+    display: none;
+  }
+}
+
+/* --------------------------------------------------------------------- nav */
+
+.nav {
+  grid-area: nav;
+  border-right: 1px solid var(--c-border);
+  background: var(--c-bg);
+  padding: var(--s-4) var(--s-3) var(--s-6);
+  display: flex;
+  flex-direction: column;
+  gap: var(--s-5);
+  position: sticky;
+  top: var(--h-header);
+  align-self: start;
+  max-height: calc(100vh - var(--h-header));
+  overflow-y: auto;
+}
+
+.navGroup {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.navTitle {
+  font-size: var(--t-2xs);
+  font-weight: var(--fw-semibold);
+  letter-spacing: 0.09em;
+  text-transform: uppercase;
+  color: var(--c-text-faint);
+  padding: 0 var(--s-3) var(--s-2);
+}
+
+.navLink {
+  display: flex;
+  align-items: center;
+  gap: var(--s-3);
+  padding: var(--s-2) var(--s-3);
+  border-radius: var(--r-md);
+  color: var(--c-text-muted);
+  font-size: var(--t-sm);
+  font-weight: var(--fw-medium);
+  border-left: 2px solid transparent;
+  transition:
+    background var(--d-fast) var(--e-out),
+    color var(--d-fast) var(--e-out);
+}
+
+.navLink:hover {
+  background: var(--c-panel);
+  color: var(--c-text);
+  text-decoration: none;
+}
+
+.navActive,
+.navActive:hover {
+  background: var(--c-accent-soft);
+  color: var(--c-accent);
+  border-left-color: var(--c-accent);
+}
+
+.navIcon {
+  font-size: 15px;
+  line-height: 1;
+  width: 18px;
+  text-align: center;
+  flex: none;
+}
+
+.navLabel {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.navBadge {
+  margin-left: auto;
+  font-size: 9px;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--c-text-faint);
+  border: 1px solid var(--c-border);
+  border-radius: var(--r-full);
+  padding: 1px 6px;
+  flex: none;
+}
+
+.navFoot {
+  margin-top: auto;
+  display: flex;
+  flex-direction: column;
+  gap: var(--s-2);
+  padding: 0 var(--s-1);
+}
+
+/* -------------------------------------------------------------------- main */
+
+.main {
+  grid-area: main;
+  padding: var(--s-5);
+  min-width: 0;
+  max-width: var(--w-content);
+  width: 100%;
+}
+
+.pageHead {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: var(--s-4);
+  margin-bottom: var(--s-5);
+  flex-wrap: wrap;
+}
+
+.pageTitle {
+  display: flex;
+  align-items: center;
+  gap: var(--s-3);
+  font-size: var(--t-2xl);
+  letter-spacing: -0.02em;
+}
+
+.pageIcon {
+  font-size: 22px;
+  line-height: 1;
+}
+
+.pageBlurb {
+  color: var(--c-text-muted);
+  font-size: var(--t-sm);
+  margin-top: var(--s-1);
+}
+
+/* ------------------------------------------------------------------ footer */
+
+.footer {
+  grid-area: footer;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--s-4);
+  flex-wrap: wrap;
+  padding: var(--s-3) var(--s-5);
+  border-top: 1px solid var(--c-border);
+  background: var(--c-bg);
+  font-size: var(--t-xs);
+  color: var(--c-text-muted);
+}
+
+.hint {
+  display: flex;
+  align-items: center;
+  gap: var(--s-2);
+}
+
+.kbd {
+  display: inline-block;
+  padding: 1px 6px;
+  border: 1px solid var(--c-border);
+  border-bottom-width: 2px;
+  border-radius: var(--r-xs);
+  background: var(--c-elevated);
+  font-family: var(--font-mono);
+  font-size: 10px;
+  color: var(--c-text);
+}
+
+.footerRight {
+  display: flex;
+  align-items: center;
+  gap: var(--s-2);
+  flex-wrap: wrap;
+}
+
+.path {
+  font-family: var(--font-mono);
+  max-width: 42ch;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+/* ------------------------------------------------------- narrow viewports */
+
+/* The old app stacked below 860px and the tab strip stayed a horizontal row
+   of twelve emoji. Here the sidebar becomes a scrolling strip of the same
+   grouped links, and everything else is already fluid. */
+@media (max-width: 900px) {
+  .app {
+    grid-template-columns: minmax(0, 1fr);
+    grid-template-areas:
+      'header'
+      'nav'
+      'main'
+      'footer';
+    grid-template-rows: var(--h-header) auto minmax(0, 1fr) auto;
+  }
+
+  .nav {
+    position: sticky;
+    top: var(--h-header);
+    z-index: var(--z-sticky);
+    flex-direction: row;
+    gap: var(--s-4);
+    border-right: none;
+    border-bottom: 1px solid var(--c-border);
+    padding: var(--s-2) var(--s-3);
+    max-height: none;
+    overflow-x: auto;
+    overflow-y: hidden;
+  }
+
+  .navGroup {
+    flex-direction: row;
+    align-items: center;
+    gap: var(--s-1);
+  }
+
+  .navTitle {
+    padding: 0 var(--s-2) 0 0;
+    align-self: center;
+  }
+
+  .navLink {
+    border-left: none;
+    border-bottom: 2px solid transparent;
+    white-space: nowrap;
+  }
+
+  .navActive,
+  .navActive:hover {
+    border-left-color: transparent;
+    border-bottom-color: var(--c-accent);
+  }
+
+  .navFoot {
+    display: none;
+  }
+
+  .main {
+    padding: var(--s-4) var(--s-3);
+    /* Clearance for the floating queue button, which otherwise sits on top
+       of whatever the page ends with. */
+    padding-bottom: var(--s-16);
+  }
+}

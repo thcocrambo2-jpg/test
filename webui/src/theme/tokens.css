@@ -1,0 +1,181 @@
+/*
+ * The palette. Every colour in this application is defined here and nowhere
+ * else — the same discipline theme.py:15-19 states for the Gradio theme, for
+ * the same reason: one palette drives both modes, so neither can drift.
+ *
+ * Light is the base definition on :root; dark is the *primary* mode and is
+ * what index.html stamps by default, but it is still expressed as an override
+ * so that a single missing token degrades to a readable colour instead of to
+ * transparent. Values are from context.md §5.
+ *
+ * If you are about to write a hex digit inside a component stylesheet: stop,
+ * and add a token here instead.
+ */
+
+:root {
+  /* ---- surfaces (light) ---- */
+  --c-bg: #ffffff;
+  --c-bg-sunken: #f2f3f5;
+  --c-panel: #f7f8fa;
+  --c-panel-hover: #eef0f4;
+  --c-elevated: #ffffff;
+  --c-input: #ffffff;
+  --c-input-hover: #f7f8fa;
+  --c-border: #e5e7eb;
+  --c-border-strong: #d3d7de;
+  --c-overlay: rgba(24, 26, 30, 0.55);
+
+  /* ---- text (light) ---- */
+  --c-text: #262626;
+  --c-text-muted: #6b7280;
+  --c-text-faint: #9aa1ad;
+  --c-text-on-accent: #1a1a1a;
+
+  /* ---- brand + semantics (identical in both modes) ---- */
+  --c-accent: #ffa116;
+  --c-accent-hover: #ffb03d;
+  --c-accent-soft: rgba(255, 161, 22, 0.14);
+  --c-accent-line: rgba(255, 161, 22, 0.42);
+
+  --c-success: #00b8a3;
+  --c-success-soft: rgba(0, 184, 163, 0.14);
+  --c-warning: #ffc01e;
+  --c-warning-soft: rgba(255, 192, 30, 0.16);
+  --c-error: #ff375f;
+  --c-error-soft: rgba(255, 55, 95, 0.13);
+  --c-error-line: rgba(255, 55, 95, 0.4);
+  --c-info: #0fa5e9;
+  --c-info-soft: rgba(15, 165, 233, 0.14);
+
+  /* Over-media colours. Deliberately identical in both themes: these sit on
+     top of a photograph, not on the page, so a "light mode" version of them
+     would be white text on a white scrim over someone's picture. Named
+     rather than inlined so that intent is legible and the rule "no literal
+     colour outside this file" stays true. */
+  --c-on-media: #ffffff;
+  --c-on-media-soft: rgba(255, 255, 255, 0.86);
+  --c-on-media-faint: rgba(255, 255, 255, 0.52);
+  --c-media-ground: #000000;
+  --c-media-scrim: rgba(0, 0, 0, 0.78);
+  --c-media-chip: rgba(0, 0, 0, 0.62);
+  --c-media-outline: rgba(255, 255, 255, 0.9);
+  --c-media-outline-dark: rgba(0, 0, 0, 0.55);
+
+  /* Semantic borders, as the semantic colour at the alpha the borders use. */
+  --c-success-line: rgba(0, 184, 163, 0.4);
+  --c-warning-line: rgba(255, 192, 30, 0.42);
+  --c-info-line: rgba(15, 165, 233, 0.4);
+
+  /* The <select> caret. A data URI cannot inherit currentColor, so the one
+     colour it needs lives here like every other one, and gets a dark-mode
+     value below. */
+  --icon-caret: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 12 12'%3E%3Cpath d='M2.5 4.5 6 8l3.5-3.5' fill='none' stroke='%236b7280' stroke-width='1.5' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E");
+
+  --c-focus: var(--c-info);
+  --c-skeleton: rgba(120, 128, 140, 0.13);
+  --c-skeleton-sheen: rgba(120, 128, 140, 0.22);
+
+  /* ---- type ---- */
+  --font-sans: "Inter", ui-sans-serif, system-ui, -apple-system, "Segoe UI",
+    Roboto, "Helvetica Neue", Arial, sans-serif;
+  --font-mono: ui-monospace, "SFMono-Regular", "JetBrains Mono", Menlo,
+    Consolas, monospace;
+
+  /* A 1.2-ish scale anchored at 14px, which is what a dense tool wants. */
+  --t-2xs: 0.6875rem; /* 11 */
+  --t-xs: 0.75rem;    /* 12 */
+  --t-sm: 0.8125rem;  /* 13 */
+  --t-md: 0.875rem;   /* 14 — body */
+  --t-lg: 1rem;       /* 16 */
+  --t-xl: 1.25rem;    /* 20 */
+  --t-2xl: 1.5rem;    /* 24 */
+  --t-3xl: 2rem;      /* 32 */
+  --t-4xl: 2.75rem;   /* 44 */
+
+  --lh-tight: 1.2;
+  --lh-snug: 1.35;
+  --lh-normal: 1.55;
+  --lh-loose: 1.7;
+
+  --fw-normal: 400;
+  --fw-medium: 500;
+  --fw-semibold: 600;
+  --fw-bold: 700;
+
+  /* ---- spacing: a 4px rhythm, named so the steps stay honest ---- */
+  --s-0: 0;
+  --s-1: 0.25rem;
+  --s-2: 0.5rem;
+  --s-3: 0.75rem;
+  --s-4: 1rem;
+  --s-5: 1.25rem;
+  --s-6: 1.5rem;
+  --s-8: 2rem;
+  --s-10: 2.5rem;
+  --s-12: 3rem;
+  --s-16: 4rem;
+  --s-20: 5rem;
+
+  /* ---- shape ---- */
+  --r-xs: 4px;
+  --r-sm: 6px;
+  --r-md: 8px;
+  --r-lg: 12px;
+  --r-xl: 16px;
+  --r-full: 999px;
+
+  /* ---- elevation ---- */
+  --sh-sm: 0 1px 2px rgba(16, 18, 22, 0.06);
+  --sh-md: 0 4px 12px rgba(16, 18, 22, 0.08);
+  --sh-lg: 0 12px 32px rgba(16, 18, 22, 0.12);
+  --sh-focus: 0 0 0 3px rgba(15, 165, 233, 0.35);
+
+  /* ---- motion ---- */
+  --e-out: cubic-bezier(0.22, 1, 0.36, 1);
+  --d-fast: 110ms;
+  --d-base: 180ms;
+  --d-slow: 320ms;
+
+  /* ---- layout ---- */
+  --w-nav: 236px;
+  --w-queue: 320px;
+  --h-header: 56px;
+  --w-content: 1560px;
+  --z-sticky: 20;
+  --z-panel: 40;
+  --z-modal: 80;
+  --z-toast: 100;
+}
+
+[data-theme='dark'] {
+  --c-bg: #1a1a1a;
+  --c-bg-sunken: #141414;
+  --c-panel: #282828;
+  --c-panel-hover: #2f2f2f;
+  --c-elevated: #303030;
+  --c-input: #303030;
+  --c-input-hover: #383838;
+  --c-border: #3e3e3e;
+  --c-border-strong: #525252;
+  --c-overlay: rgba(8, 8, 8, 0.72);
+
+  --c-text: #eff1f6;
+  --c-text-muted: #b3b3b3;
+  --c-text-faint: #7d7d7d;
+  --c-text-on-accent: #1a1a1a;
+
+  --c-accent-soft: rgba(255, 161, 22, 0.16);
+  --c-error-soft: rgba(255, 55, 95, 0.16);
+  --c-success-soft: rgba(0, 184, 163, 0.16);
+  --c-info-soft: rgba(15, 165, 233, 0.16);
+  --c-warning-soft: rgba(255, 192, 30, 0.14);
+
+  --c-skeleton: rgba(255, 255, 255, 0.06);
+  --c-skeleton-sheen: rgba(255, 255, 255, 0.12);
+
+  --icon-caret: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 12 12'%3E%3Cpath d='M2.5 4.5 6 8l3.5-3.5' fill='none' stroke='%23b3b3b3' stroke-width='1.5' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E");
+
+  --sh-sm: 0 1px 2px rgba(0, 0, 0, 0.4);
+  --sh-md: 0 4px 14px rgba(0, 0, 0, 0.45);
+  --sh-lg: 0 16px 40px rgba(0, 0, 0, 0.55);
+}

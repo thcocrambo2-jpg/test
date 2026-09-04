@@ -1,0 +1,1260 @@
+{
+ "eyebrow": "Everything the app can do",
+ "title": "A complete image studio,",
+ "title_accent": "running on your own machine.",
+ "body": [
+  "Type a sentence and get a photograph. Change one thing about it without touching the rest. Put the same face in a dozen different scenes. Turn a still into a few seconds of video. It's all here in one window, and none of it is metered — make ten images or ten thousand, the price doesn't move.",
+  "Nothing gets uploaded to be processed somewhere else. Your prompts, your references and everything you make stay where the app is running — which is the difference between a tool you can put a client's unreleased work into and one you can't.",
+  "Each tab below is a finished workflow, not a pile of settings. The hard parts are already tuned, so the first thing you type comes back looking like something — and when you want the dials, they're right there. Here's what each one does."
+ ],
+ "stats": [
+  {
+   "value": "Unlimited",
+   "label": "nothing is charged per image"
+  },
+  {
+   "value": "Private",
+   "label": "your work never leaves your machine"
+  },
+  {
+   "value": "One window",
+   "label": "every tool below, no switching apps"
+  },
+  {
+   "value": "No queue",
+   "label": "you are the only one in it"
+  }
+ ],
+ "sections": [
+  {
+   "key": "krea_t2i",
+   "label": "🎨 Krea2",
+   "headline": "Type a sentence. Get a photograph.",
+   "body": [
+    "Describe what you want in plain English — no keyword soup, no special syntax, no list of things to avoid. What comes back is full resolution and sharp enough to print.",
+    "What sets it apart is that it doesn't look generated. Skin keeps its texture instead of turning to plastic, fabric keeps its weave, and light behaves like light. Generate a batch, keep the one that works, then lock it and make ten more just like it."
+   ],
+   "highlights": [
+    "Plain-English prompts",
+    "Print-resolution output",
+    "Batches while you watch",
+    "Lock a look and repeat it",
+    "Fast drafts, or slow and perfect"
+   ],
+   "blocks": [
+    {
+     "type": "hero",
+     "items": [
+      {
+       "path": "krea_t2i/hero/hero.webp",
+       "url": null,
+       "label": null,
+       "caption": null,
+       "ratio": "21/9",
+       "is_video": false,
+       "accent": false,
+       "hue": 330
+      }
+     ],
+     "source": null,
+     "blocks": [],
+     "title": "“a rain-slick Tokyo alley at 2am, neon reflections, 35mm”",
+     "body": null,
+     "note": "One sentence in. Nothing retouched after.",
+     "caption": null,
+     "reverse": false,
+     "flat": false
+    },
+    {
+     "type": "collage",
+     "items": [
+      {
+       "path": "krea_t2i/gallery/01.webp",
+       "url": null,
+       "label": null,
+       "caption": "“portrait of a glassblower, workshop light”",
+       "ratio": "3/4",
+       "is_video": false,
+       "accent": false,
+       "hue": 22
+      },
+      {
+       "path": "krea_t2i/gallery/02.webp",
+       "url": null,
+       "label": null,
+       "caption": "“brutalist chapel, fog, wide angle”",
+       "ratio": "1/1",
+       "is_video": false,
+       "accent": false,
+       "hue": 330
+      },
+      {
+       "path": "krea_t2i/gallery/03.webp",
+       "url": null,
+       "label": null,
+       "caption": "“still life, pomegranates, Dutch master”",
+       "ratio": "4/3",
+       "is_video": false,
+       "accent": false,
+       "hue": 262
+      },
+      {
+       "path": "krea_t2i/gallery/04.webp",
+       "url": null,
+       "label": null,
+       "caption": "“desert highway, heat haze, Kodak Portra”",
+       "ratio": "16/9",
+       "is_video": false,
+       "accent": false,
+       "hue": 160
+      },
+      {
+       "path": "krea_t2i/gallery/05.webp",
+       "url": null,
+       "label": null,
+       "caption": "“product shot, ceramic mug, studio softbox”",
+       "ratio": "2/3",
+       "is_video": false,
+       "accent": false,
+       "hue": 45
+      },
+      {
+       "path": "krea_t2i/gallery/06.webp",
+       "url": null,
+       "label": null,
+       "caption": "“fashion editorial, red coat, brutalist stair”",
+       "ratio": "1/1",
+       "is_video": false,
+       "accent": false,
+       "hue": 285
+      },
+      {
+       "path": "krea_t2i/gallery/07.webp",
+       "url": null,
+       "label": null,
+       "caption": "“alpine lake at dawn, long exposure”",
+       "ratio": "3/2",
+       "is_video": false,
+       "accent": false,
+       "hue": 248
+      },
+      {
+       "path": "krea_t2i/gallery/08.webp",
+       "url": null,
+       "label": null,
+       "caption": "“cyberpunk ramen bar, steam, 85mm”",
+       "ratio": "3/4",
+       "is_video": false,
+       "accent": false,
+       "hue": 22
+      },
+      {
+       "path": "krea_t2i/gallery/09.webp",
+       "url": null,
+       "label": null,
+       "caption": "“macro, dew on a spiderweb”",
+       "ratio": "3/4",
+       "is_video": false,
+       "accent": false,
+       "hue": 200
+      },
+      {
+       "path": "krea_t2i/gallery/10.webp",
+       "url": null,
+       "label": null,
+       "caption": "“1970s album cover, grain, sun flare”",
+       "ratio": "1/1",
+       "is_video": false,
+       "accent": false,
+       "hue": 200
+      },
+      {
+       "path": "krea_t2i/gallery/11.webp",
+       "url": null,
+       "label": null,
+       "caption": "“architectural render, travertine, golden hour”",
+       "ratio": "4/3",
+       "is_video": false,
+       "accent": false,
+       "hue": 45
+      },
+      {
+       "path": "krea_t2i/gallery/12.webp",
+       "url": null,
+       "label": null,
+       "caption": "“street photography, Lisbon, tram”",
+       "ratio": "16/9",
+       "is_video": false,
+       "accent": false,
+       "hue": 22
+      }
+     ],
+     "source": null,
+     "blocks": [],
+     "title": null,
+     "body": null,
+     "note": null,
+     "caption": "Every one of these started as a single line of text.",
+     "reverse": false,
+     "flat": false
+    }
+   ],
+   "locked": false
+  },
+  {
+   "key": "krea_v2_t2i",
+   "label": "🔶 Krea2 V2",
+   "headline": "A second artist, with a different eye.",
+   "body": [
+    "Some days you want the photographer. Some days you want the art director who actually reads the brief. This is the second one: give it a paragraph and it keeps every detail in it — the count, the placement, the colour of the third thing on the left — where a shorter attention span quietly drops half of them.",
+    "It's also the one to reach for when there are words in the picture. Signage, packaging, a title on a poster: it writes them legibly, instead of producing something that only looks like text from across the room. Slower per image, and worth it when the brief is specific."
+   ],
+   "highlights": [
+    "Follows long, detailed briefs",
+    "Readable text in the image",
+    "Holds composition instructions",
+    "Made for the fussy shot"
+   ],
+   "blocks": [
+    {
+     "type": "split",
+     "items": [],
+     "source": null,
+     "blocks": [
+      {
+       "type": "compare",
+       "items": [
+        {
+         "path": "krea_v2_t2i/versus/v1.webp",
+         "url": null,
+         "label": "Krea2",
+         "caption": null,
+         "ratio": "4/3",
+         "is_video": false,
+         "accent": false,
+         "hue": 248
+        },
+        {
+         "path": "krea_v2_t2i/versus/v2.webp",
+         "url": null,
+         "label": "V2",
+         "caption": null,
+         "ratio": "4/3",
+         "is_video": false,
+         "accent": true,
+         "hue": 262
+        }
+       ],
+       "source": null,
+       "blocks": [],
+       "title": null,
+       "body": null,
+       "note": null,
+       "caption": "“a corner bookshop, hand-painted sign reading OPEN LATE, two cyclists passing”",
+       "reverse": false,
+       "flat": false
+      }
+     ],
+     "title": "Same words, two artists",
+     "body": "One prompt, run once in each tab. Watch which one keeps the hand-painted sign, both cyclists, and the corner it was told to put them on.",
+     "note": null,
+     "caption": null,
+     "reverse": false,
+     "flat": false
+    },
+    {
+     "type": "collage",
+     "items": [
+      {
+       "path": "krea_v2_t2i/gallery/01.webp",
+       "url": null,
+       "label": null,
+       "caption": null,
+       "ratio": "3/4",
+       "is_video": false,
+       "accent": false,
+       "hue": 45
+      },
+      {
+       "path": "krea_v2_t2i/gallery/02.webp",
+       "url": null,
+       "label": null,
+       "caption": null,
+       "ratio": "1/1",
+       "is_video": false,
+       "accent": false,
+       "hue": 330
+      },
+      {
+       "path": "krea_v2_t2i/gallery/03.webp",
+       "url": null,
+       "label": null,
+       "caption": null,
+       "ratio": "4/3",
+       "is_video": false,
+       "accent": false,
+       "hue": 330
+      },
+      {
+       "path": "krea_v2_t2i/gallery/04.webp",
+       "url": null,
+       "label": null,
+       "caption": null,
+       "ratio": "16/9",
+       "is_video": false,
+       "accent": false,
+       "hue": 200
+      },
+      {
+       "path": "krea_v2_t2i/gallery/05.webp",
+       "url": null,
+       "label": null,
+       "caption": null,
+       "ratio": "2/3",
+       "is_video": false,
+       "accent": false,
+       "hue": 186
+      },
+      {
+       "path": "krea_v2_t2i/gallery/06.webp",
+       "url": null,
+       "label": null,
+       "caption": null,
+       "ratio": "1/1",
+       "is_video": false,
+       "accent": false,
+       "hue": 186
+      },
+      {
+       "path": "krea_v2_t2i/gallery/07.webp",
+       "url": null,
+       "label": null,
+       "caption": null,
+       "ratio": "3/2",
+       "is_video": false,
+       "accent": false,
+       "hue": 200
+      },
+      {
+       "path": "krea_v2_t2i/gallery/08.webp",
+       "url": null,
+       "label": null,
+       "caption": null,
+       "ratio": "3/4",
+       "is_video": false,
+       "accent": false,
+       "hue": 45
+      }
+     ],
+     "source": null,
+     "blocks": [],
+     "title": null,
+     "body": null,
+     "note": null,
+     "caption": "Briefs long enough that most models start forgetting the end of them.",
+     "reverse": false,
+     "flat": false
+    }
+   ],
+   "locked": false
+  },
+  {
+   "key": "gallery",
+   "label": "🖼️ Gallery",
+   "headline": "Everything you have made, with the recipe attached.",
+   "body": [
+    "Every picture you make is kept, along with exactly how it was made. Open one from last Tuesday and you can see the prompt, the settings and the seed behind it — then run it again, or run it again with one word changed.",
+    "Browse by tab or by day, and take the lot with you in one download when you're done. Nothing is lost when you close the app."
+   ],
+   "highlights": [
+    "Keeps the recipe with the picture",
+    "Browse by tab or by day",
+    "Download everything at once",
+    "Still there when you come back"
+   ],
+   "blocks": [
+    {
+     "type": "shot",
+     "items": [
+      {
+       "path": "gallery/screen.webp",
+       "url": null,
+       "label": null,
+       "caption": null,
+       "ratio": "16/9",
+       "is_video": false,
+       "accent": false,
+       "hue": 22
+      }
+     ],
+     "source": null,
+     "blocks": [],
+     "title": null,
+     "body": null,
+     "note": null,
+     "caption": "The gallery itself — the one place a screenshot of the app beats a picture it made.",
+     "reverse": false,
+     "flat": false
+    }
+   ],
+   "locked": false
+  },
+  {
+   "key": "krea_edit",
+   "label": "✨ Krea2 Edit",
+   "headline": "Tell it what to change. It changes only that.",
+   "body": [
+    "Drop in a photograph and type “make it snow”, or “give her a leather jacket”, or “take the car out of the driveway”. You get the same picture back with that one thing different — same face, same pose, same light, same everything you didn't mention.",
+    "No masks, no layers, nothing to select. And because the person stays the person, you can keep going: the jacket, then the weather, then the time of day, one instruction at a time. Five edits later it's still the same shot, not a distant cousin of it."
+   ],
+   "highlights": [
+    "Say it in a sentence",
+    "Faces stay the same face",
+    "Stack edit after edit",
+    "Nothing to mask or select",
+    "Send straight to another tab"
+   ],
+   "blocks": [
+    {
+     "type": "pair",
+     "items": [],
+     "source": null,
+     "blocks": [
+      {
+       "type": "compare",
+       "items": [
+        {
+         "path": "krea_edit/compare-a/before.webp",
+         "url": null,
+         "label": "Before",
+         "caption": null,
+         "ratio": "1/1",
+         "is_video": false,
+         "accent": false,
+         "hue": 186
+        },
+        {
+         "path": "krea_edit/compare-a/after.webp",
+         "url": null,
+         "label": "After",
+         "caption": null,
+         "ratio": "1/1",
+         "is_video": false,
+         "accent": true,
+         "hue": 200
+        }
+       ],
+       "source": null,
+       "blocks": [],
+       "title": null,
+       "body": null,
+       "note": null,
+       "caption": "“put her in a red wool coat, keep everything else”",
+       "reverse": false,
+       "flat": false
+      },
+      {
+       "type": "compare",
+       "items": [
+        {
+         "path": "krea_edit/compare-b/before.webp",
+         "url": null,
+         "label": "Before",
+         "caption": null,
+         "ratio": "1/1",
+         "is_video": false,
+         "accent": false,
+         "hue": 200
+        },
+        {
+         "path": "krea_edit/compare-b/after.webp",
+         "url": null,
+         "label": "After",
+         "caption": null,
+         "ratio": "1/1",
+         "is_video": false,
+         "accent": true,
+         "hue": 200
+        }
+       ],
+       "source": null,
+       "blocks": [],
+       "title": null,
+       "body": null,
+       "note": null,
+       "caption": "“golden hour instead of overcast”",
+       "reverse": false,
+       "flat": false
+      }
+     ],
+     "title": null,
+     "body": null,
+     "note": null,
+     "caption": null,
+     "reverse": false,
+     "flat": false
+    },
+    {
+     "type": "fan",
+     "items": [
+      {
+       "path": "krea_edit/fan-a/v1.webp",
+       "url": null,
+       "label": null,
+       "caption": "“1970s film stock”",
+       "ratio": "3/4",
+       "is_video": false,
+       "accent": false,
+       "hue": 330
+      },
+      {
+       "path": "krea_edit/fan-a/v2.webp",
+       "url": null,
+       "label": null,
+       "caption": "“studio backdrop, hard key light”",
+       "ratio": "3/4",
+       "is_video": false,
+       "accent": false,
+       "hue": 300
+      },
+      {
+       "path": "krea_edit/fan-a/v3.webp",
+       "url": null,
+       "label": null,
+       "caption": "“winter street, snow falling”",
+       "ratio": "3/4",
+       "is_video": false,
+       "accent": false,
+       "hue": 248
+      }
+     ],
+     "source": {
+      "path": "krea_edit/fan-a/source.webp",
+      "url": null,
+      "label": "Source",
+      "caption": null,
+      "ratio": "3/4",
+      "is_video": false,
+      "accent": true,
+      "hue": 22
+     },
+     "blocks": [],
+     "title": null,
+     "body": null,
+     "note": null,
+     "caption": "One photograph, three instructions, the same person in all of them.",
+     "reverse": false,
+     "flat": false
+    }
+   ],
+   "locked": true
+  },
+  {
+   "key": "krea_v2_edit",
+   "label": "🔷 Krea2 V2 Edit",
+   "headline": "The same trick, for the fussier requests.",
+   "body": [
+    "Everything the Edit tab does, with a longer attention span. Ask for two changes at once — “move him to a studio backdrop and warm up the light” — and it does both, instead of doing the first and quietly averaging away the second.",
+    "It's also gentler on the detail that repeated editing tends to sand off: hair, jewellery, the pattern on a shirt. Reach for it when the instruction is a sentence rather than a phrase, or when the picture has already been through a few rounds."
+   ],
+   "highlights": [
+    "Two changes in one instruction",
+    "Keeps fine detail intact",
+    "Better after several rounds",
+    "Same simple workflow"
+   ],
+   "blocks": [
+    {
+     "type": "split",
+     "items": [],
+     "source": null,
+     "blocks": [
+      {
+       "type": "compare",
+       "items": [
+        {
+         "path": "krea_v2_edit/compare-a/before.webp",
+         "url": null,
+         "label": "Before",
+         "caption": null,
+         "ratio": "4/3",
+         "is_video": false,
+         "accent": false,
+         "hue": 45
+        },
+        {
+         "path": "krea_v2_edit/compare-a/after.webp",
+         "url": null,
+         "label": "After",
+         "caption": null,
+         "ratio": "4/3",
+         "is_video": false,
+         "accent": true,
+         "hue": 186
+        }
+       ],
+       "source": null,
+       "blocks": [],
+       "title": null,
+       "body": null,
+       "note": null,
+       "caption": "“move him to a studio backdrop and warm the light”",
+       "reverse": false,
+       "flat": false
+      }
+     ],
+     "title": "Two changes, one sentence",
+     "body": "Ask for the background and the lighting in a single breath and get both, in one pass, without the picture drifting away from the person in it.",
+     "note": null,
+     "caption": null,
+     "reverse": true,
+     "flat": false
+    },
+    {
+     "type": "fan",
+     "items": [
+      {
+       "path": "krea_v2_edit/fan-a/v1.webp",
+       "url": null,
+       "label": null,
+       "caption": "“night market, neon”",
+       "ratio": "3/4",
+       "is_video": false,
+       "accent": false,
+       "hue": 248
+      },
+      {
+       "path": "krea_v2_edit/fan-a/v2.webp",
+       "url": null,
+       "label": null,
+       "caption": "“linen suit, overcast”",
+       "ratio": "3/4",
+       "is_video": false,
+       "accent": false,
+       "hue": 248
+      },
+      {
+       "path": "krea_v2_edit/fan-a/v3.webp",
+       "url": null,
+       "label": null,
+       "caption": "“black and white, hard grain”",
+       "ratio": "3/4",
+       "is_video": false,
+       "accent": false,
+       "hue": 22
+      }
+     ],
+     "source": {
+      "path": "krea_v2_edit/fan-a/source.webp",
+      "url": null,
+      "label": "Source",
+      "caption": null,
+      "ratio": "3/4",
+      "is_video": false,
+      "accent": true,
+      "hue": 248
+     },
+     "blocks": [],
+     "title": null,
+     "body": null,
+     "note": null,
+     "caption": "One source, three complete changes of scene.",
+     "reverse": false,
+     "flat": false
+    }
+   ],
+   "locked": true
+  },
+  {
+   "key": "krea_inpaint",
+   "label": "🖌️ Krea2 Inpaint",
+   "headline": "Paint over what you want gone.",
+   "body": [
+    "For the fixes that are easier to point at than to describe. Brush over the scooter parked in front of the shop, the logo on the shirt, the ex in the holiday photo — say what should be there instead, and it fills it in as though it always was.",
+    "Only what you painted changes. Everything outside the stroke comes back exactly as it was, so you can use it on finished work without risking the ninety per cent that was already right. Rough strokes are fine — the edges blend themselves."
+   ],
+   "highlights": [
+    "Brush right on the picture",
+    "Only the painted part changes",
+    "Edges blend themselves",
+    "Remove almost anything"
+   ],
+   "blocks": [
+    {
+     "type": "split",
+     "items": [],
+     "source": null,
+     "blocks": [
+      {
+       "type": "row",
+       "items": [
+        {
+         "path": "krea_inpaint/demo/source.webp",
+         "url": null,
+         "label": "Before",
+         "caption": null,
+         "ratio": "1/1",
+         "is_video": false,
+         "accent": false,
+         "hue": 22
+        },
+        {
+         "path": "krea_inpaint/demo/mask.webp",
+         "url": null,
+         "label": "Painted",
+         "caption": null,
+         "ratio": "1/1",
+         "is_video": false,
+         "accent": false,
+         "hue": 200
+        },
+        {
+         "path": "krea_inpaint/demo/result.webp",
+         "url": null,
+         "label": "After",
+         "caption": null,
+         "ratio": "1/1",
+         "is_video": false,
+         "accent": true,
+         "hue": 248
+        }
+       ],
+       "source": null,
+       "blocks": [],
+       "title": null,
+       "body": null,
+       "note": null,
+       "caption": "“remove the parked scooter, continue the wall behind it”",
+       "reverse": false,
+       "flat": false
+      }
+     ],
+     "title": "Paint it, describe it, done",
+     "body": "The middle frame is the brush stroke, exactly as it was drawn — no precision required. The right one is what came back.",
+     "note": null,
+     "caption": null,
+     "reverse": true,
+     "flat": false
+    }
+   ],
+   "locked": true
+  },
+  {
+   "key": "faceswap",
+   "label": "🎭 Face Swap",
+   "headline": "One face, every shot in the set.",
+   "body": [
+    "Give it one clear photograph of a face and it carries that person into any other picture, matching the angle, the lighting and the skin tone — so it reads as a photograph of them, not a cut-out pasted on top.",
+    "This is what makes a set hang together. Invent a character in the generation tabs, then run twenty scenes through here and the same person is in all of them. Trying it on a whole folder costs you nothing but the time to pick the reference."
+   ],
+   "highlights": [
+    "One photo is enough",
+    "Matches angle and lighting",
+    "Supports multi-face selection",
+    "Run a whole set at once"
+   ],
+   "blocks": [
+    {
+     "type": "fan",
+     "items": [
+      {
+       "path": "faceswap/set-a/01.webp",
+       "url": null,
+       "label": null,
+       "caption": null,
+       "ratio": "3/4",
+       "is_video": false,
+       "accent": false,
+       "hue": 200
+      },
+      {
+       "path": "faceswap/set-a/02.webp",
+       "url": null,
+       "label": null,
+       "caption": null,
+       "ratio": "3/4",
+       "is_video": false,
+       "accent": false,
+       "hue": 160
+      },
+      {
+       "path": "faceswap/set-a/03.webp",
+       "url": null,
+       "label": null,
+       "caption": null,
+       "ratio": "3/4",
+       "is_video": false,
+       "accent": false,
+       "hue": 22
+      },
+      {
+       "path": "faceswap/set-a/04.webp",
+       "url": null,
+       "label": null,
+       "caption": null,
+       "ratio": "3/4",
+       "is_video": false,
+       "accent": false,
+       "hue": 300
+      }
+     ],
+     "source": {
+      "path": "faceswap/set-a/reference.webp",
+      "url": null,
+      "label": "Reference",
+      "caption": null,
+      "ratio": "1/1",
+      "is_video": false,
+      "accent": true,
+      "hue": 22
+     },
+     "blocks": [],
+     "title": null,
+     "body": null,
+     "note": null,
+     "caption": "Four scenes, one person. The reference on the left is the only photograph of them that exists.",
+     "reverse": false,
+     "flat": false
+    }
+   ],
+   "locked": true
+  },
+  {
+   "key": "flux_t2i",
+   "label": "🌊 Flux2D",
+   "headline": "The graphic designer of the bunch.",
+   "body": [
+    "A different engine with different instincts. Where the others reach for photography, this one reaches for design: flat colour, clean shapes, poster layouts, logos, packaging — anything meant to look made rather than taken.",
+    "It's also the best of them with lettering. When an idea stalls in another tab — the composition won't come, the type won't read — running it through here often gets it in one, and everything lands in the same gallery either way."
+   ],
+   "highlights": [
+    "Illustration and design work",
+    "Clean shapes, flat colour",
+    "Handles lettering well",
+    "A second opinion when you're stuck"
+   ],
+   "blocks": [
+    {
+     "type": "collage",
+     "items": [
+      {
+       "path": "flux_t2i/gallery/01.webp",
+       "url": null,
+       "label": null,
+       "caption": null,
+       "ratio": "3/4",
+       "is_video": false,
+       "accent": false,
+       "hue": 330
+      },
+      {
+       "path": "flux_t2i/gallery/02.webp",
+       "url": null,
+       "label": null,
+       "caption": null,
+       "ratio": "1/1",
+       "is_video": false,
+       "accent": false,
+       "hue": 45
+      },
+      {
+       "path": "flux_t2i/gallery/03.webp",
+       "url": null,
+       "label": null,
+       "caption": null,
+       "ratio": "4/3",
+       "is_video": false,
+       "accent": false,
+       "hue": 285
+      },
+      {
+       "path": "flux_t2i/gallery/04.webp",
+       "url": null,
+       "label": null,
+       "caption": null,
+       "ratio": "16/9",
+       "is_video": false,
+       "accent": false,
+       "hue": 200
+      },
+      {
+       "path": "flux_t2i/gallery/05.webp",
+       "url": null,
+       "label": null,
+       "caption": null,
+       "ratio": "2/3",
+       "is_video": false,
+       "accent": false,
+       "hue": 200
+      },
+      {
+       "path": "flux_t2i/gallery/06.webp",
+       "url": null,
+       "label": null,
+       "caption": null,
+       "ratio": "1/1",
+       "is_video": false,
+       "accent": false,
+       "hue": 160
+      },
+      {
+       "path": "flux_t2i/gallery/07.webp",
+       "url": null,
+       "label": null,
+       "caption": null,
+       "ratio": "3/2",
+       "is_video": false,
+       "accent": false,
+       "hue": 200
+      },
+      {
+       "path": "flux_t2i/gallery/08.webp",
+       "url": null,
+       "label": null,
+       "caption": null,
+       "ratio": "3/4",
+       "is_video": false,
+       "accent": false,
+       "hue": 45
+      }
+     ],
+     "source": null,
+     "blocks": [],
+     "title": null,
+     "body": null,
+     "note": null,
+     "caption": "Posters, packaging and type — the work that's supposed to look designed.",
+     "reverse": false,
+     "flat": false
+    }
+   ],
+   "locked": true
+  },
+  {
+   "key": "klein_i2i",
+   "label": "🧩 Klein Edit",
+   "headline": "Turn a rough idea into a finished picture.",
+   "body": [
+    "Feed it anything — a phone snap, a pencil sketch, a screenshot of a rough 3D layout — say what it should become, and slide one control between “tidy this up” and “start again from this shape”.",
+    "Low keeps your composition exactly where you drew it and just makes it look finished. High keeps the layout and repaints everything else. It's the fastest way from the thing in your head, badly drawn, to something you'd actually show someone."
+   ],
+   "highlights": [
+    "One slider, gentle to total",
+    "Sketch to finished art",
+    "Restyle a photo completely",
+    "Keeps your composition"
+   ],
+   "blocks": [
+    {
+     "type": "fan",
+     "items": [
+      {
+       "path": "klein_i2i/strength/s30.webp",
+       "url": null,
+       "label": null,
+       "caption": "gentle — tidied up",
+       "ratio": "4/3",
+       "is_video": false,
+       "accent": false,
+       "hue": 248
+      },
+      {
+       "path": "klein_i2i/strength/s60.webp",
+       "url": null,
+       "label": null,
+       "caption": "halfway",
+       "ratio": "4/3",
+       "is_video": false,
+       "accent": false,
+       "hue": 22
+      },
+      {
+       "path": "klein_i2i/strength/s85.webp",
+       "url": null,
+       "label": null,
+       "caption": "fully repainted",
+       "ratio": "4/3",
+       "is_video": false,
+       "accent": false,
+       "hue": 45
+      }
+     ],
+     "source": {
+      "path": "klein_i2i/strength/source.webp",
+      "url": null,
+      "label": "The sketch",
+      "caption": null,
+      "ratio": "4/3",
+      "is_video": false,
+      "accent": true,
+      "hue": 200
+     },
+     "blocks": [],
+     "title": null,
+     "body": null,
+     "note": null,
+     "caption": "One pencil sketch, the same prompt, three positions on the slider.",
+     "reverse": false,
+     "flat": false
+    }
+   ],
+   "locked": true
+  },
+  {
+   "key": "wan_i2v",
+   "label": "🎬 Wan Video",
+   "headline": "Give a still picture a few seconds of life.",
+   "body": [
+    "Hand it any image — one you made here or one from your camera roll — describe the movement, and get a short clip back. Steam rising, hair moving, a slow push toward the subject, water doing what water does. The person in the picture stays the person in the picture.",
+    "This is the one that usually costs by the second everywhere else. Here it doesn't cost anything at all, and that changes how you use it: make five versions, keep the one that moves right, throw the other four away without a thought."
+   ],
+   "highlights": [
+    "Any picture becomes a clip",
+    "Describe the movement in words",
+    "The subject holds together",
+    "Saved next to your images",
+    "Not charged by the second"
+   ],
+   "blocks": [
+    {
+     "type": "strip",
+     "items": [
+      {
+       "path": "wan_i2v/clip-a/frame-01.webp",
+       "url": null,
+       "label": "The still",
+       "caption": null,
+       "ratio": "16/9",
+       "is_video": false,
+       "accent": false,
+       "hue": 262
+      },
+      {
+       "path": "wan_i2v/clip-a/frame-02.webp",
+       "url": null,
+       "label": null,
+       "caption": null,
+       "ratio": "16/9",
+       "is_video": false,
+       "accent": false,
+       "hue": 186
+      },
+      {
+       "path": "wan_i2v/clip-a/frame-03.webp",
+       "url": null,
+       "label": null,
+       "caption": null,
+       "ratio": "16/9",
+       "is_video": false,
+       "accent": false,
+       "hue": 22
+      },
+      {
+       "path": "wan_i2v/clip-a/clip.webp",
+       "url": null,
+       "label": "Plays",
+       "caption": null,
+       "ratio": "16/9",
+       "is_video": false,
+       "accent": true,
+       "hue": 186
+      },
+      {
+       "path": "wan_i2v/clip-a/clip-b.webp",
+       "url": null,
+       "label": "Plays",
+       "caption": null,
+       "ratio": "16/9",
+       "is_video": false,
+       "accent": true,
+       "hue": 186
+      }
+     ],
+     "source": null,
+     "blocks": [],
+     "title": null,
+     "body": null,
+     "note": "the clips play as you scroll past",
+     "caption": null,
+     "reverse": false,
+     "flat": false
+    }
+   ],
+   "locked": true
+  },
+  {
+   "key": "json_batch",
+   "label": "📦 Krea2 Batch",
+   "headline": "Set up a hundred images and go to bed.",
+   "body": [
+    "Line up a whole list of prompts and settings, press start, and walk away. Each one runs in turn and lands in the gallery — and if one trips over itself, the rest carry on without you.",
+    "It's the tab that turns a long afternoon into an overnight job: regenerate an entire shoot after changing one word, or work through every variation of an idea while you're doing something else."
+   ],
+   "highlights": [
+    "Queue as many as you like",
+    "Runs unattended",
+    "One failure doesn't stop the rest",
+    "Perfect for overnight"
+   ],
+   "blocks": [
+    {
+     "type": "row",
+     "items": [
+      {
+       "path": "json_batch/run/01.webp",
+       "url": null,
+       "label": null,
+       "caption": null,
+       "ratio": "4/3",
+       "is_video": false,
+       "accent": false,
+       "hue": 262
+      },
+      {
+       "path": "json_batch/run/02.webp",
+       "url": null,
+       "label": null,
+       "caption": null,
+       "ratio": "4/3",
+       "is_video": false,
+       "accent": false,
+       "hue": 160
+      },
+      {
+       "path": "json_batch/run/03.webp",
+       "url": null,
+       "label": null,
+       "caption": null,
+       "ratio": "4/3",
+       "is_video": false,
+       "accent": false,
+       "hue": 330
+      }
+     ],
+     "source": null,
+     "blocks": [],
+     "title": null,
+     "body": null,
+     "note": null,
+     "caption": "One list, one night, a full set waiting in the morning.",
+     "reverse": false,
+     "flat": false
+    }
+   ],
+   "locked": true
+  },
+  {
+   "key": "community_prompts",
+   "label": "🌟 Prompt Library",
+   "headline": "A shelf of prompts that already work.",
+   "body": [
+    "The blank page is the hardest part. This is a browsable collection of prompts that are known to produce something good, each with its settings attached and a button that drops the whole thing into a generation tab, ready to run.",
+    "Use them as they are, or change three words and make them yours. New ones arrive on their own — there's nothing to update."
+   ],
+   "highlights": [
+    "Loads with one click",
+    "Settings come with it",
+    "Browse by tab",
+    "New prompts keep arriving"
+   ],
+   "blocks": [
+    {
+     "type": "collage",
+     "items": [
+      {
+       "path": "community_prompts/shelf/01.webp",
+       "url": null,
+       "label": null,
+       "caption": null,
+       "ratio": "3/4",
+       "is_video": false,
+       "accent": false,
+       "hue": 248
+      },
+      {
+       "path": "community_prompts/shelf/02.webp",
+       "url": null,
+       "label": null,
+       "caption": null,
+       "ratio": "1/1",
+       "is_video": false,
+       "accent": false,
+       "hue": 160
+      },
+      {
+       "path": "community_prompts/shelf/03.webp",
+       "url": null,
+       "label": null,
+       "caption": null,
+       "ratio": "4/3",
+       "is_video": false,
+       "accent": false,
+       "hue": 262
+      },
+      {
+       "path": "community_prompts/shelf/04.webp",
+       "url": null,
+       "label": null,
+       "caption": null,
+       "ratio": "16/9",
+       "is_video": false,
+       "accent": false,
+       "hue": 300
+      },
+      {
+       "path": "community_prompts/shelf/05.webp",
+       "url": null,
+       "label": null,
+       "caption": null,
+       "ratio": "2/3",
+       "is_video": false,
+       "accent": false,
+       "hue": 300
+      },
+      {
+       "path": "community_prompts/shelf/06.webp",
+       "url": null,
+       "label": null,
+       "caption": null,
+       "ratio": "1/1",
+       "is_video": false,
+       "accent": false,
+       "hue": 285
+      },
+      {
+       "path": "community_prompts/shelf/07.webp",
+       "url": null,
+       "label": null,
+       "caption": null,
+       "ratio": "3/2",
+       "is_video": false,
+       "accent": false,
+       "hue": 285
+      },
+      {
+       "path": "community_prompts/shelf/08.webp",
+       "url": null,
+       "label": null,
+       "caption": null,
+       "ratio": "3/4",
+       "is_video": false,
+       "accent": false,
+       "hue": 186
+      }
+     ],
+     "source": null,
+     "blocks": [],
+     "title": null,
+     "body": null,
+     "note": null,
+     "caption": "Every one of these is one click away from being loaded and running.",
+     "reverse": false,
+     "flat": true
+    }
+   ],
+   "locked": false
+  }
+ ],
+ "cta_title": "Ready to unlock more?",
+ "cta_body": "Upgrades are applied to your key by hand, and it only takes minutes. You keep working while we do it, and the new tabs are there the next time you start the app."
+}

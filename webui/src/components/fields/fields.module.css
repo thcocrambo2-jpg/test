@@ -1,0 +1,433 @@
+/* Form controls. One place, so every input on every tab is the same object. */
+
+.field {
+  display: flex;
+  flex-direction: column;
+  gap: var(--s-2);
+  min-width: 0;
+}
+
+/* The slider's track sits directly under its label row; the tick line under
+   that has no gap of its own. */
+.field > .ticks {
+  margin-top: calc(var(--s-2) * -1);
+}
+
+.fieldWide {
+  grid-column: 1 / -1;
+}
+
+.labelRow {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: var(--s-3);
+  min-height: 18px;
+}
+
+.label {
+  font-size: var(--t-xs);
+  font-weight: var(--fw-medium);
+  color: var(--c-text-muted);
+  letter-spacing: 0.012em;
+  line-height: var(--lh-snug);
+}
+
+.value {
+  font-family: var(--font-mono);
+  font-size: var(--t-xs);
+  color: var(--c-text);
+  font-variant-numeric: tabular-nums;
+  flex: none;
+  background: var(--c-bg-sunken);
+  border: 1px solid var(--c-border);
+  border-radius: var(--r-xs);
+  padding: 0 var(--s-2);
+}
+
+.hint {
+  font-size: var(--t-2xs);
+  color: var(--c-text-faint);
+  line-height: var(--lh-snug);
+}
+
+/* -------------------------------------------------------------- text input */
+
+.input,
+.textarea,
+.select {
+  width: 100%;
+  background: var(--c-input);
+  color: var(--c-text);
+  border: 1px solid var(--c-border);
+  border-radius: var(--r-md);
+  padding: 0 var(--s-3);
+  height: 34px;
+  font-size: var(--t-sm);
+  transition:
+    border-color var(--d-fast) var(--e-out),
+    background var(--d-fast) var(--e-out);
+}
+
+.input:hover,
+.textarea:hover,
+.select:hover {
+  border-color: var(--c-border-strong);
+}
+
+.input:focus,
+.textarea:focus,
+.select:focus {
+  border-color: var(--c-accent);
+  outline: none;
+  box-shadow: 0 0 0 3px var(--c-accent-soft);
+}
+
+.input::placeholder,
+.textarea::placeholder {
+  color: var(--c-text-faint);
+}
+
+.textarea {
+  height: auto;
+  padding: var(--s-3);
+  line-height: var(--lh-normal);
+  resize: vertical;
+  min-height: 68px;
+  font-family: inherit;
+}
+
+.mono {
+  font-family: var(--font-mono);
+  font-size: var(--t-xs);
+}
+
+.select {
+  appearance: none;
+  padding-right: var(--s-8);
+  cursor: pointer;
+  background-image: var(--icon-caret);
+  background-repeat: no-repeat;
+  background-position: right var(--s-3) center;
+}
+
+.select option {
+  background: var(--c-input);
+  color: var(--c-text);
+}
+
+/* ------------------------------------------------------------------ slider */
+
+.slider {
+  --track: var(--c-bg-sunken);
+  --filled: var(--c-accent);
+  width: 100%;
+  appearance: none;
+  height: 20px;
+  background: transparent;
+  cursor: pointer;
+  margin: 0;
+}
+
+.slider::-webkit-slider-runnable-track {
+  height: 4px;
+  border-radius: var(--r-full);
+  background: linear-gradient(
+    to right,
+    var(--filled) 0%,
+    var(--filled) var(--fill, 0%),
+    var(--track) var(--fill, 0%),
+    var(--track) 100%
+  );
+  border: 1px solid var(--c-border);
+}
+
+.slider::-moz-range-track {
+  height: 4px;
+  border-radius: var(--r-full);
+  background: var(--track);
+  border: 1px solid var(--c-border);
+}
+
+.slider::-moz-range-progress {
+  height: 4px;
+  border-radius: var(--r-full);
+  background: var(--filled);
+}
+
+.slider::-webkit-slider-thumb {
+  appearance: none;
+  width: 14px;
+  height: 14px;
+  margin-top: -6px;
+  border-radius: 50%;
+  background: var(--c-text);
+  border: 2px solid var(--c-panel);
+  box-shadow: var(--sh-sm);
+  transition: transform var(--d-fast) var(--e-out);
+}
+
+.slider::-moz-range-thumb {
+  width: 14px;
+  height: 14px;
+  border-radius: 50%;
+  background: var(--c-text);
+  border: 2px solid var(--c-panel);
+  box-shadow: var(--sh-sm);
+}
+
+.slider:hover::-webkit-slider-thumb {
+  transform: scale(1.15);
+}
+.slider:active::-webkit-slider-thumb {
+  background: var(--c-accent);
+}
+.slider:focus-visible::-webkit-slider-thumb {
+  box-shadow: var(--sh-focus);
+}
+
+.sliderNumber {
+  width: 62px;
+  flex: none;
+  height: 22px;
+  font-size: var(--t-2xs);
+  font-family: var(--font-mono);
+  text-align: right;
+  padding: 0 var(--s-2);
+  border-radius: var(--r-xs);
+  background: var(--c-bg-sunken);
+}
+
+/* The spinner arrows eat a third of a 62px box and nobody clicks them. */
+.sliderNumber::-webkit-outer-spin-button,
+.sliderNumber::-webkit-inner-spin-button {
+  appearance: none;
+  margin: 0;
+}
+.sliderNumber {
+  -moz-appearance: textfield;
+}
+
+.ticks {
+  display: flex;
+  justify-content: space-between;
+  font-size: var(--t-2xs);
+  color: var(--c-text-faint);
+  font-family: var(--font-mono);
+  margin-top: -2px;
+}
+
+/* ---------------------------------------------------------------- checkbox */
+
+.check {
+  display: flex;
+  align-items: center;
+  gap: var(--s-3);
+  cursor: pointer;
+  user-select: none;
+  padding: var(--s-2) 0;
+  min-width: 0;
+}
+
+.checkBox {
+  appearance: none;
+  width: 17px;
+  height: 17px;
+  flex: none;
+  border: 1px solid var(--c-border-strong);
+  border-radius: var(--r-xs);
+  background: var(--c-input);
+  cursor: pointer;
+  display: grid;
+  place-content: center;
+  transition:
+    background var(--d-fast) var(--e-out),
+    border-color var(--d-fast) var(--e-out);
+}
+
+.checkBox::after {
+  content: '';
+  width: 9px;
+  height: 5px;
+  border: 2px solid var(--c-text-on-accent);
+  border-top: 0;
+  border-right: 0;
+  transform: rotate(-45deg) translate(1px, -1px) scale(0);
+  transition: transform var(--d-fast) var(--e-out);
+}
+
+.checkBox:checked {
+  background: var(--c-accent);
+  border-color: var(--c-accent);
+}
+.checkBox:checked::after {
+  transform: rotate(-45deg) translate(1px, -1px) scale(1);
+}
+.checkBox:hover {
+  border-color: var(--c-accent);
+}
+.checkBox:focus-visible {
+  box-shadow: var(--sh-focus);
+}
+
+.checkLabel {
+  font-size: var(--t-sm);
+  color: var(--c-text);
+  line-height: var(--lh-snug);
+}
+
+/* ------------------------------------------------------------------- radio */
+
+.radioGroup {
+  display: flex;
+  flex-direction: column;
+  gap: var(--s-2);
+}
+
+.radio {
+  display: flex;
+  align-items: flex-start;
+  gap: var(--s-3);
+  padding: var(--s-3);
+  border: 1px solid var(--c-border);
+  border-radius: var(--r-md);
+  background: var(--c-input);
+  cursor: pointer;
+  transition:
+    border-color var(--d-fast) var(--e-out),
+    background var(--d-fast) var(--e-out);
+  font-size: var(--t-sm);
+}
+
+.radio:hover {
+  border-color: var(--c-border-strong);
+  background: var(--c-input-hover);
+}
+
+.radioChecked {
+  border-color: var(--c-accent);
+  background: var(--c-accent-soft);
+}
+
+.radioDot {
+  appearance: none;
+  width: 15px;
+  height: 15px;
+  flex: none;
+  margin-top: 2px;
+  border-radius: 50%;
+  border: 1px solid var(--c-border-strong);
+  background: var(--c-input);
+  display: grid;
+  place-content: center;
+}
+
+.radioDot:checked {
+  border-color: var(--c-accent);
+  border-width: 5px;
+}
+.radioDot:focus-visible {
+  box-shadow: var(--sh-focus);
+}
+
+/* -------------------------------------------------------------- image drop */
+
+.drop {
+  position: relative;
+  border: 1px dashed var(--c-border-strong);
+  border-radius: var(--r-lg);
+  background: var(--c-bg-sunken);
+  min-height: 168px;
+  display: grid;
+  place-items: center;
+  text-align: center;
+  padding: var(--s-6) var(--s-4);
+  cursor: pointer;
+  transition:
+    border-color var(--d-fast) var(--e-out),
+    background var(--d-fast) var(--e-out);
+  color: var(--c-text-muted);
+  font-size: var(--t-sm);
+  overflow: hidden;
+}
+
+.drop:hover {
+  border-color: var(--c-accent);
+  background: var(--c-panel-hover);
+}
+
+.dropActive {
+  border-color: var(--c-accent);
+  background: var(--c-accent-soft);
+  border-style: solid;
+}
+
+.dropIcon {
+  font-size: 22px;
+  opacity: 0.7;
+  display: block;
+  margin-bottom: var(--s-2);
+}
+
+.dropHint {
+  font-size: var(--t-xs);
+  color: var(--c-text-faint);
+  margin-top: var(--s-1);
+}
+
+.dropPreview {
+  position: relative;
+  border-radius: var(--r-lg);
+  overflow: hidden;
+  border: 1px solid var(--c-border);
+  background: var(--c-bg-sunken);
+  line-height: 0;
+}
+
+.dropPreview img {
+  width: 100%;
+  max-height: 320px;
+  object-fit: contain;
+}
+
+.dropBar {
+  position: absolute;
+  inset: auto 0 0 0;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--s-2);
+  padding: var(--s-2) var(--s-3);
+  background: linear-gradient(transparent, var(--c-media-scrim));
+  opacity: 0;
+  transition: opacity var(--d-fast) var(--e-out);
+  line-height: var(--lh-normal);
+}
+
+.dropPreview:hover .dropBar,
+.dropPreview:focus-within .dropBar {
+  opacity: 1;
+}
+
+.dropMeta {
+  font-size: var(--t-2xs);
+  font-family: var(--font-mono);
+  color: var(--c-on-media-soft);
+}
+
+/* -------------------------------------------------------------------- file */
+
+.file {
+  display: flex;
+  align-items: center;
+  gap: var(--s-3);
+}
+
+.fileName {
+  font-size: var(--t-xs);
+  font-family: var(--font-mono);
+  color: var(--c-text-muted);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
