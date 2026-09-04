@@ -50,11 +50,15 @@ export function GenerateTab({ schema }: { schema: TabSchema }) {
    * SchemaForm's own onChange.
    *
    * The bag itself is held in `tabState` rather than in this component, keyed
-   * by tab. React Router unmounts a route the moment you leave it and a bag in
-   * `useState` goes with it — which is why every prompt and every slider
-   * used to come back at its default after a look at another tab. The key is
-   * `schema.key`, so Krea2 and Krea2 V2 keep their own despite naming their
-   * fields identically. */
+   * by tab, so that leaving a tab no longer costs you what you set on it. The
+   * key is `schema.key`: Krea2 and Krea2 V2 name their fields identically and
+   * must not share a bag.
+   *
+   * Note what a tab switch actually is here, because two things below depend
+   * on it: React Router renders the matched route into the same position, so
+   * it reconciles `TabPage` with `TabPage` and this component is *not*
+   * unmounted — it is re-rendered with a different `schema`. Every ref and
+   * every closure in it survives the switch. */
   const [values, setValues] = useTabState<Record<string, unknown>>(
     `form.${schema.key}`,
     defaults,
@@ -108,11 +112,21 @@ export function GenerateTab({ schema }: { schema: TabSchema }) {
     if (handed) setValues({ ...defaults, ...handed })
   }, [schema.key, defaults, take, setValues])
 
-  const set = useCallback((name: string, value: unknown) => {
-    setValues((previous) =>
-      Object.is(previous[name], value) ? previous : { ...previous, [name]: value },
-    )
-  }, [])
+  /* `setValues` is a dependency, and has to be.
+   *
+   * It was `[]` when the bag came from `useState`, whose setter never
+   * changes. `tabState`'s does: it carries the key it writes to. Since this
+   * component is re-rendered rather than remounted on a tab switch, a setter
+   * captured once would go on writing into the tab you left — which is
+   * exactly how V2's defaults landed in Krea2's bag and emptied it. */
+  const set = useCallback(
+    (name: string, value: unknown) => {
+      setValues((previous) =>
+        Object.is(previous[name], value) ? previous : { ...previous, [name]: value },
+      )
+    },
+    [setValues],
+  )
 
   /* A whole patch in one update rather than one per key.
    *
@@ -121,9 +135,12 @@ export function GenerateTab({ schema }: { schema: TabSchema }) {
    * draw. It also has to be a single merge for a second reason: `apply` is
    * what `PresetBar` hands the server's answer to, and a preset means "these
    * values, together". */
-  const apply = useCallback((patch: Record<string, unknown>) => {
-    setValues((previous) => ({ ...previous, ...patch }))
-  }, [])
+  const apply = useCallback(
+    (patch: Record<string, unknown>) => {
+      setValues((previous) => ({ ...previous, ...patch }))
+    },
+    [setValues],
+  )
 
   /* Picking a model resets the dials that belong to it.
    *
@@ -138,12 +155,20 @@ export function GenerateTab({ schema }: { schema: TabSchema }) {
    * set. Gradio had the same rule for the same reason, by accident — a value
    * that does not change fires nothing. */
   const lastModel = useRef<string | null>(null)
+  const lastKey = useRef(schema.key)
   const model = String(values.model ?? '')
   useEffect(() => {
     const row = models.find((candidate) => candidate.name === model)
     const previous = lastModel.current
+    // Arriving on a tab is not picking a model, and the model on the way in
+    // is nearly always a different string — it belongs to a different tab.
+    // That was free when the form was reset in the same commit anyway; now it
+    // would deal one tab's steps and CFG over what you left on the next, and
+    // rewrite its prompt's trigger word on the way past.
+    const switched = lastKey.current !== schema.key
+    lastKey.current = schema.key
     lastModel.current = model
-    if (!row || previous === null || previous === model) return
+    if (switched || !row || previous === null || previous === model) return
     for (const [name, value] of Object.entries(row.defaults)) {
       if (value !== null && value !== undefined) set(name, value)
     }
@@ -185,14 +210,14 @@ export function GenerateTab({ schema }: { schema: TabSchema }) {
       left={
         <>
           <PresetBar schema={schema} onApply={apply} />
-          {/* Keyed by tab, because a tab switch is a different form. React
-            * Router renders the matched route into the same position, so
-            * without a key React reconciles `TabPage` with `TabPage` and
-            * every control keeps its own *local* state — a negative
-            * prompt expanded on Krea2 arrives expanded on V2, a LoRA stack
-            * opened on one tab is open on the next. The values live per tab
-            * in `tabState` and survive this remount; what it resets is the
-            * chrome around them, which is the part that should reset. */}
+          {/* Keyed by tab, because a tab switch is a different form and
+            * nothing else here remounts on one — React reconciles
+            * `TabPage` with `TabPage`, so without this key every control
+            * keeps its own *local* state: a negative prompt expanded on
+            * Krea2 arrives expanded on V2, a LoRA stack opened on one tab
+            * is open on the next. The values live per tab in `tabState`
+            * and survive the remount; what it clears is the chrome around
+            * them, which is the part that should clear. */}
           <SchemaForm
             key={schema.key}
             schema={schema}
