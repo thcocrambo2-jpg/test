@@ -1333,11 +1333,25 @@ build is the slow one. If you add a dependency that works under
 `python3 app.py` but fails in the binary, the usual cause is package *data*
 files: add `--include-package-data=<pkg>` in `build.sh`.
 
-Both builds got **smaller** when Gradio went. Gradio 6 ships its entire
-Svelte front end as package data, and `gradio`, `gradio_client`, `safehttpx`
-and `groovy` were all pulled in whole rather than by import graph. The React
-bundle that replaced them is a few hundred KB gzipped, so the onefile
-re-extraction cost went down too.
+The binary got **smaller** when Gradio went — measured, on one machine,
+building both trees with the same gcc and the same Nuitka:
+
+| | bytes |
+| --- | --- |
+| tag `pre-react-ui`, the last commit with `ui.py` in it | 101,554,392 |
+| this tree | **38,828,248** |
+
+Gradio 6 ships its entire Svelte front end as package data, and `gradio`,
+`gradio_client`, `safehttpx` and `groovy` were all pulled in whole rather than
+by import graph. The React bundle that replaced them is 114 KB gzipped, so the
+onefile re-extraction cost — paid on every launch, by every customer — went
+down with it.
+
+Those are Linux numbers. The Windows `.exe` has not been re-measured since,
+and if it comes out *larger*, the first thing to check is the build
+interpreter's environment: Nuitka walks whatever is installed next to it, so
+an env carrying torch or matplotlib produces a much bigger graph than a venv
+holding only `requirements.txt`.
 
 ### Building on the pod
 
