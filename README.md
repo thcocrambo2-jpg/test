@@ -884,11 +884,12 @@ picture viewer settles on because it is the one where the picture gets
 the room and everything else stays a glance away.
 
 - **The picture is the control.** Click its left half for the file before
-  it, its right half for the one after. The chevrons appear under the
-  pointer, are drawn permanently on a touch screen, and are not drawn at
-  all at the ends of the list — the zones are real buttons, so an end of
-  the list disables one and CSS takes its chevron with it. The old
-  ◀ Prev / Next ▶ pair is gone.
+  it, its right half for the one after. Nothing is drawn for either: a
+  pair of chevrons floating in the margins is permanent furniture in aid
+  of a gesture that is discovered once and then known, and the pointer
+  turning into a hand over the picture is hint enough. The zones are
+  real buttons, so an end of the list disables one and it stops taking
+  the clicks that land on it. The old ◀ Prev / Next ▶ pair is gone.
 - **← →** still walk the list. They resolve a second, off-screen pair of
   buttons by `elem_id` (`.kx-sr-nav` — clipped rather than
   `display: none`, so `offsetParent` still answers "is the Gallery tab on
@@ -920,11 +921,38 @@ Every other step is a highlight move: handing `gr.Gallery` the same list
 again makes it rebuild the grid, which throws away the scroll position of
 the very thing being scrolled through.
 
-The stage is a **fixed height** — `min(58vh, 560px)`, and 46vh on a
-phone. Fitting it to each picture would move the filmstrip up and down
-the page on every step, and the strip is the thing being aimed at. One
-CSS variable carries that number, so the phone layout is this one with
+The stage is a **fixed height** — `min(58vh, 560px)`, and 62vh on a
+phone, which is taller than it sounds for a reason: a phone screen is
+portrait and so is nearly everything this app generates, so the stage has
+to be about half again as tall as it is wide before the picture fills it
+rather than sitting pinched in the middle of it. Fitting the stage to
+each picture instead would move the filmstrip up and down the page on
+every step, and the strip is the thing being aimed at. One CSS variable
+carries that number, which is what makes the phone layout this one with
 smaller numbers rather than a second arrangement to keep working.
+
+That height lives on the stage rather than on the components, and that is
+what centres them. A `height=` on a `gr.Image` is written onto the
+component's own box, which then letterboxes the picture at the top of
+itself and leaves the whole difference as a gap underneath. The stage
+carries the height, centres what is on it on both axes, and the picture
+is only ever as large as it can be without being cropped.
+
+The strip is laid out from the DOM rather than from a stylesheet's guess
+about it. A `gr.Gallery` is a wrapping grid inside a box, and the class
+name of the element holding the tiles has moved between Gradio versions —
+a rule that guesses wrong leaves a second screenful of pictures where a
+strip should be, silently. So `theme.JS` finds a tile, takes its actual
+parent, and makes *that* the row: no wrapping, as wide as its contents,
+with every box between it and the block opened up so nothing clips it.
+The block itself — the one element with a name of our own on it — is the
+scroller. The CSS says the same thing for the names this version happens
+to use, so the strip is right before the JS runs and harmless if it never
+does.
+
+Tiles are **whole pictures shrunk into square cells**, not square crops
+out of the middle of them. The strip is how two generations of one prompt
+get told apart, and a crop takes away the half that differs.
 
 ## Recipes — "how was this made?"
 

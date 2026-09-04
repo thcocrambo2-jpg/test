@@ -876,43 +876,102 @@ CSS = f"""
 
    The stage is a fixed height on purpose. Sizing it to each picture
    would move the filmstrip up and down the page on every step, and the
-   strip is the thing being aimed at. */
+   strip is the thing being aimed at. That height lives *here* rather
+   than on the components, which is what centres them: given a height of
+   its own, Gradio's image block letterboxes at the top of it and leaves
+   the whole difference as a gap underneath. */
 .kx-stage {{
   --kx-stage-h: min(58vh, 560px);
   position: relative;
+  /* !important because this one declaration is the whole fix: it is what
+     the picture is centred in and sized against. */
+  height: var(--kx-stage-h) !important;
   border: 1px solid var(--kx-border);
   border-radius: 14px;
   background: var(--kx-sunken);
   overflow: hidden;
   padding: 0 !important;
   gap: 0 !important;
-  /* With nothing selected both the image and the video are hidden and
-     the stage has no content at all. An empty stage should look like an
-     empty stage rather than like a stray horizontal rule. */
-  min-height: 140px;
+  /* Both axes, for whichever of the two blocks is on show — and for
+     neither of them, which is what an empty gallery looks like. */
+  display: flex !important;
+  align-items: center !important;
+  justify-content: center !important;
 }}
 
-/* The picture sits *on* the stage — its own card chrome would be a box
-   drawn inside a box. */
+/* The picture sits *on* the stage: its own card chrome would be a box
+   drawn inside a box. Sized, but never given a `display` — the hidden
+   one of the pair is hidden by exactly that property. */
 .kx-stage .block {{
   background: transparent !important;
   border: 0 !important;
   box-shadow: none !important;
   padding: 0 !important;
+  width: 100% !important;
+  height: 100% !important;
+  min-height: 0 !important;
 }}
 
-/* max-height, not height: it outranks the inline height Gradio writes
-   from the component's own `height=`, so the media query at the foot of
-   this file re-sizes the stage on a phone without the Python having to
-   carry a second number for it. */
+/* Everything between the block and the picture is made a centring box of
+   the stage's size, so the picture is centred by whichever of these
+   Gradio actually renders. A name that is not in the DOM matches
+   nothing and costs nothing. */
 .kx-stage .image-container,
 .kx-stage .image-frame,
 .kx-stage .video-container,
+.kx-stage .wrap,
+/* And the same again by what a box *contains* rather than by what it is
+   called, which catches any of them this version of Gradio renders
+   under a name not in the list above. Descendants of the block only:
+   the block itself is what `visible=False` hides, and hiding is a
+   `display`, so a rule that set one here would put a hidden picture
+   back on the stage. */
+.kx-stage .block :has(img),
+.kx-stage .block :has(video) {{
+  display: flex !important;
+  align-items: center !important;
+  justify-content: center !important;
+  width: 100% !important;
+  height: 100% !important;
+  max-height: none !important;
+}}
+
+/* And the picture itself is only ever as big as it can be without being
+   cropped or overflowing. The height is spelled out as well as given as
+   a percentage: a percentage resolves to nothing if any box between
+   here and the stage turns out to size itself to its content. */
 .kx-stage img,
 .kx-stage video {{
-  max-height: var(--kx-stage-h) !important;
+  width: auto !important;
+  height: auto !important;
+  max-width: 100% !important;
+  max-height: calc(var(--kx-stage-h) - 2px) !important;
+  object-fit: contain !important;
+  margin: auto !important;
 }}
-.kx-stage img, .kx-stage video {{ object-fit: contain; }}
+
+/* Fullscreen. The browser hands the element the whole screen but keeps
+   its own styling, so without this the picture stays the size the stage
+   gave it, on a transparent panel, with the page showing through
+   behind — which is what it did. */
+.kx-stage :fullscreen,
+.kx-stage:fullscreen {{
+  width: 100vw !important;
+  height: 100vh !important;
+  max-width: none !important;
+  max-height: none !important;
+  border-radius: 0 !important;
+  background: var(--kx-sunken) !important;
+}}
+.kx-stage :fullscreen img,
+.kx-stage :fullscreen video,
+.kx-stage:fullscreen img,
+.kx-stage:fullscreen video {{
+  max-width: 100vw !important;
+  max-height: 100vh !important;
+}}
+.kx-stage :fullscreen::backdrop,
+.kx-stage:fullscreen::backdrop {{ background: var(--kx-sunken); }}
 
 /* Gradio's own download and fullscreen buttons live in the picture's top
    right corner, and the click zones below would otherwise be laid over
@@ -925,9 +984,13 @@ CSS = f"""
 
 /* Click the left or right of the picture to walk the list — where the
    pointer already is, rather than a Prev/Next pair somewhere above it.
-   These are real buttons on the same handler as the arrow keys, so an
-   end of the list disables one; the chevron is drawn on :enabled, so a
-   zone that would do nothing stops offering itself. */
+   They are real buttons on the same handler as the arrow keys, so an end
+   of the list disables one and stops it taking clicks.
+
+   Nothing is drawn for them. A pair of chevrons floating in the margins
+   of a picture is a permanent piece of furniture in aid of a gesture
+   that is discovered once and then known; the pointer turning into a
+   hand over the picture is the whole hint that is wanted. */
 .kx-zones {{
   position: absolute !important;
   inset: 42px 0 0 0;
@@ -949,45 +1012,33 @@ CSS = f"""
   width: 100% !important;
   min-width: 0 !important;
   height: 100% !important;
-  display: flex !important;
-  align-items: center;
-  padding: 0 14px !important;
+  padding: 0 !important;
   border: 0 !important;
   border-radius: 0 !important;
   background: transparent !important;
   box-shadow: none !important;
   pointer-events: auto;
-  opacity: 0;
-  transition: opacity .15s;
-  /* The label is there for a screen reader; the chevron below is what a
-     pointer gets. */
+  cursor: pointer;
+  /* The label stays for a screen reader, which is the only thing that
+     reads these at all. */
   font-size: 0 !important;
+  color: transparent !important;
 }}
 .kx-zones button > * {{ font-size: 0 !important; }}
-.kx-zones button::before {{
-  content: "❮";
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  width: 38px;
-  height: 38px;
-  font-size: 14px;
-  line-height: 1;
-  border-radius: 999px;
-  border: 1px solid rgba(255, 255, 255, .18);
-  background: rgba(15, 16, 24, .55);
-  backdrop-filter: blur(6px);
-  color: #fff;
+/* A button Gradio would otherwise light up on hover and press down on
+   click, laid over half a picture. */
+.kx-zones button:hover,
+.kx-zones button:active {{
+  background: transparent !important;
+  box-shadow: none !important;
+  transform: none !important;
 }}
-.kx-zone-next button, button.kx-zone-next {{ justify-content: flex-end; }}
-.kx-zone-next button::before, button.kx-zone-next::before {{ content: "❯"; }}
-.kx-zones button:hover:not(:disabled),
-.kx-zones button:focus-visible {{ opacity: 1; }}
-.kx-zones button:disabled {{ opacity: 0 !important; pointer-events: none; }}
-/* There is no hover on a touch screen, so the chevrons have to be there
-   without one — quiet enough to stay out of the picture's way. */
-@media (pointer: coarse) {{
-  .kx-zones button:not(:disabled) {{ opacity: .8; }}
+.kx-zones button:disabled {{ cursor: default; pointer-events: none; }}
+/* Keyboard focus has to land somewhere visible, and a transparent
+   button that has taken focus is otherwise a lost cursor. */
+.kx-zones button:focus-visible {{
+  outline: 2px solid var(--kx-accent) !important;
+  outline-offset: -4px;
 }}
 
 /* The bar under the picture: where you are on the left, the bin on the
@@ -1026,44 +1077,55 @@ CSS = f"""
   font-size: 15px !important;
 }}
 
-/* The filmstrip. Gradio lays a Gallery out as a wrapping grid; this is
-   one row that scrolls sideways instead, which is what keeps it a way
-   *to* the picture rather than a second screenful of pictures competing
-   with the one above it. Heights are left to the tiles so the strip is
-   exactly as tall as one of them at either screen size. */
-.kx-strip, .kx-strip .grid-wrap, .kx-strip .grid-container {{
+/* The filmstrip. Gradio lays a Gallery out as a wrapping grid of its own
+   making; this has to be one row that scrolls sideways, which is what
+   keeps it a way *to* the picture rather than a second screenful of
+   pictures competing with the one above it.
+
+   **The block itself is the scroller**, not anything inside it. Which
+   element holds the tiles is Gradio's business and has moved between
+   versions — so the JS in this file finds the tiles' actual parent, lays
+   that out as a nowrap row of max-content width, and opens up every box
+   between it and here. The rules below are the same thing said in CSS
+   for the class names this version happens to use: they make the strip
+   right before the JS runs, and harmless if it never does. */
+.kx-strip {{
+  overflow-x: auto !important;
+  overflow-y: hidden !important;
   height: auto !important;
   min-height: 0 !important;
 }}
-/* Both containers get the row treatment, because which one holds the
-   tiles is Gradio's business and has moved between versions: a flex row
-   that ends up with a single child is a flex row with one child in it,
-   and the sizing below goes on the tiles themselves rather than on
-   whatever happens to be their parent. */
 .kx-strip .grid-wrap,
 .kx-strip .grid-container {{
   display: flex !important;
   flex-wrap: nowrap !important;
   grid-template-columns: none !important;
   gap: 8px !important;
-}}
-.kx-strip .grid-wrap {{
-  overflow-x: auto !important;
-  overflow-y: hidden !important;
+  width: max-content !important;
+  min-width: 100% !important;
+  max-width: none !important;
+  height: auto !important;
+  min-height: 0 !important;
+  max-height: none !important;
+  overflow: visible !important;
   padding: 2px !important;
 }}
-.kx-strip .grid-container {{ flex: 1 0 auto !important; padding: 0 !important; }}
 .kx-strip .grid-container > *,
 .kx-strip .thumbnail-item,
 .kx-strip .gallery-item {{
   flex: 0 0 auto !important;
   width: var(--kx-tile, 78px) !important;
   height: var(--kx-tile, 78px) !important;
+  /* A tile is a whole picture shrunk to fit, not a square cut out of the
+     middle of one: the strip is how you tell two generations of the same
+     prompt apart, and cropping takes away the half that differs. */
+  background: var(--kx-sunken);
 }}
 .kx-strip .thumbnail-item img,
 .kx-strip .gallery-item img {{
   width: 100% !important;
   height: 100% !important;
+  object-fit: contain !important;
 }}
 /* The tile being shown is the only one at full strength: the strip is
    read out of the corner of the eye while the picture has the middle of
@@ -2526,17 +2588,19 @@ a.kx-shot {{ cursor: zoom-in; text-decoration: none !important; }}
   .gradio-container .row {{ flex-wrap: wrap; }}
   .kx-panel, .kx-panel-out {{ flex: 1 1 100% !important; min-width: 100% !important; }}
   /* The Gallery tab, smaller rather than rearranged — it is one column
-     at every width, so a phone needs a few numbers rather than a second
-     layout. A stage taller than about half the viewport pushes the
-     filmstrip off the bottom, which is the half of the tab that says
-     there is anything else to look at. */
-  .kx-stage {{ --kx-stage-h: 46vh; }}
+     at every width, so a phone needs a couple of numbers rather than a
+     second layout.
+
+     Taller than it looks like it should be, and deliberately: a phone
+     screen is portrait and so is nearly everything this app generates,
+     so the stage has to be about half again as tall as it is wide for
+     the picture to fill it. At anything less the picture is pinched
+     into the middle with the width of the screen wasted either side —
+     which is exactly what a stage in the shape of a desktop one did. */
+  .kx-stage {{ --kx-stage-h: 62vh; }}
   .kx-strip {{ --kx-tile: 62px; }}
-  /* The chevrons are drawn without being hovered here (see the
-     coarse-pointer rule above), so they sit closer in, and the corner
-     they have to stay clear of is a smaller one. */
+  /* The corner Gradio's own buttons sit in is a smaller one here. */
   .kx-zones {{ inset: 36px 0 0 0; }}
-  .kx-zones button {{ padding: 0 10px !important; }}
 }}
 
 /* The showcase blocks, which are laid out by their own grids rather than by
@@ -2696,29 +2760,60 @@ JS = r"""
   });
 
   // ------------------------------------------------------- the filmstrip
-  // Keep the highlighted tile inside the Gallery tab's strip. Stepping
-  // through the list moves the highlight without touching the strip, so
-  // a walk of a dozen files would otherwise leave the tile being shown
-  // somewhere off to the left of a strip that never moved — and with it
-  // any sense of where in the list you are.
+  // Two jobs on the Gallery tab's strip, both of them things CSS cannot
+  // do on its own.
   //
-  // Scrolls the strip's own container rather than calling
-  // scrollIntoView, which would take the page with it and drag the
-  // picture off the top of the screen. Only when the tile is near an
-  // edge: re-centring on a tile someone has just clicked is the strip
-  // moving out from under the pointer for no reason.
+  // **Lay it out as one scrolling row.** A gr.Gallery is a wrapping grid
+  // inside a box of its own, and which element holds the tiles is
+  // Gradio's business — it has a different class name in different
+  // versions, and a stylesheet that guesses wrong silently leaves a
+  // second screenful of pictures where a strip should be. So find a
+  // tile, take its actual parent, and make *that* the row: no wrapping,
+  // as wide as its contents. Everything between the row and the block is
+  // then opened up so nothing clips it, and the block itself — the one
+  // element here with a name of our own on it — is the scroller.
+  const layOutStrip = (strip) => {
+    const tile = strip.querySelector(".thumbnail-item, .gallery-item");
+    const row = tile && tile.parentElement;
+    if (!row || row === strip) return;
+    Object.assign(row.style, {
+      display: "flex", flexWrap: "nowrap", gridTemplateColumns: "none",
+      width: "max-content", minWidth: "100%", maxWidth: "none",
+      height: "auto", minHeight: "0", maxHeight: "none",
+      overflow: "visible",
+    });
+    for (let box = row.parentElement; box && box !== strip;
+         box = box.parentElement) {
+      Object.assign(box.style, {
+        width: "max-content", minWidth: "100%", maxWidth: "none",
+        height: "auto", minHeight: "0", maxHeight: "none",
+        overflow: "visible",
+      });
+    }
+  };
+
+  // **Keep the highlighted tile in view.** Stepping through the list
+  // moves the highlight without touching the strip, so a walk of a dozen
+  // files would otherwise leave the tile being shown off to the left of
+  // a strip that never moved — and with it any sense of where in the
+  // list you are.
+  //
+  // Scrolls the strip itself rather than calling scrollIntoView, which
+  // would take the page with it and drag the picture off the top of the
+  // screen. Only when the tile is near an edge: re-centring on a tile
+  // someone has just clicked is the strip moving out from under the
+  // pointer for no reason.
   const followStrip = (strip) => {
-    const wrap = strip.querySelector(".grid-wrap") || strip;
     const tile = strip.querySelector('.selected, [aria-selected="true"]');
     if (!tile) return;
     const box = tile.getBoundingClientRect();
-    const view = wrap.getBoundingClientRect();
+    const view = strip.getBoundingClientRect();
     if (!box.width || !view.width) return;
     const edge = box.width * 0.75;
     if (box.left >= view.left + edge && box.right <= view.right - edge) {
       return;
     }
-    wrap.scrollBy({
+    strip.scrollBy({
       left: (box.left + box.width / 2) - (view.left + view.width / 2),
       behavior: "smooth",
     });
@@ -2734,17 +2829,23 @@ JS = r"""
     const strip = document.getElementById("kx-gallery-strip");
     if (!strip) return false;
     let queued = false;
-    new MutationObserver(() => {
+    const redraw = () => {
       if (queued) return;
       queued = true;
       requestAnimationFrame(() => {
         queued = false;
+        layOutStrip(strip);
         followStrip(strip);
       });
-    }).observe(strip, {
+    };
+    // Styles are set on elements this observer is watching, so it is
+    // told about class and nothing else — a style attribute in the
+    // filter would have it wake itself up forever.
+    new MutationObserver(redraw).observe(strip, {
       childList: true, subtree: true,
       attributes: true, attributeFilter: ["class"],
     });
+    redraw();
     return true;
   };
   if (!watchStrip()) {

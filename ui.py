@@ -1594,9 +1594,8 @@ def _nav_updates(back, forward):
     Two pairs walk the list and they are the same gesture twice over: the
     click zones on the left and right of the picture, and an off-screen
     pair the arrow keys resolve by elem_id. Both are written from here, so
-    an end of the list is dead in every way it can be reached — and since
-    the zones' chevrons are drawn on `:enabled`, a zone that would do
-    nothing stops offering itself.
+    an end of the list is dead in every way it can be reached: a disabled
+    zone stops taking the clicks that land on it.
     """
     return (gr.update(interactive=back), gr.update(interactive=forward),
             gr.update(interactive=back), gr.update(interactive=forward))
@@ -4870,23 +4869,28 @@ def _tab_gallery(tab):
         # The stage: a fixed-height surface the picture is drawn on,
         # rather than a box that fits it. Sizing it per picture would
         # move the filmstrip up and down the page on every step, and the
-        # strip is the thing being aimed at. CSS owns the height so one
-        # media query can shrink it on a phone.
+        # strip is the thing being aimed at.
+        #
+        # Neither component is given a height. The stage has one, in CSS,
+        # and centres what is on it: a height *here* is written onto the
+        # component's own box, which then letterboxes the picture at the
+        # top of itself and leaves the whole difference as a gap
+        # underneath — and it would need a second number to shrink on a
+        # phone, where one CSS variable does it now.
         with gr.Column(elem_classes="kx-stage"):
             gallery_image = gr.Image(
                 show_label=False, visible=False, interactive=False,
-                height=560, buttons=["download", "fullscreen"],
+                buttons=["download", "fullscreen"],
             )
             gallery_video = gr.Video(
                 show_label=False, visible=False, interactive=False,
-                height=560,
             )
             # Click the left of the picture for the file before it, the
             # right for the one after: everything ◀ Prev / Next ▶ used to
             # do, in the place the pointer already is. Real buttons on
-            # the same handler rather than a JS overlay — so the ends of
-            # the list disable them, and CSS then draws no chevron for a
-            # zone that would do nothing.
+            # the same handler rather than a JS overlay, so the ends of
+            # the list disable them and a dead zone stops taking clicks.
+            # Nothing is drawn for them — see .kx-zones in theme.CSS.
             with gr.Row(elem_classes="kx-zones",
                         visible=False) as gallery_zones:
                 zone_prev_btn = gr.Button(
@@ -4929,10 +4933,15 @@ def _tab_gallery(tab):
             # anyone who loaded the page.
             value=None, show_label=False,
             elem_id="kx-gallery-strip", elem_classes="kx-strip",
-            # One row that scrolls sideways — CSS turns Gradio's wrapping
-            # grid into a strip, and `columns` is only what it falls back
-            # to if that CSS ever stops matching.
-            columns=12, height=104, object_fit="cover",
+            # One row that scrolls sideways. The CSS and the JS in
+            # theme.py do that between them — `columns` is only what it
+            # falls back to if both ever stop matching Gradio's markup.
+            #
+            # Whole pictures shrunk into square tiles rather than square
+            # crops taken out of the middle of them: the strip is how two
+            # generations of one prompt get told apart, and a crop takes
+            # away the half that differs.
+            columns=12, height=104, object_fit="contain",
             # Clicking loads the original onto the stage above, rather
             # than opening Gradio's lightbox on the thumbnail.
             allow_preview=False,
