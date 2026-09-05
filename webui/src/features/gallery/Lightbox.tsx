@@ -329,13 +329,12 @@ export function Lightbox({
  *
  *  Every finished prompt files a recipe under the path it wrote (recipes.py),
  *  so a picture can be traced back to the controls that made it. Every
- *  control comes back as recorded, Seed and Random seed included — the
- *  button means "set the dials the way they were", and the next Generate
- *  makes a new picture with them. It used to pin the seed to the one that
- *  file ran on as well, which turned the next Generate into a byte-for-byte
- *  reproduction that ComfyUI answered out of its cache; see the apply route
- *  for why that stopped. The seed itself is still on the picture, in the
- *  meta line below the stage.
+ *  control comes back as recorded, and Seed comes back as the number that
+ *  picture actually ran on — but Random seed is left alone, so the next
+ *  Generate makes *another* picture like it rather than that one again. The
+ *  seed is there for the case where the exact frame is what was wanted:
+ *  untick Random seed and run. See the apply route for why pinning it was
+ *  the wrong default.
  *
  *  Nothing is the ordinary answer. Anything generated before this pod started
  *  keeping recipes, or copied into the output folder by hand, has none — and
@@ -368,6 +367,16 @@ function useReuse(item: MediaItem | undefined) {
       }
       offer(schema.key, values)
       navigate(schema.route)
+      /* Names the seed, because the form does not: the box now holds the
+       * number this picture ran on and the control above it says, quite
+       * correctly, that it is being ignored. Somebody who came here for
+       * that exact frame would otherwise have no way of knowing they are
+       * one tick away from it. */
+      toast(
+        item.seed != null
+          ? `Settings loaded — seed ${item.seed} filled in. Untick Random seed to make this exact picture again.`
+          : 'Settings loaded.',
+      )
       return true
     } catch (error) {
       toast(error instanceof Error ? error.message : String(error))

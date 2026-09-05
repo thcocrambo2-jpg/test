@@ -945,24 +945,29 @@ def _mount_tab(api: APIRouter, schema) -> None:
                 raise HTTPException(
                     400, "That recipe belongs to the %s tab."
                          % (stored.get("tab_label") or stored.get("tab")))
-            # Every control as recorded, Seed and Random seed included.
+            # Every control as recorded, with one substitution: Seed is
+            # the seed that picture actually ran on rather than whatever
+            # number was sitting in the box, ignored, while it ran.
             #
-            # This used to overwrite those two — Seed became the seed the
-            # picture actually ran on and Random seed went off — on the
-            # reading that somebody loading a recipe wants that picture
-            # back. In practice they want that picture's *settings* and
-            # then a new picture: pinning the seed made the next Generate
-            # reproduce the file byte for byte, and because ComfyUI reuses
-            # the cached sample for a graph it has just run, it came back
-            # in about a second having done no sampling at all. The run
-            # looked like it had not happened.
+            # Random seed is *not* touched, and the pair is the whole
+            # design. This used to switch it off as well, on the reading
+            # that somebody loading a recipe wants that picture back. They
+            # do not -- they have that picture. They want its settings and
+            # then another one like it, and with the seed pinned the next
+            # Generate could only reproduce the file byte for byte: same
+            # seed, same graph, same picture. ComfyUI answered that out of
+            # the cache in about a second, having sampled nothing, so the
+            # run looked like it had not happened at all.
             #
-            # So the seed the file ran on is no longer written into the
-            # box. It is still recorded, and the gallery still shows it
-            # beside the picture, so anyone who does want that exact frame
-            # can type it in and untick Random seed — which is two
-            # deliberate acts rather than a silent one.
+            # Left as recorded, Random seed comes back the way nearly every
+            # generation is made -- on -- and Generate produces a new
+            # picture from those settings. The exact frame stays one click
+            # away, because the number to do it with is now in the box:
+            # untick Random seed and run. Restoring the value costs nothing
+            # while the tick is on, since the control ignores it.
             values = schema.restore_recipe(stored.get("fields") or [])
+            if stored.get("seed") is not None and schema.field("seed"):
+                values["seed"] = stored["seed"]
             return {"values": values, "applied": stored.get("tab_label")}
         if "settings" in body:
             return {"values": schema.preset_values(body.get("settings") or {}),
