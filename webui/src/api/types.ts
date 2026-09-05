@@ -215,7 +215,6 @@ export interface Session {
   tagline: string
   planName: string | null
   expiresAt: string | null
-  outputDir: string
   modelCount: number
   gpuCount: number
   /** Feature keys this licence grants. The nav renders from this. */

@@ -94,7 +94,7 @@ import recipes
 import showcase
 import tabschema
 from comfy import GPU_COUNT
-from config import OUTPUT_DIR, TEMP_DIR, log
+from config import TEMP_DIR, log
 
 PREFIX = "/api/v1"
 
@@ -470,7 +470,6 @@ def create_app() -> FastAPI:
             "tagline": "ComfyUI generation suite",
             "planName": plan_name,
             "expiresAt": expires.isoformat() if expires else None,
-            "outputDir": str(OUTPUT_DIR),
             "modelCount": len(handlers.MODEL_CHOICES),
             "gpuCount": GPU_COUNT,
             "isAdmin": licensing.is_admin(),

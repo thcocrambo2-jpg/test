@@ -329,7 +329,7 @@ def _run_jobs(jobs, builder=build_workflow, prefix="Krea2"):
         except ComfyUIError as exc:
             yield images, f"❌ Job {label} failed: {exc}"
             return
-    yield images, f"✅ All {total} job(s) done — images saved under {OUTPUT_DIR}"
+    yield images, f"✅ All {total} job(s) done"
 
 
 def _resolve_lora_slots(*slots) -> list:
@@ -1058,13 +1058,12 @@ def generate_faceswap(base_image, face_image, swap_model, facedetection,
         yield images, (
             "⚠️ ReActor's SFW filter rejected an input, so no swap was "
             "performed — it returned a blank 512×512 frame instead, which "
-            f"was still written to {OUTPUT_DIR}. Note the check also fails "
-            "closed: if its detector model is missing, every swap comes back "
-            "blank (see the ComfyUI log)."
+            "was still saved. Note the check also fails closed: if its "
+            "detector model is missing, every swap comes back blank "
+            "(see the ComfyUI log)."
         )
         return
-    yield images, (f"✅ Face swapped at {width}×{height} — saved to "
-                   f"{OUTPUT_DIR}")
+    yield images, f"✅ Face swapped at {width}×{height}"
 
 
 def _fit_video_size(w: int, h: int, target_area: int, snap: int = 16) -> tuple:
@@ -1129,9 +1128,7 @@ def _run_wan_jobs(jobs, builder=build_wan_i2v_workflow):
         except ComfyUIError as exc:
             yield videos, latest, f"❌ Video {label} failed: {exc}"
             return
-    yield videos, latest, (
-        f"✅ All {total} video(s) done — saved under {OUTPUT_DIR}"
-    )
+    yield videos, latest, f"✅ All {total} video(s) done"
 
 
 def _is_wan_5b(model) -> bool:

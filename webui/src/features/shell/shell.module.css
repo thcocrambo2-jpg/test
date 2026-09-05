@@ -300,13 +300,6 @@
   flex-wrap: wrap;
 }
 
-.path {
-  font-family: var(--font-mono);
-  max-width: 42ch;
-  overflow: hidden;
-  text-overflow: ellipsis;
-}
-
 /* ------------------------------------------------------- narrow viewports */
 
 /* The old app stacked below 860px and the tab strip stayed a horizontal row

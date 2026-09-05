@@ -1,26 +1,27 @@
 import { useSession } from '@/api/queries'
 import { useQueue } from '@/store/queue'
 import { Pill } from '@/components/ui'
-import { useCopy } from '@/lib/util'
 import s from './shell.module.css'
 
 /*
  * The line under everything: the keyboard hint and the ambient facts.
  *
- * Carried over from `footer_html` (theme.py:3159) including its reasoning —
- * the counts and the path are reference material rather than something read
- * on every glance, and the path in particular gets typed into scp often
- * enough to be worth a click to copy. In Gradio that click needed injected JS
- * and a `data-kx-copy` attribute; here it is an onClick.
+ * Carried over from `footer_html` (theme.py:3159): the counts are reference
+ * material rather than something read on every glance.
+ *
+ * The output directory used to sit here too, as a click-to-copy pill. It is
+ * gone, and the server no longer sends it (api.session) — it is an absolute
+ * path, so on a machine someone runs locally and shares with others it spells
+ * out the host account's name to every visitor. The path ids the gallery and
+ * the output tiles copy are OUTPUT_DIR-*relative*, which is the part anyone
+ * needed anyway.
  */
 export function Footer() {
   const { data: session } = useSession()
-  const { copied, copy } = useCopy()
   const transport = useQueue((state) => state.transport)
 
   const models = session?.modelCount ?? 0
   const gpus = session?.gpuCount ?? 0
-  const path = session?.outputDir ?? ''
 
   return (
     <footer className={s.footer}>
@@ -50,16 +51,6 @@ export function Footer() {
         <Pill>
           <b>{gpus}</b> GPU{gpus === 1 ? '' : 's'}
         </Pill>
-        {path && (
-          <Pill
-            tone={copied ? 'success' : 'default'}
-            onClick={() => copy(path)}
-            title="Click to copy the output directory"
-            className={s.path}
-          >
-            {copied ? 'Copied' : path}
-          </Pill>
-        )}
       </div>
     </footer>
   )
