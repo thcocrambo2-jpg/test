@@ -141,6 +141,10 @@ const STATUS: Record<QueueJob['status'], JobStatus> = {
   cancelled: 'cancelled',
 }
 
+/** The server statuses that are over — jobqueue.FINISHED, in the browser's
+ *  spelling of the wire values. */
+const FINISHED = new Set<QueueJob['status']>(['done', 'failed', 'cancelled'])
+
 function trim(jobs: Job[]): Job[] {
   if (jobs.length <= MAX_JOBS) return jobs
   return jobs.filter(
@@ -187,6 +191,29 @@ function mediaOf(result: DisplayResult): MediaItem[] {
   return []
 }
 
+/* The newest display each tab has actually applied, by the revision
+ * jobqueue stamped it with.
+ *
+ * A display payload is one tab's latest yield *at the moment it was read*,
+ * and two things read it: the stream, and a polling round that may have
+ * several requests in flight. Nothing keeps their answers in order. A round
+ * that asked while a batch was at one image can land after the one carrying
+ * both, and applied blind it puts the tab back to one image for good — the
+ * gallery lists the disk, so it goes on showing two, which is exactly how
+ * this looked from the outside.
+ *
+ * The server has always sent the revision that orders them (`display_for`
+ * returns jobqueue's own counter); it was simply thrown away here. Anything
+ * not newer than what the tab is already showing is an answer to a question
+ * that has since been overtaken, and is dropped.
+ *
+ * Reset on connect, and again whenever the queue's revision goes *backwards*
+ * — which means the server process restarted and its counter began at 1
+ * again. Without that second check a restart would leave every tab holding a
+ * high-water mark no new event could ever clear. */
+const DISPLAY_SEEN = new Map<string, number>()
+let lastQueueRevision = 0
+
 /* Which files this session has already counted.
  *
  * `display` is not an announcement that something was made — it is one
@@ -225,12 +252,35 @@ export const useQueue = create<QueueState>((set, get) => {
 
   function onEvent(event: StreamEvent) {
     if (event.type === 'queue') {
+      if (event.queue.revision < lastQueueRevision) DISPLAY_SEEN.clear()
+      lastQueueRevision = event.queue.revision
       set((state) => {
         const known = new Map(state.jobs.map((job) => [job.id, job]))
         // Newest first, which is the order every list in the UI reads in;
         // the server sends oldest first because that is the order they run.
         const jobs = [...event.queue.jobs]
           .reverse()
+          /* A job that was already over the first time this browser heard
+           * of it is not shown at all.
+           *
+           * The server keeps the last 20 finished jobs (jobqueue.HISTORY)
+           * so that a tab can read its gallery back out of them, and sends
+           * the lot on connect. But the images live only in this browser —
+           * the queue event carries none, and `display` replays exactly one
+           * job per tab — so after a reload those rows arrived as run
+           * buttons that could never show anything, and as finished rows in
+           * the drawer with no thumbnails. A run picker whose entries are
+           * empty is worse than no entry: the work is in the gallery, which
+           * is the page that lists the disk.
+           *
+           * `known` is the test rather than a timestamp, and it is the
+           * right one for the other case this has to survive: a job
+           * submitted from a second browser on the same pod is seen here
+           * while it is still queued or running, so by the time it finishes
+           * it is known and it stays. Only a run that began and ended
+           * entirely between two of our snapshots is dropped, and that one
+           * genuinely has nothing here to show. */
+          .filter((row) => known.has(row.id) || !FINISHED.has(row.status))
           .map((row) => merge(row, known.get(row.id)))
         // A job this browser submitted a moment ago may not be in the
         // snapshot yet, and a job the server has aged out of its 20-deep
@@ -243,6 +293,9 @@ export const useQueue = create<QueueState>((set, get) => {
     }
 
     if (event.type === 'display') {
+      // Older than what this tab is already showing — see DISPLAY_SEEN.
+      if (event.revision <= (DISPLAY_SEEN.get(event.tab) ?? 0)) return
+      DISPLAY_SEEN.set(event.tab, event.revision)
       const images = mediaOf(event.result)
       /* Counted before the job lookup below and independently of it. A
        * display event with no job to attach to is not a non-event: two
@@ -295,6 +348,15 @@ export const useQueue = create<QueueState>((set, get) => {
       let lastEvent = Date.now()
       let stopped = false
       let polling: ReturnType<typeof setInterval> | undefined
+      /* One round at a time. `setInterval` does not wait for the previous
+       * callback, and a round is a queue request plus one display request
+       * per busy tab — comfortably past POLL_MS on a slow link. Overlapping
+       * rounds are how a display answer arrives after a newer one; the
+       * revision guard drops it, and this stops it being asked for. */
+      let inFlight = false
+
+      DISPLAY_SEEN.clear()
+      lastQueueRevision = 0
 
       /* Every event, from either transport, lands here.
        *
@@ -321,22 +383,31 @@ export const useQueue = create<QueueState>((set, get) => {
        * not the second is exactly the half-working state the bug produced —
        * statuses correct, "No images yet" underneath them. */
       async function pollOnce() {
-        if (stopped) return
+        // `live` as well as `stopped`: the stream coming back mid-round
+        // clears the interval, but the requests already out still land, and
+        // what they are carrying is by then the older account.
+        if (stopped || inFlight || get().transport === 'live') return
+        inFlight = true
         try {
-          const snapshot = await api.getQueue()
-          if (!stopped) onEvent({ type: 'queue', queue: snapshot })
-        } catch {
-          return
-        }
-        for (const tab of tabsNeedingDisplay(get().jobs)) {
           try {
-            const body = await api.getDisplay(tab)
-            if (!stopped) {
-              onEvent({ type: 'display', tab, revision: body.revision, result: body.result })
-            }
+            const snapshot = await api.getQueue()
+            if (!stopped) onEvent({ type: 'queue', queue: snapshot })
           } catch {
-            /* One tab's display failing is not a reason to skip the rest. */
+            return
           }
+          for (const tab of tabsNeedingDisplay(get().jobs)) {
+            if (stopped || get().transport === 'live') return
+            try {
+              const body = await api.getDisplay(tab)
+              if (!stopped) {
+                onEvent({ type: 'display', tab, revision: body.revision, result: body.result })
+              }
+            } catch {
+              /* One tab's display failing is not a reason to skip the rest. */
+            }
+          }
+        } finally {
+          inFlight = false
         }
       }
 
