@@ -154,6 +154,11 @@
   vertical-align: -2px;
 }
 
+/* An icon that is the whole button has no label to be spaced away from. */
+.btnIconAlone {
+  margin-right: 0;
+}
+
 .image {
   width: 100%;
   aspect-ratio: var(--ratio, 1);

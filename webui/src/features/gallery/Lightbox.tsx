@@ -7,7 +7,7 @@ import type { MediaItem } from '@/api/types'
 import { Button, Pill, useToast } from '@/components/ui'
 import { useHandoff } from '@/store/handoff'
 import { cx, fileName, relativeTime, saveFile, useCopy } from '@/lib/util'
-import { DownloadIcon } from './icons'
+import { CheckIcon, CopyIcon, DownloadIcon } from './icons'
 import s from './gallery.module.css'
 
 /*
@@ -68,6 +68,9 @@ export function Lightbox({
   const stripRef = useRef<HTMLDivElement>(null)
   const stageRef = useRef<HTMLImageElement>(null)
   const { copied, copy } = useCopy()
+  /* A second copier, not the one the path pill uses: copying the prompt
+   * should not light up the path's "Copied", or the other way round. */
+  const promptCopy = useCopy()
   const reuse = useReuse(item)
   const [saving, setSaving] = useState(false)
 
@@ -169,6 +172,18 @@ export function Lightbox({
               title={`Load the settings this was made with into ${reuse.label}`}
             >
               ▶️ Load these settings
+            </Button>
+          )}
+          {item.prompt && (
+            <Button
+              size="sm"
+              variant="ghost"
+              iconOnly
+              onClick={() => void promptCopy.copy(item.prompt ?? '')}
+              aria-label="Copy prompt"
+              title={promptCopy.copied ? 'Prompt copied' : 'Copy prompt'}
+            >
+              {promptCopy.copied ? <CheckIcon /> : <CopyIcon />}
             </Button>
           )}
           <Button

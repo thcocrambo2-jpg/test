@@ -1,6 +1,7 @@
+import { cx } from '@/lib/util'
 import s from './gallery.module.css'
 
-/* The two marks the gallery draws, inline.
+/* The marks the gallery draws, inline.
  *
  * Inline because two paths of a dozen points each are cheaper than an icon
  * dependency that arrives with a thousand more, and in their own file
@@ -27,6 +28,26 @@ export function DownloadIcon() {
       <path d="M12 4v10" />
       <path d="m8 11 4 4 4-4" />
       <path d="M5 19h14" />
+    </svg>
+  )
+}
+
+/** Two sheets, for "copy this". Drawn without the trailing margin the
+ *  labelled icons carry, because it is the whole button. */
+export function CopyIcon() {
+  return (
+    <svg className={cx(s.btnIcon, s.btnIconAlone)} viewBox="0 0 24 24" aria-hidden="true">
+      <rect x="9" y="9" width="11" height="11" rx="2" />
+      <path d="M15 5H7a2 2 0 0 0-2 2v8" />
+    </svg>
+  )
+}
+
+/** The tick that stands in for it for a moment after a copy lands. */
+export function CheckIcon() {
+  return (
+    <svg className={cx(s.btnIcon, s.btnIconAlone)} viewBox="0 0 24 24" aria-hidden="true">
+      <path d="m5 13 4 4 10-10" />
     </svg>
   )
 }
