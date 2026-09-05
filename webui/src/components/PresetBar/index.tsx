@@ -1,9 +1,10 @@
-import { useEffect, useRef, useState } from 'react'
+import { useEffect, useState } from 'react'
 import type { TabSchema } from '@/api/types'
 import { api } from '@/api/client'
 import { usePresets } from '@/api/queries'
 import { SelectField } from '@/components/fields'
 import { useToast } from '@/components/ui'
+import { useTabState } from '@/store/tabState'
 import s from './preset.module.css'
 
 /*
@@ -46,13 +47,22 @@ export function PresetBar({
   onApply: (values: Record<string, unknown>) => void
 }) {
   const { data, isLoading } = usePresets(schema.presetTab)
-  const [chosen, setChosen] = useState('')
+  /* Both of these are per tab and outlive it, and the second one is the
+   * whole of what "runs once per tab" means.
+   *
+   * They were a `useState` and a `useRef`, on the reading that a tab switch
+   * remounts this component. It does not: React Router renders the matched
+   * route into the same position, so `TabPage` is reconciled with `TabPage`
+   * and everything here is re-rendered with a different `schema` instead.
+   * One ref therefore held one tab's answer at a time — Krea2 to V2 and
+   * back left it naming V2, the guard below missed, and Krea2's default
+   * preset was applied a second time over every dial the customer had
+   * touched since. Which is exactly what a preset writes and a prompt is
+   * not: the prompt stayed and everything under it snapped back. */
+  const [chosen, setChosen] = useTabState(`preset.chosen.${schema.key}`, '')
+  const [applied, setApplied] = useTabState(`preset.applied.${schema.key}`, false)
   const [busy, setBusy] = useState(false)
   const toast = useToast()
-  // One ref per tab key: switching tabs must let the new tab apply its own
-  // default, and coming back must not re-apply the first one over whatever
-  // the customer has since typed.
-  const applied = useRef<string | null>(null)
 
   async function apply(name: string) {
     setChosen(name)
@@ -69,15 +79,13 @@ export function PresetBar({
   }
 
   useEffect(() => {
-    if (applied.current === schema.key) return
-    const fallback = data?.default
-    if (!data) return
-    applied.current = schema.key
-    if (fallback) void apply(fallback)
-    // `apply` is stable enough for this: it closes over schema.key, which is
-    // the dependency that matters and is already in the guard above.
+    if (applied || !data) return
+    setApplied(true)
+    if (data.default) void apply(data.default)
+    // `apply` is deliberately not a dependency: it is redefined on every
+    // render and the flag above is what decides whether this runs at all.
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [schema.key, data])
+  }, [applied, setApplied, data])
 
   if (!schema.presetTab) return null
 
