@@ -944,16 +944,24 @@ def _mount_tab(api: APIRouter, schema) -> None:
                 raise HTTPException(
                     400, "That recipe belongs to the %s tab."
                          % (stored.get("tab_label") or stored.get("tab")))
+            # Every control as recorded, Seed and Random seed included.
+            #
+            # This used to overwrite those two — Seed became the seed the
+            # picture actually ran on and Random seed went off — on the
+            # reading that somebody loading a recipe wants that picture
+            # back. In practice they want that picture's *settings* and
+            # then a new picture: pinning the seed made the next Generate
+            # reproduce the file byte for byte, and because ComfyUI reuses
+            # the cached sample for a graph it has just run, it came back
+            # in about a second having done no sampling at all. The run
+            # looked like it had not happened.
+            #
+            # So the seed the file ran on is no longer written into the
+            # box. It is still recorded, and the gallery still shows it
+            # beside the picture, so anyone who does want that exact frame
+            # can type it in and untick Random seed — which is two
+            # deliberate acts rather than a silent one.
             values = schema.restore_recipe(stored.get("fields") or [])
-            # Two values are deliberately not restored as recorded: Seed
-            # becomes the seed the picture actually ran on rather than
-            # whatever was in the box, and Random seed goes off. Together
-            # they are the difference between "the same settings" and "the
-            # same image", which is what someone clicking this is asking
-            # for. ui._use_recipe does the same, by label.
-            if stored.get("seed") is not None:
-                values["seed"] = stored["seed"]
-                values["randomize"] = False
             return {"values": values, "applied": stored.get("tab_label")}
         if "settings" in body:
             return {"values": schema.preset_values(body.get("settings") or {}),

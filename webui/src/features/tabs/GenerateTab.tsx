@@ -96,6 +96,19 @@ export function GenerateTab({ schema }: { schema: TabSchema }) {
     return row ? { model: <Inline text={row.info} /> } : undefined
   }, [models, values.model])
 
+  /* Declared above the two things that write whole bags of values, because
+   * both have to record the model they just wrote — see the model effect
+   * below for what happens to a recipe when they do not. */
+  const lastModel = useRef<string | null>(null)
+  const lastKey = useRef(schema.key)
+
+  /** A patch is about to be applied whole. If it names a model, that model
+   *  was *chosen by the patch* and not by the customer, so it is not a
+   *  change the model effect should react to. */
+  const notePatchedModel = useCallback((patch: Record<string, unknown>) => {
+    if (typeof patch.model === 'string') lastModel.current = patch.model
+  }, [])
+
   // A handoff — the Prompt Library's Use button, the Gallery's "load these
   // settings" — is drained on arrival and applied *over the defaults*, never
   // over whatever this tab was left holding: a recipe means "these values,
@@ -106,11 +119,26 @@ export function GenerateTab({ schema }: { schema: TabSchema }) {
   // Without one this does nothing at all. It used to re-seed the whole bag
   // from `defaults` on every mount, which is exactly what threw away the form
   // you had filled in the moment you looked at another tab.
+  //
+  // Subscribed to rather than drained on mount, and that is the whole of it:
+  // whoever offers a handoff then navigates to the tab it is for, and when
+  // that tab is the one already on screen — "load these settings" from this
+  // page's own lightbox — the navigation is to the route we are on, so React
+  // Router re-renders `TabPage` with `TabPage`, nothing remounts, and an
+  // effect keyed on `schema.key` never runs again. The values sat in the
+  // store unread and the button looked broken from the output panel while
+  // working from the gallery. Watching `pending` makes arrival the trigger,
+  // which is what it always meant. `take` clears it, so this settles in one
+  // extra pass and a later remount does not re-apply it over what has been
+  // typed since.
   const take = useHandoff((state) => state.take)
+  const handed = useHandoff((state) => state.pending[schema.key])
   useEffect(() => {
-    const handed = take(schema.key)
-    if (handed) setValues({ ...defaults, ...handed })
-  }, [schema.key, defaults, take, setValues])
+    if (!handed) return
+    take(schema.key)
+    notePatchedModel(handed)
+    setValues({ ...defaults, ...handed })
+  }, [handed, schema.key, defaults, take, setValues, notePatchedModel])
 
   /* `setValues` is a dependency, and has to be.
    *
@@ -137,9 +165,10 @@ export function GenerateTab({ schema }: { schema: TabSchema }) {
    * values, together". */
   const apply = useCallback(
     (patch: Record<string, unknown>) => {
+      notePatchedModel(patch)
       setValues((previous) => ({ ...previous, ...patch }))
     },
-    [setValues],
+    [setValues, notePatchedModel],
   )
 
   /* Picking a model resets the dials that belong to it.
@@ -150,12 +179,17 @@ export function GenerateTab({ schema }: { schema: TabSchema }) {
    * config.py. The registries arrive whole in `/catalog`, so it happens here
    * with no round trip, and the same four lines serve all four tabs.
    *
-   * Only on an actual *change*: applying a preset that names the model
-   * already selected must not overwrite the steps and CFG that preset just
-   * set. Gradio had the same rule for the same reason, by accident — a value
-   * that does not change fires nothing. */
-  const lastModel = useRef<string | null>(null)
-  const lastKey = useRef(schema.key)
+   * Only on an actual *change*, and only one the customer made. Applying a
+   * preset that names the model already selected must not overwrite the
+   * steps and CFG that preset just set — Gradio had that rule for the same
+   * reason, by accident, since a value that does not change fires nothing.
+   * A preset or a recipe naming a *different* model is the same case and
+   * Gradio's accident did not cover it: "load these settings" would restore
+   * a recipe and then, one render later, deal that model's default steps and
+   * CFG over the recorded ones and rewrite the prompt's trigger word — so
+   * the button loaded not quite the settings it was pointing at. Hence
+   * `notePatchedModel`: a model that arrived inside a patch is recorded as
+   * already seen, and only a hand on the dropdown gets here. */
   const model = String(values.model ?? '')
   useEffect(() => {
     const row = models.find((candidate) => candidate.name === model)

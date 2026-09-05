@@ -168,7 +168,11 @@ export function Lightbox({
               size="sm"
               variant="primary"
               loading={reuse.busy}
-              onClick={() => void reuse.load()}
+              onClick={() => {
+                void reuse.load().then((loaded) => {
+                  if (loaded) onClose()
+                })
+              }}
               title={`Load the settings this was made with into ${reuse.label}`}
             >
               ▶️ Load these settings
@@ -324,12 +328,14 @@ export function Lightbox({
 /** "Load these settings" for one generated file.
  *
  *  Every finished prompt files a recipe under the path it wrote (recipes.py),
- *  so a picture can be traced back to the controls that made it. Two values
- *  are deliberately not restored as recorded, and it is the whole point of
- *  the button: **Seed** becomes the seed that picture actually ran on rather
- *  than whatever was in the box, and **Random seed** goes off. Together they
- *  are the difference between "the same settings" and "the same image", and
- *  the server applies both (see the apply route).
+ *  so a picture can be traced back to the controls that made it. Every
+ *  control comes back as recorded, Seed and Random seed included — the
+ *  button means "set the dials the way they were", and the next Generate
+ *  makes a new picture with them. It used to pin the seed to the one that
+ *  file ran on as well, which turned the next Generate into a byte-for-byte
+ *  reproduction that ComfyUI answered out of its cache; see the apply route
+ *  for why that stopped. The seed itself is still on the picture, in the
+ *  meta line below the stage.
  *
  *  Nothing is the ordinary answer. Anything generated before this pod started
  *  keeping recipes, or copied into the output folder by hand, has none — and
@@ -346,19 +352,26 @@ function useReuse(item: MediaItem | undefined) {
   const schema = schemas?.find((candidate) => candidate.key === item?.tab)
   const can = Boolean(item && schema)
 
-  async function load() {
-    if (!item || !schema) return
+  /** True when the values actually went somewhere, so the caller can shut
+   *  the dialog on the way out. Worth reporting rather than assuming: from
+   *  a tab's own output panel the navigation below is to the route already
+   *  on screen and moves nothing, so closing is the only thing that says
+   *  the click was heard. */
+  async function load(): Promise<boolean> {
+    if (!item || !schema) return false
     setBusy(true)
     try {
       const values = await api.applyRecipe(schema.key, item.id)
       if (Object.keys(values).length === 0) {
         toast('No recipe on file for that one.')
-        return
+        return false
       }
       offer(schema.key, values)
       navigate(schema.route)
+      return true
     } catch (error) {
       toast(error instanceof Error ? error.message : String(error))
+      return false
     } finally {
       setBusy(false)
     }
