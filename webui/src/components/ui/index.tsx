@@ -1,8 +1,10 @@
 import {
   createContext,
+  useCallback,
   useContext,
   useEffect,
   useId,
+  useRef,
   useState,
   type ButtonHTMLAttributes,
   type ReactNode,
@@ -316,23 +318,42 @@ export function Modal({
   title,
   children,
   width,
+  zIndex,
 }: {
   open: boolean
   onClose: () => void
   title?: ReactNode
   children: ReactNode
   width?: number
+  /** Overrides `--z-modal`, for a modal opened on top of another layer that
+   *  already sits at it — see `ConfirmHost`. */
+  zIndex?: number | string
 }) {
+  /* Keys are taken in the capture phase and stopped there.
+   *
+   * Every other global shortcut in the app listens on `window` in the bubble
+   * phase — the lightbox's Escape and arrows, for two — and window capture runs
+   * before all of them. Without this, one Escape pressed on a confirmation
+   * opened over the lightbox would answer the question *and* close the picture
+   * behind it, and an arrow key would flip the picture underneath the dialog.
+   * An open modal should be the only thing listening.
+   *
+   * The one thing to know when putting a field in a modal: React's own
+   * listeners never see these keys either, so an `onKeyDown` on modal content
+   * will not fire. Typing is unaffected — characters, Tab and Enter on a
+   * focused button are default actions, and `onChange` rides `input`, none of
+   * which propagation touches. Only an explicit key handler needs rethinking. */
   useEffect(() => {
     if (!open) return
     function onKeyDown(event: KeyboardEvent) {
+      event.stopPropagation()
       if (event.key === 'Escape') onClose()
     }
-    window.addEventListener('keydown', onKeyDown)
+    window.addEventListener('keydown', onKeyDown, true)
     const previous = document.body.style.overflow
     document.body.style.overflow = 'hidden'
     return () => {
-      window.removeEventListener('keydown', onKeyDown)
+      window.removeEventListener('keydown', onKeyDown, true)
       document.body.style.overflow = previous
     }
   }, [open, onClose])
@@ -341,7 +362,7 @@ export function Modal({
   if (!open) return null
 
   return createPortal(
-    <div className={s.backdrop} onMouseDown={onClose}>
+    <div className={s.backdrop} style={zIndex ? { zIndex } : undefined} onMouseDown={onClose}>
       <div
         className={s.modal}
         style={width ? { width: `min(${width}px, 100%)` } : undefined}
@@ -404,6 +425,84 @@ export function ToastHost({ children }: { children: ReactNode }) {
           document.body,
         )}
     </ToastContext.Provider>
+  )
+}
+
+// ------------------------------------------------------------------ confirm
+
+export interface ConfirmOptions {
+  title?: string
+  body: ReactNode
+  confirmLabel?: string
+  cancelLabel?: string
+  tone?: 'danger' | 'default'
+}
+
+const ConfirmContext = createContext<(options: ConfirmOptions) => Promise<boolean>>(
+  () => Promise.resolve(false),
+)
+
+/** Ask a yes/no question and await the answer.
+ *
+ *  A promise and not a `<ConfirmDialog>` the caller renders, because the
+ *  callers are already `async` functions that ask in the middle of doing
+ *  something — `if (!(await confirm(…))) return` is the same shape the
+ *  `window.confirm` it replaces had, where a declarative dialog would split
+ *  each delete into a pending-state half and a do-it half. */
+export function useConfirm() {
+  return useContext(ConfirmContext)
+}
+
+export function ConfirmHost({ children }: { children: ReactNode }) {
+  const [options, setOptions] = useState<ConfirmOptions | null>(null)
+  // Held in a ref rather than in state: settling the promise is not something
+  // the render output depends on, and a re-render must not lose it.
+  const settle = useRef<((answer: boolean) => void) | null>(null)
+
+  const ask = useCallback((next: ConfirmOptions) => {
+    return new Promise<boolean>((resolve) => {
+      // A second question asked while one is open answers the first as "no"
+      // rather than abandoning a caller mid-`await` forever.
+      settle.current?.(false)
+      settle.current = resolve
+      setOptions(next)
+    })
+  }, [])
+
+  const answer = useCallback((value: boolean) => {
+    setOptions(null)
+    const resolve = settle.current
+    settle.current = null
+    resolve?.(value)
+  }, [])
+
+  // Escape, the backdrop and the ✕ all arrive here, so every way out of the
+  // dialog is a "no" and none of them leaves the promise pending.
+  const cancel = useCallback(() => answer(false), [answer])
+
+  return (
+    <ConfirmContext.Provider value={ask}>
+      {children}
+      <Modal
+        open={options !== null}
+        onClose={cancel}
+        title={options?.title}
+        zIndex="var(--z-confirm)"
+      >
+        <div>{options?.body}</div>
+        <div className={s.modalFoot}>
+          <Button variant="ghost" onClick={cancel} autoFocus>
+            {options?.cancelLabel ?? 'Cancel'}
+          </Button>
+          <Button
+            variant={options?.tone === 'danger' ? 'danger' : 'primary'}
+            onClick={() => answer(true)}
+          >
+            {options?.confirmLabel ?? 'Confirm'}
+          </Button>
+        </div>
+      </Modal>
+    </ConfirmContext.Provider>
   )
 }
 

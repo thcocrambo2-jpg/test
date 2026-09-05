@@ -144,6 +144,9 @@
   --z-sticky: 20;
   --z-panel: 40;
   --z-modal: 80;
+  /* Above --z-modal because the gallery's lightbox sits at it, and a
+   * confirmation is always asked on top of whatever raised it. */
+  --z-confirm: 90;
   --z-toast: 100;
 }
 

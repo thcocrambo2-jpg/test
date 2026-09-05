@@ -4,7 +4,7 @@ import { BrowserRouter } from 'react-router-dom'
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import { App } from './App'
 import { exchangeToken } from '@/api/client'
-import { ToastHost } from '@/components/ui'
+import { ConfirmHost, ToastHost } from '@/components/ui'
 import './theme/base.css'
 
 const queryClient = new QueryClient({
@@ -38,7 +38,9 @@ function boot() {
     <QueryClientProvider client={queryClient}>
       <BrowserRouter>
         <ToastHost>
-          <App />
+          <ConfirmHost>
+            <App />
+          </ConfirmHost>
         </ToastHost>
       </BrowserRouter>
     </QueryClientProvider>

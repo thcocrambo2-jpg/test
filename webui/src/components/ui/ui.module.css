@@ -492,6 +492,16 @@
   line-height: var(--lh-normal);
 }
 
+/* Inside the body rather than a sibling of it, because `Modal` takes one
+ * `children` slot — so the spacing is a margin off the question, not a rule
+ * across the panel. */
+.modalFoot {
+  display: flex;
+  justify-content: flex-end;
+  gap: var(--s-3);
+  margin-top: var(--s-5);
+}
+
 /* ------------------------------------------------------------------ toasts */
 
 .toastHost {

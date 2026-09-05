@@ -3,7 +3,15 @@ import { useQueryClient } from '@tanstack/react-query'
 import { api } from '@/api/client'
 import { useGallery } from '@/api/queries'
 import type { MediaItem } from '@/api/types'
-import { Alert, Button, EmptyState, Segmented, Skeleton, useToast } from '@/components/ui'
+import {
+  Alert,
+  Button,
+  EmptyState,
+  Segmented,
+  Skeleton,
+  useConfirm,
+  useToast,
+} from '@/components/ui'
 import { cx, fileName, relativeTime, saveFile, useCopy } from '@/lib/util'
 import { useQueue } from '@/store/queue'
 import { useTabState } from '@/store/tabState'
@@ -47,6 +55,7 @@ export function Gallery() {
   const { data, isLoading, error } = useGallery(cursor)
   const queryClient = useQueryClient()
   const toast = useToast()
+  const confirm = useConfirm()
 
   /* The selection.
    *
@@ -163,7 +172,15 @@ export function Gallery() {
     void queryClient.invalidateQueries({ queryKey: ['gallery'] })
   }
 
+  /** Delete one file, from the lightbox. */
   async function remove(item: MediaItem) {
+    const confirmed = await confirm({
+      title: 'Delete permanently?',
+      body: 'Delete this file? This cannot be undone.',
+      confirmLabel: 'Delete',
+      tone: 'danger',
+    })
+    if (!confirmed) return
     await api.deleteMedia(item.id)
     await queryClient.invalidateQueries({ queryKey: ['gallery'] })
     setLightbox(null)
@@ -210,7 +227,13 @@ export function Gallery() {
     const ids = [...selected]
     if (ids.length === 0 || busy) return
     const what = ids.length === 1 ? 'this file' : `these ${ids.length} files`
-    if (!window.confirm(`Delete ${what} permanently? This cannot be undone.`)) return
+    const confirmed = await confirm({
+      title: 'Delete permanently?',
+      body: `Delete ${what}? This cannot be undone.`,
+      confirmLabel: 'Delete',
+      tone: 'danger',
+    })
+    if (!confirmed) return
     setBusy(true)
     try {
       const result = await api.deleteMediaMany(ids)

@@ -200,13 +200,7 @@ export function Lightbox({
             <DownloadIcon /> Download
           </Button>
           {onDelete && (
-            <Button
-              size="sm"
-              variant="danger"
-              onClick={() => {
-                if (window.confirm('Delete this file permanently?')) onDelete(item)
-              }}
-            >
+            <Button size="sm" variant="danger" onClick={() => onDelete(item)}>
               Delete
             </Button>
           )}
