@@ -133,9 +133,9 @@ function JobRow({ job, onNavigate }: { job: Job; onNavigate: () => void }) {
       )}
 
       <div className={s.jobStatus}>
-        <span style={{ display: 'flex', alignItems: 'center', gap: 'var(--s-2)' }}>
+        <span className={s.jobStatusText}>
           <span className={cx(s.statusDot, dot)} aria-hidden />
-          {job.error ?? job.statusText}
+          <span className={s.jobStatusLine}>{job.error ?? job.statusText}</span>
         </span>
         {isLive(job) ? (
           <Button
@@ -149,11 +149,22 @@ function JobRow({ job, onNavigate }: { job: Job; onNavigate: () => void }) {
             Cancel
           </Button>
         ) : (
+          /* One thumbnail, not the batch. The row is 320px wide and its
+           * job is to say which run this is, not to be a gallery — the run
+           * picker on the tab shows the whole batch, and clicking anywhere
+           * on this row goes there with this run selected. The thumbnail,
+           * not the original: three full-resolution PNGs to draw 34px
+           * squares was the other thing wrong with this row. */
           job.images.length > 0 && (
             <span className={s.jobThumbs}>
-              {job.images.slice(0, 3).map((image) => (
-                <img key={image.id} src={image.url} alt="" className={s.jobThumb} />
-              ))}
+              <img
+                src={job.images[0].thumbUrl ?? job.images[0].url}
+                alt=""
+                className={s.jobThumb}
+              />
+              {job.images.length > 1 && (
+                <span className={s.jobMore}>+{job.images.length - 1}</span>
+              )}
             </span>
           )
         )}

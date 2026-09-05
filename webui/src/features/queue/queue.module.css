@@ -91,6 +91,9 @@
 .list {
   flex: 1;
   overflow-y: auto;
+  /* `overflow-y: auto` alone computes the other axis to `auto` as well, so
+     anything too wide scrolls the drawer sideways instead of wrapping. */
+  overflow-x: hidden;
   padding: var(--s-3);
   display: flex;
   flex-direction: column;
@@ -98,6 +101,11 @@
 }
 
 .job {
+  /* A flex item's floor is its content, and this row's content includes a
+     status line ending in an absolute output path — one unbreakable token
+     wider than the 320px drawer. Without this the card refuses to shrink and
+     everything after it is pushed out of the panel. */
+  min-width: 0;
   border: 1px solid var(--c-border);
   border-radius: var(--r-md);
   background: var(--c-panel);
@@ -144,6 +152,7 @@
 .jobPrompt {
   font-size: var(--t-xs);
   color: var(--c-text-muted);
+  overflow-wrap: anywhere;
   display: -webkit-box;
   -webkit-line-clamp: 2;
   line-clamp: 2;
@@ -153,16 +162,45 @@
 
 .jobStatus {
   display: flex;
-  align-items: center;
+  align-items: flex-start;
   gap: var(--s-2);
   font-size: var(--t-2xs);
   color: var(--c-text-muted);
   justify-content: space-between;
 }
 
+/* Takes the slack and gives it back: `min-width: 0` lets it shrink past its
+   longest word, `overflow-wrap` breaks that word, and the thumbnail beside
+   it keeps its own size instead of being shoved out of the card. */
+.jobStatusText {
+  display: flex;
+  align-items: flex-start;
+  gap: var(--s-2);
+  flex: 1 1 auto;
+  min-width: 0;
+}
+
+.jobStatusLine {
+  min-width: 0;
+  overflow-wrap: anywhere;
+  display: -webkit-box;
+  -webkit-line-clamp: 3;
+  line-clamp: 3;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+}
+
 .jobThumbs {
   display: flex;
+  align-items: center;
   gap: var(--s-1);
+  flex: 0 0 auto;
+}
+
+.jobMore {
+  font-family: var(--font-mono);
+  font-size: var(--t-2xs);
+  color: var(--c-text-faint);
 }
 
 .jobThumb {
@@ -178,6 +216,8 @@
   height: 6px;
   border-radius: 50%;
   flex: none;
+  /* Centred on the first line of the status text, which now wraps. */
+  margin-top: 0.42em;
 }
 .dotQueued {
   background: var(--c-text-faint);
