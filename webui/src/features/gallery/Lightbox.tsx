@@ -372,11 +372,7 @@ function useReuse(item: MediaItem | undefined) {
        * correctly, that it is being ignored. Somebody who came here for
        * that exact frame would otherwise have no way of knowing they are
        * one tick away from it. */
-      toast(
-        item.seed != null
-          ? `Settings loaded — seed ${item.seed} filled in. Untick Random seed to make this exact picture again.`
-          : 'Settings loaded.',
-      )
+      toast('Settings loaded.')
       return true
     } catch (error) {
       toast(error instanceof Error ? error.message : String(error))
