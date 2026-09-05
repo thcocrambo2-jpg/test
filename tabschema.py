@@ -162,10 +162,14 @@ class Repeat:
     Two shapes exist in this app and the difference shifts every argument
     after it (context.md 4.3):
 
-      * **pairs** `(name, weight)` — Krea2, Flux, Edit, Inpaint. Eight
-        slots, from MAX_LORA_SLOTS.
-      * **triples** `(enabled, name, weight)` — the two Power-Lora-Loader
-        tabs, V2 and Klein, whose rows carry a per-row on/off checkbox.
+      * **triples** `(enabled, name, weight)` — every tab but Flux. The
+        row carries a per-row on/off checkbox, so switching one off keeps
+        its filename instead of resetting the dropdown to "None".
+      * **pairs** `(name, weight)` — Flux alone, whose stack is a separate
+        folder and pipeline. Eight slots, from MAX_LORA_SLOTS.
+
+    The Krea2 family were pairs until the two shapes were unified; a
+    preset stored in the old shape still loads, see `preset_values`.
 
     `parts` is the submission order *within* one slot, so `call_args`
     flattens `slots x parts` and that is the tail. `slots()` returns one
@@ -663,9 +667,29 @@ class TabSchema:
             rows = settings.get("loras")
             rows = rows if isinstance(rows, list) else []
             defaults = tail.rows()
+            # What "no LoRA here" is spelled as, for the migration below.
+            blank = next((p.default for p in tail.parts if p.name == "name"),
+                         "None")
             for index in range(tail.count()):
                 row = rows[index] if index < len(rows) else None
                 row = list(row) if isinstance(row, (list, tuple)) else []
+                # A Krea2 preset saved before the stack grew its On column
+                # stores [name, weight], and five of its eight rows are
+                # ["None", 0.8]. Read such a row the way the pair world
+                # meant it: a row naming a real file was on, and "None" was
+                # how off was spelled. Prepending a bare True instead would
+                # come back with every empty row ticked, because "None" is
+                # a valid choice and so the not-on-this-pod guard below
+                # never fires for it.
+                #
+                # Length-sniffed rather than keyed on the tab: Krea2 Edit
+                # offers these same presets and is entitled separately from
+                # the Krea2 tab, so a Krea2-shaped branch here would leave
+                # Edit reading them raw on a licence that grants only Edit.
+                # V2 and Klein rows have always been three long and never
+                # match.
+                if len(tail.parts) == 3 and len(row) == 2:
+                    row = [row[0] != blank, row[0], row[1]]
                 known = None
                 for offset, part in enumerate(tail.parts):
                     key = tail.value_key(index, part.name)
@@ -819,7 +843,13 @@ def _stack_slots(loader):
 
 
 def _pair_tail(choices, title):
-    """`(name, weight)` slots — Krea2, Flux, Edit, Inpaint."""
+    """`(name, weight)` slots — Flux, and nothing else any more.
+
+    The Krea2-family tabs used to be here too. They moved to `_triple_tail`
+    so that switching a row off keeps its filename, which is what the V2
+    tabs have always done; Flux keeps the two-part row because its stack is
+    a separate folder and a separate pipeline that nobody asked to change.
+    """
     return Repeat(
         parts=(
             Field("name", "LoRA {n}", "select", "None", choices=choices),
@@ -831,12 +861,18 @@ def _pair_tail(choices, title):
     )
 
 
-def _triple_tail(choices, loader, title):
-    """`(enabled, name, weight)` slots — the Power-Lora-Loader tabs.
+def _triple_tail(choices, slots, title):
+    """`(enabled, name, weight)` slots — every tab but Flux.
 
     The order inside the row is the submission order of the handler's
     varargs tail, so `enabled` really does come first. Getting it wrong
     shifts every argument after it.
+
+    `slots` is the rows callable rather than a loader, because the two
+    families fill their stack from different places: V2 and Klein take
+    theirs from the source workflow (`_stack_slots`), the Krea2 family
+    repeats a blank row (`_blank_slots`). Everything else about the row is
+    the same, which is the point.
     """
     return Repeat(
         parts=(
@@ -845,13 +881,20 @@ def _triple_tail(choices, loader, title):
             Field("weight", "Strength", "slider", 1.0, lo=0.0, hi=2.0,
                   step=0.01),
         ),
-        slots=_stack_slots(loader),
+        slots=slots,
         title=title,
     )
 
 
 def _krea_lora_tail():
-    return _pair_tail(_lora_choices, "🎭 LoRA stack")
+    """The Krea 2 folder's stack — Krea2, Edit and Inpaint share it.
+
+    Model-only (`LoraLoaderModelOnly`, workflow.py), where the V2 stack is
+    model *and* CLIP, so the title stays plain rather than borrowing V2's.
+    """
+    return _triple_tail(_lora_choices,
+                        _blank_slots(handlers.MAX_LORA_SLOTS),
+                        "LoRA stack")
 
 
 def _seed_fields(default=42):
@@ -933,7 +976,7 @@ def _v2_sampler_fields(denoise=True):
     rows += [
         Field("cfg", "CFG", "slider", V2_VARIANT_DEFAULTS["turbo"]["cfg"],
               lo=0.0, hi=20.0, step=0.1, group="sampler",
-              preset="sampler.cfg"),
+              preset="sampler.cfg", hint=_CFG_NOTE),
         Field("sampler_mode", "Sampler mode", "select", V2_SAMPLER_MODES[0],
               choices=V2_SAMPLER_MODES, group="sampler",
               preset="sampler.sampler_mode"),
@@ -980,7 +1023,7 @@ def _v2_variance_fields():
     )
 
 
-def _reference_fields(group="core"):
+def _reference_fields(group="reference"):
     """Grounding / reference fidelity / scene fidelity — both Edit tabs."""
     return (
         Field("grounding",
@@ -1025,6 +1068,11 @@ G_SAMPLER = Group("sampler", "Sampler", renderer="sampler", collapsible=True)
 G_VARIANCE = Group("variance", "Variance", renderer="variance",
                    collapsible=True, default_open=False)
 G_INPUTS = Group("inputs", "Images", column="right")
+# The two that used to be written out per tab, which is how one of them
+# ended up titled "Output" on three tabs and "Sampling" on two while
+# holding the same kind of thing. Shared so they cannot drift again.
+G_CORE = Group("core", "Output", dense=True)
+G_REFERENCE = Group("reference", "Reference", dense=True)
 
 # The Wan tab's two radio lists, verbatim from ui.py:3549-3552. They name
 # model families rather than files, and the strings are what generate_wan_
@@ -1069,25 +1117,26 @@ SCHEMAS = (
         category="generate", route="/generate/krea2",
         submit_label="Generate", preset_tab=presets.TAB_KREA2,
         preset_note=GEN_PRESET_NOTE,
-        groups=(G_PROMPT, Group("core", "Output", dense=True), G_SEED, G_SAVE),
+        groups=(G_PROMPT, G_CORE, G_SAMPLER, G_SEED, G_SAVE),
         fields=(
             Field("prompt", "Prompt", "textarea",
                   "A photorealistic golden-hour portrait, natural skin "
                   "texture, shallow depth of field", lines=5, group="prompt"),
-            Field("negative", "Negative prompt (only used when CFG > 1)",
-                  "textarea", "", lines=2, group="prompt", collapsed=True),
+            Field("negative", "Negative prompt", "textarea", "", lines=3,
+                  group="prompt", collapsed=True, hint=_CFG_NOTE),
             *_seed_fields(),
             Field("steps", "Steps", "slider",
                   lambda: handlers.DEFAULTS["steps"], lo=1, hi=60, step=1,
-                  group="core", preset="steps"),
+                  group="sampler", preset="steps"),
             Field("cfg", "CFG", "slider", lambda: handlers.DEFAULTS["cfg"],
-                  lo=0.5, hi=8.0, step=0.1, group="core", preset="cfg",
+                  lo=0.5, hi=8.0, step=0.1, group="sampler", preset="cfg",
                   hint=_CFG_NOTE),
             Field("resolution", "Resolution", "select", DEFAULT_RESOLUTION,
                   choices=list(RESOLUTION_PRESETS), group="core",
                   preset="resolution", wide=True),
             Field("sampler", "Sampler", "select", SAMPLERS[0],
-                  choices=SAMPLERS, group="core", preset="sampler", wide=True),
+                  choices=SAMPLERS, group="sampler", preset="sampler",
+                  wide=True),
             Field("model", "Model", "select",
                   lambda: handlers.MODEL_CHOICES[0],
                   choices=lambda: handlers.MODEL_CHOICES, group="core",
@@ -1109,7 +1158,7 @@ SCHEMAS = (
         category="generate", route="/generate/krea2-v2",
         submit_label="Generate", preset_tab=presets.TAB_KREA2_V2,
         preset_note=GEN_PRESET_NOTE,
-        groups=(G_PROMPT, Group("core", "Output", dense=True),
+        groups=(G_PROMPT, G_CORE,
                 # In ui.py these sat in the *output* column, alone among the
                 # ten tabs. They are controls, so they go with the controls.
                 G_SAMPLER, G_VARIANCE,
@@ -1117,17 +1166,18 @@ SCHEMAS = (
                       default_open=False),
                 G_SEED, G_SAVE),
         fields=(
-            Field("prompt", "Positive Prompt", "textarea", "", lines=6,
+            Field("prompt", "Prompt", "textarea", "", lines=5,
                   group="prompt"),
-            Field("negative", "Negatives", "textarea", V2_DEFAULT_NEGATIVE,
-                  lines=6, group="prompt", collapsed=True),
+            Field("negative", "Negative prompt", "textarea",
+                  V2_DEFAULT_NEGATIVE, lines=3, group="prompt",
+                  collapsed=True, hint=_CFG_NOTE),
             # The seed the source workflow shipped with, kept as-is.
             *_seed_fields(default=370102505887178),
             Field("model", "Model", "select",
                   lambda: handlers.V2_MODEL_CHOICES[0],
                   choices=lambda: handlers.V2_MODEL_CHOICES, group="core",
                   preset="model", wide=True),
-            Field("aspect", "Aspect ratio", "select", V2_DEFAULT_ASPECT,
+            Field("aspect", "Resolution", "select", V2_DEFAULT_ASPECT,
                   choices=list(V2_ASPECT_RATIOS), group="core",
                   preset="aspect", wide=True),
             Field("megapixels", "Megapixels", "slider",
@@ -1145,9 +1195,10 @@ SCHEMAS = (
             _batch_field(),
             *_save_fields(),
             Field("lora_slots", "LoRA stack", "repeat",
-                  repeat=_triple_tail(_lora_choices,
-                                      handlers.v2_default_lora_slots,
-                                      "🎭 LoRA stack — model + CLIP")),
+                  repeat=_triple_tail(
+                      _lora_choices,
+                      _stack_slots(handlers.v2_default_lora_slots),
+                      "LoRA stack — model + CLIP")),
         ),
     ),
 
@@ -1159,9 +1210,9 @@ SCHEMAS = (
         icon="🖌️", blurb="Paint over what should change. Leave the rest "
                         "alone.",
         category="edit", route="/edit/inpaint", submit_label="Inpaint",
-        groups=(Group("canvas", column="right"), G_PROMPT,
-                Group("core", "Sampling", dense=True),
-                Group("mask", "Mask shaping", dense=True), G_SEED),
+        groups=(Group("canvas", column="right"), G_PROMPT, G_CORE,
+                G_SAMPLER, Group("mask", "Mask shaping", dense=True),
+                G_SEED),
         fields=(
             # The canvas is the work surface, not a sidebar control, so it
             # takes the wide column and the results stack under it. Being
@@ -1172,22 +1223,22 @@ SCHEMAS = (
                   "Image — paint the region to replace (paste with Ctrl+V)",
                   "mask", None, group="canvas", column="right"),
             Field("prompt", "Prompt (describes the masked region)",
-                  "textarea", "", lines=3, group="prompt"),
-            Field("negative", "Negative prompt (only used when CFG > 1)",
-                  "textarea", "", lines=2, group="prompt", collapsed=True),
+                  "textarea", "", lines=5, group="prompt"),
+            Field("negative", "Negative prompt", "textarea", "", lines=3,
+                  group="prompt", collapsed=True, hint=_CFG_NOTE),
             *_seed_fields(),
             Field("steps", "Steps", "slider",
                   lambda: handlers.DEFAULTS["steps"], lo=1, hi=60, step=1,
-                  group="core"),
+                  group="sampler"),
             Field("cfg", "CFG", "slider", lambda: handlers.DEFAULTS["cfg"],
-                  lo=0.5, hi=8.0, step=0.1, group="core", hint=_CFG_NOTE),
+                  lo=0.5, hi=8.0, step=0.1, group="sampler", hint=_CFG_NOTE),
             Field("denoise", "Denoise (1 = replace fully)", "slider", 1.0,
-                  lo=0.1, hi=1.0, step=0.05, group="core", wide=True,
+                  lo=0.1, hi=1.0, step=0.05, group="sampler", wide=True,
                   hint="With nothing painted this runs as whole-image "
                        "img2img, where 1.0 ignores the source entirely — "
                        "0.5–0.8 is the useful range."),
             Field("sampler", "Sampler", "select", SAMPLERS[0],
-                  choices=SAMPLERS, group="core", wide=True),
+                  choices=SAMPLERS, group="sampler", wide=True),
             Field("grow", "Grow mask (px)", "slider", 8, lo=0, hi=32, step=1,
                   group="mask",
                   hint="Dilates the painted region before blurring."),
@@ -1213,7 +1264,7 @@ SCHEMAS = (
                         "the rest.",
         category="edit", route="/edit/krea2-edit", submit_label="Edit",
         preset_tab=presets.TAB_KREA2, preset_note=EDIT_PRESET_NOTE.format("🎨 Krea2"),
-        groups=(G_INPUTS, G_PROMPT, Group("core", "Sampling", dense=True),
+        groups=(G_INPUTS, G_PROMPT, G_CORE, G_REFERENCE, G_SAMPLER,
                 G_SEED),
         fields=(
             *_two_image_fields("Source image (paste with Ctrl+V)",
@@ -1226,17 +1277,18 @@ SCHEMAS = (
                   "background. Do not change the face at all.          "
                   "remove clothes exposing her naked average natural shaped "
                   "tits. dont change her face",
-                  lines=3, group="prompt"),
-            Field("negative", "Negative prompt (only used when CFG > 1)",
-                  "textarea", "", lines=2, group="prompt", collapsed=True),
+                  lines=5, group="prompt"),
+            Field("negative", "Negative prompt", "textarea", "", lines=3,
+                  group="prompt", collapsed=True, hint=_CFG_NOTE),
             *_seed_fields(),
             Field("steps", "Steps", "slider",
                   lambda: handlers.DEFAULTS["steps"], lo=1, hi=60, step=1,
-                  group="core", preset="steps"),
+                  group="sampler", preset="steps"),
             Field("cfg", "CFG", "slider", lambda: handlers.DEFAULTS["cfg"],
-                  lo=0.5, hi=8.0, step=0.1, group="core", preset="cfg"),
+                  lo=0.5, hi=8.0, step=0.1, group="sampler", preset="cfg",
+                  hint=_CFG_NOTE),
             Field("sampler", "Sampler", "select", SAMPLERS[0],
-                  choices=SAMPLERS, group="core", preset="sampler",
+                  choices=SAMPLERS, group="sampler", preset="sampler",
                   wide=True),
             *_reference_fields(),
             Field("model", "Model", "select",
@@ -1258,16 +1310,17 @@ SCHEMAS = (
         category="edit", route="/edit/krea2-v2-edit", submit_label="Edit",
         preset_tab=presets.TAB_KREA2_V2,
         preset_note=EDIT_PRESET_NOTE.format("🔶 Krea2 V2"),
-        groups=(G_INPUTS, G_PROMPT, Group("core", "Output", dense=True),
-                G_SAMPLER, G_VARIANCE, G_SEED),
+        groups=(G_INPUTS, G_PROMPT, G_CORE, G_REFERENCE, G_SAMPLER,
+                G_VARIANCE, G_SEED),
         fields=(
             *_two_image_fields("Source image (paste with Ctrl+V)",
                                "➕ Add a second reference (subject)",
                                "Second reference — subject"),
-            Field("prompt", "Edit instruction", "textarea", "", lines=3,
+            Field("prompt", "Edit instruction", "textarea", "", lines=5,
                   group="prompt"),
-            Field("negative", "Negatives (only used when CFG > 1)",
-                  "textarea", V2_DEFAULT_NEGATIVE, lines=4, group="prompt", collapsed=True),
+            Field("negative", "Negative prompt", "textarea",
+                  V2_DEFAULT_NEGATIVE, lines=3, group="prompt",
+                  collapsed=True, hint=_CFG_NOTE),
             *_seed_fields(),
             Field("model", "Model", "select",
                   lambda: handlers.V2_MODEL_CHOICES[0],
@@ -1278,16 +1331,17 @@ SCHEMAS = (
                   "Reference geometry (fit = v1.2; the legacy crop is for "
                   "older weights)",
                   "select", V2_EDIT_FIT_MODES[0], choices=V2_EDIT_FIT_MODES,
-                  group="core", wide=True),
+                  group="reference", wide=True),
             # No Denoise: the source reaches the model through conditioning
             # rather than the starting latent, so the builder pins it at 1.0.
             *_v2_sampler_fields(denoise=False),
             *_v2_variance_fields(),
             _batch_field(),
             Field("lora_slots", "LoRA stack", "repeat",
-                  repeat=_triple_tail(_lora_choices,
-                                      handlers.v2_default_lora_slots,
-                                      "🎭 LoRA stack — model + CLIP")),
+                  repeat=_triple_tail(
+                      _lora_choices,
+                      _stack_slots(handlers.v2_default_lora_slots),
+                      "LoRA stack — model + CLIP")),
         ),
     ),
 
@@ -1300,7 +1354,7 @@ SCHEMAS = (
         category="generate", route="/generate/flux", submit_label="Generate",
         groups=(G_PROMPT, Group("core", "Output", dense=True), G_SEED),
         fields=(
-            Field("prompt", "Positive Prompt", "textarea",
+            Field("prompt", "Prompt", "textarea",
                   "A photorealistic golden-hour portrait, natural skin "
                   "texture, shallow depth of field", lines=5, group="prompt"),
             *_seed_fields(),
@@ -1320,7 +1374,7 @@ SCHEMAS = (
             _batch_field(),
             Field("lora_slots", "Flux LoRA stack", "repeat",
                   repeat=_pair_tail(_flux_lora_choices,
-                                    "🎭 Flux LoRA stack (`loras/flux2/`)")),
+                                    "Flux LoRA stack (loras/flux2/)")),
         ),
     ),
 
@@ -1375,8 +1429,9 @@ SCHEMAS = (
             _batch_field(),
             Field("lora_slots", "LoRA stack", "repeat",
                   repeat=_triple_tail(
-                      _klein_lora_choices, handlers.klein_default_lora_slots,
-                      "🎭 LoRA stack — model + CLIP (`loras/klein/`)")),
+                      _klein_lora_choices,
+                      _stack_slots(handlers.klein_default_lora_slots),
+                      "LoRA stack — model + CLIP (loras/klein/)")),
         ),
     ),
 

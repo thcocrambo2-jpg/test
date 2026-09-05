@@ -333,14 +333,22 @@ def _run_jobs(jobs, builder=build_workflow, prefix="Krea2"):
 
 
 def _resolve_lora_slots(*slots) -> list:
-    """Flat (name, weight, name, weight, ...) UI values → (file, strength).
+    """Flat (enabled, name, weight) × N UI values → (file, strength) pairs.
+
+    The same contract as _resolve_v2_lora_slots, and deliberately so: a row
+    contributes only while its checkbox is on, and order is preserved
+    because LoRA application is not commutative. Switching a row off now
+    keeps its filename in the dropdown instead of throwing it away, which
+    is the whole reason the column exists.
 
     Variadic on purpose: the slot count then lives only in MAX_LORA_SLOTS,
     so adding a slot needs no change here or in any handler signature.
-    Slots left at "None" resolve to nothing and drop out.
+    Slots left at "None" resolve to nothing and drop out even when ticked.
     """
     loras = []
-    for name, weight in zip(slots[::2], slots[1::2]):
+    for enabled, name, weight in zip(slots[::3], slots[1::3], slots[2::3]):
+        if not enabled:
+            continue
         lora_file = resolve_lora_name(name)
         if lora_file:
             loras.append((lora_file, float(weight)))
@@ -373,6 +381,12 @@ def _krea_settings(seed, randomize, steps, cfg, resolution, sampler, model,
     dropdown label is the useful thing to keep and the resolved filename
     is not. Mirrors the generate_single signature — when that gains a
     control, this is the other half of the change.
+
+    LoRA rows are [enabled, name, weight], the shape V2 has always stored.
+    Presets written before the stack grew its On column hold [name, weight]
+    and still load: tabschema.preset_values sniffs the row length and reads
+    a two-part row as on-if-named. Nothing on the licence server is
+    rewritten — both shapes sit in the collection side by side.
     """
     return {
         "model": model,
@@ -383,8 +397,8 @@ def _krea_settings(seed, randomize, steps, cfg, resolution, sampler, model,
         "seed": int(seed or 0),
         "randomize": bool(randomize),
         "batch_count": int(batch_count),
-        "loras": [[name, float(weight)]
-                  for name, weight in zip(lora_slots[::2], lora_slots[1::2])],
+        "loras": [[bool(on), name, float(weight)] for on, name, weight
+                  in zip(lora_slots[::3], lora_slots[1::3], lora_slots[2::3])],
     }
 
 

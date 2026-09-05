@@ -16,9 +16,9 @@
         },
         {
           "type": "Textbox",
-          "label": "Negative prompt (only used when CFG > 1)",
+          "label": "Negative prompt",
           "value": null,
-          "lines": 2,
+          "lines": 3,
           "placeholder": null,
           "interactive": null,
           "visible": true,
@@ -199,6 +199,14 @@
           "elem_id": null
         },
         {
+          "type": "Checkbox",
+          "label": "On",
+          "value": false,
+          "interactive": null,
+          "visible": true,
+          "elem_id": null
+        },
+        {
           "type": "Dropdown",
           "label": "LoRA 1",
           "value": "None",
@@ -215,11 +223,19 @@
         },
         {
           "type": "Slider",
-          "label": "Weight",
-          "value": 0.8,
+          "label": "Strength",
+          "value": 1.0,
           "minimum": 0.0,
           "maximum": 2.0,
-          "step": 0.05,
+          "step": 0.01,
+          "interactive": null,
+          "visible": true,
+          "elem_id": null
+        },
+        {
+          "type": "Checkbox",
+          "label": "On",
+          "value": false,
           "interactive": null,
           "visible": true,
           "elem_id": null
@@ -241,11 +257,19 @@
         },
         {
           "type": "Slider",
-          "label": "Weight",
-          "value": 0.8,
+          "label": "Strength",
+          "value": 1.0,
           "minimum": 0.0,
           "maximum": 2.0,
-          "step": 0.05,
+          "step": 0.01,
+          "interactive": null,
+          "visible": true,
+          "elem_id": null
+        },
+        {
+          "type": "Checkbox",
+          "label": "On",
+          "value": false,
           "interactive": null,
           "visible": true,
           "elem_id": null
@@ -267,11 +291,19 @@
         },
         {
           "type": "Slider",
-          "label": "Weight",
-          "value": 0.8,
+          "label": "Strength",
+          "value": 1.0,
           "minimum": 0.0,
           "maximum": 2.0,
-          "step": 0.05,
+          "step": 0.01,
+          "interactive": null,
+          "visible": true,
+          "elem_id": null
+        },
+        {
+          "type": "Checkbox",
+          "label": "On",
+          "value": false,
           "interactive": null,
           "visible": true,
           "elem_id": null
@@ -293,11 +325,19 @@
         },
         {
           "type": "Slider",
-          "label": "Weight",
-          "value": 0.8,
+          "label": "Strength",
+          "value": 1.0,
           "minimum": 0.0,
           "maximum": 2.0,
-          "step": 0.05,
+          "step": 0.01,
+          "interactive": null,
+          "visible": true,
+          "elem_id": null
+        },
+        {
+          "type": "Checkbox",
+          "label": "On",
+          "value": false,
           "interactive": null,
           "visible": true,
           "elem_id": null
@@ -319,11 +359,19 @@
         },
         {
           "type": "Slider",
-          "label": "Weight",
-          "value": 0.8,
+          "label": "Strength",
+          "value": 1.0,
           "minimum": 0.0,
           "maximum": 2.0,
-          "step": 0.05,
+          "step": 0.01,
+          "interactive": null,
+          "visible": true,
+          "elem_id": null
+        },
+        {
+          "type": "Checkbox",
+          "label": "On",
+          "value": false,
           "interactive": null,
           "visible": true,
           "elem_id": null
@@ -345,11 +393,19 @@
         },
         {
           "type": "Slider",
-          "label": "Weight",
-          "value": 0.8,
+          "label": "Strength",
+          "value": 1.0,
           "minimum": 0.0,
           "maximum": 2.0,
-          "step": 0.05,
+          "step": 0.01,
+          "interactive": null,
+          "visible": true,
+          "elem_id": null
+        },
+        {
+          "type": "Checkbox",
+          "label": "On",
+          "value": false,
           "interactive": null,
           "visible": true,
           "elem_id": null
@@ -371,11 +427,19 @@
         },
         {
           "type": "Slider",
-          "label": "Weight",
-          "value": 0.8,
+          "label": "Strength",
+          "value": 1.0,
           "minimum": 0.0,
           "maximum": 2.0,
-          "step": 0.05,
+          "step": 0.01,
+          "interactive": null,
+          "visible": true,
+          "elem_id": null
+        },
+        {
+          "type": "Checkbox",
+          "label": "On",
+          "value": false,
           "interactive": null,
           "visible": true,
           "elem_id": null
@@ -397,11 +461,11 @@
         },
         {
           "type": "Slider",
-          "label": "Weight",
-          "value": 0.8,
+          "label": "Strength",
+          "value": 1.0,
           "minimum": 0.0,
           "maximum": 2.0,
-          "step": 0.05,
+          "step": 0.01,
           "interactive": null,
           "visible": true,
           "elem_id": null
@@ -413,9 +477,9 @@
       "controls": [
         {
           "type": "Textbox",
-          "label": "Positive Prompt",
+          "label": "Prompt",
           "value": null,
-          "lines": 6,
+          "lines": 5,
           "placeholder": "The source workflow ships this box empty — describe your image here.",
           "interactive": null,
           "visible": true,
@@ -423,9 +487,9 @@
         },
         {
           "type": "Textbox",
-          "label": "Negatives",
+          "label": "Negative prompt",
           "value": "This low quality greyscale unfinished sketch is inaccurate and flawed. The image is very blurred and lacks detail with excessive chromatic aberrations and artifacts. The image is overly saturated with excessive bloom. It has a toony aesthetic with bold outlines and flat colors.\n\nFake, unreal, wrong anatomy, big eyes, bad anatomy, extra limbs, missing fingers, fused fingers, poorly drawn hands, poorly drawn face, mutated hands, long neck, extra arms, extra legs, extra fingers, disfigured, malformed limbs, missing limbs, skinny, fat, jpeg artifacts, watermark, signature, text, logo, exaggerated features, unnatural skin tone, bokeh, deformed, lowres, out of frame, aliasing, blurry background, doll-like skin, plastic texture, uncanny valley, incorrect proportions, duplicate body parts, unnatural poses, poor anatomical proportions, pubic hair, digital art, drawing, cartoon, large breasts, huge breasts, faded colors, pastel tones, beigesthetic, flat lighting, overexposed whites, AI glow, plastic skin, skincare-ad look, studio lighting, cartoon or 3D style, text watermark or logos, cleft chin, indented chin, smooth groin, Barbie-doll anatomy, blurred genitalia, aged, wrinkles, massive breasts, 28G, airbrushed, plastic skin, clothes, bra, underwear, iPhone, smartphone, wide angle distortion, tattoos, piercings, excessive cum.",
-          "lines": 6,
+          "lines": 3,
           "placeholder": null,
           "interactive": null,
           "visible": true,
@@ -468,7 +532,7 @@
         },
         {
           "type": "Dropdown",
-          "label": "Aspect ratio",
+          "label": "Resolution",
           "value": "3:4 (Portrait Standard)",
           "interactive": null,
           "visible": true,
@@ -921,7 +985,7 @@
           "type": "Textbox",
           "label": "Prompt (describes the masked region)",
           "value": null,
-          "lines": 3,
+          "lines": 5,
           "placeholder": null,
           "interactive": null,
           "visible": true,
@@ -929,9 +993,9 @@
         },
         {
           "type": "Textbox",
-          "label": "Negative prompt (only used when CFG > 1)",
+          "label": "Negative prompt",
           "value": null,
-          "lines": 2,
+          "lines": 3,
           "placeholder": null,
           "interactive": null,
           "visible": true,
@@ -1070,6 +1134,14 @@
           "elem_id": null
         },
         {
+          "type": "Checkbox",
+          "label": "On",
+          "value": false,
+          "interactive": null,
+          "visible": true,
+          "elem_id": null
+        },
+        {
           "type": "Dropdown",
           "label": "LoRA 1",
           "value": "None",
@@ -1086,11 +1158,19 @@
         },
         {
           "type": "Slider",
-          "label": "Weight",
-          "value": 0.8,
+          "label": "Strength",
+          "value": 1.0,
           "minimum": 0.0,
           "maximum": 2.0,
-          "step": 0.05,
+          "step": 0.01,
+          "interactive": null,
+          "visible": true,
+          "elem_id": null
+        },
+        {
+          "type": "Checkbox",
+          "label": "On",
+          "value": false,
           "interactive": null,
           "visible": true,
           "elem_id": null
@@ -1112,11 +1192,19 @@
         },
         {
           "type": "Slider",
-          "label": "Weight",
-          "value": 0.8,
+          "label": "Strength",
+          "value": 1.0,
           "minimum": 0.0,
           "maximum": 2.0,
-          "step": 0.05,
+          "step": 0.01,
+          "interactive": null,
+          "visible": true,
+          "elem_id": null
+        },
+        {
+          "type": "Checkbox",
+          "label": "On",
+          "value": false,
           "interactive": null,
           "visible": true,
           "elem_id": null
@@ -1138,11 +1226,19 @@
         },
         {
           "type": "Slider",
-          "label": "Weight",
-          "value": 0.8,
+          "label": "Strength",
+          "value": 1.0,
           "minimum": 0.0,
           "maximum": 2.0,
-          "step": 0.05,
+          "step": 0.01,
+          "interactive": null,
+          "visible": true,
+          "elem_id": null
+        },
+        {
+          "type": "Checkbox",
+          "label": "On",
+          "value": false,
           "interactive": null,
           "visible": true,
           "elem_id": null
@@ -1164,11 +1260,19 @@
         },
         {
           "type": "Slider",
-          "label": "Weight",
-          "value": 0.8,
+          "label": "Strength",
+          "value": 1.0,
           "minimum": 0.0,
           "maximum": 2.0,
-          "step": 0.05,
+          "step": 0.01,
+          "interactive": null,
+          "visible": true,
+          "elem_id": null
+        },
+        {
+          "type": "Checkbox",
+          "label": "On",
+          "value": false,
           "interactive": null,
           "visible": true,
           "elem_id": null
@@ -1190,11 +1294,19 @@
         },
         {
           "type": "Slider",
-          "label": "Weight",
-          "value": 0.8,
+          "label": "Strength",
+          "value": 1.0,
           "minimum": 0.0,
           "maximum": 2.0,
-          "step": 0.05,
+          "step": 0.01,
+          "interactive": null,
+          "visible": true,
+          "elem_id": null
+        },
+        {
+          "type": "Checkbox",
+          "label": "On",
+          "value": false,
           "interactive": null,
           "visible": true,
           "elem_id": null
@@ -1216,11 +1328,19 @@
         },
         {
           "type": "Slider",
-          "label": "Weight",
-          "value": 0.8,
+          "label": "Strength",
+          "value": 1.0,
           "minimum": 0.0,
           "maximum": 2.0,
-          "step": 0.05,
+          "step": 0.01,
+          "interactive": null,
+          "visible": true,
+          "elem_id": null
+        },
+        {
+          "type": "Checkbox",
+          "label": "On",
+          "value": false,
           "interactive": null,
           "visible": true,
           "elem_id": null
@@ -1242,11 +1362,19 @@
         },
         {
           "type": "Slider",
-          "label": "Weight",
-          "value": 0.8,
+          "label": "Strength",
+          "value": 1.0,
           "minimum": 0.0,
           "maximum": 2.0,
-          "step": 0.05,
+          "step": 0.01,
+          "interactive": null,
+          "visible": true,
+          "elem_id": null
+        },
+        {
+          "type": "Checkbox",
+          "label": "On",
+          "value": false,
           "interactive": null,
           "visible": true,
           "elem_id": null
@@ -1268,11 +1396,11 @@
         },
         {
           "type": "Slider",
-          "label": "Weight",
-          "value": 0.8,
+          "label": "Strength",
+          "value": 1.0,
           "minimum": 0.0,
           "maximum": 2.0,
-          "step": 0.05,
+          "step": 0.01,
           "interactive": null,
           "visible": true,
           "elem_id": null
@@ -1434,7 +1562,7 @@
           "type": "Textbox",
           "label": "Edit instruction",
           "value": "Remove all her clothes completely, make her fully nude. Keep the exact same face, facial features, expression, skin tone, hairstyle, body pose, hands position, and background. Do not change the face at all.          remove clothes exposing her naked average natural shaped tits. dont change her face",
-          "lines": 3,
+          "lines": 5,
           "placeholder": "make the jacket red · this person walking a dog on a beach at sunset",
           "interactive": null,
           "visible": true,
@@ -1442,9 +1570,9 @@
         },
         {
           "type": "Textbox",
-          "label": "Negative prompt (only used when CFG > 1)",
+          "label": "Negative prompt",
           "value": null,
-          "lines": 2,
+          "lines": 3,
           "placeholder": null,
           "interactive": null,
           "visible": true,
@@ -1583,6 +1711,14 @@
           "elem_id": null
         },
         {
+          "type": "Checkbox",
+          "label": "On",
+          "value": false,
+          "interactive": null,
+          "visible": true,
+          "elem_id": null
+        },
+        {
           "type": "Dropdown",
           "label": "LoRA 1",
           "value": "None",
@@ -1599,11 +1735,19 @@
         },
         {
           "type": "Slider",
-          "label": "Weight",
-          "value": 0.8,
+          "label": "Strength",
+          "value": 1.0,
           "minimum": 0.0,
           "maximum": 2.0,
-          "step": 0.05,
+          "step": 0.01,
+          "interactive": null,
+          "visible": true,
+          "elem_id": null
+        },
+        {
+          "type": "Checkbox",
+          "label": "On",
+          "value": false,
           "interactive": null,
           "visible": true,
           "elem_id": null
@@ -1625,11 +1769,19 @@
         },
         {
           "type": "Slider",
-          "label": "Weight",
-          "value": 0.8,
+          "label": "Strength",
+          "value": 1.0,
           "minimum": 0.0,
           "maximum": 2.0,
-          "step": 0.05,
+          "step": 0.01,
+          "interactive": null,
+          "visible": true,
+          "elem_id": null
+        },
+        {
+          "type": "Checkbox",
+          "label": "On",
+          "value": false,
           "interactive": null,
           "visible": true,
           "elem_id": null
@@ -1651,11 +1803,19 @@
         },
         {
           "type": "Slider",
-          "label": "Weight",
-          "value": 0.8,
+          "label": "Strength",
+          "value": 1.0,
           "minimum": 0.0,
           "maximum": 2.0,
-          "step": 0.05,
+          "step": 0.01,
+          "interactive": null,
+          "visible": true,
+          "elem_id": null
+        },
+        {
+          "type": "Checkbox",
+          "label": "On",
+          "value": false,
           "interactive": null,
           "visible": true,
           "elem_id": null
@@ -1677,11 +1837,19 @@
         },
         {
           "type": "Slider",
-          "label": "Weight",
-          "value": 0.8,
+          "label": "Strength",
+          "value": 1.0,
           "minimum": 0.0,
           "maximum": 2.0,
-          "step": 0.05,
+          "step": 0.01,
+          "interactive": null,
+          "visible": true,
+          "elem_id": null
+        },
+        {
+          "type": "Checkbox",
+          "label": "On",
+          "value": false,
           "interactive": null,
           "visible": true,
           "elem_id": null
@@ -1703,11 +1871,19 @@
         },
         {
           "type": "Slider",
-          "label": "Weight",
-          "value": 0.8,
+          "label": "Strength",
+          "value": 1.0,
           "minimum": 0.0,
           "maximum": 2.0,
-          "step": 0.05,
+          "step": 0.01,
+          "interactive": null,
+          "visible": true,
+          "elem_id": null
+        },
+        {
+          "type": "Checkbox",
+          "label": "On",
+          "value": false,
           "interactive": null,
           "visible": true,
           "elem_id": null
@@ -1729,11 +1905,19 @@
         },
         {
           "type": "Slider",
-          "label": "Weight",
-          "value": 0.8,
+          "label": "Strength",
+          "value": 1.0,
           "minimum": 0.0,
           "maximum": 2.0,
-          "step": 0.05,
+          "step": 0.01,
+          "interactive": null,
+          "visible": true,
+          "elem_id": null
+        },
+        {
+          "type": "Checkbox",
+          "label": "On",
+          "value": false,
           "interactive": null,
           "visible": true,
           "elem_id": null
@@ -1755,11 +1939,19 @@
         },
         {
           "type": "Slider",
-          "label": "Weight",
-          "value": 0.8,
+          "label": "Strength",
+          "value": 1.0,
           "minimum": 0.0,
           "maximum": 2.0,
-          "step": 0.05,
+          "step": 0.01,
+          "interactive": null,
+          "visible": true,
+          "elem_id": null
+        },
+        {
+          "type": "Checkbox",
+          "label": "On",
+          "value": false,
           "interactive": null,
           "visible": true,
           "elem_id": null
@@ -1781,11 +1973,11 @@
         },
         {
           "type": "Slider",
-          "label": "Weight",
-          "value": 0.8,
+          "label": "Strength",
+          "value": 1.0,
           "minimum": 0.0,
           "maximum": 2.0,
-          "step": 0.05,
+          "step": 0.01,
           "interactive": null,
           "visible": true,
           "elem_id": null
@@ -1825,7 +2017,7 @@
           "type": "Textbox",
           "label": "Edit instruction",
           "value": null,
-          "lines": 3,
+          "lines": 5,
           "placeholder": "make the jacket red · this person walking a dog on a beach at sunset",
           "interactive": null,
           "visible": true,
@@ -1833,9 +2025,9 @@
         },
         {
           "type": "Textbox",
-          "label": "Negatives (only used when CFG > 1)",
+          "label": "Negative prompt",
           "value": "This low quality greyscale unfinished sketch is inaccurate and flawed. The image is very blurred and lacks detail with excessive chromatic aberrations and artifacts. The image is overly saturated with excessive bloom. It has a toony aesthetic with bold outlines and flat colors.\n\nFake, unreal, wrong anatomy, big eyes, bad anatomy, extra limbs, missing fingers, fused fingers, poorly drawn hands, poorly drawn face, mutated hands, long neck, extra arms, extra legs, extra fingers, disfigured, malformed limbs, missing limbs, skinny, fat, jpeg artifacts, watermark, signature, text, logo, exaggerated features, unnatural skin tone, bokeh, deformed, lowres, out of frame, aliasing, blurry background, doll-like skin, plastic texture, uncanny valley, incorrect proportions, duplicate body parts, unnatural poses, poor anatomical proportions, pubic hair, digital art, drawing, cartoon, large breasts, huge breasts, faded colors, pastel tones, beigesthetic, flat lighting, overexposed whites, AI glow, plastic skin, skincare-ad look, studio lighting, cartoon or 3D style, text watermark or logos, cleft chin, indented chin, smooth groin, Barbie-doll anatomy, blurred genitalia, aged, wrinkles, massive breasts, 28G, airbrushed, plastic skin, clothes, bra, underwear, iPhone, smartphone, wide angle distortion, tattoos, piercings, excessive cum.",
-          "lines": 4,
+          "lines": 3,
           "placeholder": null,
           "interactive": null,
           "visible": true,

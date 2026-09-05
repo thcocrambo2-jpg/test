@@ -225,9 +225,10 @@ def cases(module) -> dict:
     the swap this file exists to catch, so `cutoff_step` is 7 and
     `total_steps` is 23 rather than both being what the slider ships with.
 
-    The LoRA tails are the two shapes from context.md 4.3: pairs
-    `(name, weight)` for Krea2 / Flux / Edit / Inpaint, triples
-    `(enabled, name, weight)` for the two Power-Lora-Loader tabs.
+    The LoRA tails are the two shapes from context.md 4.3: triples
+    `(enabled, name, weight)` everywhere the row carries an on/off column,
+    which is now every tab but Flux — Flux keeps the bare `(name, weight)`
+    pair, a separate folder and a separate pipeline.
     """
     model = module.MODEL_CHOICES[0]
     v2_model = module.V2_MODEL_CHOICES[0]
@@ -237,6 +238,8 @@ def cases(module) -> dict:
 
     pairs = tuple(v for i in range(module.MAX_LORA_SLOTS)
                   for v in ("None", round(0.35 + i / 100, 2)))
+    krea_triples = tuple(v for i in range(module.MAX_LORA_SLOTS)
+                         for v in (False, "None", round(0.35 + i / 100, 2)))
     triples = tuple(v for i in range(len(module.KLEIN_LORA_SLOTS))
                     for v in (False, "None", round(0.4 + i / 100, 2)))
     v2_triples = tuple(v for i in range(len(module.V2_LORA_SLOTS))
@@ -247,7 +250,7 @@ def cases(module) -> dict:
             "a lighthouse in a storm, 35mm", "blurry, watermark",
             1234567, False, 9, 1.7, "1216×832 (Landscape)", "euler",
             model, 2, False, "", False, "",
-        ) + pairs,
+        ) + krea_triples,
 
         "generate_flux": (
             "a lighthouse in a storm, 35mm",

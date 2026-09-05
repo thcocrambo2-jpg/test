@@ -32,7 +32,18 @@ function ordered(fields: Field[], first: string[]): Field[] {
 export function SamplerPanel({ fields, render }: PanelProps) {
   // Steps and CFG are the two dials anyone touches; sampler_mode and bongmath
   // get set once a year.
-  const list = ordered(fields, ['steps', 'cfg', 'denoise', 'sampler_name', 'scheduler', 'eta'])
+  // Both spellings of the dropdown: 'sampler_name' on the RES4LYF tabs,
+  // 'sampler' on the KSampler ones, which share this panel since their
+  // Steps and CFG moved into it.
+  const list = ordered(fields, [
+    'steps',
+    'cfg',
+    'denoise',
+    'sampler_name',
+    'sampler',
+    'scheduler',
+    'eta',
+  ])
   return <div className={cx(s.groupBody, s.groupDense)}>{list.map(render)}</div>
 }
 

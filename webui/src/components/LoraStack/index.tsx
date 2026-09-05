@@ -8,13 +8,12 @@ import s from '@/components/SchemaForm/form.module.css'
 /*
  * One LoRA stack, both shapes.
  *
- * ui.py has four near-identical builders for this, and they are not quite
- * interchangeable: `_lora_inputs` submits **pairs** (name, weight), while
- * `_lora_triples` (ui.py:914) submits **triples** (enabled, name, weight),
- * because the two Power-Lora-Loader tabs — V2 and Klein — carry a per-row
- * on/off checkbox. Flattening that distinction shifts every argument after
- * the stack, silently, and the pictures come back subtly wrong rather than
- * the request failing. See context.md §4.3.
+ * Two submission shapes still exist and they are not interchangeable:
+ * **triples** (enabled, name, weight) on every tab but Flux, whose rows
+ * carry a per-row on/off checkbox, and **pairs** (name, weight) on Flux.
+ * Flattening that distinction shifts every argument after the stack,
+ * silently, and the pictures come back subtly wrong rather than the
+ * request failing. See context.md §4.3.
  *
  * `spec.shape` is read off the baseline in `fromBaseline.ts`, so this
  * component never guesses which one it has.
@@ -53,11 +52,9 @@ export function LoraStack({
         aria-expanded={open}
       >
         <span>
-          LoRA{' '}
+          {spec.title}{' '}
           <span className={s.groupCount}>
-            {nothingToConfigure
-              ? 'no slots'
-              : `${active.length}/${spec.count} active · ${spec.shape}s`}
+            {nothingToConfigure ? 'no slots' : `${active.length}/${spec.count} active`}
           </span>
         </span>
         <span className={cx(s.groupCaret, open && s.groupCaretOpen)} aria-hidden>
