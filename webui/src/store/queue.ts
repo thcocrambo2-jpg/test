@@ -218,6 +218,26 @@ function mediaOf(result: DisplayResult): MediaItem[] {
 const DISPLAY_SEEN = new Map<string, number>()
 let lastQueueRevision = 0
 
+/* What the polling fallback last fetched a display *under*, per tab: the
+ * job it was for and the status that job was in at the time.
+ *
+ * This is what decides whether to ask again, and it is deliberately not the
+ * revision. Revisions order the answers — that is DISPLAY_SEEN's job above,
+ * and the display route has always sent one. Asking is a different question,
+ * and hanging it on a field the queue snapshot only started carrying in this
+ * same change made the client silently useless against a server that had not
+ * been restarted: every row arrived with no revision, the comparison was
+ * false forever, no display was ever fetched, and nothing but the gallery
+ * showed a picture. A status is a thing every version of this server has
+ * always sent. */
+const DISPLAY_FETCHED = new Map<string, string>()
+
+/** The job a tab's display is about, as an identity that changes exactly
+ *  when there is something new to ask for. */
+function displayStamp(job: Job): string {
+  return `${job.id}:${job.status}`
+}
+
 /* Which files this session has already counted.
  *
  * `display` is not an announcement that something was made — it is one
@@ -360,6 +380,7 @@ export const useQueue = create<QueueState>((set, get) => {
       let inFlight = false
 
       DISPLAY_SEEN.clear()
+      DISPLAY_FETCHED.clear()
       lastQueueRevision = 0
 
       /* Every event, from either transport, lands here.
@@ -399,10 +420,16 @@ export const useQueue = create<QueueState>((set, get) => {
           } catch {
             return
           }
-          for (const tab of tabsNeedingDisplay(get().jobs)) {
+          for (const [tab, stamp] of tabsNeedingDisplay(get().jobs)) {
             if (stopped || get().transport === 'live') return
             try {
               const body = await api.getDisplay(tab)
+              // Recorded against the stamp the *decision* was made under, not
+              // the job's state now: if it settled while this was in flight,
+              // the next round sees a stamp it has not fetched under and asks
+              // once more, which is exactly the round that carries the last
+              // picture of a batch.
+              DISPLAY_FETCHED.set(tab, stamp)
               if (!stopped) {
                 onEvent({ type: 'display', tab, revision: body.revision, result: body.result })
               }
@@ -561,30 +588,31 @@ export function isLive(job: Job): boolean {
   return job.status === 'queued' || job.status === 'running'
 }
 
-/** Which tabs the polling fallback should fetch `display` for.
+/** Which tabs the polling fallback should fetch `display` for, and the
+ *  stamp each request is being made under.
  *
  *  Not "every tab": that is one request per entitled tab per 1.5 seconds for
- *  media that has not changed since the page loaded. A tab is worth asking
- *  about when the job `display_for` would answer with has moved on since the
- *  output this browser holds for it — which is one integer comparison, now
- *  that the queue snapshot carries each job's revision.
+ *  media that has not changed since the page loaded. Two clauses, and the
+ *  second is the one that took two goes to get right.
  *
- *  It used to be a guess, and the guess dropped the last picture of every
- *  batch. A tab was polled while a job was *live*, and after it settled only
- *  if its newest run had come up empty. But a round applies the queue
- *  snapshot before it decides, so the round that learned the job was done had
- *  already stopped asking: the last display it fetched was the one from the
- *  round before, taken while the batch was still running. A batch of four
- *  ended at three pictures, a batch of two at one, and a batch of one at zero
- *  — which was the only case the empty-run clause covered, and so the only
- *  size that ever looked right.
+ *  **A live job's tab, every round.** Its output grows as the batch runs, so
+ *  there is always something new to ask for.
  *
- *  Revisions also retire the recency bound that went with the guess. A run
- *  that genuinely produced nothing is fetched once, its revision is recorded,
- *  and it is never asked for again — rather than polled for a minute in the
- *  hope that something turns up. */
-function tabsNeedingDisplay(jobs: Job[]): string[] {
-  const wanted = new Set<string>()
+ *  **A settled job's tab, once.** This is the fix for the batch's last
+ *  picture. The old rule polled while live and then, after the job settled,
+ *  only if it had come up empty — but a round applies the queue snapshot
+ *  before it decides, so the round that learned the job was done had already
+ *  stopped asking. The last display fetched came from the round before, taken
+ *  while the batch was still running: four jobs ended at three pictures, two
+ *  at one, one at zero. Keying on `id:status` means the transition to done is
+ *  itself the thing that asks, exactly once.
+ *
+ *  Deliberately not keyed on the job's revision, though the snapshot now
+ *  carries one. Ordering the answers wants a revision; deciding to ask does
+ *  not, and a client that cannot ask at all against a server one commit
+ *  behind it is a worse failure than the one being fixed. */
+function tabsNeedingDisplay(jobs: Job[]): [string, string][] {
+  const wanted: [string, string][] = []
   const asked = new Set<string>()
   // Newest first, so the first job seen for a tab is the one `display_for`
   // means on the server: its newest run that has actually begun.
@@ -592,9 +620,10 @@ function tabsNeedingDisplay(jobs: Job[]): string[] {
     if (job.status === 'queued') continue
     if (asked.has(job.tabKey)) continue
     asked.add(job.tabKey)
-    // A local job — a submission the server has not acknowledged, or one it
-    // rejected — has no revision and no output to fetch.
-    if (job.revision > (DISPLAY_SEEN.get(job.tabKey) ?? 0)) wanted.add(job.tabKey)
+    const stamp = displayStamp(job)
+    if (isLive(job) || DISPLAY_FETCHED.get(job.tabKey) !== stamp) {
+      wanted.push([job.tabKey, stamp])
+    }
   }
-  return [...wanted]
+  return wanted
 }
