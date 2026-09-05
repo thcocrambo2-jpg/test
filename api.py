@@ -874,6 +874,7 @@ def _queue_json() -> dict:
             "step": _progress_pair(row.progress),
             "error": _failure(row.status, row.progress),
             "submitted": row.submitted, "place": row.place,
+            "revision": row.revision,
         } for row in rows],
     }
 

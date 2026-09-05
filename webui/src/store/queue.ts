@@ -61,6 +61,9 @@ export interface Job {
   prompt: string
   startedAt: number
   endedAt: number | null
+  /** jobqueue's stamp on this job's last change — what makes "is the
+   *  output I hold for this job the output it has now?" answerable. */
+  revision: number
 }
 
 /** How the app is learning about the queue right now.
@@ -174,6 +177,7 @@ function merge(row: QueueJob, previous: Job | undefined): Job {
     errorDismissed: previous?.errorDismissed ?? false,
     seed: previous?.seed ?? null,
     prompt: previous?.prompt ?? (row.title === '—' ? '' : row.title),
+    revision: row.revision,
     startedAt: previous?.startedAt ?? row.submitted * 1000,
     endedAt:
       status === 'queued' || status === 'running' ? null : (previous?.endedAt ?? Date.now()),
@@ -465,6 +469,7 @@ export const useQueue = create<QueueState>((set, get) => {
               errorDismissed: false,
               seed: null,
               prompt,
+              revision: 0,
               startedAt: Date.now(),
               endedAt: null,
             },
@@ -494,6 +499,7 @@ export const useQueue = create<QueueState>((set, get) => {
               errorDismissed: false,
               seed: null,
               prompt,
+              revision: 0,
               startedAt: Date.now(),
               endedAt: Date.now(),
             },
@@ -559,30 +565,36 @@ export function isLive(job: Job): boolean {
  *
  *  Not "every tab": that is one request per entitled tab per 1.5 seconds for
  *  media that has not changed since the page loaded. A tab is worth asking
- *  about when it has a run in flight, or when its newest finished run has no
- *  images and finished recently enough that they are probably still coming.
+ *  about when the job `display_for` would answer with has moved on since the
+ *  output this browser holds for it — which is one integer comparison, now
+ *  that the queue snapshot carries each job's revision.
  *
- *  The recency bound is what stops a genuinely empty run — a handler that
- *  refused, a cancelled job — from being polled for as long as the tab is
- *  open. After the grace period it is accepted as having produced nothing,
- *  which is the truth. */
-const DISPLAY_GRACE_MS = 60_000
-
+ *  It used to be a guess, and the guess dropped the last picture of every
+ *  batch. A tab was polled while a job was *live*, and after it settled only
+ *  if its newest run had come up empty. But a round applies the queue
+ *  snapshot before it decides, so the round that learned the job was done had
+ *  already stopped asking: the last display it fetched was the one from the
+ *  round before, taken while the batch was still running. A batch of four
+ *  ended at three pictures, a batch of two at one, and a batch of one at zero
+ *  — which was the only case the empty-run clause covered, and so the only
+ *  size that ever looked right.
+ *
+ *  Revisions also retire the recency bound that went with the guess. A run
+ *  that genuinely produced nothing is fetched once, its revision is recorded,
+ *  and it is never asked for again — rather than polled for a minute in the
+ *  hope that something turns up. */
 function tabsNeedingDisplay(jobs: Job[]): string[] {
   const wanted = new Set<string>()
-  const settled = new Set<string>()
+  const asked = new Set<string>()
   // Newest first, so the first job seen for a tab is the one `display_for`
   // means on the server: its newest run that has actually begun.
   for (const job of jobs) {
     if (job.status === 'queued') continue
-    if (isLive(job)) {
-      wanted.add(job.tabKey)
-      continue
-    }
-    if (settled.has(job.tabKey) || wanted.has(job.tabKey)) continue
-    settled.add(job.tabKey)
-    const age = Date.now() - (job.endedAt ?? job.startedAt)
-    if (job.images.length === 0 && age < DISPLAY_GRACE_MS) wanted.add(job.tabKey)
+    if (asked.has(job.tabKey)) continue
+    asked.add(job.tabKey)
+    // A local job — a submission the server has not acknowledged, or one it
+    // rejected — has no revision and no output to fetch.
+    if (job.revision > (DISPLAY_SEEN.get(job.tabKey) ?? 0)) wanted.add(job.tabKey)
   }
   return [...wanted]
 }

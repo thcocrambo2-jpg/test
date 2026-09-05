@@ -257,6 +257,10 @@ export interface QueueJob {
   error: string | null
   submitted: number
   place: number
+  /** jobqueue's own counter, stamped on this job's last change. The same
+   *  one `display` carries, so a reader can tell whether the output it
+   *  holds for the job is the output the job has now. */
+  revision: number
 }
 
 export interface QueueSnapshot {

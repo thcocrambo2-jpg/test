@@ -113,6 +113,10 @@ class JobView:
     progress: str
     submitted: float
     place: int          # 1-based place among those waiting, 0 if not one
+    # The job's own revision -- the same counter display_for answers with.
+    # Carried so a caller reading the queue can tell whether the output it
+    # holds for this job is the output the job has now, without asking.
+    revision: int = 0
 
 
 # One lock for everything. The critical sections are all "read or write a
@@ -287,7 +291,8 @@ def _view(job: Job) -> JobView:
     return JobView(id=job.id, lane=job.lane, tab=job.tab,
                    tab_label=job.tab_label, title=job.title,
                    status=job.status, progress=job.progress,
-                   submitted=job.submitted, place=place)
+                   submitted=job.submitted, place=place,
+                   revision=job.revision)
 
 
 def display_for(tab: str) -> tuple[int, dict | None]:
