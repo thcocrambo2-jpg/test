@@ -155,7 +155,7 @@
     "save": {
       "class_type": "SaveImage",
       "inputs": {
-        "filename_prefix": "KleinEdit",
+        "filename_prefix": "KleinEdit_golden00",
         "images": [
           "decode",
           0
@@ -356,7 +356,7 @@
     "save": {
       "class_type": "SaveImage",
       "inputs": {
-        "filename_prefix": "KleinEdit",
+        "filename_prefix": "KleinEdit_golden00",
         "images": [
           "decode",
           0

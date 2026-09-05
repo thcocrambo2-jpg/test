@@ -130,7 +130,7 @@
       "class_type": "SaveVideo",
       "inputs": {
         "codec": "h264",
-        "filename_prefix": "wan/Wan22I2V",
+        "filename_prefix": "wan/Wan22I2V_golden00",
         "format": "mp4",
         "video": [
           "video",
@@ -326,7 +326,7 @@
       "class_type": "SaveVideo",
       "inputs": {
         "codec": "h264",
-        "filename_prefix": "wan/Wan22I2V",
+        "filename_prefix": "wan/Wan22I2V_golden00",
         "format": "mp4",
         "video": [
           "video",

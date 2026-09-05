@@ -174,7 +174,7 @@
     "save": {
       "class_type": "SaveImage",
       "inputs": {
-        "filename_prefix": "Krea2V2Edit",
+        "filename_prefix": "Krea2V2Edit_golden00",
         "images": [
           "decode",
           0
@@ -406,7 +406,7 @@
     "save": {
       "class_type": "SaveImage",
       "inputs": {
-        "filename_prefix": "Krea2V2Edit",
+        "filename_prefix": "Krea2V2Edit_golden00",
         "images": [
           "decode",
           0

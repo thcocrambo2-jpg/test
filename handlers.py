@@ -257,6 +257,38 @@ def _release_on_swap(comfy_client, workflow) -> str:
     return "♻️ Different models than the last job — unloading the old ones"
 
 
+def _run_tag() -> str:
+    """A short random token, so no two jobs can ever share a filename.
+
+    ComfyUI does not remember how many files it has written. It derives
+    the next counter by listing the output folder and taking the highest
+    one it finds, plus one (`folder_paths.get_save_image_path`). Delete
+    the three newest pictures and that maximum drops by three, so the
+    next three generations are written under the *exact* names of the
+    files that were just deleted.
+
+    Nothing downstream survives that. `/media/Krea2_00042_.png` is the
+    same URL for the old file and the new one, and api._send serves it
+    with `max-age=86400`, so a browser that saw the deleted picture keeps
+    showing it in place of the new one for a day. The recipe is filed
+    under the same relative path too, so the caption ends up describing a
+    picture that is not the one on screen.
+
+    A token in the prefix takes the counter out of the argument: every
+    job gets a namespace nothing has ever written to, the counter starts
+    at 1 inside it, and the name is unique whatever has been deleted.
+    Eight hex characters is 4 billion, drawn per job rather than per
+    process, which for a folder of a few thousand is not worth a
+    collision check.
+
+    A function, and module-level, so scripts/golden.py can stub it to a
+    fixed value the way it already stubs client.upload_image — for
+    exactly this reason: it lands *in* the workflow, and a snapshot that
+    changed on every run would freeze nothing.
+    """
+    return uuid.uuid4().hex[:8]
+
+
 def _run_jobs(jobs, builder=build_workflow, prefix="Krea2"):
     """Shared executor: yields (gallery_paths, status_text) as work progresses."""
     images = []
@@ -272,6 +304,9 @@ def _run_jobs(jobs, builder=build_workflow, prefix="Krea2"):
         job_prefix = prefix
         if job["loras"]:
             job_prefix += "_" + Path(job["loras"][0][0]).stem
+        # Last, so the readable part of the name — the tab, and which LoRA
+        # it ran with — still comes first in a directory listing.
+        job_prefix += "_" + _run_tag()
         workflow = builder(filename_prefix=job_prefix, **job)
         swap_note = _release_on_swap(client, workflow)
         if swap_note:
@@ -990,6 +1025,10 @@ def generate_faceswap(base_image, face_image, swap_model, facedetection,
         yield [], f"❌ Uploading the images to ComfyUI failed: {exc}"
         return
     workflow = build_faceswap_workflow(
+        # `tag` again rather than a second draw: the swap is one job, and
+        # naming its output after the inputs it was built from is more
+        # use than a fresh number. See _run_tag for why it is there.
+        filename_prefix=f"Krea2FaceSwap_{tag}",
         base_image_name=base_name, face_image_name=face_name,
         swap_model=swap_model, facedetection=facedetection,
         face_restore_model=restore_model,
@@ -1126,10 +1165,12 @@ def generate_wan_video(image, prompt, negative, model, mode, seed, randomize,
         fps, snap = WAN_5B_FPS, 32
         shift = WAN_5B_DEFAULTS["shift"]
         builder = build_wan_5b_workflow
+        wan_prefix = "wan/Wan22TI2V5B"
     else:
         fps, snap = WAN_FPS, 16
         shift = WAN_MODE_DEFAULTS["turbo" if turbo else "raw"]["shift"]
         builder = build_wan_i2v_workflow
+        wan_prefix = "wan/Wan22I2V"
     image = image.convert("RGB")
     width, height = _fit_video_size(*image.size, WAN_RESOLUTIONS[resolution],
                                     snap=snap)
@@ -1147,6 +1188,10 @@ def generate_wan_video(image, prompt, negative, model, mode, seed, randomize,
         "width": width, "height": height,
         "length": _seconds_to_frames(seconds, fps), "fps": fps,
         "sampler": sampler, "shift": shift, "image_name": image_name,
+        # Spelled out here rather than left to the builder's default so
+        # the tag can go on it — see _run_tag. Videos land in wan/, and
+        # that subfolder has its own counter to be knocked backwards.
+        "filename_prefix": f"{wan_prefix}_{_run_tag()}",
         **({} if use_5b else {"lightning": turbo}),
     } for i in range(int(batch_count))]
     for videos, latest, status in _run_wan_jobs(jobs, builder=builder):

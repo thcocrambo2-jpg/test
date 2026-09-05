@@ -194,6 +194,12 @@ def patch(module, capture) -> None:
 
     module.comfy_ensure_alive = lambda *a, **k: (True, "")
 
+    # The per-job filename token. Random by design — that is the whole
+    # point of it — and it lands *in* the workflow as filename_prefix, so
+    # without this every snapshot would differ on every run. Same reason
+    # upload_image is pinned to UPLOADED below.
+    module._run_tag = lambda: "golden00"
+
     # Silent by contract in the app; a POST to the licence server here.
     # Kept rather than discarded: the fourth positional is the settings
     # blob the licence server stores, and it is the thing tabschema has to

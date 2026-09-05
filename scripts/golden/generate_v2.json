@@ -96,7 +96,7 @@
     "save": {
       "class_type": "SaveImage",
       "inputs": {
-        "filename_prefix": "Krea2V2",
+        "filename_prefix": "Krea2V2_golden00",
         "images": [
           "grain",
           0
@@ -250,7 +250,7 @@
     "save": {
       "class_type": "SaveImage",
       "inputs": {
-        "filename_prefix": "Krea2V2",
+        "filename_prefix": "Krea2V2_golden00",
         "images": [
           "grain",
           0
