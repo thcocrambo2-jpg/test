@@ -120,6 +120,23 @@ def start_comfyui(port: int = COMFY_PORT, log_path=COMFY_LOG, extra_args=()):
         return None
     env = os.environ.copy()
     env.pop("CUDA_VISIBLE_DEVICES", None)  # make sure ComfyUI sees every GPU
+    # stdout below is a log FILE, and Python picks the encoding for a
+    # redirected stream from the ANSI code page rather than from the
+    # console — cp1252 on a typical Windows machine even when the console
+    # itself is UTF-8. One non-ASCII byte from any custom node then raises
+    # UnicodeEncodeError inside the print, Python reports "lost sys.stderr"
+    # and ComfyUI dies with exit 1 before it has served anything.
+    #
+    # That is not hypothetical: RES4LYF's helper_sigma_preview_image_preproc
+    # holds a Δ in a line that also trips SyntaxWarning, so the warning text
+    # carries the character. The warning is emitted only while the module is
+    # compiled to bytecode, which makes this a first-import failure — and a
+    # permanent one, because the process dies before the .pyc can be written,
+    # so the next start compiles it again and fails the same way.
+    #
+    # setdefault, not assignment: a caller who has deliberately set an
+    # encoding keeps it.
+    env.setdefault("PYTHONIOENCODING", "utf-8")
     # Not sys.executable: compiled with Nuitka that is this binary, and
     # ComfyUI needs a real interpreter (see bootstrap.runtime_python).
     cmd = [
