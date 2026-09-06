@@ -217,6 +217,37 @@ if ($pyVersion -and $pyVersion -notmatch '^3\.12\.') {
     Say "note: python $pyVersion - the app is tested on 3.12"
 }
 
+# Having an interpreter is not the same as having one that can install
+# ComfyUI. bootstrap.runtime_python() validates this too and refuses an
+# interpreter without pip, but finding out here is the difference between a
+# message before anything is downloaded and the same message after the
+# licence seat is taken and a few hundred megabytes have moved.
+#
+# The two Windows impostors that satisfy Get-Command and then cannot
+# install anything are an MSYS2 python, which ships no pip, and the
+# zero-byte Microsoft Store alias stub. Probed with find_spec rather than a
+# bare `import pip` so a missing pip prints nothing: a traceback on stderr
+# here would be noise, and redirecting it away is the 2>&1 trap above.
+& python -c "import importlib.util,sys; sys.exit(0 if importlib.util.find_spec('pip') else 1)"
+if ($LASTEXITCODE -ne 0) {
+    Die @"
+python is on PATH, but that interpreter cannot import pip.
+
+       ComfyUI is installed with pip and run as a separate process, so
+       the app cannot continue without it. This is usually an MSYS2
+       python (no pip) or the Microsoft Store alias sitting ahead of a
+       real one on PATH.
+
+       Install Python 3.12 from https://www.python.org/downloads/, tick
+       "Add python.exe to PATH", and make sure it comes before any
+       MSYS2 or WindowsApps entry. Check with:
+
+           where.exe python
+
+       Close and reopen PowerShell afterwards, so PATH is re-read.
+"@
+}
+
 try {
     New-Item -ItemType Directory -Path $BIN_DIR -Force -ErrorAction Stop | Out-Null
 } catch {

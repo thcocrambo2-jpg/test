@@ -64,14 +64,62 @@ def runtime_python() -> str:
     """
     if not FROZEN:
         return sys.executable
-    found = shutil.which("python3") or shutil.which("python")
-    if not found:
+
+    # Which name to try first is platform-specific, and getting this
+    # backwards is not cosmetic. "python3" is a Unix convention; on Windows
+    # the interpreter a customer installs is python.exe, and python3.exe is
+    # typically one of three things that are not it: absent, MSYS2's (which
+    # ships no pip at all), or the zero-byte Microsoft Store alias stub that
+    # is present by default on Windows 11. Asking for python3 first there
+    # reaches straight past the right interpreter for one that cannot
+    # install anything.
+    names = ("python", "python3") if sys.platform == "win32" else ("python3", "python")
+
+    # Validated rather than taken on trust. shutil.which only proves that a
+    # name resolves, and both Windows impostors above resolve perfectly
+    # well; what they cannot do is `-m pip install`, which is the only
+    # reason this function exists. Left unchecked the failure surfaces as
+    # "No module named pip" from inside the first install — after the
+    # licence seat is taken and several log lines past anything that
+    # mentions an interpreter.
+    tried = []
+    for name in names:
+        found = shutil.which(name)
+        if not found or found in tried:
+            continue
+        tried.append(found)
+        # The Store alias is a zero-byte reparse point that opens the
+        # Microsoft Store when executed. Skip it by shape rather than
+        # running it, so probing never pops a shop window at a customer.
+        try:
+            if Path(found).stat().st_size == 0:
+                continue
+        except OSError:
+            continue
+        try:
+            probe = subprocess.run(
+                [found, "-c", "import pip"],
+                capture_output=True, timeout=60,
+            )
+        except (OSError, subprocess.SubprocessError):
+            continue
+        if probe.returncode == 0:
+            return found
+
+    if tried:
         raise RuntimeError(
-            "No python3 found on PATH. The binary bundles this app, but "
-            "ComfyUI still runs as a separate Python process and needs an "
-            "interpreter — install python3 and re-run."
+            "Found %s on PATH, but no interpreter there can import pip. "
+            "ComfyUI runs as a separate Python process and is installed "
+            "with pip, so the app cannot continue. Install Python 3.12 "
+            "from python.org (tick \"Add python.exe to PATH\") and make "
+            "sure it comes before any MSYS2 or Microsoft Store entry."
+            % ", ".join(tried)
         )
-    return found
+    raise RuntimeError(
+        "No Python interpreter found on PATH. The binary bundles this app, "
+        "but ComfyUI still runs as a separate Python process and needs an "
+        "interpreter — install Python 3.12 and re-run."
+    )
 
 
 def run_cmd(cmd: list, cwd=None, desc: str | None = None) -> None:
