@@ -195,48 +195,45 @@ function mediaOf(result: DisplayResult): MediaItem[] {
   return []
 }
 
-/* The newest display each tab has actually applied, by the revision
- * jobqueue stamped it with.
+/* The revision of the newest output this browser has actually applied,
+ * per *job*.
  *
- * A display payload is one tab's latest yield *at the moment it was read*,
- * and two things read it: the stream, and a polling round that may have
- * several requests in flight. Nothing keeps their answers in order. A round
- * that asked while a batch was at one image can land after the one carrying
- * both, and applied blind it puts the tab back to one image for good — the
- * gallery lists the disk, so it goes on showing two, which is exactly how
- * this looked from the outside.
+ * Per job, and that is the fix. It used to be per tab, and a tab is a
+ * moving target: the only question the server could be asked was "what
+ * output should this tab be showing?", and the answer becomes the *next*
+ * run the moment that run starts. A run that finished while its successor
+ * was starting had its final yield fall straight down that gap — and a
+ * finished job's revision never changes again, so no later event could
+ * carry it either. From the outside that was a picture which generated
+ * and then simply never appeared: not in the tab, and not as the
+ * thumbnail on its row in the queue drawer. Queue two runs on one tab and
+ * it was reliably one of the two.
  *
- * The server has always sent the revision that orders them (`display_for`
- * returns jobqueue's own counter); it was simply thrown away here. Anything
- * not newer than what the tab is already showing is an answer to a question
- * that has since been overtaken, and is dropped.
+ * So `display` now names the job it is about, every job can be asked for
+ * by name, and output is attached to the run that made it. Which run a
+ * tab *shows* was never this map's business and is not inferred from it:
+ * that is `activeByTab`, which the queue has always stated outright.
  *
- * Reset on connect, and again whenever the queue's revision goes *backwards*
- * — which means the server process restarted and its counter began at 1
- * again. Without that second check a restart would leave every tab holding a
- * high-water mark no new event could ever clear. */
+ * The revision is jobqueue's own counter for that job — the same integer
+ * the queue snapshot carries — which is what makes "is the output I hold
+ * for this job the output it has now?" answerable without asking, and
+ * what orders two answers about one run that arrive out of order.
+ *
+ * Pruned against the queue on every snapshot, so ids the server has
+ * forgotten leave with it. That also covers the case the old code needed
+ * a separate "did the revision go backwards?" check for: a restarted
+ * server begins its counter at 1 again, but it also hands out an entirely
+ * new set of ids, and none of the old marks survive the first snapshot.
+ */
 const DISPLAY_SEEN = new Map<string, number>()
-let lastQueueRevision = 0
 
-/* What the polling fallback last fetched a display *under*, per tab: the
- * job it was for and the status that job was in at the time.
+/** How many runs one polling round will fetch output for.
  *
- * This is what decides whether to ask again, and it is deliberately not the
- * revision. Revisions order the answers — that is DISPLAY_SEEN's job above,
- * and the display route has always sent one. Asking is a different question,
- * and hanging it on a field the queue snapshot only started carrying in this
- * same change made the client silently useless against a server that had not
- * been restarted: every row arrived with no revision, the comparison was
- * false forever, no display was ever fetched, and nothing but the gallery
- * showed a picture. A status is a thing every version of this server has
- * always sent. */
-const DISPLAY_FETCHED = new Map<string, string>()
-
-/** The job a tab's display is about, as an identity that changes exactly
- *  when there is something new to ask for. */
-function displayStamp(job: Job): string {
-  return `${job.id}:${job.status}`
-}
+ *  The round after the fallback engages finds every run it knows stale,
+ *  and a page that has been open a while knows up to MAX_JOBS of them.
+ *  Newest first, so the runs somebody is plausibly looking at catch up in
+ *  the first round and the rest follow over the next few. */
+const MAX_DISPLAY_FETCH = 4
 
 /* Which files this session has already counted.
  *
@@ -276,8 +273,6 @@ export const useQueue = create<QueueState>((set, get) => {
 
   function onEvent(event: StreamEvent) {
     if (event.type === 'queue') {
-      if (event.queue.revision < lastQueueRevision) DISPLAY_SEEN.clear()
-      lastQueueRevision = event.queue.revision
       set((state) => {
         const known = new Map(state.jobs.map((job) => [job.id, job]))
         // Newest first, which is the order every list in the UI reads in;
@@ -313,13 +308,26 @@ export const useQueue = create<QueueState>((set, get) => {
         const orphans = state.jobs.filter((job) => !seen.has(job.id))
         return { jobs: trim([...jobs, ...orphans]) }
       })
+      /* Drop the applied-output marks for runs this browser no longer
+       * holds — trimmed away here, cleared by the user, or gone with a
+       * server that restarted. Nothing will ask about them again, and the
+       * map would otherwise grow for the life of the page. */
+      const held = new Set(get().jobs.map((job) => job.id))
+      for (const id of DISPLAY_SEEN.keys()) {
+        if (!held.has(id)) DISPLAY_SEEN.delete(id)
+      }
       return
     }
 
     if (event.type === 'display') {
-      // Older than what this tab is already showing — see DISPLAY_SEEN.
-      if (event.revision <= (DISPLAY_SEEN.get(event.tab) ?? 0)) return
-      DISPLAY_SEEN.set(event.tab, event.revision)
+      /* Keyed by the run the server named. The tab is the fallback for a
+       * server one commit behind this build, whose answer is about
+       * whichever run the tab should be showing — the assumption this
+       * whole store used to be built on. */
+      const key = event.job ?? `tab:${event.tab}`
+      // Older than what has already been applied for this run — see the
+      // note on DISPLAY_SEEN.
+      if (event.revision <= (DISPLAY_SEEN.get(key) ?? 0)) return
       const images = mediaOf(event.result)
       /* Counted before the job lookup below and independently of it. A
        * display event with no job to attach to is not a non-event: two
@@ -329,14 +337,16 @@ export const useQueue = create<QueueState>((set, get) => {
        * disk. */
       const fresh = countNew(images)
       if (fresh > 0) set((state) => ({ mediaRevision: state.mediaRevision + fresh }))
+      let applied = false
       set((state) => {
-        // `display_for` points at the newest job for that tab that has
-        // actually begun — not the newest queued one — so the target here
-        // is the same job the server meant.
-        const target = state.jobs.find(
-          (job) => job.tabKey === event.tab && job.status !== 'queued',
-        )
+        const target = event.job
+          ? state.jobs.find((job) => job.id === event.job)
+          : // The old reading, kept only for the older server above:
+            // `display_for` pointed at the newest job for that tab that
+            // had begun, so this is the same job the server meant.
+            state.jobs.find((job) => job.tabKey === event.tab && job.status !== 'queued')
         if (!target) return {}
+        applied = true
         return {
           jobs: state.jobs.map((job) =>
             job.id === target.id
@@ -350,6 +360,13 @@ export const useQueue = create<QueueState>((set, get) => {
           ),
         }
       })
+      /* Marked only once it has landed on a row. An event this browser
+       * had nowhere to put is not an event it has seen: the row can still
+       * arrive (a reconnect replays the queue and the displays, and they
+       * are separate events), and a mark set here would turn that replay
+       * into a no-op — losing the output for good, because a finished
+       * job's revision never moves again. */
+      if (applied) DISPLAY_SEEN.set(key, event.revision)
       return
     }
 
@@ -374,14 +391,13 @@ export const useQueue = create<QueueState>((set, get) => {
       let polling: ReturnType<typeof setInterval> | undefined
       /* One round at a time. `setInterval` does not wait for the previous
        * callback, and a round is a queue request plus one display request
-       * per busy tab — comfortably past POLL_MS on a slow link. Overlapping
-       * rounds are how a display answer arrives after a newer one; the
-       * revision guard drops it, and this stops it being asked for. */
+       * per run that has moved — comfortably past POLL_MS on a slow link.
+       * Overlapping rounds are how a display answer arrives after a newer
+       * one; the revision guard drops it, and this stops it being asked
+       * for. */
       let inFlight = false
 
       DISPLAY_SEEN.clear()
-      DISPLAY_FETCHED.clear()
-      lastQueueRevision = 0
 
       /* Every event, from either transport, lands here.
        *
@@ -402,11 +418,15 @@ export const useQueue = create<QueueState>((set, get) => {
 
       /* One round of the fallback.
        *
-       * Two requests, because the two stream events are not interchangeable:
-       * `/queue` carries every job's status and no media whatsoever, and the
-       * images live only behind `/tabs/{key}/display`. Polling the first and
-       * not the second is exactly the half-working state the bug produced —
-       * statuses correct, "No images yet" underneath them. */
+       * Two kinds of request, because the two stream events are not
+       * interchangeable: `/queue` carries every job's status and no media
+       * whatsoever, and the images live only behind
+       * `/tabs/{key}/display`. Polling the first and not the second is
+       * exactly the half-working state the bug produced — statuses
+       * correct, "No images yet" underneath them.
+       *
+       * The queue answer is applied first on purpose: it is what tells
+       * `displaysNeeded` which runs have moved since the last round. */
       async function pollOnce() {
         // `live` as well as `stopped`: the stream coming back mid-round
         // clears the interval, but the requests already out still land, and
@@ -420,21 +440,32 @@ export const useQueue = create<QueueState>((set, get) => {
           } catch {
             return
           }
-          for (const [tab, stamp] of tabsNeedingDisplay(get().jobs)) {
+          for (const [tab, jobId, revision] of displaysNeeded(get().jobs)) {
             if (stopped || get().transport === 'live') return
             try {
-              const body = await api.getDisplay(tab)
-              // Recorded against the stamp the *decision* was made under, not
-              // the job's state now: if it settled while this was in flight,
-              // the next round sees a stamp it has not fetched under and asks
-              // once more, which is exactly the round that carries the last
-              // picture of a batch.
-              DISPLAY_FETCHED.set(tab, stamp)
-              if (!stopped) {
-                onEvent({ type: 'display', tab, revision: body.revision, result: body.result })
+              const body = await api.getDisplay(tab, jobId)
+              if (body.job) {
+                if (!stopped) {
+                  onEvent({
+                    type: 'display',
+                    tab,
+                    job: body.job,
+                    revision: body.revision,
+                    result: body.result,
+                  })
+                }
+              } else {
+                /* The server has nothing under that id: the run has aged
+                 * out of jobqueue's twenty-deep history, or it never got
+                 * there at all. Marked at the revision the request was
+                 * decided under so the next round stops asking — without
+                 * this the round would repeat forever, once every 1.5
+                 * seconds, for as long as the page stayed open. What this
+                 * browser already holds for that run is what it keeps. */
+                DISPLAY_SEEN.set(jobId, revision)
               }
             } catch {
-              /* One tab's display failing is not a reason to skip the rest. */
+              /* One run's display failing is not a reason to skip the rest. */
             }
           }
         } finally {
@@ -588,42 +619,37 @@ export function isLive(job: Job): boolean {
   return job.status === 'queued' || job.status === 'running'
 }
 
-/** Which tabs the polling fallback should fetch `display` for, and the
- *  stamp each request is being made under.
+/** Which runs the polling fallback should fetch output for, and the
+ *  revision each request is being decided under. Newest first.
  *
- *  Not "every tab": that is one request per entitled tab per 1.5 seconds for
- *  media that has not changed since the page loaded. Two clauses, and the
- *  second is the one that took two goes to get right.
+ *  One question with an exact answer, where this used to be a heuristic.
+ *  jobqueue stamps every change to a job with a revision and the queue
+ *  snapshot carries it; `DISPLAY_SEEN` holds the revision whose output
+ *  this browser has actually applied. Different means there is something
+ *  to collect. That is a running job on every round as its batch grows, a
+ *  job that has just settled exactly once, and — once a quiet queue has
+ *  caught up — nothing at all, which is fewer requests than the old rule
+ *  made as well as more of the right ones.
  *
- *  **A live job's tab, every round.** Its output grows as the batch runs, so
- *  there is always something new to ask for.
+ *  What it fixes: the old rule asked per *tab*, for the newest run on it,
+ *  keyed on `id:status`. One question per tab per round meant that when
+ *  one run finished as the next was starting, the round that should have
+ *  collected the first one's last picture asked about the second instead,
+ *  and the first was never askable again. Asking per run removes the
+ *  contention entirely.
  *
- *  **A settled job's tab, once.** This is the fix for the batch's last
- *  picture. The old rule polled while live and then, after the job settled,
- *  only if it had come up empty — but a round applies the queue snapshot
- *  before it decides, so the round that learned the job was done had already
- *  stopped asking. The last display fetched came from the round before, taken
- *  while the batch was still running: four jobs ended at three pictures, two
- *  at one, one at zero. Keying on `id:status` means the transition to done is
- *  itself the thing that asks, exactly once.
- *
- *  Deliberately not keyed on the job's revision, though the snapshot now
- *  carries one. Ordering the answers wants a revision; deciding to ask does
- *  not, and a client that cannot ask at all against a server one commit
- *  behind it is a worse failure than the one being fixed. */
-function tabsNeedingDisplay(jobs: Job[]): [string, string][] {
-  const wanted: [string, string][] = []
-  const asked = new Set<string>()
-  // Newest first, so the first job seen for a tab is the one `display_for`
-  // means on the server: its newest run that has actually begun.
+ *  Two runs are skipped. A queued one has produced nothing, and asking
+ *  costs a request to be told so. One still at revision 0 was never a job
+ *  on the server — see submit()'s catch, where a rejected click becomes a
+ *  local row — and there is nothing there to ask about, ever.
+ */
+function displaysNeeded(jobs: Job[]): [string, string, number][] {
+  const wanted: [string, string, number][] = []
   for (const job of jobs) {
-    if (job.status === 'queued') continue
-    if (asked.has(job.tabKey)) continue
-    asked.add(job.tabKey)
-    const stamp = displayStamp(job)
-    if (isLive(job) || DISPLAY_FETCHED.get(job.tabKey) !== stamp) {
-      wanted.push([job.tabKey, stamp])
-    }
+    if (job.status === 'queued' || job.revision === 0) continue
+    if (DISPLAY_SEEN.get(job.id) === job.revision) continue
+    wanted.push([job.tabKey, job.id, job.revision])
+    if (wanted.length >= MAX_DISPLAY_FETCH) break
   }
   return wanted
 }

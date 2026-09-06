@@ -281,7 +281,17 @@ export interface DisplayResult {
 /** What GET /api/v1/stream sends. One connection for the whole app. */
 export type StreamEvent =
   | { type: 'queue'; queue: QueueSnapshot }
-  | { type: 'display'; tab: string; revision: number; result: DisplayResult }
+  | {
+      type: 'display'
+      tab: string
+      /** The run this output belongs to. Carried so output is attached to
+       *  the job that made it rather than guessed from the tab — see the
+       *  note on DISPLAY_SEEN in store/queue.ts. Null only from a server
+       *  that predates it, or when the tab has produced nothing. */
+      job: string | null
+      revision: number
+      result: DisplayResult
+    }
   | { type: 'presets'; tab: string; revision: number }
 
 export type JobEvent =
@@ -471,10 +481,17 @@ export interface ApiClient {
   /** Delete a selection in one request. Partial success is normal — the
    *  ids that would not go come back in `failed`. */
   deleteMediaMany(ids: string[]): Promise<{ deleted: number; failed: string[] }>
-  /** One tab's latest yield, over plain HTTP. The `display` stream event's
+  /** One run's latest yield, over plain HTTP. The `display` stream event's
    *  twin, and the half of the polling fallback that carries images —
-   *  `getQueue` carries statuses and no media at all. */
-  getDisplay(tab: string): Promise<{ revision: number; result: DisplayResult }>
+   *  `getQueue` carries statuses and no media at all.
+   *
+   *  Naming a `job` asks for that run in particular. Without one the answer
+   *  is about whichever run the tab should be showing, which is the wrong
+   *  run for collecting the last picture of the one before it. */
+  getDisplay(
+    tab: string,
+    job?: string,
+  ): Promise<{ job: string | null; revision: number; result: DisplayResult }>
   getPresets(tab: string): Promise<PresetList>
   /** A preset name or a stored recipe -> the values it is safe to write
    *  into this tab. Server-side, because guarding a value means knowing

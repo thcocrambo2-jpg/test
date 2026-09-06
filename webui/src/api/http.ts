@@ -166,9 +166,11 @@ export const httpClient: ApiClient = {
   getShowcase: () => get<Showcase | null>('/showcase'),
   getQueue: () => get<QueueSnapshot>('/queue'),
 
-  getDisplay: (tab) =>
-    get<{ revision: number; result: DisplayResult }>(
-      `/tabs/${encodeURIComponent(tab)}/display`,
+  getDisplay: (tab, job) =>
+    get<{ job: string | null; revision: number; result: DisplayResult }>(
+      `/tabs/${encodeURIComponent(tab)}/display${
+        job ? `?job=${encodeURIComponent(job)}` : ''
+      }`,
     ),
   getPresets: (tab) => get<PresetList>(`/presets/${encodeURIComponent(tab)}`),
 
@@ -292,12 +294,16 @@ export const httpClient: ApiClient = {
       }
 
       on<QueueSnapshot>('queue', (data) => ({ type: 'queue', queue: data }))
-      on<{ tab: string; revision: number; result: DisplayResult }>('display', (data) => ({
-        type: 'display',
-        tab: data.tab,
-        revision: data.revision,
-        result: data.result,
-      }))
+      on<{ tab: string; job?: string | null; revision: number; result: DisplayResult }>(
+        'display',
+        (data) => ({
+          type: 'display',
+          tab: data.tab,
+          job: data.job ?? null,
+          revision: data.revision,
+          result: data.result,
+        }),
+      )
       on<{ tab: string; revision: number }>('presets', (data) => ({
         type: 'presets',
         tab: data.tab,

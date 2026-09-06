@@ -295,21 +295,64 @@ def _view(job: Job) -> JobView:
                    revision=job.revision)
 
 
-def display_for(tab: str) -> tuple[int, dict | None]:
-    """(revision, latest yield) for the job that tab should be showing.
+def display_for(tab: str) -> tuple[str | None, int, dict | None]:
+    """(job id, revision, latest yield) for the run that tab should show.
 
     "Should be showing" is the newest job for that tab that has actually
-    *begun* — so a tab switches to a new run the moment it starts, not
-    when it was queued, and goes on showing the last finished run while
-    three more sit waiting behind it. That is what the tab did before
-    there was a queue, and it is the only reading under which the gallery
-    and the status line always describe the same run.
+    *produced something* — and the emphasis moved there from "has begun"
+    to close a hole that lost whole pictures.
+
+    Under the old reading, a run's output became unreachable the instant
+    the next run on the same tab started: this returned the new job,
+    whose `result` was still None, and the finished one could never be
+    asked for again. Its revision was final, so no later event carried it
+    either. Queue two runs and the first one's last picture was gone —
+    from the tab, and from its row in the queue — which is exactly the
+    "only one of the two showed up" this fixes.
+
+    Nothing about what the tab *displays* changes, because the caller no
+    longer infers that from here: the id comes back with the result, so a
+    reader attaches output to the run that made it and takes which run is
+    current from the queue, where it has always been stated outright.
     """
     with _LOCK:
         for job in reversed(_JOBS):
-            if str(job.tab) == str(tab) and job.status != QUEUED:
-                return job.revision, job.result
-    return 0, None
+            if str(job.tab) == str(tab) and job.result is not None:
+                return job.id, job.revision, job.result
+    return None, 0, None
+
+
+def display_of(job_id: str, tab: str | None = None
+               ) -> tuple[str | None, int, dict | None]:
+    """The same three, for one named run.
+
+    What a poll uses to collect a run's last yield after a second run has
+    taken its tab over. `tab` is checked rather than assumed because the
+    route that answers this is gated per tab, and a job id from another
+    tab must not be a way around that gate.
+    """
+    with _LOCK:
+        for job in _JOBS:
+            if job.id != job_id:
+                continue
+            if tab is not None and str(job.tab) != str(tab):
+                return None, 0, None
+            return job.id, job.revision, job.result
+    return None, 0, None
+
+
+def displays() -> list[tuple[str, str, int, dict]]:
+    """(id, tab, revision, latest yield) for every job that has produced
+    one, oldest first.
+
+    The stream walks this rather than one job per tab, so a run that
+    finishes while the next one is starting still gets its final output
+    delivered. `result` is replaced wholesale by _freeze and never
+    mutated in place, so handing the reference out is safe.
+    """
+    with _LOCK:
+        return [(job.id, str(job.tab), job.revision, job.result)
+                for job in _JOBS if job.result is not None]
 
 
 def note_preset_saved(tab: str) -> int:

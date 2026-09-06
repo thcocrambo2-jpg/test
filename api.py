@@ -975,17 +975,28 @@ def _mount_tab(api: APIRouter, schema) -> None:
 
     @api.get("/tabs/%s/display" % key, dependencies=gate,
              name="display_" + key)
-    def display():
-        """The latest yield of the job this tab should be showing.
+    def display(job: str | None = None):
+        """The latest yield of one of this tab's runs.
 
-        "Should be showing" is jobqueue.display_for's reading and not a
-        new one: the newest job for this tab that has actually *begun*. So
-        a tab switches to a new run the moment it starts rather than when
-        it was queued, and goes on showing the last finished run while
-        three more sit waiting behind it.
+        Without `job`, the run this tab should be showing —
+        jobqueue.display_for's reading: the newest one that has actually
+        produced something.
+
+        With `job`, that run in particular. This is the half the polling
+        fallback needs and did not have: it can only ask one question per
+        tab per round, and while a second run is starting the answer to
+        the unqualified question is already about the second run. Naming
+        the job is how the first one's last picture gets collected.
+
+        `job` always comes back, so the caller attaches output to the run
+        that made it instead of guessing from the tab — null when there is
+        no such run here, or it has yielded nothing yet.
         """
-        revision, result = jobqueue.display_for(key)
-        return {"revision": revision,
+        if job is None:
+            job_id, revision, result = jobqueue.display_for(key)
+        else:
+            job_id, revision, result = jobqueue.display_of(job, tab=key)
+        return {"job": job_id, "revision": revision,
                 "result": _display_json(schema, result)}
 
     @api.post("/tabs/%s/generate" % key, dependencies=gate,
@@ -1097,9 +1108,9 @@ async def _events(request: Request):
 
     Sends everything once on connect — a page that has just loaded needs
     the current queue, not the next change to it — and then only what has
-    moved. Each `seen` entry is a revision counter jobqueue already keeps,
-    so "has this changed?" costs one integer comparison rather than a
-    diff.
+    moved. `seen` and `sent` below hold revision counters jobqueue already
+    keeps, so "has this changed?" costs one integer comparison rather than
+    a diff: `seen` for the queue as a whole, `sent` for each job's output.
 
     Async rather than sync, and that is not a style choice: Starlette runs
     a sync streaming generator on a threadpool worker, and a `time.sleep`
@@ -1109,6 +1120,26 @@ async def _events(request: Request):
     # Seeded from the same snapshot that is about to be sent, so the
     # first pass of the loop does not send it a second time.
     seen = {"queue": jobqueue.revision()}
+    # What each *job* was last told about, by id.
+    #
+    # Per job and not per tab, which is the fix. Per tab meant asking
+    # jobqueue for "the run this tab should show" and sending only that,
+    # so a run that finished while the next one on its tab was starting
+    # never had its final yield sent — and its revision was final, so
+    # nothing later carried it either. Two runs queued on one tab, one
+    # picture on screen.
+    #
+    # Seeded so that connecting still costs one display per tab — the run
+    # each tab should show — rather than every job in the twenty-deep
+    # history, whose images this browser has no row to hang on anyway.
+    showing = set()
+    for schema in tabschema.entitled():
+        job_id, _, _ = jobqueue.display_for(str(schema.key))
+        if job_id is not None:
+            showing.add(job_id)
+    sent = {job_id: revision
+            for job_id, _, revision, _ in jobqueue.displays()
+            if job_id not in showing}
     last_beat = 0.0
     # Padding, sent before anything that matters, and it is not
     # superstition. A proxy that buffers by *size* releases nothing until
@@ -1130,14 +1161,21 @@ async def _events(request: Request):
             seen["queue"] = revision
             yield _sse("queue", _queue_json())
 
-        for schema in tabschema.entitled():
-            key = str(schema.key)
-            stamp, result = jobqueue.display_for(key)
-            if result is None or seen.get(("tab", key)) == stamp:
+        # Every run that has produced something, not one per tab. Rebuilt
+        # each pass rather than added to, so ids that have aged out of
+        # jobqueue's history leave with them instead of accumulating for
+        # as long as the connection lives.
+        allowed = {str(schema.key): schema for schema in tabschema.entitled()}
+        fresh = {}
+        for job_id, tab, stamp, result in jobqueue.displays():
+            fresh[job_id] = stamp
+            schema = allowed.get(tab)
+            if schema is None or sent.get(job_id) == stamp:
                 continue
-            seen[("tab", key)] = stamp
-            yield _sse("display", {"tab": key, "revision": stamp,
+            yield _sse("display", {"tab": tab, "job": job_id,
+                                   "revision": stamp,
                                    "result": _display_json(schema, result)})
+        sent = fresh
 
         # A preset saved by a background job — the save happens wherever
         # the job eventually runs, so nothing else is in a position to
