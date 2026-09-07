@@ -26,6 +26,12 @@ venv/
 .dryrun/output/all_outputs_*.zip
 
 tmp
+tmp2
 .gradio
 
 commands.txt
+
+
+prompts/
+context.md
+windows/

@@ -12,6 +12,7 @@ import shutil
 import subprocess
 import sys
 import tarfile
+from collections import deque
 from pathlib import Path
 
 import features
@@ -123,16 +124,39 @@ def runtime_python() -> str:
 
 
 def run_cmd(cmd: list, cwd=None, desc: str | None = None) -> None:
-    """Run a command, raising with the captured output tail on failure."""
+    """Run a command, echoing its output, and raise with the tail on failure.
+
+    Streamed line by line rather than captured whole. The difference only
+    matters for one command, but it matters a lot there: installing
+    ComfyUI's requirements into an empty environment takes tens of minutes,
+    and with the output swallowed there is nothing on screen for any of it.
+    A customer reads a window that has printed nothing for twenty minutes
+    as a hang, and closes it — halfway through a pip install, which is the
+    one moment it is genuinely expensive to do.
+
+    The last lines are still kept, so a failure reports the same tail it
+    always did. Keeping both is the point: the output has to be visible
+    while it works *and* summarised when it does not, and a caller that
+    only ever saw the summary could not tell a slow install from a stuck
+    one.
+    """
     log.info("%s ...", desc or " ".join(map(str, cmd)))
-    result = subprocess.run(
-        [str(c) for c in cmd], cwd=cwd, text=True,
+    tail = deque(maxlen=25)
+    # bufsize=1 is line buffering, so a long install appears as it happens
+    # rather than in blocks whenever a pipe buffer happens to fill.
+    process = subprocess.Popen(
+        [str(c) for c in cmd], cwd=cwd, text=True, bufsize=1,
         stdout=subprocess.PIPE, stderr=subprocess.STDOUT,
     )
-    if result.returncode != 0:
-        tail = "\n".join(result.stdout.splitlines()[-25:])
+    for line in process.stdout:
+        line = line.rstrip()
+        tail.append(line)
+        print(line, flush=True)
+    process.wait()
+    if process.returncode != 0:
         raise RuntimeError(
-            f"Command failed ({desc or cmd[0]}), exit {result.returncode}:\n{tail}"
+            f"Command failed ({desc or cmd[0]}), exit {process.returncode}:\n"
+            + "\n".join(tail)
         )
 
 
@@ -233,7 +257,7 @@ def _torch_index(info: dict) -> str:
 
 
 def _pip_install(args: list, desc: str) -> None:
-    run_cmd([runtime_python(), "-m", "pip", "install", "-q", *args], desc=desc)
+    run_cmd([runtime_python(), "-m", "pip", "install", *args], desc=desc)
 
 
 def torch_constraints_file() -> Path | None:
@@ -523,7 +547,7 @@ def install_comfyui() -> None:
     constraints = torch_constraints_file()
     if constraints is not None:
         reqs += ["--constraint", constraints]
-    run_cmd([runtime_python(), "-m", "pip", "install", "-q", *reqs], desc=desc)
+    run_cmd([runtime_python(), "-m", "pip", "install", *reqs], desc=desc)
 
 
 def install_custom_nodes() -> None:
@@ -591,7 +615,7 @@ def install_v2_nodes() -> None:
         if not reqs.exists():
             continue
         try:
-            run_cmd([runtime_python(), "-m", "pip", "install", "-q", "-r", reqs],
+            run_cmd([runtime_python(), "-m", "pip", "install", "-r", reqs],
                     desc=f"Installing {dirname} requirements")
         except RuntimeError as exc:
             log.error("%s requirements failed to install (%s) — the pack may "
@@ -667,7 +691,7 @@ def install_onnxruntime() -> bool:
     _uninstall_onnxruntime()
     for args, desc in candidates:
         try:
-            run_cmd([runtime_python(), "-m", "pip", "install", "-q", *args],
+            run_cmd([runtime_python(), "-m", "pip", "install", *args],
                     desc=f"Installing {desc}")
         except RuntimeError as exc:
             log.warning("%s would not install (%s) — trying the next option",
@@ -739,7 +763,7 @@ def install_reactor() -> None:
     reqs = dest / "requirements.txt"
     if reqs.exists():
         try:
-            run_cmd([runtime_python(), "-m", "pip", "install", "-q", "-r", reqs],
+            run_cmd([runtime_python(), "-m", "pip", "install", "-r", reqs],
                     desc="Installing ReActor requirements")
         except RuntimeError as exc:
             log.error("ReActor requirements failed to install (%s) — the "
