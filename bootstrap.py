@@ -404,6 +404,56 @@ def clone_pinned(url: str, dest, name: str, desc: str) -> None:
             desc=f"Pinning {name} to {sha[:8]}")
 
 
+def repin_checkout(dest, name: str) -> None:
+    """Move an existing clone to the revision PINS.json records for `name`.
+
+    clone_pinned only ever runs on an empty directory, so a pod volume, a
+    Docker image's baked tree or a Windows install that already holds a
+    checkout keeps whatever revision it was cloned at, for ever — a pin
+    that moves in a release reaches new machines and nobody else. That is
+    tolerable for a pin that only moves to change weights, and not for one
+    that moves because a tab needs nodes the old checkout does not have:
+    ComfyUI went from v0.29 to v0.34 for MiniMax H3, whose nodes are core
+    ComfyUI, and every existing volume would otherwise refuse that tab with
+    "node not found" until somebody deleted the folder by hand.
+
+    Best-effort by design. A fetch that fails — no network, a server that
+    will not serve the commit — logs and leaves the checkout where it is:
+    the app still starts on the revision it has, and comfy.verify_core_node
+    says which tab that costs. It never touches a tree that is not a git
+    checkout, and never runs when there is no pin to move to.
+    """
+    sha = mirror.node_pin(name).get("sha")
+    dest = Path(dest)
+    if not sha or not (dest / ".git").exists():
+        return
+    try:
+        head = subprocess.run(
+            ["git", "-C", str(dest), "rev-parse", "HEAD"],
+            capture_output=True, text=True, timeout=60,
+        ).stdout.strip()
+    except (OSError, subprocess.SubprocessError) as exc:
+        log.warning("Could not read %s's revision (%s) — leaving it as is.",
+                    name, exc)
+        return
+    if head == sha:
+        return
+    log.info("%s is at %s and this release pins %s — moving the checkout",
+             name, head[:8] or "?", sha[:8])
+    try:
+        # `fetch origin <sha>` rather than a plain fetch: it is the one form
+        # that works on both a full clone and the shallow one clone_pinned's
+        # unpinned fallback makes, and it pulls exactly the commit wanted.
+        run_cmd(["git", "-C", dest, "fetch", "--quiet", "origin", sha],
+                desc=f"Fetching {name} {sha[:8]}")
+        run_cmd(["git", "-C", dest, "checkout", "--quiet", sha],
+                desc=f"Pinning {name} to {sha[:8]}")
+    except Exception as exc:                  # noqa: BLE001
+        log.error("Could not move %s to %s (%s) — continuing on %s. Tabs "
+                  "that need the newer revision will say so at startup.",
+                  name, sha[:8], exc, head[:8] or "?")
+
+
 def node_pack_from_mirror(dirname: str, dest) -> bool:
     """Install a custom-node pack from the mirror's pinned tarball.
 
@@ -451,6 +501,11 @@ def install_comfyui() -> None:
     """Clone ComfyUI at its pinned revision (idempotent) and install reqs."""
     if (COMFY_DIR / "main.py").exists():
         log.info("ComfyUI already present at %s — skipping clone", COMFY_DIR)
+        # ... but not skipping the pin. An existing checkout is the one
+        # thing clone_pinned never sees, so a pin that moved in a release
+        # has to be applied here or it applies to nobody who already ran
+        # the app. Best-effort; see repin_checkout.
+        repin_checkout(COMFY_DIR, "ComfyUI")
     else:
         clone_pinned(COMFYUI_REPO, COMFY_DIR, "ComfyUI", "Cloning ComfyUI")
     # ComfyUI's requirements always install — they belong to the subprocess,

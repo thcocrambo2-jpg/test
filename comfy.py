@@ -284,6 +284,38 @@ def verify_custom_node(class_type: str, needle: str, node_dir,
         return False
 
 
+def verify_core_node(class_type: str, since: str,
+                     port: int = COMFY_PORT) -> bool:
+    """Log whether a *core* node is registered — which is a version check.
+
+    verify_custom_node explains a pack that failed to import. This is the
+    other way a node can be missing: the ComfyUI checkout predates the
+    release the node first shipped in. That is a pin problem rather than
+    an import problem, so the message names the release and the thing that
+    moves the checkout (bootstrap.repin_checkout, which runs on every start
+    and logs why it could not). Diagnostic like its sibling: it never
+    raises and never blocks startup — the tab still refuses at generation
+    time with a message of its own; this says why, once, where somebody
+    reading the startup log will see it.
+    """
+    try:
+        if node_registered(class_type, port):
+            log.info("Core node %s is registered", class_type)
+            return True
+        log.error(
+            "Core node %s is NOT registered — the ComfyUI checkout at %s "
+            "predates %s, which is where it first shipped. The tab built on "
+            "it will refuse every job until the checkout is moved to the "
+            "revision scripts/PINS.json records (the app tries on every "
+            "start; look above for why it could not).",
+            class_type, COMFY_DIR, since,
+        )
+        return False
+    except Exception as exc:  # diagnostics must never break startup
+        log.warning("Could not verify core node %s: %s", class_type, exc)
+        return False
+
+
 def wait_for_comfyui(process, timeout: int = 300,
                      port: int = COMFY_PORT, log_path=COMFY_LOG) -> None:
     """Block until the ComfyUI API answers; raise with the log tail if it dies."""
