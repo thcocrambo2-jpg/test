@@ -231,21 +231,6 @@ export function Lightbox({
       </header>
 
       <div className={s.lightboxStage} onClick={onClose}>
-        {index > 0 && (
-          <button
-            type="button"
-            className={cx(s.arrow, s.arrowLeft)}
-            aria-label="Previous"
-            onClick={(event) => {
-              event.stopPropagation()
-              onIndex(index - 1)
-            }}
-          >
-            <svg viewBox="0 0 24 24" aria-hidden="true">
-              <path d="m15 5-7 7 7 7" />
-            </svg>
-          </button>
-        )}
         {item.kind === 'video' ? (
           <video
             className={s.lightboxImage}
@@ -255,30 +240,25 @@ export function Lightbox({
             onClick={(event) => event.stopPropagation()}
           />
         ) : (
-          /* Two layers, and the order matters.
+          /* Two layers, and each one has a box it can be right about.
            *
-           * Underneath, the 512px thumbnail as a *background* — already in
-           * cache because the grid tile that opened this used the same URL,
-           * so it paints on the first frame and the stage is never blank.
-           * A background and not an <img> on purpose: backgrounds are not
-           * hit-test targets, so "Copy image" in the moment before the
-           * full-resolution file lands cannot quietly hand over a 512px
-           * WebP. The only thing right-clickable here is the original.
+           * Underneath, the 512px thumbnail, stretched across the whole
+           * stage and fitted with `object-fit` — so it paints exactly the
+           * rectangle the original will land on, and it has that box from
+           * the first frame rather than waiting on a size it has not
+           * downloaded yet. It is already in cache, because the grid tile
+           * that opened this used the same URL. It cannot be right-clicked:
+           * `pointer-events: none` in the stylesheet, so "Copy image" in the
+           * moment before the full-resolution file lands cannot quietly hand
+           * over a 512px WebP. The only picture on offer is the original.
            *
-           * On top, the original, revealed once it has decoded. The frame
-           * carries the aspect ratio so neither layer moves during the
-           * swap — it is a sharpen, not a reflow. */
-          <div
-            className={s.stageFrame}
-            style={{ ['--ratio' as string]: `${item.width} / ${item.height}` }}
-            onClick={(event) => event.stopPropagation()}
-          >
+           * On top, the original, revealed once it has decoded. It is sized
+           * by its own dimensions against the same box, so the two agree on
+           * where the picture goes to within a fraction of a pixel — it is a
+           * sharpen, not a reflow. */
+          <div className={s.stageFrame} onClick={(event) => event.stopPropagation()}>
             {item.thumbUrl && (
-              <div
-                className={s.stageThumb}
-                style={{ backgroundImage: `url("${item.thumbUrl}")` }}
-                aria-hidden="true"
-              />
+              <img className={s.stageThumb} src={item.thumbUrl} alt="" aria-hidden="true" />
             )}
             <img
               ref={stageRef}
@@ -289,21 +269,6 @@ export function Lightbox({
               onError={() => setLoaded(item.url)}
             />
           </div>
-        )}
-        {index < items.length - 1 && (
-          <button
-            type="button"
-            className={cx(s.arrow, s.arrowRight)}
-            aria-label="Next"
-            onClick={(event) => {
-              event.stopPropagation()
-              onIndex(index + 1)
-            }}
-          >
-            <svg viewBox="0 0 24 24" aria-hidden="true">
-              <path d="m9 5 7 7-7 7" />
-            </svg>
-          </button>
         )}
       </div>
 

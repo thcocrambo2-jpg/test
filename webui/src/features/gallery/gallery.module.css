@@ -309,60 +309,71 @@
   box-shadow: var(--sh-lg);
 }
 
-/* The still image's stage: a box the exact shape of the picture, holding the
-   thumbnail and the original stacked on one another.
+/* The still image's stage: the thumbnail across it, the original over that.
 
-   It needs the ratio because the <img> inside has no intrinsic size until it
-   loads, and a box that sizes itself from its content would be zero high for
-   exactly as long as there is something to show underneath. Full height,
-   width derived from the ratio, and `max-width` clamping the landscape case
-   back — at which point the ratio re-derives the height. */
+   The frame is the stage and nothing more — it has no shape of its own. It
+   used to carry `aspect-ratio` with `height: 100%`, and that was the bug an
+   earlier version of this comment cheerfully described as the fix: an
+   explicit height is a *definite* height, so when `max-width: 100%` clamped
+   the width, the ratio did not re-derive the height to match. Measured on a
+   390px phone, a 1536x1024 picture in a 374x718 stage got a 374x718 frame.
+   The original, `object-fit: contain`, painted 374x249 in the middle of it;
+   the thumbnail, a `background-size: cover` layer filling the frame, was
+   blown up 2.1x to cover all 718px behind it. That 234px band of magnified,
+   wrongly-shaped thumbnail above and below the sharp picture is what people
+   saw and reported as a stretched image in the background.
+
+   Nothing here computes a shape any more. The two layers agree on where the
+   picture goes because they are fitted the same way, not because a box was
+   calculated for them. */
 .stageFrame {
   position: relative;
-  aspect-ratio: var(--ratio, 1);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 100%;
   height: 100%;
-  width: auto;
-  max-width: 100%;
-  max-height: 100%;
   min-width: 0;
   min-height: 0;
-  border-radius: var(--r-md);
-  overflow: hidden;
-  box-shadow: var(--sh-lg);
 }
 
-/* The thumbnail, shown as it is.
-   It was blurred here, on the reasoning that a 512px thumbnail is being shown
-   at several times its own size and a picture softly out of focus reads as
-   one still arriving. The reasoning was right and the measurement was not:
-   the stage renders a 341x512 thumbnail at about 525x790, which is 1.54x —
-   mildly soft, entirely legible, and nothing that needs covering up. A
-   blur-up earns its place over a 20px placeholder at 40x, where the raw
-   pixels would read as a broken image. Over this it only destroyed the
-   picture somebody opened the lightbox to look at.
+/* The thumbnail, as a picture rather than as a background.
 
-   No `transform` either: the scale existed solely to crop the transparent
-   margin `blur()` leaves behind, and left in on its own it would show as a
-   6% jump at the moment the original takes over. */
+   A background was the older idea and it had one real virtue — a background
+   is not a hit-test target, so it could not be right-clicked and saved in
+   place of the original. `pointer-events: none` buys that back, and an <img>
+   brings something a background could not: `object-fit`, which fits the
+   picture inside the box instead of resizing the box to the picture. The box
+   can then be the whole stage, which it has from the first frame, whether or
+   not anything has downloaded. That is the whole placeholder problem solved
+   — a box that is always there, and a fit that is always right.
+
+   Shown as it is, not blurred. That was tried, on the reasoning that a 512px
+   thumbnail shown at several times its size reads better softened. The
+   reasoning was right and the measurement was not: the stage renders a
+   341x512 thumbnail at about 525x790, which is 1.54x — mildly soft, entirely
+   legible, and nothing that needed covering up. A blur-up earns its place
+   over a 20px placeholder at 40x. Over this it only destroyed the picture
+   somebody opened the lightbox to look at. */
 .stageThumb {
-  position: absolute;
-  inset: 0;
-  background-position: center;
-  background-repeat: no-repeat;
-  background-size: cover;
-}
-
-.stageFull {
   position: absolute;
   inset: 0;
   width: 100%;
   height: 100%;
-  max-width: none;
-  max-height: none;
-  /* The frame already carries them, and rounding the same corner twice
-     leaves a rim of blurred thumbnail outside the sharp image. */
-  border-radius: 0;
-  box-shadow: none;
+  object-fit: contain;
+  pointer-events: none;
+}
+
+/* The original. `.lightboxImage` has already sized it — max-width and
+   max-height at 100% of a frame with a definite size, both axes auto — so
+   its box is the picture's own box, which is why the corner radius and the
+   shadow it carries land on the picture and not on the stage.
+
+   `position: relative` only to lift it over the thumbnail: the thumbnail is
+   absolutely positioned and would otherwise paint above an in-flow sibling,
+   whatever the source order says. */
+.stageFull {
+  position: relative;
   opacity: 0;
   transition: opacity var(--d-base) var(--e-out);
 }
@@ -372,51 +383,11 @@
 }
 
 /* Someone who has asked not to be shown motion is not asking to be shown a
-   blurred picture for longer. No crossfade; the original simply appears. */
+   thumbnail for longer. No crossfade; the original simply appears. */
 @media (prefers-reduced-motion: reduce) {
   .stageFull {
     transition: none;
   }
-}
-
-.arrow {
-  position: absolute;
-  top: 50%;
-  transform: translateY(-50%);
-  width: 40px;
-  height: 40px;
-  border-radius: 50%;
-  border: 1px solid var(--c-border);
-  background: var(--c-elevated);
-  color: var(--c-text);
-  cursor: pointer;
-  display: grid;
-  place-items: center;
-  padding: 0;
-}
-
-/* A drawn chevron rather than a guillemet: the glyph sits off-centre in its
-   own line box, so no amount of centring the button centres the mark. */
-.arrow svg {
-  width: 18px;
-  height: 18px;
-  fill: none;
-  stroke: currentColor;
-  stroke-width: 2;
-  stroke-linecap: round;
-  stroke-linejoin: round;
-}
-
-.arrow:hover {
-  border-color: var(--c-accent);
-  color: var(--c-accent);
-}
-
-.arrowLeft {
-  left: var(--s-4);
-}
-.arrowRight {
-  right: var(--s-4);
 }
 
 /* The filmstrip. Laid out by the DOM: one flex row that scrolls, with the
@@ -531,7 +502,6 @@
     display: none;
   }
 
-  /* Room the arrows are drawn over anyway. */
   .lightboxStage {
     padding: 0 var(--s-2);
   }
