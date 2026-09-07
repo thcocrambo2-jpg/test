@@ -160,6 +160,6 @@ for (const plan of await plans.find({}).sort({ sort_order: 1 }).toArray()) {
 }
 
 console.log(
-  '\nNext: npm run issue-key -- --name "Acme Corp" --plan pro --seats 2',
+  '\nNext: npm run issue-key -- --name "Acme Corp" --plan creator --seats 2',
 );
 process.exit(0);

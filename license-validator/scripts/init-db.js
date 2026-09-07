@@ -31,6 +31,6 @@ for (const name of ["licenses", "sessions", "prompts", "presets"]) {
 console.log("\nNext: npm run seed-catalog");
 console.log("      npm run seed-presets");
 console.log(
-  '      npm run issue-key -- --name "Acme Corp" --plan pro --seats 2',
+  '      npm run issue-key -- --name "Acme Corp" --plan creator --seats 2',
 );
 process.exit(0);

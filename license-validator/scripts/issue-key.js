@@ -1,6 +1,6 @@
 // Issue a license key for a customer.
 //
-//   npm run issue-key -- --name "Acme Corp" --plan pro --seats 2
+//   npm run issue-key -- --name "Acme Corp" --plan creator --seats 2
 //   npm run issue-key -- --name "Trial" --plan creator --seats 1 --days 30
 //   npm run issue-key -- --key KREA2-XXXX-XXXX-XXXX --plan studio --update
 //   npm run issue-key -- --key KREA2-XXXX-XXXX-XXXX --features-extra "wan_i2v" --update
@@ -104,7 +104,7 @@ if (opts.revoke || opts.enable) {
 if (!opts.name && !opts.key) {
   const known = await plans.find({}).sort({ sort_order: 1 }).toArray();
   die(
-    'usage: npm run issue-key -- --name "Acme Corp" --plan pro --seats 2',
+    'usage: npm run issue-key -- --name "Acme Corp" --plan creator --seats 2',
     '       [--features-extra "wan_i2v"] [--days 30] [--admin|--no-admin]',
     "       [--update] [--key KREA2-...] [--revoke]",
     "",
@@ -131,7 +131,7 @@ if (opts.plan !== undefined && opts.features !== undefined) {
 
 let plan_id;
 if (opts.plan !== undefined) {
-  if (opts.plan === true) die("--plan needs a value, e.g. --plan pro");
+  if (opts.plan === true) die("--plan needs a value, e.g. --plan creator");
   const plan = await plans.findOne({ _id: String(opts.plan).trim() });
   if (!plan) {
     const known = await plans.find({}).sort({ sort_order: 1 }).toArray();

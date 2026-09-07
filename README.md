@@ -453,7 +453,7 @@ reads it from the acquire response, and a customer cannot switch a tab on
 by editing their pod template. Set it when you issue the key:
 
 ```bash
-npm run issue-key -- --name "Acme Corp" --plan pro --seats 2
+npm run issue-key -- --name "Acme Corp" --plan creator --seats 2
 ```
 
 | Key            | Tab                     | Extra download |
@@ -473,9 +473,12 @@ npm run issue-key -- --name "Acme Corp" --plan pro --seats 2
 | `json_batch`   | JSON Advanced Batch     | none           |
 | `community_prompts` | 🌟 Prompt Library  | none           |
 
-The four shipped plans stack: `starter` (19/mo) is the first three keys,
-`creator` (39) adds the editing set and the prompt library, `pro` (59)
-adds Flux 2 and Klein, and `studio` (89) adds video and JSON batch.
+The three shipped plans stack: `starter` (₹599/mo) is `krea_t2i`, the
+gallery and the prompt library; `creator` (₹999) adds Krea 2 V2, both edit
+tabs and JSON batch; `studio` (₹1799) adds Wan and both MiniMax video tabs.
+`krea_inpaint`, `faceswap`, `flux_t2i` and `klein_i2i` are on no public
+plan since 2026-09-07 and are hidden from the pricing page — the code is
+still here, and the internal `admin` plan still grants them.
 `license-validator/README.md` has the full table and how to change it.
 
 Shared weights are handled for you — `krea_edit` and `krea_inpaint` both
@@ -485,9 +488,10 @@ level over: it shares the Identity Edit LoRA with `krea_edit` and the ~17 GB
 of weights with `krea_v2_t2i`, so its own cost is only whichever of those
 two is not already granted.
 
-`krea_v2_edit` ships on the internal `admin` plan only. Put it on
-`creator`/`pro`/`studio` in `license-validator/src/plans.js` (next to
-`krea_edit`) when it should be something a customer can buy.
+`krea_v2_edit` is on `creator` and `studio`, next to `krea_edit`. A new
+tab lands on the internal `admin` plan first and is added to a public
+plan in `license-validator/src/plans.js` when it should be something a
+customer can buy.
 
 Keys are permanent and names are not: a key is compiled into every shipped
 binary, so renaming one drops that tab for anyone on an older build — the

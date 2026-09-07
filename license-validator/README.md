@@ -45,24 +45,28 @@ that tier instead of requiring a bulk update across `licenses`.
 
 ```bash
 npm run seed-catalog                                             # once, and after editing plans
-npm run issue-key -- --name "Acme Corp" --plan pro --seats 2
+npm run issue-key -- --name "Acme Corp" --plan creator --seats 2
 npm run issue-key -- --key KREA2-XXXX-XXXX-XXXX --plan studio --update
 npm run issue-key -- --key KREA2-XXXX-XXXX-XXXX --features-extra "wan_i2v" --update
 ```
 
 ### Shipped plans
 
-| Plan | $/mo | Grants |
+| Plan | ₹/mo | Grants |
 | --- | --- | --- |
-| `starter` | 19 | krea_t2i, krea_v2_t2i, gallery |
-| `creator` | 39 | + krea_edit, krea_inpaint, faceswap |
-| `pro` | 59 | + flux_t2i, klein_i2i |
-| `studio` | 89 | + wan_i2v, minimax_i2v, minimax_t2v, json_batch |
-| `admin` | 0 | everything, `is_public: false` |
+| `starter` | 599 | krea_t2i, gallery, community_prompts |
+| `creator` | 999 | + krea_v2_t2i, krea_edit, krea_v2_edit, json_batch |
+| `studio` | 1799 | + wan_i2v, minimax_i2v, minimax_t2v |
+| `admin` | 0 | everything, including the four withdrawn tabs; `is_public: false` |
 
-`krea_v2_edit` is on `admin` only for now — a new tab lands there before it
-lands on anything a customer is paying for. Add it next to `krea_edit` in
-`creator`/`pro`/`studio` when it should be purchasable.
+Three public tiers since 2026-09-07. `pro` was deleted that day (no
+license was on it), and `krea_inpaint`, `faceswap`, `flux_t2i` and
+`klein_i2i` were **withdrawn**: on no public plan, and `enabled: false` in
+the features collection so the pricing page does not list them. The app
+still ships those tabs and `admin` still grants them, so a dev pod can
+check one still works; putting one back on sale is a plan edit plus that
+flag. `krea_t2i` is turbo-only by configuration (the Raw model is not in
+`KREA2_MODELS`), which is why V2 — turbo and raw — starts at Creator.
 
 Prices are **documentation, not enforcement.** Nothing here charges anyone;
 `expires_at` is the only lever that actually stops a key working.
@@ -123,7 +127,7 @@ nothing", not "no opinion" — it overrides a plan like any other array.
 heartbeat, where a change makes a running instance log that it needs a
 restart. It is deliberately not applied live: tabs are built once at
 launch and a newly granted tab has no weights on disk behind it. Note this
-now applies to **plan** edits too: changing `pro` tells every running Pro
+now applies to **plan** edits too: changing `creator` tells every running Creator
 customer, within a heartbeat, that they should restart.
 
 ## Feature keys
@@ -320,7 +324,7 @@ cp .env.example .env          # fill in MONGODB_URI
 npm run init-db               # creates indexes — run once per cluster
 npm run seed-catalog          # writes the plans + features collections
 npm run seed-prompts          # writes the starter prompt library (optional)
-npm run issue-key -- --name "Acme Corp" --plan pro --seats 2
+npm run issue-key -- --name "Acme Corp" --plan creator --seats 2
 npm start
 ```
 
@@ -335,7 +339,7 @@ actually get before you send it.
 ```bash
 npm run issue-key -- --name "Trial" --plan studio --seats 1 --days 30
 npm run issue-key -- --name "Acme Corp" --seats 3 --update      # seats only
-npm run issue-key -- --key KREA2-XXXX-XXXX-XXXX --plan pro --update
+npm run issue-key -- --key KREA2-XXXX-XXXX-XXXX --plan creator --update
 npm run issue-key -- --key KREA2-XXXX-XXXX-XXXX --features-extra "wan_i2v" --update
 npm run issue-key -- --key KREA2-XXXX-XXXX-XXXX --revoke
 ```
@@ -421,7 +425,7 @@ would not work anyway — the Gradio share URL is regenerated on every run.
 ```js
 { key: "KREA2-XXXX-XXXX-XXXX", name: "Acme Corp", seats: 2,
   active: true, expires_at: ISODate | null,
-  plan_id: "pro" | null,              // the normal route
+  plan_id: "creator" | null,          // the normal route
   features: [...] | null,             // literal override; wins over plan_id
   features_extra: ["wan_i2v"] | null, // granted on top of the plan
   is_admin: false,                    // a role, not an entitlement
@@ -439,10 +443,10 @@ review queue you are the one working through.
 `plans` — `_id` is the plan key
 
 ```js
-{ _id: "pro", name: "Pro", description: "...",
-  price_monthly: 1499, currency: "INR",
+{ _id: "creator", name: "Creator", description: "...",
+  price_monthly: 999, currency: "INR",
   discounts: { yearly: 25 },          // optional; overrides the cycle rate
-  features: ["krea_t2i", ...], is_public: true, sort_order: 30 }
+  features: ["krea_t2i", ...], is_public: true, sort_order: 20 }
 ```
 
 `price_monthly` is the **only** price stored. What a quarter or a year

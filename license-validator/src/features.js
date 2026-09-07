@@ -125,6 +125,13 @@ export const FEATURES = [
     sort_order: 67,
     enabled: true,
   },
+  // ── Withdrawn 2026-09-07 ─────────────────────────────────────────────
+  //
+  // The next four are on no public plan and `enabled: false` here, so the
+  // pricing page neither lists them nor shows them on a tier. The keys and
+  // the app code behind them are untouched — `admin` still grants all four
+  // — so switching one back on is a plan edit plus this flag, not a
+  // rebuild. See plans.js for the whole change.
   {
     key: "krea_inpaint",
     name: "Krea2 Inpaint",
@@ -132,7 +139,7 @@ export const FEATURES = [
     description: "Edit only specific parts of an image",
     category: "editing",
     sort_order: 50,
-    enabled: true,
+    enabled: false,
   },
   {
     key: "faceswap",
@@ -141,7 +148,7 @@ export const FEATURES = [
     description: "Easily replace faces in any image",
     category: "editing",
     sort_order: 60,
-    enabled: true,
+    enabled: false,
   },
   {
     key: "flux_t2i",
@@ -150,7 +157,7 @@ export const FEATURES = [
     description: "Create high-quality images with Flux 2 Dev",
     category: "generation",
     sort_order: 70,
-    enabled: true,
+    enabled: false,
   },
   {
     key: "klein_i2i",
@@ -159,7 +166,7 @@ export const FEATURES = [
     description: "Edit images or combine two images together",
     category: "editing",
     sort_order: 80,
-    enabled: true,
+    enabled: false,
   },
   {
     key: "wan_i2v",

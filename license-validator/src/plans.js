@@ -332,21 +332,40 @@ export async function resolveEntitlement(license) {
 // They live here rather than in the client so the recommended tier can be
 // moved from Atlas without a redeploy — the same reason the feature
 // names moved to the features collection.
+//
+// ── The 2026-09-07 restructure ──────────────────────────────────────────
+//
+// Three public tiers, not four. `pro` is gone (no license was ever on it —
+// checked before it was deleted), and four tabs were withdrawn from every
+// public plan: `krea_inpaint`, `faceswap`, `flux_t2i` and `klein_i2i`.
+// Withdrawn, not deleted: their code is still in the app and their rows
+// are still in the features collection, marked `enabled: false` there so
+// the pricing page stops listing them (see features.js). A license that
+// does not name a key does not get the tab, so removing them from the
+// plans below is what actually hides them; the catalogue flag is what
+// stops the page advertising something no plan sells.
+//
+// `admin` keeps all four. It is the plan on your own pods, the tabs still
+// exist in the binary, and it is where you would go to check one still
+// works before deciding whether to delete the code.
+//
+// Prices were not changed by the restructure — the three surviving tiers
+// kept the figure they already had.
 export const DEFAULT_PLANS = [
   {
     _id: "starter",
     name: "Starter",
-    description: "Fast Krea 2 generation for everyday use",
+    description: "Fast Krea 2 generation, the gallery and the prompt library",
     price_monthly: 599,
     currency: "INR",
-    features: ["krea_t2i", "krea_v2_t2i", "gallery"],
+    features: ["krea_t2i", "gallery", "community_prompts"],
     is_public: true,
     sort_order: 10,
   },
   {
     _id: "creator",
     name: "Creator",
-    description: "Generation plus the full editing set",
+    description: "Krea 2 V2, both edit tabs and batch generation",
     price_monthly: 999,
     currency: "INR",
     features: [
@@ -354,8 +373,8 @@ export const DEFAULT_PLANS = [
       "krea_v2_t2i",
       "gallery",
       "krea_edit",
-      "krea_inpaint",
-      "faceswap",
+      "krea_v2_edit",
+      "json_batch",
       "community_prompts",
     ],
     is_public: true,
@@ -363,30 +382,9 @@ export const DEFAULT_PLANS = [
     sort_order: 20,
   },
   {
-    _id: "pro",
-    name: "Pro",
-    description: "Everything in Creator, plus Flux 2 and Klein Edit",
-    price_monthly: 1499,
-    currency: "INR",
-    features: [
-      "krea_t2i",
-      "krea_v2_t2i",
-      "gallery",
-      "krea_edit",
-      "krea_inpaint",
-      "faceswap",
-      "krea_v2_edit",
-      "flux_t2i",
-      "klein_i2i",
-      "community_prompts",
-    ],
-    is_public: true,
-    sort_order: 30,
-  },
-  {
     _id: "studio",
     name: "Studio",
-    description: "Full access — every model, video, and the batch tools",
+    description: "Everything in Creator, plus Wan and MiniMax video with sound",
     price_monthly: 1799,
     currency: "INR",
     features: [
@@ -394,11 +392,7 @@ export const DEFAULT_PLANS = [
       "krea_v2_t2i",
       "gallery",
       "krea_edit",
-      "krea_inpaint",
       "krea_v2_edit",
-      "faceswap",
-      "flux_t2i",
-      "klein_i2i",
       "wan_i2v",
       "minimax_i2v",
       "minimax_t2v",
@@ -408,11 +402,11 @@ export const DEFAULT_PLANS = [
     is_public: true,
     sort_order: 40,
   },
-  // Not public, it is the name that shows up in the server logs for your
-  // own pods, and it is where a new tab lands first — which is exactly
-  // what `krea_v2_edit` is doing here. It is on no paid plan yet; add it
-  // to creator/pro/studio above (next to `krea_edit`) when it should be
-  // something a customer can buy.
+  // Not public, and the name that shows up in the server logs for your own
+  // pods. It grants every tab the binary can build — including the four
+  // withdrawn ones, which no customer plan names any more — and it is
+  // where a new tab lands first, before it is on anything a customer pays
+  // for.
   {
     _id: "admin",
     name: "Admin (Internal)",
