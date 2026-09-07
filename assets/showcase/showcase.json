@@ -343,6 +343,66 @@
       ]
     },
 
+    "minimax_i2v": {
+      "headline": "A clip with its own soundtrack, from one picture.",
+      "body": [
+        "Hand it a still — one you made here or one from your camera roll — and describe what happens next: the camera drifts in, she looks up and laughs, rain starts on the window. MiniMax H3 renders the motion and the sound in one pass, so the clip comes back with footsteps, weather and voices already on it rather than as a silent loop you have to score yourself.",
+        "Five to fifteen seconds at 24 fps, and the picture you started from stays the picture you started from. Like every other tab here it is not metered — make a handful of takes and keep the one that moves and sounds right."
+      ],
+      "highlights": [
+        "Video and audio from a single pass",
+        "Any picture is a starting frame",
+        "Describe the motion and the sound in words",
+        "5 to 15 seconds, 24 fps",
+        "Saved next to your images"
+      ],
+      "blocks": [
+        {
+          "type": "strip",
+          "dir": "clip-a",
+          "ratio": "16/9",
+          "note": "the clips play with sound as you scroll past",
+          "items": [
+            { "file": "frame-01.webp", "label": "The still" },
+            { "file": "frame-02.webp" },
+            { "file": "frame-03.webp" },
+            { "file": "clip.webp", "label": "Plays", "accent": true },
+            { "file": "clip-b.webp", "label": "Plays", "accent": true }
+          ]
+        }
+      ]
+    },
+
+    "minimax_t2v": {
+      "headline": "No picture needed — describe the scene and hear it.",
+      "body": [
+        "The same model with nothing to start from but your words. Say what is in frame, how it moves and what it sounds like, pick an aspect ratio, and get a short clip back with the soundtrack already on it — a kettle that actually whistles, surf that actually breaks.",
+        "It shares its weights with MiniMax I2V, so having both costs no extra disk, and it runs on the same queue as everything else: type it, press Generate, keep working while it renders."
+      ],
+      "highlights": [
+        "Starts from words alone",
+        "Sound is generated with the picture",
+        "Eight aspect ratios, portrait to ultrawide",
+        "5 to 15 seconds, 24 fps",
+        "Shares its download with MiniMax I2V"
+      ],
+      "blocks": [
+        {
+          "type": "strip",
+          "dir": "clip-a",
+          "ratio": "16/9",
+          "note": "the clips play with sound as you scroll past",
+          "items": [
+            { "file": "frame-01.webp", "label": "First frame" },
+            { "file": "frame-02.webp" },
+            { "file": "frame-03.webp" },
+            { "file": "clip.webp", "label": "Plays", "accent": true },
+            { "file": "clip-b.webp", "label": "Plays", "accent": true }
+          ]
+        }
+      ]
+    },
+
     "json_batch": {
       "headline": "Set up a hundred images and go to bed.",
       "body": [

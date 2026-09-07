@@ -75,6 +75,8 @@ class Key(str, Enum):
     FLUX_T2I = "flux_t2i"
     KLEIN_I2I = "klein_i2i"
     WAN_I2V = "wan_i2v"
+    MINIMAX_I2V = "minimax_i2v"
+    MINIMAX_T2V = "minimax_t2v"
     JSON_BATCH = "json_batch"
     COMMUNITY_PROMPTS = "community_prompts"
 
@@ -150,6 +152,12 @@ FEATURES = (
     Feature(Key.FLUX_T2I, "🌊 Flux2D", needs=("flux",)),
     Feature(Key.KLEIN_I2I, "🧩 Klein Edit", needs=("klein",)),
     Feature(Key.WAN_I2V, "🎬 Wan Video", needs=("wan",)),
+    # Two tabs, one graph, one download. The core MiniMax node takes an
+    # optional first frame, so text-to-video is image-to-video without the
+    # upload — sold as two features, but the weights they need are the same
+    # ~56 GB, which is why both name the one group.
+    Feature(Key.MINIMAX_I2V, "🎥 MiniMax I2V", needs=("minimax",)),
+    Feature(Key.MINIMAX_T2V, "🎞️ MiniMax T2V", needs=("minimax",)),
     # Runs whatever graph is pasted into it, so it has no assets of its
     # own — it is only useful alongside the tabs whose models it names.
     Feature(Key.JSON_BATCH, "📦 Krea2 Batch"),

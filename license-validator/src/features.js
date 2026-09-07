@@ -170,6 +170,30 @@ export const FEATURES = [
     sort_order: 90,
     enabled: true,
   },
+  // Two keys, one model. MiniMax H3 produces video *with sound*, and its
+  // core node takes an optional first frame — so image-to-video and
+  // text-to-video are the same graph sold twice. The app downloads the
+  // weights once whichever of the two a plan grants; they sit at 92 and 94
+  // so they read as one block after Wan and before the batch tab.
+  {
+    key: "minimax_i2v",
+    name: "MiniMax Video",
+    tab_label: "🎥 MiniMax I2V",
+    description: "Turn a picture into a short clip — with sound",
+    category: "video",
+    sort_order: 92,
+    enabled: true,
+  },
+  {
+    key: "minimax_t2v",
+    name: "MiniMax Text to Video",
+    tab_label: "🎞️ MiniMax T2V",
+    description:
+      "Describe a scene and get a short clip with sound, no picture needed",
+    category: "video",
+    sort_order: 94,
+    enabled: true,
+  },
   {
     key: "json_batch",
     name: "Krea2 Batch",

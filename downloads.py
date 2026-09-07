@@ -40,6 +40,10 @@ from config import (
     KLEIN_VAE,
     KLEIN_VAE_HF_REPO,
     KREA2_MODELS,
+    MINIMAX_HF_FILES,
+    MINIMAX_HF_REPO,
+    MINIMAX_TURBO_LORA,
+    MINIMAX_TURBO_LORA_REPO,
     MODELS_DIR,
     REACTOR_FACEDETECTION_FILES,
     REACTOR_HF_FILES,
@@ -156,6 +160,34 @@ def fetch_hf_file(relpath: str) -> None:
             local_dir=MODELS_DIR,
             token=HF_TOKEN,
             revision=mirror.revision(HF_MODEL_REPO),
+        ),
+        desc=relpath,
+    )
+
+
+def fetch_hf_repo_file(repo: str, relpath: str) -> None:
+    """Download one file from any HF model repo laid out the way ComfyUI is.
+
+    fetch_hf_file is this with the repo fixed to Comfy-Org/Krea-2, and
+    fetch_hf_file_to is for a repo whose layout is *not* ComfyUI's. The
+    MiniMax repo keeps diffusion_models/, text_encoders/ and vae/ exactly
+    where ComfyUI wants them, so the file lands in place with no rename —
+    mirror first, then upstream at the pinned revision, like the rest.
+    """
+    dest = MODELS_DIR / relpath
+    if dest.exists():
+        log.info("✓ %s (cached)", relpath)
+        return
+    if from_mirror(dest, relpath):
+        return
+    log.info("↓ %s (from %s) ...", relpath, repo)
+    _with_retries(
+        lambda: hf_hub_download(
+            repo_id=repo,
+            filename=relpath,
+            local_dir=MODELS_DIR,
+            token=HF_TOKEN,
+            revision=mirror.revision(repo),
         ),
         desc=relpath,
     )
@@ -604,6 +636,31 @@ def download_wan_models() -> None:
                       relpath, exc)
 
 
+def download_minimax_models() -> None:
+    """Fetch the MiniMax H3 weights (~56 GB) — both MiniMax tabs share them.
+
+    Every item is independent, the same posture as the Wan downloader: a
+    missing file degrades only the two MiniMax tabs, which name what they
+    are waiting for, and the next run retries it. The four Comfy-Org files
+    download straight into place; the turbo LoRA sits at the root of
+    lightx2v's repo and has to be placed under loras/ by hand.
+    """
+    for relpath in MINIMAX_HF_FILES:
+        try:
+            fetch_hf_repo_file(MINIMAX_HF_REPO, relpath)
+        except Exception as exc:
+            log.error("MiniMax H3 file %s unavailable (%s) — the MiniMax "
+                      "tabs will refuse to run until a later run fetches "
+                      "it.", relpath, exc)
+    try:
+        fetch_hf_file_to(MINIMAX_TURBO_LORA_REPO, MINIMAX_TURBO_LORA,
+                         MODELS_DIR / "loras" / MINIMAX_TURBO_LORA)
+    except Exception as exc:
+        log.error("MiniMax H3 turbo LoRA %s unavailable (%s) — the MiniMax "
+                  "tabs will refuse to run until a later run fetches it.",
+                  MINIMAX_TURBO_LORA, exc)
+
+
 def download_flux_models() -> None:
     """Fetch the Flux 2 model, text encoder, VAE and LoRAs (~57 GB)."""
     for relpath in FLUX_HF_FILES:
@@ -688,6 +745,7 @@ ASSET_GROUPS = {
     "flux": download_flux_models,
     "klein": download_klein_models,
     "wan": download_wan_models,
+    "minimax": download_minimax_models,
     "reactor": download_reactor_models,
 }
 

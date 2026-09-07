@@ -57,7 +57,7 @@ npm run issue-key -- --key KREA2-XXXX-XXXX-XXXX --features-extra "wan_i2v" --upd
 | `starter` | 19 | krea_t2i, krea_v2_t2i, gallery |
 | `creator` | 39 | + krea_edit, krea_inpaint, faceswap |
 | `pro` | 59 | + flux_t2i, klein_i2i |
-| `studio` | 89 | + wan_i2v, json_batch |
+| `studio` | 89 | + wan_i2v, minimax_i2v, minimax_t2v, json_batch |
 | `admin` | 0 | everything, `is_public: false` |
 
 `krea_v2_edit` is on `admin` only for now — a new tab lands there before it
@@ -147,6 +147,8 @@ keep a plain name.
 | `klein_i2i` | Klein Edit — Image to Image | editing |
 | `faceswap` | Face Swap (ReActor) | editing |
 | `wan_i2v` | Wan 2.2 Video | video |
+| `minimax_i2v` | MiniMax H3 Video (image-to-video, with sound) | video |
+| `minimax_t2v` | MiniMax H3 Text to Video (with sound) | video |
 | `gallery` | Gallery | tools |
 | `json_batch` | JSON Advanced Batch | tools |
 

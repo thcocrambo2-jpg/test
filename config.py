@@ -9,6 +9,7 @@ LoRA lists and (optional) access tokens. In section order:
                         Single / Edit / Inpaint tabs
     Krea 2 V2           the Krea2 advanced pipeline, self-contained
     Wan 2.2             image-to-video (+ the parallel-instance knobs)
+    MiniMax H3          video with sound — image-to-video and text-to-video
     Flux 2              text-to-image
     Klein Edit          Flux 2 Klein 9B image editing, self-contained
     ReActor             face swap
@@ -553,6 +554,102 @@ WAN_COMFY_PORT = 8189
 WAN_COMFY_LOG = WORKING_DIR / "comfyui_wan.log"
 KREA_RESERVE_VRAM_GB = float(os.environ.get("KREA2_MAIN_RESERVE_VRAM", 26))
 WAN_RESERVE_VRAM_GB = float(os.environ.get("KREA2_WAN_RESERVE_VRAM", 22))
+
+# ── MiniMax H3 — video with sound (image-to-video and text-to-video) ─────────
+# MiniMax H3 is a packed audio+video DiT: one sampler pass produces the
+# frames and the soundtrack together, so every clip comes back with audio,
+# which Wan never did. Two tabs share one graph — the core
+# MiniMaxH3ImageToVideo node takes an *optional* first frame, so text-to-
+# video is the same workflow with LoadImage left out. Two feature keys
+# ("minimax_i2v", "minimax_t2v"), one asset group ("minimax") between them.
+#
+# Transcribed from the two Custom Prompt workflows in
+# hearmeman/comfyui-minimax-template:v8 (kept under tmp/minimax-reference/,
+# not shipped). Everything that graph does is core ComfyUI — the rgthree
+# Power Lora Loader it carried was empty, its KJNodes preview override is
+# cosmetic, and CreateVideo + SaveVideo already write Wan's MP4s — so no
+# node pack is installed for this. What it does need is **ComfyUI v0.34.0
+# or later**, where these nodes first ship: scripts/PINS.json moved from
+# v0.29.0 to v0.34.0 for exactly this reason, bootstrap.repin_checkout moves
+# an existing checkout there, and comfy.verify_core_node says so at startup
+# when one still predates it.
+#
+# The quant is the template's default: the int8 "convrot" diffusion model
+# and text encoder. It is the largest download in the app (~56 GB), and 27
+# GB of that is the 32B Qwen3-VL text encoder. The fp8 and bf16 builds in
+# the same repo are the same graph under another filename and are not
+# offered — each would be another 21-66 GB on the volume.
+MINIMAX_HF_REPO = "Comfy-Org/MiniMax-H3"
+MINIMAX_UNET = "minimax_h3_fl2va_pruned_int8_convrot.safetensors"        # ~21.0 GB
+MINIMAX_TEXT_ENCODER = "qwen3vl_32b_minimax_h3_int8_convrot.safetensors"  # ~27.1 GB
+MINIMAX_VIDEO_VAE = "minimax_h3_video_vae_fp16.safetensors"               # ~5.2 GB
+MINIMAX_AUDIO_VAE = "minimax_h3_audio_vae_fp32.safetensors"               # ~0.6 GB
+# The repo's layout is ComfyUI's, so these download straight into place.
+MINIMAX_HF_FILES = [
+    f"diffusion_models/{MINIMAX_UNET}",
+    f"text_encoders/{MINIMAX_TEXT_ENCODER}",
+    f"vae/{MINIMAX_VIDEO_VAE}",
+    f"vae/{MINIMAX_AUDIO_VAE}",
+]
+# The 8-step turbo LoRA, always on — the template titles it "Always On,
+# Don't Touch" and the sampler settings below are its recipe. It lives in
+# lightx2v's repo rather than Comfy-Org's: the 768p 8-step build is only
+# published there.
+MINIMAX_TURBO_LORA_REPO = "lightx2v/Minimax-h3-Turbo"
+MINIMAX_TURBO_LORA = "minimax_h3_fl2v_turbo_8step_v1.0_768p_comfyui_bf16.safetensors"  # ~2.0 GB
+MINIMAX_TURBO_LORA_STRENGTH = 0.8
+
+# The sampler block, verbatim from the template: BasicScheduler "simple" at
+# 8 steps, euler, no CFG — a BasicGuider, because like Flux the model is
+# guidance-distilled and has no negative prompt — and an
+# ExtendIntermediateSigmas pass that inserts two extra sigmas below 0.8.
+MINIMAX_DEFAULTS = {"steps": 8, "sampler": "euler", "scheduler": "simple"}
+MINIMAX_SIGMA_EXTEND = {"steps": 2, "start_at_sigma": 0.8,
+                        "end_at_sigma": 0.0, "spacing": "linear"}
+
+# Geometry. 24 fps, and the frame count has to sit on the model's "17k + 5"
+# grid: 124 frames is 5 s and the node's default, 362 is 15 s and the top
+# of the trained range. Sides are multiples of 32.
+MINIMAX_FPS = 24
+MINIMAX_FRAME_STEP = 17
+MINIMAX_FRAME_OFFSET = 5
+MINIMAX_MIN_SECONDS = 5.0
+MINIMAX_MAX_SECONDS = 15.0
+MINIMAX_DEFAULT_SECONDS = 5.0
+MINIMAX_CANVAS_MULTIPLE = 32
+# Two canvas rules, chosen per job with the Resolution radio; the actual
+# size keeps the source (or chosen) aspect either way — see
+# workflow_minimax.resolve_size. "Standard" is the template's
+# ResolutionSelector at 0.7 MP. "Native" is the model's own canvas, which
+# the node file calls adapt_canvas: a 768 short edge with the area capped
+# at 768 × 1344 — 40-50% more pixels, slower, and what the 768p turbo LoRA
+# was trained against.
+MINIMAX_STANDARD_MEGAPIXELS = 0.7
+MINIMAX_NATIVE_SHORT_EDGE = 768
+MINIMAX_NATIVE_MAX_PIXELS = 768 * 1344
+MINIMAX_RESOLUTIONS = {
+    "Standard (0.7 MP — the template default)": "standard",
+    "Native 768p (short edge 768, slower)": "native",
+}
+MINIMAX_DEFAULT_RESOLUTION = "Standard (0.7 MP — the template default)"
+# The text-to-video tab has no picture to take an aspect from, so it
+# offers ResolutionSelector's own list, labels verbatim. The template
+# shipped with 9:16 selected.
+MINIMAX_ASPECT_RATIOS = {
+    "1:1 (Square)": (1, 1),
+    "2:3 (Portrait Photo)": (2, 3),
+    "3:2 (Photo)": (3, 2),
+    "3:4 (Portrait Standard)": (3, 4),
+    "4:3 (Standard)": (4, 3),
+    "9:16 (Portrait Widescreen)": (9, 16),
+    "16:9 (Widescreen)": (16, 9),
+    "21:9 (Ultrawide)": (21, 9),
+}
+MINIMAX_DEFAULT_ASPECT = "9:16 (Portrait Widescreen)"
+# The core node both tabs are built on, and the ComfyUI release it arrived
+# in. app.py asks the running server for it whenever either tab is granted.
+MINIMAX_NODE = "MiniMaxH3ImageToVideo"
+MINIMAX_COMFYUI_MIN = "v0.34.0"
 
 # ── Flux 2 ────────────────────────────────────────────────────────────────────
 # The Flux tab generates images with Flux 2 Dev (32B, guidance-distilled:

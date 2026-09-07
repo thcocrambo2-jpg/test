@@ -47,6 +47,7 @@ from config import (
     DEFAULT_RESOLUTION,
     FREE_ON_SWAP,
     KREA2_MODELS,
+    MINIMAX_FPS,
     OUTPUT_DIR,
     RESOLUTION_PRESETS,
     SAMPLERS,
@@ -111,6 +112,14 @@ from workflow_krea2_v2_edit import (
     build_v2_edit_workflow,
     fit_size as v2_edit_fit_size,
     status as v2_edit_status,
+)
+from workflow_minimax import (
+    aspect_size as minimax_aspect_size,
+    build_minimax_video_workflow,
+    frames_for as minimax_frames,
+    minimax_missing,
+    minimax_models_available,
+    resolve_size as minimax_resolve_size,
 )
 from workflow_reactor import (
     build_faceswap_workflow,
@@ -1099,16 +1108,27 @@ def _seconds_to_frames(seconds: float, fps: int) -> int:
     return max(17, int(round(float(seconds) * fps / 4)) * 4 + 1)
 
 
-def _run_wan_jobs(jobs, builder=build_wan_i2v_workflow):
-    """Video executor: yields (all_videos, latest_video, status_text)."""
+def _run_wan_jobs(jobs, builder=build_wan_i2v_workflow, comfy_client=None):
+    """Video executor: yields (all_videos, latest_video, status_text).
+
+    `comfy_client` is the instance the clips run on — wan_client unless a
+    caller says otherwise. The MiniMax tabs say otherwise: they run on the
+    main instance whatever KREA2_WAN_PARALLEL says, because their int8
+    model plus 32B text encoder is ~48 GB of weights and does not fit
+    beside a second instance holding VRAM back for Wan. The port and log
+    that have to be alive follow the client, since ensure_alive must ask
+    the instance the job is actually going to.
+    """
     videos = []
     total = len(jobs)
     latest = None
-    # Video jobs go to their own instance under KREA2_WAN_PARALLEL, so the
-    # port that has to be alive is the one wan_client talks to.
+    comfy_client = comfy_client or wan_client
+    # Only Wan's own client points at the second instance, and only when
+    # that instance exists — without the flag wan_client *is* client.
+    on_wan_instance = comfy_client is wan_client and WAN_PARALLEL
     alive, note = comfy_ensure_alive(
-        port=WAN_COMFY_PORT if WAN_PARALLEL else COMFY_PORT,
-        log_path=WAN_COMFY_LOG if WAN_PARALLEL else COMFY_LOG,
+        port=WAN_COMFY_PORT if on_wan_instance else COMFY_PORT,
+        log_path=WAN_COMFY_LOG if on_wan_instance else COMFY_LOG,
     )
     if not alive:
         yield videos, latest, note
@@ -1118,7 +1138,7 @@ def _run_wan_jobs(jobs, builder=build_wan_i2v_workflow):
     for idx, job in enumerate(jobs, start=1):
         label = f"{idx}/{total}"
         workflow = builder(**job)
-        swap_note = _release_on_swap(wan_client, workflow)
+        swap_note = _release_on_swap(comfy_client, workflow)
         if swap_note:
             yield videos, latest, f"{swap_note} — video {label} will be slower"
         recipes.stamp(seed=job["seed"])       # see _run_jobs
@@ -1129,7 +1149,7 @@ def _run_wan_jobs(jobs, builder=build_wan_i2v_workflow):
         try:
             # Raw 720p renders can take the better part of an hour on an
             # A40, so the video timeout is far above the image one.
-            for event in wan_client.run(workflow, timeout=7200):
+            for event in comfy_client.run(workflow, timeout=7200):
                 if event["type"] == "progress" and event["total"]:
                     yield videos, latest, (
                         f"⏳ Video {label} — step "
@@ -1207,6 +1227,88 @@ def generate_wan_video(image, prompt, negative, model, mode, seed, randomize,
     } for i in range(int(batch_count))]
     for videos, latest, status in _run_wan_jobs(jobs, builder=builder):
         yield videos, latest, status, base_seed
+
+def _minimax_note() -> str | None:
+    """Why MiniMax cannot run yet, or None when every weight is on disk."""
+    if minimax_models_available():
+        return None
+    return ("❌ The MiniMax H3 weights are not downloaded yet (missing: %s) — "
+            "restart the app so the download step can fetch them."
+            % ", ".join(minimax_missing()))
+
+
+def _minimax_jobs(*, prompt, base_seed, steps, width, height, seconds,
+                  sampler, batch_count, prefix, image_name=None) -> list:
+    """The per-clip job dicts both MiniMax tabs hand to _run_wan_jobs.
+
+    One function because the two tabs differ in exactly one key —
+    `image_name`, which the text tab leaves None so the builder leaves
+    LoadImage out — and everything else about a clip is decided the same
+    way on both.
+    """
+    return [{
+        "prompt": prompt or "", "seed": base_seed + i, "steps": int(steps),
+        "width": width, "height": height,
+        "length": minimax_frames(seconds), "fps": MINIMAX_FPS,
+        "sampler": sampler, "image_name": image_name,
+        # Clips land in minimax/, a subfolder with a counter of its own to
+        # be knocked backwards — see _run_tag.
+        "filename_prefix": f"minimax/{prefix}_{_run_tag()}",
+    } for i in range(int(batch_count))]
+
+
+def generate_minimax_video(image, prompt, seed, randomize, steps, resolution,
+                           seconds, sampler, batch_count):
+    """MiniMax I2V tab: animate an uploaded image into a clip with sound."""
+    if image is None:
+        yield [], None, "❌ Upload an image first.", 0
+        return
+    note = _minimax_note()
+    if note:
+        yield [], None, note, 0
+        return
+    image = image.convert("RGB")
+    width, height = minimax_resolve_size(*image.size, resolution)
+    base_seed = random.randint(0, 2**32 - 1) if randomize else int(seed)
+    tag = uuid.uuid4().hex[:8]
+    try:
+        # The main instance, whatever KREA2_WAN_PARALLEL says — see
+        # _run_wan_jobs on why MiniMax never rides the Wan lane.
+        image_name = client.upload_image(_png_bytes(image),
+                                         f"minimax_{tag}.png")
+    except Exception as exc:
+        yield [], None, f"❌ Uploading the image to ComfyUI failed: {exc}", 0
+        return
+    jobs = _minimax_jobs(prompt=prompt, base_seed=base_seed, steps=steps,
+                         width=width, height=height, seconds=seconds,
+                         sampler=sampler, batch_count=batch_count,
+                         prefix="MiniMaxI2V", image_name=image_name)
+    for videos, latest, status in _run_wan_jobs(
+            jobs, builder=build_minimax_video_workflow, comfy_client=client):
+        yield videos, latest, status, base_seed
+
+
+def generate_minimax_t2v(prompt, aspect, seed, randomize, steps, resolution,
+                         seconds, sampler, batch_count):
+    """MiniMax T2V tab: a clip with sound from the prompt alone."""
+    if not (prompt or "").strip():
+        yield [], None, ("❌ Write a prompt first — there is no image for "
+                         "this tab to go on."), 0
+        return
+    note = _minimax_note()
+    if note:
+        yield [], None, note, 0
+        return
+    width, height = minimax_aspect_size(aspect, resolution)
+    base_seed = random.randint(0, 2**32 - 1) if randomize else int(seed)
+    jobs = _minimax_jobs(prompt=prompt, base_seed=base_seed, steps=steps,
+                         width=width, height=height, seconds=seconds,
+                         sampler=sampler, batch_count=batch_count,
+                         prefix="MiniMaxT2V")
+    for videos, latest, status in _run_wan_jobs(
+            jobs, builder=build_minimax_video_workflow, comfy_client=client):
+        yield videos, latest, status, base_seed
+
 
 def generate_from_json(json_file, json_text):
     """JSON tab: file upload takes precedence over pasted text."""

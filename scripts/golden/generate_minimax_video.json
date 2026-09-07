@@ -1,0 +1,390 @@
+[
+  {
+    "audio_vae": {
+      "class_type": "VAELoader",
+      "inputs": {
+        "vae_name": "minimax_h3_audio_vae_fp32.safetensors"
+      }
+    },
+    "clip": {
+      "class_type": "CLIPLoader",
+      "inputs": {
+        "clip_name": "qwen3vl_32b_minimax_h3_int8_convrot.safetensors",
+        "device": "default",
+        "type": "minimax"
+      }
+    },
+    "decode": {
+      "class_type": "VAEDecode",
+      "inputs": {
+        "samples": [
+          "sample",
+          0
+        ],
+        "vae": [
+          "vae",
+          0
+        ]
+      }
+    },
+    "decode_audio": {
+      "class_type": "VAEDecodeAudio",
+      "inputs": {
+        "samples": [
+          "sample",
+          0
+        ],
+        "vae": [
+          "audio_vae",
+          0
+        ]
+      }
+    },
+    "guider": {
+      "class_type": "BasicGuider",
+      "inputs": {
+        "conditioning": [
+          "i2v",
+          0
+        ],
+        "model": [
+          "turbo",
+          0
+        ]
+      }
+    },
+    "i2v": {
+      "class_type": "MiniMaxH3ImageToVideo",
+      "inputs": {
+        "clip": [
+          "clip",
+          0
+        ],
+        "first_frame": [
+          "source",
+          0
+        ],
+        "height": 768,
+        "length": 175,
+        "prompt": "the tide comes in and the gulls cry",
+        "vae": [
+          "vae",
+          0
+        ],
+        "width": 1152
+      }
+    },
+    "noise": {
+      "class_type": "RandomNoise",
+      "inputs": {
+        "noise_seed": 7890123
+      }
+    },
+    "sample": {
+      "class_type": "SamplerCustomAdvanced",
+      "inputs": {
+        "guider": [
+          "guider",
+          0
+        ],
+        "latent_image": [
+          "i2v",
+          1
+        ],
+        "noise": [
+          "noise",
+          0
+        ],
+        "sampler": [
+          "sampler",
+          0
+        ],
+        "sigmas": [
+          "sigmas_extended",
+          0
+        ]
+      }
+    },
+    "sampler": {
+      "class_type": "KSamplerSelect",
+      "inputs": {
+        "sampler_name": "dpmpp_2m"
+      }
+    },
+    "save": {
+      "class_type": "SaveVideo",
+      "inputs": {
+        "codec": "h264",
+        "filename_prefix": "minimax/MiniMaxI2V_golden00",
+        "format": "mp4",
+        "video": [
+          "video",
+          0
+        ]
+      }
+    },
+    "sigmas": {
+      "class_type": "BasicScheduler",
+      "inputs": {
+        "denoise": 1.0,
+        "model": [
+          "turbo",
+          0
+        ],
+        "scheduler": "simple",
+        "steps": 9
+      }
+    },
+    "sigmas_extended": {
+      "class_type": "ExtendIntermediateSigmas",
+      "inputs": {
+        "end_at_sigma": 0.0,
+        "sigmas": [
+          "sigmas",
+          0
+        ],
+        "spacing": "linear",
+        "start_at_sigma": 0.8,
+        "steps": 2
+      }
+    },
+    "source": {
+      "class_type": "LoadImage",
+      "inputs": {
+        "image": "golden_upload.png"
+      }
+    },
+    "turbo": {
+      "class_type": "LoraLoaderModelOnly",
+      "inputs": {
+        "lora_name": "minimax_h3_fl2v_turbo_8step_v1.0_768p_comfyui_bf16.safetensors",
+        "model": [
+          "unet",
+          0
+        ],
+        "strength_model": 0.8
+      }
+    },
+    "unet": {
+      "class_type": "UNETLoader",
+      "inputs": {
+        "unet_name": "minimax_h3_fl2va_pruned_int8_convrot.safetensors",
+        "weight_dtype": "default"
+      }
+    },
+    "vae": {
+      "class_type": "VAELoader",
+      "inputs": {
+        "vae_name": "minimax_h3_video_vae_fp16.safetensors"
+      }
+    },
+    "video": {
+      "class_type": "CreateVideo",
+      "inputs": {
+        "audio": [
+          "decode_audio",
+          0
+        ],
+        "fps": 24.0,
+        "images": [
+          "decode",
+          0
+        ]
+      }
+    }
+  },
+  {
+    "audio_vae": {
+      "class_type": "VAELoader",
+      "inputs": {
+        "vae_name": "minimax_h3_audio_vae_fp32.safetensors"
+      }
+    },
+    "clip": {
+      "class_type": "CLIPLoader",
+      "inputs": {
+        "clip_name": "qwen3vl_32b_minimax_h3_int8_convrot.safetensors",
+        "device": "default",
+        "type": "minimax"
+      }
+    },
+    "decode": {
+      "class_type": "VAEDecode",
+      "inputs": {
+        "samples": [
+          "sample",
+          0
+        ],
+        "vae": [
+          "vae",
+          0
+        ]
+      }
+    },
+    "decode_audio": {
+      "class_type": "VAEDecodeAudio",
+      "inputs": {
+        "samples": [
+          "sample",
+          0
+        ],
+        "vae": [
+          "audio_vae",
+          0
+        ]
+      }
+    },
+    "guider": {
+      "class_type": "BasicGuider",
+      "inputs": {
+        "conditioning": [
+          "i2v",
+          0
+        ],
+        "model": [
+          "turbo",
+          0
+        ]
+      }
+    },
+    "i2v": {
+      "class_type": "MiniMaxH3ImageToVideo",
+      "inputs": {
+        "clip": [
+          "clip",
+          0
+        ],
+        "first_frame": [
+          "source",
+          0
+        ],
+        "height": 768,
+        "length": 175,
+        "prompt": "the tide comes in and the gulls cry",
+        "vae": [
+          "vae",
+          0
+        ],
+        "width": 1152
+      }
+    },
+    "noise": {
+      "class_type": "RandomNoise",
+      "inputs": {
+        "noise_seed": 7890124
+      }
+    },
+    "sample": {
+      "class_type": "SamplerCustomAdvanced",
+      "inputs": {
+        "guider": [
+          "guider",
+          0
+        ],
+        "latent_image": [
+          "i2v",
+          1
+        ],
+        "noise": [
+          "noise",
+          0
+        ],
+        "sampler": [
+          "sampler",
+          0
+        ],
+        "sigmas": [
+          "sigmas_extended",
+          0
+        ]
+      }
+    },
+    "sampler": {
+      "class_type": "KSamplerSelect",
+      "inputs": {
+        "sampler_name": "dpmpp_2m"
+      }
+    },
+    "save": {
+      "class_type": "SaveVideo",
+      "inputs": {
+        "codec": "h264",
+        "filename_prefix": "minimax/MiniMaxI2V_golden00",
+        "format": "mp4",
+        "video": [
+          "video",
+          0
+        ]
+      }
+    },
+    "sigmas": {
+      "class_type": "BasicScheduler",
+      "inputs": {
+        "denoise": 1.0,
+        "model": [
+          "turbo",
+          0
+        ],
+        "scheduler": "simple",
+        "steps": 9
+      }
+    },
+    "sigmas_extended": {
+      "class_type": "ExtendIntermediateSigmas",
+      "inputs": {
+        "end_at_sigma": 0.0,
+        "sigmas": [
+          "sigmas",
+          0
+        ],
+        "spacing": "linear",
+        "start_at_sigma": 0.8,
+        "steps": 2
+      }
+    },
+    "source": {
+      "class_type": "LoadImage",
+      "inputs": {
+        "image": "golden_upload.png"
+      }
+    },
+    "turbo": {
+      "class_type": "LoraLoaderModelOnly",
+      "inputs": {
+        "lora_name": "minimax_h3_fl2v_turbo_8step_v1.0_768p_comfyui_bf16.safetensors",
+        "model": [
+          "unet",
+          0
+        ],
+        "strength_model": 0.8
+      }
+    },
+    "unet": {
+      "class_type": "UNETLoader",
+      "inputs": {
+        "unet_name": "minimax_h3_fl2va_pruned_int8_convrot.safetensors",
+        "weight_dtype": "default"
+      }
+    },
+    "vae": {
+      "class_type": "VAELoader",
+      "inputs": {
+        "vae_name": "minimax_h3_video_vae_fp16.safetensors"
+      }
+    },
+    "video": {
+      "class_type": "CreateVideo",
+      "inputs": {
+        "audio": [
+          "decode_audio",
+          0
+        ],
+        "fps": 24.0,
+        "images": [
+          "decode",
+          0
+        ]
+      }
+    }
+  }
+]

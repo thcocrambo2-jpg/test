@@ -183,6 +183,7 @@ def patch(module, capture) -> None:
         "klein_model_available",
         "flux_model_available", "flux_turbo_lora_available",
         "wan_models_available", "wan_5b_available", "wan_lightning_available",
+        "minimax_models_available",
     ):
         if hasattr(module, name):
             setattr(module, name, lambda *a, **k: True)
@@ -286,6 +287,23 @@ def cases(module) -> dict:
             "14B two-expert (best quality, 16 fps)", "Raw (20 steps)",
             6789012, False, 17, 3.1, "720p (sharper, ~3× slower)", 3.25,
             "dpmpp_2m", 2,
+        ),
+
+        # The two MiniMax tabs share one builder; the snapshots prove the
+        # image one wires a LoadImage in and the text one does not, and
+        # that 7 s lands on 175 frames and 6 s on 158 — the 17k+5 grid,
+        # which is the one arithmetic here that is easy to get subtly
+        # wrong and impossible to see in a finished clip.
+        "generate_minimax_video": (
+            image, "the tide comes in and the gulls cry",
+            7890123, False, 9, "Native 768p (short edge 768, slower)", 7,
+            "dpmpp_2m", 2,
+        ),
+
+        "generate_minimax_t2v": (
+            "a kettle comes to the boil and whistles", "16:9 (Widescreen)",
+            8901234, False, 11, "Standard (0.7 MP — the template default)", 6,
+            "euler_ancestral", 2,
         ),
     }
 

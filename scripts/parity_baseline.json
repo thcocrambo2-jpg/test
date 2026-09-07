@@ -3344,6 +3344,300 @@
         }
       ]
     },
+    "minimax_i2v": {
+      "tab_id": "minimax_i2v",
+      "controls": [
+        {
+          "type": "Image",
+          "label": "Start image (paste with Ctrl+V)",
+          "value": null,
+          "placeholder": null,
+          "interactive": null,
+          "visible": true,
+          "elem_id": null
+        },
+        {
+          "type": "Textbox",
+          "label": "Prompt (the motion, and the sound)",
+          "value": null,
+          "lines": 4,
+          "placeholder": "she looks up and laughs, rain against the window, a kettle starting to whistle",
+          "interactive": null,
+          "visible": true,
+          "elem_id": null
+        },
+        {
+          "type": "Number",
+          "label": "Seed",
+          "value": 42,
+          "minimum": 0,
+          "maximum": null,
+          "step": 1,
+          "placeholder": null,
+          "interactive": null,
+          "visible": true,
+          "elem_id": null
+        },
+        {
+          "type": "Checkbox",
+          "label": "🎲 Random seed",
+          "value": true,
+          "interactive": null,
+          "visible": true,
+          "elem_id": null
+        },
+        {
+          "type": "Slider",
+          "label": "Steps",
+          "value": 8,
+          "minimum": 1,
+          "maximum": 40,
+          "step": 1,
+          "interactive": null,
+          "visible": true,
+          "elem_id": null
+        },
+        {
+          "type": "Radio",
+          "label": "Resolution (keeps the source aspect)",
+          "value": "Standard (0.7 MP — the template default)",
+          "interactive": null,
+          "visible": true,
+          "elem_id": null,
+          "choices": [
+            [
+              "Standard (0.7 MP — the template default)",
+              "Standard (0.7 MP — the template default)"
+            ],
+            [
+              "Native 768p (short edge 768, slower)",
+              "Native 768p (short edge 768, slower)"
+            ]
+          ]
+        },
+        {
+          "type": "Slider",
+          "label": "Duration (seconds)",
+          "value": 5.0,
+          "minimum": 5.0,
+          "maximum": 15.0,
+          "step": 1.0,
+          "interactive": null,
+          "visible": true,
+          "elem_id": null
+        },
+        {
+          "type": "Dropdown",
+          "label": "Sampler",
+          "value": "euler",
+          "interactive": null,
+          "visible": true,
+          "multiselect": null,
+          "elem_id": null,
+          "choices": [
+            [
+              "er_sde",
+              "er_sde"
+            ],
+            [
+              "euler",
+              "euler"
+            ],
+            [
+              "euler_ancestral",
+              "euler_ancestral"
+            ],
+            [
+              "dpmpp_2m",
+              "dpmpp_2m"
+            ],
+            [
+              "res_multistep",
+              "res_multistep"
+            ],
+            [
+              "uni_pc",
+              "uni_pc"
+            ]
+          ]
+        },
+        {
+          "type": "Slider",
+          "label": "Batch count",
+          "value": 1,
+          "minimum": 1,
+          "maximum": 10,
+          "step": 1,
+          "interactive": null,
+          "visible": true,
+          "elem_id": null
+        }
+      ]
+    },
+    "minimax_t2v": {
+      "tab_id": "minimax_t2v",
+      "controls": [
+        {
+          "type": "Textbox",
+          "label": "Prompt (the scene, the motion, and the sound)",
+          "value": null,
+          "lines": 5,
+          "placeholder": "a kettle on a gas hob comes to the boil and whistles, steam catching the window light, slow push-in",
+          "interactive": null,
+          "visible": true,
+          "elem_id": null
+        },
+        {
+          "type": "Dropdown",
+          "label": "Aspect ratio",
+          "value": "9:16 (Portrait Widescreen)",
+          "interactive": null,
+          "visible": true,
+          "multiselect": null,
+          "elem_id": null,
+          "choices": [
+            [
+              "1:1 (Square)",
+              "1:1 (Square)"
+            ],
+            [
+              "2:3 (Portrait Photo)",
+              "2:3 (Portrait Photo)"
+            ],
+            [
+              "3:2 (Photo)",
+              "3:2 (Photo)"
+            ],
+            [
+              "3:4 (Portrait Standard)",
+              "3:4 (Portrait Standard)"
+            ],
+            [
+              "4:3 (Standard)",
+              "4:3 (Standard)"
+            ],
+            [
+              "9:16 (Portrait Widescreen)",
+              "9:16 (Portrait Widescreen)"
+            ],
+            [
+              "16:9 (Widescreen)",
+              "16:9 (Widescreen)"
+            ],
+            [
+              "21:9 (Ultrawide)",
+              "21:9 (Ultrawide)"
+            ]
+          ]
+        },
+        {
+          "type": "Number",
+          "label": "Seed",
+          "value": 42,
+          "minimum": 0,
+          "maximum": null,
+          "step": 1,
+          "placeholder": null,
+          "interactive": null,
+          "visible": true,
+          "elem_id": null
+        },
+        {
+          "type": "Checkbox",
+          "label": "🎲 Random seed",
+          "value": true,
+          "interactive": null,
+          "visible": true,
+          "elem_id": null
+        },
+        {
+          "type": "Slider",
+          "label": "Steps",
+          "value": 8,
+          "minimum": 1,
+          "maximum": 40,
+          "step": 1,
+          "interactive": null,
+          "visible": true,
+          "elem_id": null
+        },
+        {
+          "type": "Radio",
+          "label": "Resolution",
+          "value": "Standard (0.7 MP — the template default)",
+          "interactive": null,
+          "visible": true,
+          "elem_id": null,
+          "choices": [
+            [
+              "Standard (0.7 MP — the template default)",
+              "Standard (0.7 MP — the template default)"
+            ],
+            [
+              "Native 768p (short edge 768, slower)",
+              "Native 768p (short edge 768, slower)"
+            ]
+          ]
+        },
+        {
+          "type": "Slider",
+          "label": "Duration (seconds)",
+          "value": 5.0,
+          "minimum": 5.0,
+          "maximum": 15.0,
+          "step": 1.0,
+          "interactive": null,
+          "visible": true,
+          "elem_id": null
+        },
+        {
+          "type": "Dropdown",
+          "label": "Sampler",
+          "value": "euler",
+          "interactive": null,
+          "visible": true,
+          "multiselect": null,
+          "elem_id": null,
+          "choices": [
+            [
+              "er_sde",
+              "er_sde"
+            ],
+            [
+              "euler",
+              "euler"
+            ],
+            [
+              "euler_ancestral",
+              "euler_ancestral"
+            ],
+            [
+              "dpmpp_2m",
+              "dpmpp_2m"
+            ],
+            [
+              "res_multistep",
+              "res_multistep"
+            ],
+            [
+              "uni_pc",
+              "uni_pc"
+            ]
+          ]
+        },
+        {
+          "type": "Slider",
+          "label": "Batch count",
+          "value": 1,
+          "minimum": 1,
+          "maximum": 10,
+          "step": 1,
+          "interactive": null,
+          "visible": true,
+          "elem_id": null
+        }
+      ]
+    },
     "json_batch": {
       "tab_id": "json",
       "controls": [
@@ -3565,6 +3859,36 @@
         "randomize",
         "steps",
         "cfg",
+        "resolution",
+        "seconds",
+        "sampler",
+        "batch_count"
+      ],
+      "varargs": null,
+      "keyword_only": []
+    },
+    "generate_minimax_video": {
+      "positional": [
+        "image",
+        "prompt",
+        "seed",
+        "randomize",
+        "steps",
+        "resolution",
+        "seconds",
+        "sampler",
+        "batch_count"
+      ],
+      "varargs": null,
+      "keyword_only": []
+    },
+    "generate_minimax_t2v": {
+      "positional": [
+        "prompt",
+        "aspect",
+        "seed",
+        "randomize",
+        "steps",
         "resolution",
         "seconds",
         "sampler",

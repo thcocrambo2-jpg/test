@@ -27,6 +27,8 @@ import licensing
 from config import (
     COMFY_DIR,
     KREA_RESERVE_VRAM_GB,
+    MINIMAX_COMFYUI_MIN,
+    MINIMAX_NODE,
     REACTOR_NODES_DIR,
     TEMP_DIR,
     V2_NODE_REPOS,
@@ -132,6 +134,13 @@ def main() -> None:
             comfy.verify_custom_node(
                 class_type, dirname, COMFY_DIR / "custom_nodes" / dirname,
             )
+    if (features.enabled(features.Key.MINIMAX_I2V)
+            or features.enabled(features.Key.MINIMAX_T2V)):
+        # The MiniMax nodes are core ComfyUI rather than a pack, so the
+        # failure to catch is a checkout older than the release that
+        # carries them — which is what an existing volume has until
+        # bootstrap.repin_checkout has moved it to the pin.
+        comfy.verify_core_node(MINIMAX_NODE, MINIMAX_COMFYUI_MIN)
     if (features.enabled(features.Key.KREA_EDIT)
             or features.enabled(features.Key.KREA_V2_EDIT)):
         # Krea2Edit is cloned rather than vendored, so it fails the same

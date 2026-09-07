@@ -468,6 +468,8 @@ npm run issue-key -- --name "Acme Corp" --plan pro --seats 2
 | `flux_t2i`     | 🌊 Flux 2               | ~57 GB         |
 | `klein_i2i`    | 🧩 Klein Edit           | ~19 GB         |
 | `wan_i2v`      | 🎬 Video (Wan 2.2)      | ~49 GB         |
+| `minimax_i2v`  | 🎥 MiniMax I2V (video with sound) | ~56 GB (shared with `minimax_t2v`) |
+| `minimax_t2v`  | 🎞️ MiniMax T2V (video with sound) | shared with `minimax_i2v` |
 | `json_batch`   | JSON Advanced Batch     | none           |
 | `community_prompts` | 🌟 Prompt Library  | none           |
 
@@ -1190,6 +1192,7 @@ error in the log points at a custom node instead.
 - `workflow_krea2_v2_edit.py` — Krea 2 V2 Edit builder (that graph's instruction-edit variant)
 - `workflow_klein.py` — Flux 2 Klein 9B edit builder (the Klein advanced Klein Edit graph)
 - `workflow_wan.py` — Wan 2.2 image-to-video workflow builder (two-expert A14B)
+- `workflow_minimax.py` — MiniMax H3 video-with-sound builder; one graph serves both the image-to-video and text-to-video tabs
 - `workflow_reactor.py` — ReActor face-swap workflow builder + availability checks
 - `client.py` — ComfyUI HTTP/websocket client (queue, progress, image upload, interrupt)
 - `jobqueue.py` — the visible job queue behind every Generate button (worker per lane, cancel, history)
@@ -2398,3 +2401,76 @@ only buys a second ComfyUI instance when it is granted.
 Make sure the pod volume has room: Krea (~32 GB) +
 Wan (~49 GB) + ComfyUI needs a ≥ 100 GB disk (a 120 GB volume fits with
 ~35 GB left for outputs).
+
+## Video with sound (MiniMax H3 — image-to-video and text-to-video)
+
+Two tabs on one model. **🎥 MiniMax I2V** animates an uploaded image and
+**🎞️ MiniMax T2V** builds the clip from the prompt alone, and both come
+back **with a soundtrack**: MiniMax H3 is a packed audio+video model, so one
+sampler pass produces the frames and the audio together. That is the
+difference from Wan, and it is why the prompt on these tabs describes what
+things sound like as well as how they move.
+
+Feature keys `minimax_i2v` and `minimax_t2v`. They share one asset group,
+so granting both downloads the weights once — and it is the largest
+download in the app:
+
+| File | Size |
+| --- | --- |
+| `minimax_h3_fl2va_pruned_int8_convrot.safetensors` — the diffusion model, int8 | ~21 GB |
+| `qwen3vl_32b_minimax_h3_int8_convrot.safetensors` — the 32B Qwen3-VL text encoder, int8 | ~27 GB |
+| video VAE (fp16) and audio VAE (fp32) | ~5.8 GB |
+| `minimax_h3_fl2v_turbo_8step_v1.0_768p_comfyui_bf16.safetensors` — the turbo LoRA | ~2 GB |
+| **total** | **~56 GB** |
+
+The graph is the "Custom Prompt" workflow from
+`hearmeman/comfyui-minimax-template:v8`, transcribed into
+`workflow_minimax.py` the way the V2 graph was. Every node in it is core
+ComfyUI — the template's rgthree loader was empty, its KJNodes preview
+override is cosmetic, and `CreateVideo` carries the audio that
+`VHS_VideoCombine` did — so **no node pack is installed** for this feature.
+The core `MiniMaxH3ImageToVideo` node takes an *optional* first frame, which
+is the whole reason one builder serves both tabs: text-to-video is the same
+graph with `LoadImage` left out. The 8-step turbo LoRA is always on at 0.8
+and the sampler block is its recipe — `BasicScheduler` `simple`, euler, no
+CFG and no negative prompt (a `BasicGuider`; like Flux, the model is
+guidance-distilled), plus an `ExtendIntermediateSigmas` pass below sigma
+0.8.
+
+What the tabs expose: Steps (default 8), Duration 5–15 s, Sampler, Batch
+count, and a Resolution radio with two rules. *Standard* is the template's
+0.7 MP `ResolutionSelector`; *Native 768p* is the model's own canvas (a 768
+short edge capped at 768×1344 — what the node file calls `adapt_canvas`).
+I2V takes the aspect from the uploaded image; T2V offers
+`ResolutionSelector`'s eight aspect ratios. Duration snaps to the model's
+"17k+5" frame grid at 24 fps — 5 s is 124 frames, 15 s is 362, which is the
+trained range. Clips are saved as MP4 under `output/minimax/` and appear in
+the Gallery like Wan's.
+
+**This feature moved the ComfyUI pin.** The MiniMax nodes ship in ComfyUI
+**v0.34.0**; `scripts/PINS.json` pinned v0.29.0, so the pin is now
+`12d52794`, the v0.34.0 tag. Three things follow:
+
+- `bootstrap.install_comfyui()` now moves an *existing* checkout to the pin
+  when its HEAD differs (`repin_checkout`), so a pod volume or a Windows
+  install that already holds ComfyUI picks the new revision up on its next
+  start instead of keeping v0.29 for ever. It fetches exactly the pinned
+  commit and never fails startup: if the fetch cannot happen the app runs on
+  what it has, and `comfy.verify_core_node` logs which tab that costs.
+- The move was checked before it was made. Under v0.34.0, the four pinned
+  node packs (RES4LYF, RBG Smart Seed Variance, post-processing, Krea2Edit)
+  and the vendored ReActor all import without error, and all twelve golden
+  workflows — every existing tab's graph — pass its prompt validator
+  unchanged. `python scripts/golden.py --check` is byte-identical before
+  and after.
+- What was **not** checked is a GPU render on v0.34.0: nothing here has a
+  card that holds these models. The first pod start after this lands is the
+  test of that.
+
+Both tabs run on the **main** ComfyUI instance whatever `KREA2_WAN_PARALLEL`
+says: the int8 model plus the 32B text encoder is ~48 GB of weights, which
+does not fit beside a second instance holding VRAM back for Wan on a 48 GB
+card. The template runs ComfyUI with `--disable-dynamic-vram`; this app does
+not change its ComfyUI arguments for one tab, so if a MiniMax render fails to
+allocate where the same card runs the template, that flag is the first thing
+to try.
