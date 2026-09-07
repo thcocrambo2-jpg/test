@@ -15,7 +15,7 @@ import {
 import { cx, fileName, relativeTime, saveFile, useCopy } from '@/lib/util'
 import { useQueue } from '@/store/queue'
 import { useTabState } from '@/store/tabState'
-import { DownloadIcon, TrashIcon } from './icons'
+import { DownloadIcon, PlayIcon, TrashIcon } from './icons'
 import { Lightbox } from './Lightbox'
 import s from './gallery.module.css'
 
@@ -438,14 +438,52 @@ function Tile({
       {/* The 512px WebP, not the multi-megabyte original: a page of tiles is
           the one place the size difference is measured in tens of megabytes.
           `?? item.url` is gallery_index's no-backfill policy showing through
-          — a video, or anything generated before thumbnails existed, has no
-          thumb and serves the original, exactly as it did before. */}
-      <img
-        className={s.image}
-        src={item.thumbUrl ?? item.url}
-        alt={item.prompt ?? ''}
-        loading="lazy"
-      />
+          — anything generated before thumbnails existed has no thumb and
+          serves the original, exactly as it did before.
+
+          A clip with no thumbnail is the one case that cannot go in an
+          <img>, and for a long time it did: the src was an .mp4, no browser
+          has ever decoded one as an image, and what the grid showed was the
+          broken-image state — which, because `alt` is the prompt, rendered
+          as a paragraph of the prompt where the picture should be. So it
+          gets a <video> instead. `#t=0.1` is a media fragment asking for the
+          frame a tenth of a second in, which is what makes the browser paint
+          a frame rather than a black rectangle; `preload="metadata"` keeps
+          that to a range request or two rather than the whole file. Muted
+          and playsInline because iOS will not paint a frame otherwise.
+
+          This is the fallback, not the plan. gallery_index now grabs the
+          opening frame with ffmpeg when a clip is generated, so a clip made
+          on a pod that has one takes the <img> path above like everything
+          else. This is what is left: clips from before that, and pods
+          without ffmpeg. */}
+      {item.kind === 'video' && !item.thumbUrl ? (
+        <video
+          className={s.image}
+          src={`${item.url}#t=0.1`}
+          preload="metadata"
+          muted
+          playsInline
+          /* The name the <img>'s `alt` would have carried. A tile is a
+             button, and a button whose only content is an unlabelled
+             <video> is announced as nothing at all. */
+          aria-label={item.prompt || item.path}
+        />
+      ) : (
+        <img
+          className={s.image}
+          src={item.thumbUrl ?? item.url}
+          alt={item.prompt ?? ''}
+          loading="lazy"
+        />
+      )}
+      {/* A still frame out of a clip is a still. Without this the only thing
+          separating the two in a mixed grid is finding out on click. */}
+      {item.kind === 'video' && (
+        <span className={s.playBadge} title="Video">
+          <PlayIcon />
+        </span>
+      )}
       <label
         className={cx(s.pick, (selected || anySelected) && s.pickShown)}
         onClick={(event) => event.stopPropagation()}

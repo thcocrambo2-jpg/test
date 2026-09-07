@@ -334,9 +334,10 @@ def _media(path, recipe=None) -> dict:
         "url": "%s/media/%s" % (PREFIX, quoted),
         "kind": "video" if is_video else "image",
         # A placeholder ratio for video, so a grid of tiles does not
-        # collapse to nothing while the browser loads metadata. Reading
-        # the real dimensions needs a container parse, and gallery_index
-        # does not thumbnail video either — same reason, same trade.
+        # collapse to nothing while the browser loads metadata. Replaced
+        # below by the thumbnail's own shape when there is one — reading
+        # the real dimensions still needs a container parse, and the
+        # thumbnail already answers the only question the grid asks.
         "width": 16 if is_video else 0,
         "height": 9 if is_video else 0,
         "createdAt": "",
@@ -348,19 +349,30 @@ def _media(path, recipe=None) -> dict:
     except OSError:
         pass
     # Only when there is really a thumbnail on disk. /thumbs falls back to
-    # the original for anything gallery_index never encoded — a video, or
-    # anything from before the module existed — and a caller told "here is
-    # a thumbnail" fetches it, so the fallback would hand the same
-    # multi-megabyte file down a second time, under a second cache key, to
-    # be shown at 512px. Absent is the honest answer, and `thumbUrl?` on
-    # the TypeScript side has always said it was one of the possible ones.
-    if not is_video and gallery_index.has_thumb(path):
+    # the original for anything gallery_index never encoded — anything from
+    # before the module existed, or a clip on a pod with no ffmpeg — and a
+    # caller told "here is a thumbnail" fetches it, so the fallback would
+    # hand the same multi-megabyte file down a second time, under a second
+    # cache key, to be shown at 512px. Absent is the honest answer, and
+    # `thumbUrl?` on the TypeScript side has always said it was one of the
+    # possible ones.
+    has_thumb = gallery_index.has_thumb(path)
+    if has_thumb:
         row["thumbUrl"] = "%s/thumbs/%s" % (PREFIX, quoted)
-    if not is_video:
+    # Header-only: PIL does not decode pixels until you ask it to, so a
+    # page of two dozen costs two dozen small reads.
+    #
+    # A still is measured from the original, because that is both its true
+    # size and the shape the grid wants. A clip cannot be — the container
+    # is not a picture — so it is measured from its thumbnail instead,
+    # which was fitted inside a 512px box without being reshaped and so
+    # carries the clip's aspect ratio even though it does not carry its
+    # dimensions. The grid asks only about shape; the lightbox, which asks
+    # about size, does not print these for video.
+    if not is_video or has_thumb:
         try:
-            # Header-only: PIL does not decode pixels until you ask it to,
-            # so a page of two dozen costs two dozen small reads.
-            with Image.open(path) as image:
+            measure = gallery_index.thumb_path(path) if is_video else path
+            with Image.open(measure) as image:
                 row["width"], row["height"] = image.size
         except Exception:                        # noqa: BLE001
             pass

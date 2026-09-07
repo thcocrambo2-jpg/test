@@ -51,3 +51,16 @@ export function CheckIcon() {
     </svg>
   )
 }
+
+/** The triangle that says a tile is a clip and not a still.
+ *
+ *  Filled, unlike every mark above it. Those are all 14px on a button, where
+ *  a 1.8px stroke reads cleanly; this one sits over a picture that may be any
+ *  colour at all, and an outlined triangle at that size is a smudge. */
+export function PlayIcon() {
+  return (
+    <svg className={s.playMark} viewBox="0 0 24 24" aria-hidden="true">
+      <path d="M9 6.3v11.4L18.4 12z" />
+    </svg>
+  )
+}

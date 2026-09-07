@@ -89,6 +89,40 @@
   cursor: pointer;
 }
 
+/* The clip marker, in the corner the checkbox does not use.
+
+   Shaped like `.pick` on purpose — same box, same radius, same scrim — so
+   the two corners of a tile read as one family rather than as a control and
+   a decoration. Always shown, unlike the checkbox: it is not a thing to do,
+   it is what the tile *is*, and a mark that appears on hover would be a mark
+   that never appears on a phone.
+
+   `pointer-events: none` because the whole tile is already the click target
+   and a badge that swallowed the click would be a small dead spot on it. */
+.playBadge {
+  position: absolute;
+  inset: var(--s-2) var(--s-2) auto auto;
+  display: grid;
+  place-items: center;
+  width: 26px;
+  height: 26px;
+  border-radius: var(--r-sm);
+  background: var(--c-media-scrim);
+  color: #fff;
+  pointer-events: none;
+  line-height: 0;
+}
+
+.playMark {
+  width: 13px;
+  height: 13px;
+  fill: currentColor;
+  stroke: none;
+  /* Optically centred. A triangle's mass sits behind its point, so a
+     triangle centred by its bounding box looks a pixel left of centre. */
+  margin-left: 1px;
+}
+
 /* The count's slot while a selection exists. */
 /* The bar's left half. `.bar` is space-between, so a third child would be
    pushed to the middle of the row rather than sitting beside the count it
@@ -388,6 +422,60 @@
   .stageFull {
     transition: none;
   }
+}
+
+/* The two ends of the stage, as places you can click.
+
+   Invisible, and that is deliberate rather than unfinished. The chevrons
+   that used to sit here were dropped because two marks over the picture are
+   two things in front of the one thing being looked at, and none of that
+   reasoning has changed. What is added back is only the *region* they stood
+   in — which already reads as "go that way" to anyone who has held a phone
+   — without painting anything over the picture to say so.
+
+   Above the picture, not behind it, and that is the whole reason this works
+   on a phone. A landscape file on a 390px screen is fitted to the full
+   width of the stage, so there is no bare backdrop beside it to aim at: a
+   zone that yielded to the picture would have no width at all in exactly
+   the case that needs it most. The cost is that the outer fifth of the
+   picture is no longer right-clickable, which is a fair trade for the
+   middle three-fifths staying so.
+
+   `clamp`, because one number cannot serve both screens. 20% of a 390px
+   phone is 78px — a thumb — and leaves 234px in the middle where a tap
+   still closes, as it always did. 20% of a 1530px desktop would be 306px of
+   unclickable picture on each side, so it stops at 240px.
+
+   Not rendered over video. `<video controls>` puts play at the left end of
+   its bar and fullscreen at the right, and both sit under these. */
+.edge {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  z-index: 2;
+  width: clamp(72px, 20%, 240px);
+  padding: 0;
+  border: 0;
+  background: none;
+  appearance: none;
+  cursor: pointer;
+  /* Without it a grey slab flashes over the corner of the picture on every
+     tap, which is a thing appearing over the picture by another route. */
+  -webkit-tap-highlight-color: transparent;
+}
+
+/* Inward, because the stage clips: the global 2px ring sits outside the
+   element, and outside this one is past the edge of the screen. */
+.edge:focus-visible {
+  outline-offset: -6px;
+}
+
+.edgeLeft {
+  left: 0;
+}
+
+.edgeRight {
+  right: 0;
 }
 
 /* The filmstrip. Laid out by the DOM: one flex row that scrolls, with the

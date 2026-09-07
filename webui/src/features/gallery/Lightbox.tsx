@@ -231,6 +231,40 @@ export function Lightbox({
       </header>
 
       <div className={s.lightboxStage} onClick={onClose}>
+        {/* The ends of the stage, as prev and next.
+         *
+         * Nothing is drawn — see `.edge` in the stylesheet for why, and for
+         * why they are not offered over a video. They stop propagation
+         * because the stage they sit in closes the dialog on a click, which
+         * is the behaviour the middle of the stage keeps.
+         *
+         * Absent at the ends of the strip rather than present and inert: a
+         * pointer cursor over a button that does nothing is a worse answer
+         * than the backdrop underneath, which at least closes. */}
+        {item.kind !== 'video' && index > 0 && (
+          <button
+            type="button"
+            className={cx(s.edge, s.edgeLeft)}
+            aria-label="Previous image"
+            title="Previous image"
+            onClick={(event) => {
+              event.stopPropagation()
+              onIndex(index - 1)
+            }}
+          />
+        )}
+        {item.kind !== 'video' && index < items.length - 1 && (
+          <button
+            type="button"
+            className={cx(s.edge, s.edgeRight)}
+            aria-label="Next image"
+            title="Next image"
+            onClick={(event) => {
+              event.stopPropagation()
+              onIndex(index + 1)
+            }}
+          />
+        )}
         {item.kind === 'video' ? (
           <video
             className={s.lightboxImage}
@@ -288,9 +322,15 @@ export function Lightbox({
         </div>
         <div className={cx(s.lightboxHead, s.lightboxFoot)}>
           <div className={s.lightboxMeta}>
-            <span>
-              {item.width} × {item.height}
-            </span>
+            {/* Stills only. A clip's real size is not on hand — the API
+             *  measures a video by its thumbnail, which carries its shape
+             *  and not its dimensions — and "512 × 288" under a 1280 × 720
+             *  clip is worse than saying nothing. */}
+            {item.kind !== 'video' && (
+              <span>
+                {item.width} × {item.height}
+              </span>
+            )}
             {item.seed != null && <span>seed {item.seed}</span>}
             <span>{relativeTime(item.createdAt)}</span>
           </div>
