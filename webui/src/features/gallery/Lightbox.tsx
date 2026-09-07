@@ -7,7 +7,7 @@ import type { MediaItem } from '@/api/types'
 import { Button, Pill, useToast } from '@/components/ui'
 import { useHandoff } from '@/store/handoff'
 import { cx, fileName, relativeTime, saveFile, useCopy } from '@/lib/util'
-import { CheckIcon, CopyIcon, DownloadIcon } from './icons'
+import { CheckIcon, CopyIcon, DownloadIcon, TrashIcon } from './icons'
 import s from './gallery.module.css'
 
 /*
@@ -71,6 +71,11 @@ export function Lightbox({
   /* A second copier, not the one the path pill uses: copying the prompt
    * should not light up the path's "Copied", or the other way round. */
   const promptCopy = useCopy()
+  /* Said out loud when a copy does not land. A phone on plain HTTP has no
+   * clipboard API at all (see `copyText`), and a button that fails silently
+   * there is one you go on pressing while the paste keeps handing back
+   * whatever the phone was holding before. */
+  const toast = useToast()
   const reuse = useReuse(item)
   const [saving, setSaving] = useState(false)
 
@@ -173,9 +178,11 @@ export function Lightbox({
                   if (loaded) onClose()
                 })
               }}
+              aria-label={`Load the settings this was made with into ${reuse.label}`}
               title={`Load the settings this was made with into ${reuse.label}`}
             >
-              ▶️ Load these settings
+              <span aria-hidden="true">▶️</span>
+              <span className={s.btnLabel}>Load these settings</span>
             </Button>
           )}
           {item.prompt && (
@@ -183,7 +190,11 @@ export function Lightbox({
               size="sm"
               variant="ghost"
               iconOnly
-              onClick={() => void promptCopy.copy(item.prompt ?? '')}
+              onClick={() => {
+                void promptCopy.copy(item.prompt ?? '').then((landed) => {
+                  if (!landed) toast('Could not reach the clipboard.')
+                })
+              }}
               aria-label="Copy prompt"
               title={promptCopy.copied ? 'Prompt copied' : 'Copy prompt'}
             >
@@ -195,13 +206,22 @@ export function Lightbox({
             variant="ghost"
             loading={saving}
             onClick={() => void save()}
+            aria-label={`Download ${fileName(item.id)}`}
             title={`Download ${fileName(item.id)}`}
           >
-            <DownloadIcon /> Download
+            <DownloadIcon />
+            <span className={s.btnLabel}>Download</span>
           </Button>
           {onDelete && (
-            <Button size="sm" variant="danger" onClick={() => onDelete(item)}>
-              Delete
+            <Button
+              size="sm"
+              variant="danger"
+              onClick={() => onDelete(item)}
+              aria-label="Delete"
+              title="Delete"
+            >
+              <TrashIcon />
+              <span className={s.btnLabel}>Delete</span>
             </Button>
           )}
           <Button size="sm" variant="ghost" iconOnly onClick={onClose} aria-label="Close">
@@ -301,7 +321,7 @@ export function Lightbox({
             </button>
           ))}
         </div>
-        <div className={s.lightboxHead}>
+        <div className={cx(s.lightboxHead, s.lightboxFoot)}>
           <div className={s.lightboxMeta}>
             <span>
               {item.width} × {item.height}
@@ -309,7 +329,14 @@ export function Lightbox({
             {item.seed != null && <span>seed {item.seed}</span>}
             <span>{relativeTime(item.createdAt)}</span>
           </div>
-          <Pill tone={copied ? 'success' : 'default'} onClick={() => copy(item.path)}>
+          <Pill
+            tone={copied ? 'success' : 'default'}
+            onClick={() => {
+              void copy(item.path).then((landed) => {
+                if (!landed) toast('Could not reach the clipboard.')
+              })
+            }}
+          >
             {copied ? 'Copied' : item.path}
           </Pill>
         </div>

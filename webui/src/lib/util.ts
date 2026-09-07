@@ -56,6 +56,69 @@ export function formatDate(iso: string | null): string | null {
   })
 }
 
+/** Put `text` on the clipboard, and say whether it actually landed.
+ *
+ *  `navigator.clipboard` is the whole API on a desktop and none of it on a
+ *  phone reached the way this app is usually reached. It exists only in a
+ *  *secure* context, and the two ordinary ways onto a phone — the pod's own
+ *  `http://<ip>:7860`, or the LAN address of a Windows desktop run — are
+ *  both plain HTTP, where the object is not merely unavailable but
+ *  `undefined`. The call threw, the `catch` swallowed it, the button showed
+ *  no tick and said nothing, and whatever the phone was already holding
+ *  stayed on the clipboard. For anyone who got the app onto their phone by
+ *  copying the `…/#k=<token>` link, that is what pasted: a long encoded URL
+ *  they never asked for and could not explain.
+ *
+ *  So: the modern API where there is one, and the 2015 one behind it — a
+ *  textarea, selected, `execCommand('copy')`. Deprecated, synchronous, and
+ *  the only thing that works without HTTPS.
+ */
+export async function copyText(text: string): Promise<boolean> {
+  try {
+    if (navigator.clipboard?.writeText) {
+      await navigator.clipboard.writeText(text)
+      return true
+    }
+  } catch {
+    /* Refused, or a context that claimed the API and would not use it.
+       Fall through: the old way asks nobody's permission. */
+  }
+  return legacyCopy(text)
+}
+
+/** The pre-`navigator.clipboard` copy: put the text in a field, select it,
+ *  and tell the document to copy the selection. */
+function legacyCopy(text: string): boolean {
+  const area = document.createElement('textarea')
+  area.value = text
+  /* Off-screen, not `display: none` or `hidden`: a field the layout has
+   * thrown away cannot hold a selection, and an empty selection copies
+   * nothing. `readonly` keeps the phone keyboard down on the way past. */
+  area.readOnly = true
+  area.style.cssText =
+    'position:fixed;top:0;left:0;width:1px;height:1px;padding:0;border:none;opacity:0'
+  document.body.append(area)
+
+  // Whatever the reader had selected on the page is theirs, and taking it to
+  // run a copy is not a trade they agreed to. Put it back.
+  const selection = document.getSelection()
+  const previous = selection && selection.rangeCount > 0 ? selection.getRangeAt(0) : null
+  try {
+    area.select()
+    // iOS ignores select() on a readonly field. A range it honours.
+    area.setSelectionRange(0, text.length)
+    return document.execCommand('copy')
+  } catch {
+    return false
+  } finally {
+    area.remove()
+    if (selection && previous) {
+      selection.removeAllRanges()
+      selection.addRange(previous)
+    }
+  }
+}
+
 /** Copy to the clipboard, reporting whether it landed so the caller can show
  *  a "Copied" state instead of hoping. */
 export function useCopy(resetMs = 1600) {
@@ -64,15 +127,15 @@ export function useCopy(resetMs = 1600) {
 
   useEffect(() => () => clearTimeout(timer.current), [])
 
-  async function copy(text: string) {
-    try {
-      await navigator.clipboard.writeText(text)
-      setCopied(true)
-      clearTimeout(timer.current)
-      timer.current = setTimeout(() => setCopied(false), resetMs)
-    } catch {
-      setCopied(false)
-    }
+  /** Resolves false when nothing reached the clipboard, so a caller with
+   *  somewhere to say so can say so — silence is what made this look like it
+   *  had worked. */
+  async function copy(text: string): Promise<boolean> {
+    const landed = await copyText(text)
+    setCopied(landed)
+    clearTimeout(timer.current)
+    if (landed) timer.current = setTimeout(() => setCopied(false), resetMs)
+    return landed
   }
 
   return { copied, copy }

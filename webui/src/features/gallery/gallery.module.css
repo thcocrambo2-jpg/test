@@ -159,6 +159,12 @@
   margin-right: 0;
 }
 
+/* The words beside a button's mark. Nothing to do on a wide screen — the rule
+   is here so the phone block at the foot of this file has something to hide. */
+.btnLabel {
+  display: inline;
+}
+
 .image {
   width: 100%;
   aspect-ratio: var(--ratio, 1);
@@ -466,6 +472,73 @@
   font-family: var(--font-mono);
   font-size: var(--t-2xs);
   color: var(--c-text-muted);
+}
+
+/* ------------------------------------------------------ lightbox on a phone
+
+   Two things go wrong on a narrow screen and both are paid for by the
+   picture, which is the only thing anybody opened this to look at.
+
+   The header overflows. `.lightboxActions` is `flex: none`, so it is sized by
+   its own content and the `flex-wrap` above it never fires. On a 390px phone
+   the row of five measured 500px: the title beside it had already ellipsised
+   itself to nothing trying to help, and the last 130px — most of Delete, and
+   the close ✕ entirely — hung off the right of a `position: fixed` element
+   there is no scrolling to. Not cramped, unreachable. So at this width the
+   words go and the marks stay, which brings the same row to 366px, and the
+   actions are allowed to shrink, which is what turns that `flex-wrap` from a
+   decoration into a real last resort further down.
+
+   The footer stacks. Its two halves are wider than the screen together, so
+   they take a line each, and two lines of monospace is most of the height the
+   picture had left. Little of it earns that: the size is legible from the
+   picture, the seed rides along in the settings the ▶️ button loads, and the
+   filename names a file on a machine nobody is holding. Gone here, unchanged
+   above the breakpoint, where it costs nothing. */
+@media (max-width: 720px) {
+  .lightboxHead {
+    gap: var(--s-2);
+    padding: var(--s-2) var(--s-3);
+  }
+
+  .lightboxTitle {
+    display: none;
+  }
+
+  .lightboxActions {
+    flex: 1 1 auto;
+    min-width: 0;
+  }
+
+  .btnLabel {
+    display: none;
+  }
+
+  /* The mark is the whole button now, so the space it was keeping for a word
+     beside it would sit it off-centre. */
+  .lightboxActions .btnIcon {
+    margin-right: 0;
+  }
+
+  /* A thumb, not a mouse. These are also the only way out of a dialog that
+     covers the screen, so they are the last controls to make small. */
+  .lightboxActions button {
+    min-width: 34px;
+    height: 34px;
+  }
+
+  .lightboxFoot {
+    display: none;
+  }
+
+  /* Room the arrows are drawn over anyway. */
+  .lightboxStage {
+    padding: 0 var(--s-2);
+  }
+
+  .strip {
+    padding: var(--s-2) var(--s-3);
+  }
 }
 
 .skeletonGrid {
