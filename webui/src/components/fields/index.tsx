@@ -2,6 +2,7 @@ import { useCallback, useEffect, useId, useRef, useState, type ReactNode } from 
 import { cx } from '@/lib/util'
 import { useUndoHistory } from '@/lib/undo'
 import { Button } from '@/components/ui'
+import { RecentStrip } from './RecentStrip'
 import s from './fields.module.css'
 
 /*
@@ -518,6 +519,12 @@ export function ImageDropField({
         hidden
         onChange={(event) => accept(event.target.files)}
       />
+
+      {/* The fourth way in, under the other three. Every image input on
+          every tab gets it, because every one of them is somewhere a
+          picture this app already made might belong. */}
+      <RecentStrip value={value} onPick={onChange} />
+
       {hint && <div className={s.hint}>{hint}</div>}
     </div>
   )

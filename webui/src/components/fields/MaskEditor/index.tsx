@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { Button, Pill } from '@/components/ui'
 import { cx } from '@/lib/util'
+import { RecentStrip } from '../RecentStrip'
 import { prepareMask, targetSize } from './prepare'
 import s from './MaskEditor.module.css'
 
@@ -358,14 +359,22 @@ export function MaskEditor({
 
   // ------------------------------------------------------------- loading
 
+  /** A new source image. The layers go with it — paint is in the source's
+   *  own pixel coordinates, so keeping it across a different picture would
+   *  put the mask somewhere nobody drew it. */
+  const loadFile = useCallback(
+    (file: File) => {
+      onChange({ background: file, layers: [], revision: value.revision + 1 })
+    },
+    [onChange, value.revision],
+  )
+
   const load = useCallback(
     (files: FileList | null) => {
       const file = files?.[0]
-      if (file && file.type.startsWith('image/')) {
-        onChange({ background: file, layers: [], revision: value.revision + 1 })
-      }
+      if (file && file.type.startsWith('image/')) loadFile(file)
     },
-    [onChange, value.revision],
+    [loadFile],
   )
 
   useEffect(() => {
@@ -595,6 +604,12 @@ export function MaskEditor({
             <Pill tone="warning">nothing painted — runs as full-image img2img</Pill>
           ))}
       </div>
+
+      {/* The same reel every other image input carries. Inpaint is where it
+          earns the most: painting over a picture this app made a minute ago
+          is the ordinary case, and it used to mean a round trip through the
+          gallery and the downloads folder. */}
+      <RecentStrip value={value.background} onPick={loadFile} />
 
       <input
         ref={fileInputRef}

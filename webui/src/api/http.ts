@@ -174,8 +174,13 @@ export const httpClient: ApiClient = {
     ),
   getPresets: (tab) => get<PresetList>(`/presets/${encodeURIComponent(tab)}`),
 
-  getGallery: (cursor) =>
-    get<GalleryPage>(`/gallery${cursor ? `?cursor=${encodeURIComponent(cursor)}` : ''}`),
+  getGallery: (cursor, kind) => {
+    const params = new URLSearchParams()
+    if (cursor) params.set('cursor', cursor)
+    if (kind) params.set('kind', kind)
+    const suffix = params.toString()
+    return get<GalleryPage>(`/gallery${suffix ? `?${suffix}` : ''}`)
+  },
 
   async deleteMedia(id: string) {
     await send<void>(`/gallery/${encodePathId(id)}`, undefined, 'DELETE')

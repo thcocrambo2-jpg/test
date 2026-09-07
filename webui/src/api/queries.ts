@@ -1,4 +1,5 @@
-import { useQuery } from '@tanstack/react-query'
+import { useEffect, useRef } from 'react'
+import { useQuery, useQueryClient } from '@tanstack/react-query'
 import { api } from './client'
 import type { ModelRow, TabSchema } from './types'
 import { useQueue } from '@/store/queue'
@@ -67,10 +68,49 @@ export function useShowcase() {
   return useQuery({ queryKey: ['showcase'], queryFn: () => api.getShowcase(), ...FOREVER })
 }
 
-export function useGallery(cursor: string | null) {
+/** One page of the gallery listing.
+ *
+ *  `kind` is part of the key rather than a filter applied to the answer: the
+ *  server pages a *narrowed* listing, so the stills page and the everything
+ *  page are two different lists with two different cursors. Both sit under
+ *  `['gallery', …]`, so the `invalidateQueries({ queryKey: ['gallery'] })`
+ *  every delete already does still reaches both. */
+export function useGallery(cursor: string | null, kind?: 'image') {
   return useQuery({
-    queryKey: ['gallery', cursor],
-    queryFn: () => api.getGallery(cursor),
+    queryKey: ['gallery', kind ?? 'all', cursor],
+    queryFn: () => api.getGallery(cursor, kind),
     staleTime: 30_000,
   })
+}
+
+/** The newest stills, for the strip under every image input.
+ *
+ *  The first page and only the first page. This is "the thing you made a
+ *  minute ago, fed back in", not a browser — the Gallery is one click away
+ *  and does that job properly, with paging and a lightbox.
+ *
+ *  It refetches whenever a run produces a file, which the Gallery itself
+ *  deliberately does not always do: there, a grid reflowing under a
+ *  half-made selection or an open lightbox is its own small hostility.
+ *  Neither exists here, and a strip that does not offer the picture you have
+ *  just made is a strip nobody looks at twice. The two are never mounted
+ *  together — a tab route and `/library/gallery` are different routes — so
+ *  this cannot pull the grid out from under anyone.
+ *
+ *  An error is not reported. `/gallery` is gated on the Gallery feature, so
+ *  a licence without it answers 403, and the honest rendering of that under
+ *  an upload field is nothing at all. */
+export function useRecentImages() {
+  const queryClient = useQueryClient()
+  const mediaRevision = useQueue((state) => state.mediaRevision)
+  const query = useGallery(null, 'image')
+
+  const counted = useRef(mediaRevision)
+  useEffect(() => {
+    if (mediaRevision === counted.current) return
+    counted.current = mediaRevision
+    void queryClient.invalidateQueries({ queryKey: ['gallery'] })
+  }, [mediaRevision, queryClient])
+
+  return query
 }

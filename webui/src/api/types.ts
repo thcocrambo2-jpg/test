@@ -472,7 +472,11 @@ export interface ApiClient {
   getCatalogue(): Promise<Catalogue>
   getAppCatalog(): Promise<AppCatalog>
   getShowcase(): Promise<Showcase | null>
-  getGallery(cursor: string | null): Promise<GalleryPage>
+  /** One page of the listing. `kind` narrows it: 'image' lists stills
+   *  only, which is what the reuse strip under an upload field wants — a
+   *  page of the whole listing taken on a video tab is mostly clips, and
+   *  an image input cannot take one. */
+  getGallery(cursor: string | null, kind?: 'image'): Promise<GalleryPage>
   deleteMedia(id: string): Promise<void>
   submit(schema: TabSchema, values: SubmitValues): Promise<SubmitResult>
   cancel(jobId: string): Promise<void>
