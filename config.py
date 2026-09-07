@@ -144,12 +144,17 @@ KREA2_MODELS = [
         "variant": "turbo",
         "hf_path": "diffusion_models/krea2_turbo_fp8_scaled.safetensors",
     },
-    {
-        "name": "Krea 2 Raw (official)",
-        "file": "krea2_raw_fp8_scaled.safetensors",     # ~13.1 GB
-        "variant": "raw",
-        "hf_path": "diffusion_models/krea2_raw_fp8_scaled.safetensors",
-    }
+    # Raw is deliberately not offered here — this tab is turbo-only by
+    # plan design. Krea 2 Raw is still offered on the V2 tab (V2_MODELS
+    # below), whose download_v2_models() fetches it independently of this
+    # list, so commenting this out is a dropdown-only change: nothing
+    # about what gets downloaded moves.
+    # {
+    #     "name": "Krea 2 Raw (official)",
+    #     "file": "krea2_raw_fp8_scaled.safetensors",     # ~13.1 GB
+    #     "variant": "raw",
+    #     "hf_path": "diffusion_models/krea2_raw_fp8_scaled.safetensors",
+    # },
     # {
     #     "name": "FinePn V2 (amateur phone photo)",
     #     "file": "Krea2_FinePornV2_FP8.safetensors",       # ~12.2 GB
@@ -250,9 +255,11 @@ V2_TURBO_LORA_STRENGTH = 0.6
 # hf_path within HF_MODEL_REPO / optional trigger); the first entry is the
 # default and is the model the source workflow ships with.
 #
-# Raw costs no extra disk: krea2_raw_fp8_scaled is already in KREA2_MODELS,
-# and the downloads are keyed on the destination path, so whichever tab
-# asks for it first fetches it and the other finds it cached.
+# Raw's file (krea2_raw_fp8_scaled) was previously also offered on the
+# Krea 2 Turbo tab and shared between the two loops; that tab is
+# turbo-only now (plan design), so download_v2_models() is what fetches
+# this file — see its docstring for why it does so independently rather
+# than assuming another group already did.
 V2_MODELS = [
     {
         "name": "Krea 2 Turbo mxfp8 (workflow default)",

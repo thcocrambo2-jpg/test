@@ -467,10 +467,10 @@ def download_v2_models() -> None:
     whichever runs first downloads it and the other logs a cache hit.
     """
     for entry in V2_MODELS:
-        # Krea 2 Raw is also in KREA2_MODELS; fetch_hf_file keys on the
-        # destination path, so whichever registry asks first downloads it
-        # and the other logs a cache hit. A missing model only greys out
-        # one dropdown choice.
+        # Krea 2 Raw's file was also in KREA2_MODELS before that tab went
+        # turbo-only; this loop fetches it on its own regardless (see the
+        # docstring above), so nothing here depends on that. A missing
+        # model only greys out one dropdown choice.
         try:
             fetch_hf_file(entry["hf_path"])
         except Exception as exc:
