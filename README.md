@@ -320,6 +320,24 @@ there and downloads nothing — the same thing `KREA2_BASE_DIR=./tmp` does
 for a local `python app.py`. **`docker compose down -v` deletes the
 volume** and the weights with it.
 
+### Testing every tab without the weights
+
+The same guard is what `scripts/mock_models.py` leans on for a dev box that
+should build every tab and download nothing:
+
+```bash
+KREA2_BASE_DIR=tmp2 python scripts/mock_models.py          # create the placeholders
+KREA2_BASE_DIR=tmp2 python scripts/mock_models.py --check  # what would a real run still fetch?
+```
+
+It runs every asset group in `downloads.py` — whatever the licence says —
+with the network stubbed out, so each "download" is a zero-byte file at
+exactly the path the real code checks. Files already there are never
+touched, so a real weight stays real and a re-run only adds what a config
+change introduced; the list goes to `<base>/mock-manifest.txt` so the
+placeholders can be told apart later. A generation fails on an empty
+file, of course: this is for exercising the app, not the models.
+
 ### Reusing models you already downloaded
 
 Every download guards on the file simply existing under `MODELS_DIR`
