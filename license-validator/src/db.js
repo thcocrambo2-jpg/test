@@ -132,6 +132,16 @@ export async function ensureIndexes() {
   // whole collection without it.
   await licenses.createIndex({ plan_id: 1 }, { name: "plan_id" });
 
+  // Which licences belong to a Telegram customer. Read on every /buy (to
+  // decide whether a tap means new, renew or upgrade) and every /mykeys.
+  // Sparse because a CLI-issued key has no telegram_user_id at all, and
+  // most licences never will — indexing their absence would be an entry
+  // per licence for a field the licensing path does not even read.
+  await licenses.createIndex(
+    { telegram_user_id: 1 },
+    { sparse: true, name: "telegram_user" },
+  );
+
   // The prompt library. `fingerprint` is the deduplication key and the one
   // index that is load-bearing rather than an optimisation: the pod already
   // skips a recipe it has submitted before, but that memory is per-process,

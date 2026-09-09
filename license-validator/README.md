@@ -191,6 +191,8 @@ touches a download.
 | `POST` | `/v1/admin/builds/promote` | Point a channel at a build. `{sha256, channel}` |
 | `POST` | `/v1/admin/prompts/review` | `{id, approve}` — publish or reject one prompt |
 | `POST` | `/v1/admin/prompts` | Author an ⭐ official prompt. Public immediately |
+| `POST` | `/tg/webhook/:path` | Telegram updates. The path is derived from `TELEGRAM_WEBHOOK_SECRET`, and the `X-Telegram-Bot-Api-Secret-Token` header must match it too. Always answers 200 |
+| `GET` `POST` | `/internal/cron/sweep` | Retry stuck provisioning and delivery. Needs `CRON_SECRET` — **not** `ADMIN_TOKEN` |
 
 `/v1/plans` is unauthenticated on purpose: it is a pricing page's data and
 none of it is secret. Non-public plans are filtered out, so `admin` and any
@@ -418,6 +420,93 @@ so no `Origin` header is sent and CORS never applies to the real traffic.
 It is enabled for anything browser-side you add later. Pinning an origin
 would not work anyway — the Gradio share URL is regenerated on every run.
 
+## Telegram bot
+
+Licences are also sold directly in Telegram, paid in Telegram Stars. It is
+the same deployment, the same database and the same licence documents — a
+key bought in the bot is byte-indistinguishable from one issued with
+`npm run issue-key`, which is why nothing on the pod side knows the bot
+exists.
+
+```text
+customer → Telegram → POST /tg/webhook/<path> → orders.js → provision.js → Mongo
+                      secret_token header        state       the only
+                      + random path              machine     licence writer
+```
+
+Set `TELEGRAM_BOT_TOKEN` and `TELEGRAM_WEBHOOK_SECRET`, then register:
+
+```bash
+npm run set-webhook -- --url https://<node-tag>.vercel.app
+npm run set-webhook -- --show     # what Telegram thinks, and its last error
+npm run set-webhook -- --delete
+```
+
+**With either variable unset the whole bot answers 404**, exactly as
+`/v1/admin/*` does without an `ADMIN_TOKEN`. Deploying this code to a
+service that is not selling anything changes nothing.
+
+### What a customer can do
+
+`/start` · `/plans` · `/buy` · `/mykeys` · `/renew` · `/help`
+
+Prices come from `price_stars_monthly` on the plan documents, read through
+the same `allPlans()` the pricing page uses. **A plan with no Stars price
+cannot be bought**, which is what keeps `admin`, `admin-minimal`,
+`test-krea1-only` and `customer-admin` off the shelf without a second list
+of what is for sale. `price_stars_monthly` is deliberately absent from
+`/v1/plans`.
+
+Tapping a tier means one of three things, decided by what the customer
+already holds:
+
+| They hold | They tap | What happens |
+| --- | --- | --- |
+| nothing | any tier | a new key, term starts today |
+| Creator | Creator | **renew** — the term is added to what is left |
+| Creator | Studio | **upgrade** — plan changes, term restarts today |
+
+A revoked licence counts as no licence, so a payment can never quietly
+reinstate somebody who was cut off.
+
+### The delivery message carries two values
+
+`KREA2_LICENSE_KEY` **and** `KREA2_NODE_TAG`. A pod with the key and no tag
+exits with code 2 before it prints anything (`config.py:955-964` builds the
+licence API URL from the tag), and there is no key-entry screen anywhere in
+the app — both are environment variables. The bot refuses to sell at all
+while `KREA2_NODE_TAG` is unset, checked before the invoice rather than
+after the money.
+
+### When something goes wrong
+
+The webhook **always answers 200**. Telegram retries any non-2xx for 24
+hours, which is the right thing before a payment and the wrong thing after
+one, so failures live in the order's status and the log instead.
+
+The charge is recorded before any licence work begins, so a purchase cannot
+be lost. Anything left unfinished is picked up by the sweep — one cron every
+fifteen minutes, calling the same code the webhook does:
+
+```bash
+npm run orders                                # the 20 most recent
+npm run orders -- --status FAILED_PROVISION
+npm run orders -- --show    <order-id>
+npm run orders -- --retry   <order-id>        # provision + deliver
+npm run orders -- --deliver <order-id>        # re-send the message only
+npm run orders -- --sweep                     # one pass, right now
+```
+
+`--retry` calls the same `fulfillOrder()` the webhook calls, so it cannot
+double-issue: every transition is conditional and matches nothing the second
+time.
+
+> **Vercel plan note.** `vercel.json` schedules the sweep every fifteen
+> minutes. Hobby projects allow only one cron run per day — on Hobby, change
+> the schedule to something like `"0 3 * * *"` or the deployment is
+> rejected. Nothing else about the bot depends on the cron: it is recovery,
+> not the happy path.
+
 ## Data
 
 `licenses`
@@ -544,11 +633,56 @@ couple this service to a UI it should know nothing about. It is bounded
 (8 KB) rather than checked, and the client guards every value against what
 its own build offers before applying any of it.
 
+`orders` — one document per purchase attempt, and the only reason a payment
+webhook can be received twice without selling anything twice.
+
+```js
+{ _id: "b3f1c8e2-...",              // uuid, and IS the invoice payload
+  telegram_user_id: 987654321, telegram_chat_id: 987654321,
+  intent: "new" | "renew" | "upgrade",
+  plan_id: "creator", cycle: "monthly", months: 1,
+  amount_stars: 850,                // what was quoted, at invoice time
+  paid_amount: 850,                 // what Telegram says was charged
+  currency: "XTR", seats: 1,
+  status: "CREATED" | "INVOICED" | "PAID" | "PROVISIONED" |
+          "DELIVERED" | "FAILED_PROVISION" | "EXPIRED_UNPAID",
+  telegram_payment_charge_id: "...",// absent until paid — sparse index
+  license_key: "KREA2-...",         // absent until provisioned
+  provision_attempts: 0, last_error: null,
+  created_at, updated_at, invoiced_at, paid_at, provisioned_at,
+  delivered_at }
+```
+
+`amount_stars` and `paid_amount` are stored separately and compared before
+provisioning — a mismatch is `FAILED_PROVISION` with no licence written.
+Every status change is one conditional update naming the status it must come
+from, so a replayed webhook matches nothing.
+
+`telegram_users` — who has talked to the bot. `_id` is the Telegram user id
+itself, so every write is a plain upsert. Deliberately thin; nothing on the
+licensing path reads it.
+
+```js
+{ _id: 987654321, username: "acme_ops", first_name: "Ravi",
+  language_code: "en", is_blocked: false,
+  first_seen_at, last_seen_at }
+```
+
+`licenses` gains one optional field, `telegram_user_id`, on keys sold through
+the bot. It is a label for `/mykeys` and renewal, never an input: nothing in
+`licenseProblem()`, `resolveEntitlement()` or `/v1/build` branches on it, and
+`seatPayload()` never sends it. A CLI-issued key has none and is exactly as
+valid.
+
 Indexes: unique `key`; `plan_id`; unique `(license_key, instance_id)`;
 `(license_key, last_seen)`; TTL on `last_seen`; unique `fingerprint`;
 `(is_public, tab, created_at)`; `(reviewed_at, created_at)`;
-`(license_key, reviewed_at)`. `plans` and `features` are keyed by their
-string `_id` and need nothing beyond it.
+`(license_key, reviewed_at)`; sparse `telegram_user_id` on `licenses`;
+and on `orders` a **unique sparse** `telegram_payment_charge_id` (two
+orders cannot record one charge), `(telegram_user_id, created_at)`,
+`(status, updated_at)` for the sweep and a sparse `license_key`.
+`plans`, `features` and `telegram_users` are keyed by their `_id` and
+need nothing beyond it.
 
 `created_at` on a session row is never overwritten, so the gap between it
 and `last_seen` is how long that instance has been up.

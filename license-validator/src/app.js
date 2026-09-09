@@ -65,6 +65,12 @@ import {
   r2Configured,
 } from "./r2.js";
 import telegramRouter from "./telegram/router.js";
+// A second import from node:crypto rather than an edit to the one above,
+// so that every line this project adds to app.js is an addition. Same
+// module, no runtime cost.
+import { createHash, timingSafeEqual } from "node:crypto";
+import { CRON_SECRET } from "./config.js";
+import { sweep } from "./sweep.js";
 
 const app = express();
 
@@ -1848,6 +1854,43 @@ app.post(
       `promote  ${channel}/${platform} -> ${sha256.slice(0, 12)}`,
     );
     res.json({ ok: true, channel, platform, sha256 });
+  }),
+);
+
+// ── The recovery sweep, called by Vercel Cron ───────────────────────────
+//
+// Guarded by CRON_SECRET and deliberately NOT by ADMIN_TOKEN. That token
+// already authorises publishing a build, promoting a release channel and
+// moderating prompts; a job that retries a stuck provisioning step needs
+// none of that, and widening the blast radius of the most privileged
+// credential in the service to save an environment variable is a bad
+// trade. Unset, this route answers 404 like the admin routes do.
+//
+// app.all rather than app.post because Vercel Cron issues a GET, while a
+// human retrying by hand reaches for POST. Both do the same thing: the
+// sweep takes no input and every action it can take is idempotent.
+//
+// Inside wrap(), so a database failure here is a 503 like everywhere else
+// and the cron simply runs again in fifteen minutes.
+app.all(
+  "/internal/cron/sweep",
+  wrap(async (req, res) => {
+    if (!CRON_SECRET) {
+      return res.status(404).json({ ok: false, error: "not_found" });
+    }
+    // Constant-time, over digests so a wrong-length header is rejected by
+    // the comparison rather than by an exception.
+    const digest = (value) =>
+      createHash("sha256").update(String(value ?? "")).digest();
+    if (
+      !timingSafeEqual(
+        digest(req.get("authorization")),
+        digest(`Bearer ${CRON_SECRET}`),
+      )
+    ) {
+      return res.status(401).json({ ok: false, error: "unauthorized" });
+    }
+    res.json({ ok: true, ...(await sweep()) });
   }),
 );
 

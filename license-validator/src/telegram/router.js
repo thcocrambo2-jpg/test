@@ -53,7 +53,11 @@ import express from "express";
 import { TELEGRAM_WEBHOOK_SECRET } from "../config.js";
 
 import { botConfigured } from "./bot.js";
-import { handleMessage } from "./commands.js";
+import { handleCallbackQuery, handleMessage } from "./commands.js";
+import {
+  handlePreCheckoutQuery,
+  handleSuccessfulPayment,
+} from "./payments.js";
 
 const router = express.Router();
 
@@ -105,7 +109,11 @@ export function webhookUrl(baseUrl) {
  * nothing here handles. Kept beside the dispatch it describes, so the two
  * cannot drift.
  */
-export const ALLOWED_UPDATES = Object.freeze(["message"]);
+export const ALLOWED_UPDATES = Object.freeze([
+  "message",
+  "callback_query",
+  "pre_checkout_query",
+]);
 
 router.post("/webhook/:path", async (req, res) => {
   if (!webhookConfigured()) {
@@ -133,8 +141,18 @@ router.post("/webhook/:path", async (req, res) => {
   // Past this line every path answers 200.
   try {
     const update = req.body || {};
-    if (update.message) {
+    // Order matters. A successful payment arrives as an ordinary `message`
+    // with a `successful_payment` on it, so it must be checked before the
+    // command handler — which would otherwise see a message with no text
+    // and answer it with the help blurb while the money went unrecorded.
+    if (update.message?.successful_payment) {
+      await handleSuccessfulPayment(update.message);
+    } else if (update.message) {
       await handleMessage(update.message);
+    } else if (update.callback_query) {
+      await handleCallbackQuery(update.callback_query);
+    } else if (update.pre_checkout_query) {
+      await handlePreCheckoutQuery(update.pre_checkout_query);
     } else {
       // The key names only — never the update itself, which carries the
       // customer's name and whatever they typed.

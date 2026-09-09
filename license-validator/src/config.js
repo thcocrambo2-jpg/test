@@ -133,6 +133,21 @@ export const TELEGRAM_ADMIN_IDS = Object.freeze(
     .filter((id) => Number.isSafeInteger(id) && id > 0),
 );
 
+// The deployment's own tag, and half of what a customer needs.
+//
+// A pod builds the licence API URL from KREA2_NODE_TAG (config.py:955-964,
+// validated there as a single DNS label) and exits with code 2 before it
+// does anything if the variable is missing. There is no licence-key entry
+// screen anywhere in the app — the key and the tag are both environment
+// variables — so a delivery message carrying only the key sells somebody
+// an app that cannot start.
+//
+// The same value the Makefile already reads for publishing, named the same,
+// so there is one tag per deployment rather than one per purpose. The bot
+// refuses to sell at all while it is unset, which is checked before an
+// invoice is sent rather than after the money arrives.
+export const KREA2_NODE_TAG = process.env.KREA2_NODE_TAG || "";
+
 // Guards POST /internal/cron/sweep, which Vercel Cron calls.
 //
 // Deliberately NOT ADMIN_TOKEN. That one token already authorises
