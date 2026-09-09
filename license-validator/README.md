@@ -501,11 +501,19 @@ npm run orders -- --sweep                     # one pass, right now
 double-issue: every transition is conditional and matches nothing the second
 time.
 
-> **Vercel plan note.** `vercel.json` schedules the sweep every fifteen
-> minutes. Hobby projects allow only one cron run per day — on Hobby, change
-> the schedule to something like `"0 3 * * *"` or the deployment is
-> rejected. Nothing else about the bot depends on the cron: it is recovery,
-> not the happy path.
+> **The sweep runs once a day, at 03:00 UTC.** Hobby projects allow only
+> one cron run per day, and a shorter schedule is rejected at deploy time.
+> That is survivable because the sweep is recovery and not the happy path —
+> the webhook provisions and delivers within a second of the payment, and
+> the sweep only exists for the invocation that died mid-flight. What it
+> does mean is that an order the webhook failed to finish can sit for up to
+> a day, so when something is known to be stuck, do not wait for it:
+>
+>     npm run orders -- --status FAILED_PROVISION
+>     npm run orders -- --sweep
+>
+> Both run from a laptop, need no deployment, and do exactly what the cron
+> would have done.
 
 ## Data
 
