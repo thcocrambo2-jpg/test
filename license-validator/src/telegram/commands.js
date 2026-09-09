@@ -49,7 +49,7 @@ import { allFeatures, isFeatureEnabled, sortByRegistry } from "../features.js";
 import { countOpenOrders, createOrder, markInvoiced } from "../orders.js";
 import { BASE_CYCLE, allPlans, billingCycles, starsPrice } from "../plans.js";
 
-import { answerCallbackQuery, sendInvoice, sendMessage } from "./bot.js";
+import { answerCallbackQuery, botId, sendInvoice, sendMessage } from "./bot.js";
 import { INTENT } from "./payments.js";
 import * as copy from "./copy.js";
 
@@ -313,6 +313,17 @@ async function replyRenew(chatId, userId) {
 export async function handleMessage(message) {
   const chatId = message?.chat?.id;
   if (!chatId) return;
+
+  // Never answer ourselves. Telegram posts service messages into the chat
+  // on the bot's behalf — a refund notice is one — and they arrive as
+  // ordinary updates whose sender is the bot. Falling through to the
+  // command switch would greet a customer who has just been refunded with
+  // "I only understand a few commands", and would file the bot in
+  // telegram_users as though it were a customer.
+  if (message.from?.id && message.from.id === botId()) {
+    console.log(`tg self   ${message.from.id}  ignored`);
+    return;
+  }
 
   const userId = message.from?.id ?? "?";
   const command = parseCommand(message.text);

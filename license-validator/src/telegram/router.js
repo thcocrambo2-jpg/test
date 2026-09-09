@@ -147,6 +147,16 @@ router.post("/webhook/:path", async (req, res) => {
     // and answer it with the help blurb while the money went unrecorded.
     if (update.message?.successful_payment) {
       await handleSuccessfulPayment(update.message);
+    } else if (update.message?.refunded_payment) {
+      // A refund we issued, echoed back. Logged rather than acted on: the
+      // refund itself is a deliberate operator action taken elsewhere, and
+      // what to do about the licence it paid for is a decision a person
+      // makes. Recording it here is what makes "why is this key still
+      // active?" answerable from the log.
+      console.log(
+        `tg refund ${update.message.refunded_payment.total_amount} ` +
+          `${update.message.refunded_payment.currency}`,
+      );
     } else if (update.message) {
       await handleMessage(update.message);
     } else if (update.callback_query) {

@@ -57,6 +57,25 @@ export function botConfigured() {
   return TELEGRAM_BOT_TOKEN !== "";
 }
 
+/**
+ * The bot's own Telegram user id.
+ *
+ * The digits before the colon in the token are the bot's user id — a
+ * documented property of the token format, so this needs neither a getMe
+ * call on a path that cannot afford one nor a second variable to keep in
+ * step with the token.
+ *
+ * It is needed because the bot receives its own service messages: refunding
+ * a Star makes Telegram post a refund notice into the chat, and that
+ * message arrives as an ordinary update whose sender is the bot. Answering
+ * it as if a customer had typed something is how a refunded customer gets
+ * told "I only understand a few commands".
+ */
+export function botId() {
+  const id = Number.parseInt(String(TELEGRAM_BOT_TOKEN).split(":")[0], 10);
+  return Number.isSafeInteger(id) ? id : null;
+}
+
 /** Remove the bot token from a string that is about to be logged. */
 function redact(text) {
   const value = String(text ?? "");
