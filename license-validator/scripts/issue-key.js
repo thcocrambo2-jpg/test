@@ -34,7 +34,6 @@
 // features array is frozen at the day it was issued and will not follow
 // any pricing change.
 
-import { randomBytes } from "node:crypto";
 import { collections, ensureIndexes } from "../src/db.js";
 import {
   featureOrder,
@@ -42,6 +41,15 @@ import {
   parseFeatureArg,
 } from "../src/features.js";
 import { invalidatePlans, resolveEntitlement } from "../src/plans.js";
+// Every licence write below goes through provision.js, which is also what
+// the Telegram purchase path calls. Two implementations of "issue a key"
+// would be two answers to what a key looks like, and the wrong one would be
+// the one nobody runs by hand and therefore nobody sees.
+import {
+  createLicense,
+  ProvisionError,
+  updateLicense,
+} from "../src/provision.js";
 
 function args(argv) {
   const out = {};
@@ -58,26 +66,28 @@ function args(argv) {
   return out;
 }
 
-/** KREA2-XXXX-XXXX-XXXX from a rejection-free alphabet (no O/0/I/1). */
-function generateKey() {
-  const alphabet = "ABCDEFGHJKLMNPQRSTUVWXYZ23456789";
-  const bytes = randomBytes(12);
-  const chars = [...bytes].map((b) => alphabet[b % alphabet.length]);
-  return [
-    "KREA2",
-    chars.slice(0, 4).join(""),
-    chars.slice(4, 8).join(""),
-    chars.slice(8, 12).join(""),
-  ].join("-");
-}
-
 function die(...lines) {
   for (const line of lines) console.error(line);
   process.exit(1);
 }
 
+/**
+ * Run a provisioning call, turning a rejected argument into a one-line
+ * usage error. Anything else — an unreachable Atlas, most likely — keeps
+ * its stack trace, because that is a fault to look at rather than a
+ * mistake to correct.
+ */
+async function orDie(operation) {
+  try {
+    return await operation();
+  } catch (err) {
+    if (err instanceof ProvisionError) die(err.message);
+    throw err;
+  }
+}
+
 const opts = args(process.argv.slice(2));
-const { licenses, plans } = await collections();
+const { plans } = await collections();
 await ensureIndexes();
 invalidatePlans(); // a long-lived shell should not print a stale plan
 invalidateFeatures();
@@ -90,11 +100,8 @@ const knownFeatures = await featureOrder();
 if (opts.revoke || opts.enable) {
   if (!opts.key) die("--revoke/--enable needs --key KREA2-...");
   const active = Boolean(opts.enable);
-  const result = await licenses.updateOne(
-    { key: opts.key },
-    { $set: { active, updated_at: new Date() } },
-  );
-  if (!result.matchedCount) die(`no license with key ${opts.key}`);
+  const result = await orDie(() => updateLicense({ key: opts.key, active }));
+  if (!result) die(`no license with key ${opts.key}`);
   // Running instances notice on their next heartbeat, so a revoke takes
   // effect in about a minute rather than only blocking the next start.
   console.log(`${active ? "enabled" : "revoked"}  ${opts.key}`);
@@ -115,9 +122,10 @@ if (!opts.name && !opts.key) {
 }
 
 const seats = Number.parseInt(opts.seats, 10) || 1;
-const expires_at = opts.days
-  ? new Date(Date.now() + Number.parseInt(opts.days, 10) * 86_400_000)
-  : null;
+// The term is provision.js's arithmetic now, not this script's. On a create
+// it still runs from today; on an --update it extends what is left instead
+// of resetting it, which is the bug this delegation exists to fix.
+const days = opts.days ? opts.days : null;
 
 // ── Validate before writing anything ───────────────────────────────────
 
@@ -179,33 +187,42 @@ async function report(license) {
 // ── Update ─────────────────────────────────────────────────────────────
 
 if (opts.update) {
-  const filter = opts.key ? { key: opts.key } : { name: opts.name };
-  const update = { seats, active: true, updated_at: new Date() };
-  if (opts.days) update.expires_at = expires_at;
-  // Only when one of the two flags is actually passed, for the same
-  // reason as the entitlements below: an --update about seats must not
-  // silently demote an admin key.
-  if (opts.admin) update.is_admin = true;
-  if (opts["no-admin"]) update.is_admin = false;
-  // Each only when asked: an --update that is really about seats must not
-  // silently wipe an entitlement someone set earlier.
-  if (features !== null) update.features = features;
-  if (features_extra !== null) update.features_extra = features_extra;
+  // Said out loud, because it is the one destructive thing here.
+  // provision.js clears the literal features array whenever a plan is set;
+  // without that a leftover array would keep winning and the new plan would
+  // do nothing — a silent no-op is the worst possible outcome of "put them
+  // on Pro".
   if (plan_id !== undefined) {
-    update.plan_id = plan_id;
-    // Loudly, because it is the one destructive thing here. A leftover
-    // literal array would keep winning and the new plan would do nothing —
-    // a silent no-op is the worst possible outcome of "put them on Pro".
-    update.features = null;
     console.log(
       `clearing this license's literal features array so plan ` +
         `"${plan_id}" takes effect`,
     );
   }
-  const result = await licenses.findOneAndUpdate(
-    filter,
-    { $set: update },
-    { returnDocument: "after" },
+  // Only when one of the two flags is actually passed, for the same reason
+  // as the entitlements below: an --update about seats must not silently
+  // demote an admin key. Left undefined otherwise, which provision.js reads
+  // as "leave this field alone".
+  let is_admin;
+  if (opts.admin) is_admin = true;
+  if (opts["no-admin"]) is_admin = false;
+
+  const result = await orDie(() =>
+    updateLicense({
+      key: opts.key ?? null,
+      match_name: opts.name ?? null,
+      seats,
+      active: true,
+      is_admin,
+      // Each only when asked: an --update that is really about seats must
+      // not silently wipe an entitlement someone set earlier.
+      features: features === null ? undefined : features,
+      features_extra: features_extra === null ? undefined : features_extra,
+      plan_id,
+      // Extends what is left rather than resetting it — the whole point of
+      // the delegation. Twelve days remaining plus a 30-day renewal is 42
+      // days, not 30.
+      extend: days === null ? undefined : { days },
+    }),
   );
   if (!result) die("no matching license to update");
 
@@ -223,25 +240,22 @@ if (opts.update) {
 
 // ── Create ─────────────────────────────────────────────────────────────
 
-const key = opts.key && opts.key !== true ? opts.key : generateKey();
-const doc = {
-  key,
-  name: opts.name === true ? null : opts.name,
-  seats,
-  active: true,
-  expires_at,
-  // All three written even when null, so the document shape is the same
-  // for every key and an unset entitlement is visibly a choice.
-  plan_id: plan_id ?? null,
-  features,
-  features_extra,
-  // Written even when false, like the three above, so every document has
-  // the same shape and an ordinary key is visibly ordinary rather than
-  // merely missing the field.
-  is_admin: Boolean(opts.admin),
-  created_at: new Date(),
-};
-await licenses.insertOne(doc);
+// The key, the term and the document shape — including which fields are
+// written even when null — all live in provision.js now, so a licence sold
+// through the bot and one issued here are the same document.
+const doc = await orDie(() =>
+  createLicense({
+    key: opts.key && opts.key !== true ? opts.key : null,
+    name: opts.name === true ? null : opts.name,
+    seats,
+    days,
+    plan_id: plan_id ?? null,
+    features,
+    features_extra,
+    is_admin: Boolean(opts.admin),
+  }),
+);
+const key = doc.key;
 
 console.log(`\n  customer   ${opts.name}`);
 console.log(`  key        ${key}`);
@@ -249,7 +263,9 @@ console.log(`  seats      ${seats}`);
 console.log(`  admin      ${doc.is_admin ? "yes — prompts are not captured "
   + "automatically; publish with the checkbox" : "no"}`);
 await report(doc);
-console.log(`  expires    ${expires_at ? expires_at.toISOString() : "never"}`);
+console.log(
+  `  expires    ${doc.expires_at ? doc.expires_at.toISOString() : "never"}`,
+);
 if (plan_id === undefined && features === null) {
   console.log(
     "\n  WARNING  no --plan and no --features: this key falls back to the " +
