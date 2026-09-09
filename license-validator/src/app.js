@@ -64,11 +64,30 @@ import {
   presignGet,
   r2Configured,
 } from "./r2.js";
+import telegramRouter from "./telegram/router.js";
 
 const app = express();
 
 app.set("trust proxy", true);
 app.disable("x-powered-by");   // no need to advertise the framework/version
+
+// ── Telegram bot ────────────────────────────────────────────────────────
+//
+// The payment plane, on the same app because provisioning is a module
+// call rather than a network hop — see TELEGRAM_BOT_PLAN.md §3. With
+// TELEGRAM_BOT_TOKEN or TELEGRAM_WEBHOOK_SECRET unset it answers 404 to
+// everything, exactly as the admin routes do without an ADMIN_TOKEN.
+//
+// Mounted ABOVE the global body parser on purpose. The 16kb limit below
+// is a deliberate bound on what a pod may submit to /v1/prompts, and it
+// applies to every route registered after it — so a Telegram router
+// mounted underneath would be capped at 16kb however large its own
+// parser was, and an update that exceeded it would 413 and be retried by
+// Telegram for a day. Registering it first lets it read the body with
+// its own express.json({ limit: "64kb" }) and leaves the global cap
+// exactly where it was for everything else.
+app.use("/tg", telegramRouter);
+
 app.use(express.json({ limit: "16kb" }));
 
 // Wide open on purpose. The real traffic is server-side: the pod calls

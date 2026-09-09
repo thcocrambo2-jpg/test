@@ -13,7 +13,8 @@
     "seed-presets": "node scripts/seed-presets.js",
     "issue-key": "node scripts/issue-key.js",
     "prompts": "node scripts/add-prompt.js",
-    "presets": "node scripts/presets.js"
+    "presets": "node scripts/presets.js",
+    "set-webhook": "node scripts/set-webhook.js"
   },
   "engines": {
     "node": ">=20"

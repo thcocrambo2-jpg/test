@@ -112,7 +112,7 @@ export const BILLING_ID = "__billing";
 // The cycle every plan is priced in. Always offered, never discounted:
 // `price_monthly` *is* the list price, so a discount here would mean the
 // figure in the plan document is not the one anybody pays.
-const BASE_CYCLE = "monthly";
+export const BASE_CYCLE = "monthly";
 
 export const DEFAULT_BILLING = {
   _id: BILLING_ID,
@@ -413,7 +413,7 @@ export const DEFAULT_PLANS = [
     name: "Starter",
     description: "Fast Krea 2 generation, the gallery and the prompt library",
     price_monthly: 599,
-    price_stars_monthly: 150,
+    price_stars_monthly: 500,
     currency: "INR",
     features: ["krea_t2i", "gallery", "community_prompts"],
     is_public: true,
@@ -424,7 +424,7 @@ export const DEFAULT_PLANS = [
     name: "Creator",
     description: "Krea 2 V2 and both edit tabs",
     price_monthly: 999,
-    price_stars_monthly: 250,
+    price_stars_monthly: 850,
     currency: "INR",
     features: [
       "krea_t2i",
@@ -443,7 +443,7 @@ export const DEFAULT_PLANS = [
     name: "Studio",
     description: "Everything in Creator, plus Wan and MiniMax video with sound",
     price_monthly: 1799,
-    price_stars_monthly: 450,
+    price_stars_monthly: 1550,
     currency: "INR",
     features: [
       "krea_t2i",

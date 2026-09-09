@@ -98,4 +98,55 @@ export const DOWNLOAD_TTL_SECONDS = int("DOWNLOAD_TTL_SECONDS", 30 * 24 * 3600);
 // URL five times in Mongo is five places to forget when it changes.
 export const CONTACT_URL = process.env.CONTACT_URL || "";
 
+// ── Telegram bot ─────────────────────────────────────────────────────────
+//
+// All four are unset in a deployment that does not run the bot, and that is
+// a supported state: with no token and no webhook secret the /tg router
+// answers 404 to everything, exactly as /v1/admin/* does with no
+// ADMIN_TOKEN. Adding this code to a deployment therefore changes nothing
+// until the variables are set.
+//
+// The token is the bot's whole identity — anyone holding it can read every
+// message sent to the bot and send as it. It must never be logged, never
+// appear in an error message, and never be returned by any route.
+export const TELEGRAM_BOT_TOKEN = process.env.TELEGRAM_BOT_TOKEN || "";
+
+// The value handed to setWebhook as `secret_token`, which Telegram then
+// sends back in X-Telegram-Bot-Api-Secret-Token on every update. 32+ random
+// characters from `openssl rand -hex 32`.
+//
+// It is also the seed for the random path segment the webhook is mounted
+// at — see webhookPath() in telegram/router.js. One configured value, two
+// independent checks: the path is a one-way hash of this, so the path
+// appearing in a proxy log or an access log (which it will) reveals
+// nothing about the header token an attacker would also need. Rotating
+// this rotates both, which is what you want.
+export const TELEGRAM_WEBHOOK_SECRET = process.env.TELEGRAM_WEBHOOK_SECRET || "";
+
+// Telegram user ids allowed to use the bot's admin commands. Comma or
+// space separated. Config rather than a secret: knowing an id grants
+// nothing, because Telegram authenticates the sender, not us.
+export const TELEGRAM_ADMIN_IDS = Object.freeze(
+  (process.env.TELEGRAM_ADMIN_IDS || "")
+    .split(/[\s,]+/)
+    .map((part) => Number.parseInt(part, 10))
+    .filter((id) => Number.isSafeInteger(id) && id > 0),
+);
+
+// Guards POST /internal/cron/sweep, which Vercel Cron calls.
+//
+// Deliberately NOT ADMIN_TOKEN. That one token already authorises
+// publishing a build, promoting a release channel and moderating prompts;
+// the sweep needs none of that, and widening a token that powerful so a
+// cron job can retry a provisioning step would trade a real blast radius
+// for a saved environment variable.
+export const CRON_SECRET = process.env.CRON_SECRET || "";
+
+// How many orders one Telegram user may have open (CREATED or INVOICED) at
+// once. The same shape as the existing cap on pending prompt submissions:
+// checked before the write, answered benignly, and there to stop one user
+// filling the collection with invoices they never intend to pay — not to
+// police honest customers, who have one open order at a time.
+export const ORDER_MAX_OPEN_PER_USER = int("ORDER_MAX_OPEN_PER_USER", 10);
+
 export const PORT = int("PORT", 3000);
