@@ -127,11 +127,12 @@ export const FEATURES = [
   },
   // ── Withdrawn 2026-09-07 ─────────────────────────────────────────────
   //
-  // The next four are on no public plan and `enabled: false` here, so the
+  // The next four are on no plan at all and `enabled: false` here, so the
   // pricing page neither lists them nor shows them on a tier. The keys and
-  // the app code behind them are untouched — `admin` still grants all four
-  // — so switching one back on is a plan edit plus this flag, not a
-  // rebuild. See plans.js for the whole change.
+  // the app code behind them are untouched, so switching one back on is a
+  // plan edit plus this flag, not a rebuild — and one licence can have any
+  // of them today with `--features-extra`. See plans.js for the whole
+  // change.
   {
     key: "krea_inpaint",
     name: "Krea2 Inpaint",
@@ -208,7 +209,9 @@ export const FEATURES = [
     description: "Generate many images at once using advanced controls",
     category: "tools",
     sort_order: 100,
-    enabled: true,
+    // Off for the same reason as the four above, and no plan grants it.
+    // The tab exists in the binary; nothing sells it.
+    enabled: false,
   },
   {
     key: "community_prompts",

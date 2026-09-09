@@ -228,10 +228,7 @@ export async function billingCycles() {
  * for the tier where the standard commitment discount is not the deal you
  * want to offer. Unset — the normal case — means the cycle's own rate.
  */
-export function cyclePrice(plan, cycle) {
-  const monthly = Number(plan?.price_monthly);
-  if (!Number.isFinite(monthly) || monthly < 0) return null;
-
+function pricedTerm(monthly, plan, cycle) {
   const override = cycle.id === BASE_CYCLE ? null : percent(plan?.discounts?.[cycle.id]);
   const discount = override ?? cycle.discount_percent;
   const undiscounted = Math.round(monthly * cycle.months);
@@ -245,6 +242,38 @@ export function cyclePrice(plan, cycle) {
     discount_percent: discount,
     saving: undiscounted - total,
   };
+}
+
+export function cyclePrice(plan, cycle) {
+  const monthly = Number(plan?.price_monthly);
+  if (!Number.isFinite(monthly) || monthly < 0) return null;
+  return pricedTerm(monthly, plan, cycle);
+}
+
+/**
+ * What one plan costs on one cycle **in Telegram Stars**, or null if it
+ * cannot be bought through the bot.
+ *
+ * Shares pricedTerm() with cyclePrice() rather than restating the
+ * arithmetic, so a quarterly discount cannot mean one thing in rupees and
+ * another in Stars — including a plan's own `discounts` override, which
+ * applies to both by construction.
+ *
+ * Null for anything without a whole, positive `price_stars_monthly`: an
+ * absent price is a tier that is not for sale, and a zero one would be an
+ * invoice Telegram rejects. `total` is the only figure that may be sent to
+ * the Bot API — Stars are integers, so `per_month` is a comparison figure
+ * for the copy and nothing else, exactly as it is for rupees.
+ *
+ * A cycle whose discount rounds the total down to zero is refused too,
+ * which cannot happen at today's prices and would be a free licence if it
+ * ever did.
+ */
+export function starsPrice(plan, cycle) {
+  const monthly = Number(plan?.price_stars_monthly);
+  if (!Number.isInteger(monthly) || monthly < 1) return null;
+  const price = pricedTerm(monthly, plan, cycle);
+  return price.total >= 1 ? price : null;
 }
 
 /** Drop the cache, so the next read hits Mongo. For scripts and tests. */
@@ -313,11 +342,25 @@ export async function resolveEntitlement(license) {
 // edit to `studio` retroactively changed how many pods every studio
 // customer may run.
 //
-// `price_monthly` is the only price stored. Quarterly and yearly are
+// `price_monthly` is the only rupee price stored. Quarterly and yearly are
 // derived from it and the discounts on the `__billing` document, so there
 // is no second figure here to forget to update — see cyclePrice(). A plan
 // that should not follow the standard discount can carry its own with
 // `discounts: { yearly: 25 }`; none does today.
+//
+// `price_stars_monthly` is the second price, and the only one that is not
+// derived from the first. Telegram Stars are `XTR`, a whole-number count,
+// and there is no stable rate from rupees to convert at request time — a
+// live rate would mean an invoice whose price moved between the customer
+// reading it and paying it. So it is stored explicitly, and the same
+// cyclePrice() discount arithmetic derives the quarterly and yearly Star
+// totals (see starsPrice).
+//
+// **Absent means not purchasable through the bot.** That is the whole
+// mechanism keeping an internal tier off the shelf: `admin`,
+// `admin-minimal`, `test-krea1-only` and the hand-made `customer-admin`
+// carry no Stars price and so cannot be invoiced, without anything having
+// to maintain a second list of what is for sale.
 //
 // Two optional presentation fields, read only by the pricing page:
 //
@@ -337,26 +380,40 @@ export async function resolveEntitlement(license) {
 //
 // Three public tiers, not four. `pro` is gone (no license was ever on it —
 // checked before it was deleted), and four tabs were withdrawn from every
-// public plan: `krea_inpaint`, `faceswap`, `flux_t2i` and `klein_i2i`.
-// Withdrawn, not deleted: their code is still in the app and their rows
-// are still in the features collection, marked `enabled: false` there so
-// the pricing page stops listing them (see features.js). A license that
-// does not name a key does not get the tab, so removing them from the
-// plans below is what actually hides them; the catalogue flag is what
-// stops the page advertising something no plan sells.
+// plan: `krea_inpaint`, `faceswap`, `flux_t2i` and `klein_i2i`. Withdrawn,
+// not deleted: their code is still in the app and their rows are still in
+// the features collection, marked `enabled: false` there so the pricing
+// page stops listing them (see features.js). A license that does not name
+// a key does not get the tab, so removing them from the plans below is
+// what actually hides them; the catalogue flag is what stops the page
+// advertising something no plan sells.
 //
-// `admin` keeps all four. It is the plan on your own pods, the tabs still
-// exist in the binary, and it is where you would go to check one still
-// works before deciding whether to delete the code.
+// `admin` does not keep them either. It is the plan on your own pods, and
+// the four withdrawn tabs are reachable from it by granting the keys with
+// `--features-extra` on the one licence you want them on, which is a
+// smaller thing to undo than a tier that quietly grants everything.
+//
+// `json_batch` is granted by no plan at present. The feature exists in the
+// registry and in the binary; nothing sells it.
 //
 // Prices were not changed by the restructure — the three surviving tiers
 // kept the figure they already had.
+//
+// ── This list is a mirror, and the database is the original ─────────────
+//
+// seed-catalog upserts these documents, so anything here that disagrees
+// with Atlas is reverted on the next run. The collection is authoritative:
+// when the two differ, it is this list that is stale, and the fix is to
+// update it — not to seed over a live edit. Checked against the live
+// collection on 2026-09-09 and identical to it, field for field, apart
+// from the Stars prices added below.
 export const DEFAULT_PLANS = [
   {
     _id: "starter",
     name: "Starter",
     description: "Fast Krea 2 generation, the gallery and the prompt library",
     price_monthly: 599,
+    price_stars_monthly: 150,
     currency: "INR",
     features: ["krea_t2i", "gallery", "community_prompts"],
     is_public: true,
@@ -365,8 +422,9 @@ export const DEFAULT_PLANS = [
   {
     _id: "creator",
     name: "Creator",
-    description: "Krea 2 V2, both edit tabs and batch generation",
+    description: "Krea 2 V2 and both edit tabs",
     price_monthly: 999,
+    price_stars_monthly: 250,
     currency: "INR",
     features: [
       "krea_t2i",
@@ -374,7 +432,6 @@ export const DEFAULT_PLANS = [
       "gallery",
       "krea_edit",
       "krea_v2_edit",
-      "json_batch",
       "community_prompts",
     ],
     is_public: true,
@@ -386,6 +443,7 @@ export const DEFAULT_PLANS = [
     name: "Studio",
     description: "Everything in Creator, plus Wan and MiniMax video with sound",
     price_monthly: 1799,
+    price_stars_monthly: 450,
     currency: "INR",
     features: [
       "krea_t2i",
@@ -396,7 +454,6 @@ export const DEFAULT_PLANS = [
       "wan_i2v",
       "minimax_i2v",
       "minimax_t2v",
-      "json_batch",
       "community_prompts",
     ],
     is_public: true,
@@ -419,14 +476,9 @@ export const DEFAULT_PLANS = [
       "gallery",
       "krea_edit",
       "krea_v2_edit",
-      "krea_inpaint",
-      "faceswap",
-      "flux_t2i",
-      "klein_i2i",
       "wan_i2v",
       "minimax_i2v",
       "minimax_t2v",
-      "json_batch",
       "community_prompts",
     ],
     is_public: false,

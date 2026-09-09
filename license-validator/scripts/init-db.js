@@ -16,14 +16,17 @@ await ensureIndexes();
 console.log(`database        ${DB_NAME}`);
 console.log(
   "collections     licenses, sessions, plans, features, prompts, presets, " +
-    "builds, downloads",
+    "builds, downloads, orders, telegram_users",
 );
 console.log(`stale window    ${STALE_SECONDS}s (a seat frees itself after this)`);
 console.log(`session TTL     ${SESSION_TTL_SECONDS}s (cleanup only)`);
 console.log("\nindexes:");
 // plans and features are keyed by their string _id, so they need no
-// indexes beyond the one Mongo creates for _id itself.
-for (const name of ["licenses", "sessions", "prompts", "presets"]) {
+// indexes beyond the one Mongo creates for _id itself. So is
+// telegram_users, which is additionally not listed here because nothing
+// creates it until the first customer talks to the bot — Mongo makes a
+// collection on its first write, and an empty one would be misleading.
+for (const name of ["licenses", "sessions", "prompts", "presets", "orders"]) {
   for (const index of await db.collection(name).indexes()) {
     console.log(`  ${name}.${index.name}`);
   }

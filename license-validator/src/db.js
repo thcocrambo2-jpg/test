@@ -83,6 +83,25 @@ export async function collections() {
     // buys: seat counts say how many pods run at once, this says how many
     // distinct machines have ever pulled the binary on a given key.
     downloads: db.collection("downloads"),
+    // One document per purchase attempt made through the Telegram bot, and
+    // the state machine that makes a payment webhook safe to receive twice.
+    // Telegram retries a webhook for up to 24 hours on any non-2xx, so a
+    // duplicate delivery is normal traffic rather than an edge case; every
+    // transition on this document is a conditional update, which is the
+    // whole of the idempotency mechanism (see orders.js).
+    //
+    // It sits above the licence, never inside it: orders hold money,
+    // charges, Telegram identity and retries, while a licence holds a key,
+    // a plan, a date and a seat count. A licence sold this way is
+    // byte-indistinguishable from a hand-issued one, which is why nothing
+    // on the pod side has to know this collection exists.
+    orders: db.collection("orders"),
+    // Who has talked to the bot: `_id` is the Telegram user id itself, so
+    // every write is a plain upsert and there is no second identifier to
+    // keep in step. Deliberately thin — a name, a language and whether the
+    // bot has been blocked. It is not a CRM, and nothing on the licensing
+    // path reads it.
+    telegram_users: db.collection("telegram_users"),
   };
 }
 
@@ -93,7 +112,7 @@ export async function collections() {
  * that restarts reclaims its own row instead of racing itself into two.
  */
 export async function ensureIndexes() {
-  const { licenses, sessions, prompts, presets, builds, downloads } =
+  const { licenses, sessions, prompts, presets, builds, downloads, orders } =
     await collections();
   await licenses.createIndex({ key: 1 }, { unique: true, name: "key_unique" });
   await sessions.createIndex(
@@ -190,4 +209,40 @@ export async function ensureIndexes() {
     { created_at: 1 },
     { expireAfterSeconds: DOWNLOAD_TTL_SECONDS, name: "download_ttl" },
   );
+
+  // Telegram orders. The first of these is the only one that is
+  // load-bearing rather than an optimisation, and it is the last line of
+  // defence for the thing that actually costs money.
+  //
+  // One Telegram charge backs at most one order, whatever Telegram sends
+  // and however many times it sends it. The conditional update in
+  // orders.js already refuses a second `successful_payment` for an order
+  // that has left INVOICED; this index is what holds even if that fence
+  // were ever bypassed — two documents cannot carry one charge id.
+  //
+  // **Sparse is not optional.** An order that has not been paid has no
+  // charge id, and without `sparse` every one of those would index as
+  // `null` and collide with the next — the second unpaid order in
+  // existence would fail to insert, which is a much worse outage than the
+  // one this index prevents.
+  await orders.createIndex(
+    { telegram_payment_charge_id: 1 },
+    { unique: true, sparse: true, name: "charge_id_unique" },
+  );
+  // This customer's orders, newest first: /mykeys and order history.
+  await orders.createIndex(
+    { telegram_user_id: 1, created_at: -1 },
+    { name: "user_recent" },
+  );
+  // The sweep's query: what is stuck, and how long has it been stuck.
+  await orders.createIndex({ status: 1, updated_at: 1 }, { name: "sweep" });
+  // "Which order paid for this key?" — support, and renewal reminders.
+  // Sparse because an order only has a key once it has been provisioned.
+  await orders.createIndex(
+    { license_key: 1 },
+    { sparse: true, name: "license_key" },
+  );
+
+  // `telegram_users` gets no index at all. Every read and every write of it
+  // is by `_id` — the Telegram user id itself — which is indexed already.
 }
