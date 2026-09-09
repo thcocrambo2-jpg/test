@@ -29,6 +29,11 @@ tmp
 tmp2
 .gradio
 
+# Where scripts/mirror_cloudflared.py keeps the release binaries it is
+# uploading. ~95 MB of someone else's build artifacts, kept between runs
+# only so a re-run does not download them again.
+.cloudflared-mirror/
+
 commands.txt
 
 

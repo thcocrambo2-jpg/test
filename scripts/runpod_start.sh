@@ -257,6 +257,64 @@ the downloaded app is damaged (checksum does not match).
     say "downloaded and verified"
 fi
 
+# ── The tunnel helper ────────────────────────────────────────────────────────
+# serve.py needs cloudflared to hand the customer a public URL, and since
+# the Gradio UI was removed it is the ONLY thing that produces one. Left to
+# itself the app fetches it from the GitHub "latest" release on first
+# launch, which makes one github.com endpoint a hard dependency of every
+# first start - and the failure mode is a customer with no link at all.
+#
+# So it is fetched here instead, from the same public Hugging Face mirror
+# the weights come from, pinned to a release and checked against a known
+# sha256. serve.cloudflared_binary() returns early when the file is already
+# at KREA2_BASE_DIR, so putting it there is the entire change: no recompile,
+# no new build published, just this script.
+#
+# EVERY failure below is a note rather than a hard stop. If the mirror is
+# unreachable, or the bytes are wrong, the app still starts and still falls
+# back to the GitHub release exactly as it does today - so this can only
+# ever add a source, never take one away.
+#
+# Refreshing to a newer cloudflared is scripts/mirror_cloudflared.py, then
+# the three constants below, then `make start-ps1` / `make start-sh`.
+CF_BIN="$BASE/cloudflared"
+CF_URL="https://huggingface.co/thcocrambo2/krea2-tools/resolve/ba22c6ba0afc0c9f9b644c133310903831bbc17b/cloudflared/2026.8.3/cloudflared-linux-amd64"
+CF_SHA="f29324fe934d1e100617484c78deef803c4dc2cd351d645bbde42e96b4fccc5e"
+
+# Not re-verified when it is already there: serve.py checks only that the
+# file exists, and hashing 40 MB on every boot to reach the same verdict
+# would be the most expensive line in this script.
+if [[ ! -f "$CF_BIN" ]]; then
+    say "fetching the tunnel helper (once) ..."
+    cf_tmp="$CF_BIN.part"
+    rm -f "$cf_tmp"
+    curl -fL -sS --retry 3 --retry-delay 2 --retry-connrefused \
+        -o "$cf_tmp" "$CF_URL"
+    cf_rc=$?
+    if (( cf_rc != 0 )); then
+        rm -f "$cf_tmp"
+        say "note: could not fetch the tunnel helper (curl $cf_rc) — the app"
+        say "      will download it from its original source."
+    else
+        cf_got="$(sha256sum "$cf_tmp" | cut -d' ' -f1)"
+        if [[ "$cf_got" != "$CF_SHA" ]]; then
+            rm -f "$cf_tmp"
+            say "note: the tunnel helper arrived damaged — the app will"
+            say "      download it from its original source."
+        # chmod before the rename, not after: serve.py chmods only the copy
+        # it downloads itself, so a file arriving here non-executable would
+        # stay that way. Renamed only once it is both verified and runnable,
+        # because serve.py trusts its mere existence.
+        elif chmod +x "$cf_tmp" && mv -f "$cf_tmp" "$CF_BIN"; then
+            say "tunnel helper ready"
+        else
+            rm -f "$cf_tmp"
+            say "note: could not install the tunnel helper to $CF_BIN — the"
+            say "      app will download it from its original source."
+        fi
+    fi
+fi
+
 # ── Run ──────────────────────────────────────────────────────────────────────
 export KREA2_BASE_DIR="$BASE"
 

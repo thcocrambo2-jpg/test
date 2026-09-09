@@ -20,6 +20,11 @@ SHELL := /bin/bash
 ENV_FILE := license-validator/.env
 ARTIFACT := dist/krea2app
 
+# The pod's start script. Published by build.sh as part of a full
+# release, but it is a plain file at a fixed key and a fix to it should
+# not need a recompile of the binary it happens to launch. See start-sh.
+POD_START := scripts/runpod_start.sh
+
 # The Windows half of the pair. Nothing here builds it — Nuitka does not
 # cross-compile, so `.\build.ps1` has to run on Windows — but the start
 # script it publishes is a plain file, and pushing a fix to that should not
@@ -104,7 +109,7 @@ fi
 endef
 
 .PHONY: help check check-args compile publish release health builds promote \
-        start-ps1 image image-dev image-push webui webui-dev
+        start-ps1 start-sh image image-dev image-push webui webui-dev
 
 help:
 	@echo
@@ -116,6 +121,7 @@ help:
 	echo "  make publish    upload $(ARTIFACT) and point \"stable\" at it"
 	echo "  make release    compile, then publish"
 	echo "  make check-args everything a build must agree about, checked"
+	echo "  make start-sh   push a $(POD_START) fix without a full publish"
 	echo
 	echo "  make webui      rebuild the React bundle - THE ONLY TARGET NEEDING NODE"
 	echo "  make webui-dev  Vite's dev server, proxying the API to :7860"
@@ -264,6 +270,54 @@ release: check-args
 	@$(LOAD_ENV)
 	$(LOAD_WRITE)
 	./build.sh -y
+
+# Publish the pod start script on its own.
+#
+# The mirror image of start-ps1, and it exists for the same reason: this is
+# one object at a fixed key, `./build.sh` normally uploads it alongside the
+# binary, and a fix to the script should not cost a Nuitka compile and a new
+# build document. The binary is untouched - this writes start.sh and nothing
+# else, which is the object /v1/start.sh redirects to.
+start-sh:
+	@$(LOAD_ENV)
+	$(LOAD_WRITE)
+	if [[ ! -f "$(POD_START)" ]]; then
+	    echo "ERROR: $(POD_START) not found." >&2
+	    exit 1
+	fi
+	# The inverse of the BOM check start-ps1 does, and needed for the same
+	# reason: the two scripts are read by tools with opposite tastes. bash
+	# reads a BOM as the first three bytes of the shebang line, and a CR at
+	# the end of it as part of the interpreter's name - so either one fails on
+	# the pod with "bad interpreter", a message that names neither the cause
+	# nor, usually, the right file. .gitattributes pins *.sh to LF; this is
+	# what catches a file that got past it.
+	if [[ "$$(head -c 3 "$(POD_START)" | xxd -p)" == "efbbbf" ]]; then
+	    echo "ERROR: $(POD_START) starts with a UTF-8 BOM." >&2
+	    echo "       bash reads it as part of the shebang and the pod fails" >&2
+	    echo "       with 'bad interpreter'. Re-save it as UTF-8, no BOM." >&2
+	    exit 1
+	fi
+	# -U, not a bare grep: a grep built for Windows (Git Bash, MSYS)
+	# opens files in text mode and strips the CR before the pattern ever
+	# sees it, so the check silently passes on exactly the machine most
+	# likely to have introduced the CR. On Linux -U is documented as
+	# having no effect, so it costs nothing to always pass it.
+	if grep -qU $$'\r' "$(POD_START)"; then
+	    echo "ERROR: $(POD_START) has CRLF line endings." >&2
+	    echo "       The pod would fail with: bad interpreter: /usr/bin/env bash^M" >&2
+	    echo "       Convert it to LF before publishing." >&2
+	    exit 1
+	fi
+	url=$$(python3 scripts/r2_presign.py --key start.sh --method PUT --expires 900)
+	code=$$(curl -sS -o /dev/null -w '%{http_code}' -T "$(POD_START)" "$$url")
+	if [[ "$$code" == "200" ]]; then
+	    echo "uploaded $(POD_START) -> r2://$$R2_BUILDS_BUCKET/start.sh"
+	    echo "Pods get it on their next start."
+	else
+	    echo "ERROR: upload failed (HTTP $$code)" >&2
+	    exit 1
+	fi
 
 # Publish the Windows start script on its own.
 #

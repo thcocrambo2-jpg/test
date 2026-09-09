@@ -541,6 +541,75 @@ the downloaded app is damaged (checksum does not match).
     Say 'downloaded and verified'
 }
 
+# ── The tunnel helper ────────────────────────────────────────────────────
+# serve.py needs cloudflared to hand the customer a public URL, and since
+# the Gradio UI was removed it is the ONLY thing that produces one. Left to
+# itself the app fetches it from the GitHub "latest" release on first
+# launch, which makes one github.com endpoint a hard dependency of every
+# first start - and the failure mode is a customer with no link at all.
+#
+# So it is fetched here instead, from the same public Hugging Face mirror
+# the weights come from, pinned to a release and checked against a known
+# sha256. serve.cloudflared_binary() returns early when the file is already
+# at KREA2_BASE_DIR, so putting it there is the entire change: no recompile,
+# no new build published, just this script.
+#
+# EVERY failure below is a note rather than a hard stop. If the mirror is
+# unreachable, or the bytes are wrong, the app still starts and still falls
+# back to the GitHub release exactly as it does today - so this can only
+# ever add a source, never take one away.
+#
+# Refreshing to a newer cloudflared is scripts/mirror_cloudflared.py, then
+# the three constants below, then `make start-ps1` / `make start-sh`.
+$CF_BIN = Join-Path $BASE 'cloudflared.exe'
+$CF_URL = 'https://huggingface.co/thcocrambo2/krea2-tools/resolve/ba22c6ba0afc0c9f9b644c133310903831bbc17b/cloudflared/2026.8.3/cloudflared-windows-amd64.exe'
+$CF_SHA = '83e726ed18ea78c5ad5213c4c3a3a27051393950d2bc8ed4de69bec12d14eaae'
+
+# Not re-verified when it is already there: serve.py checks only that the
+# file exists, and hashing 55 MB on every start to reach the same verdict
+# would be the most expensive line in this script.
+if (-not (Test-Path -LiteralPath $CF_BIN)) {
+    $cfTmp = "$CF_BIN.part"
+    # try/catch around the whole thing rather than just the download:
+    # $ErrorActionPreference is 'Stop', so a locked file or a full disk at
+    # the Move-Item below would otherwise end this script with a stack
+    # trace - for an optional step whose failure the app already handles.
+    try {
+        Say 'fetching the tunnel helper (once) ...'
+        Remove-Item -LiteralPath $cfTmp -Force -ErrorAction SilentlyContinue
+        & curl.exe -fL -sS --retry 3 --retry-delay 2 --retry-connrefused --progress-bar -o "$cfTmp" "$CF_URL"
+        $cfRc = $LASTEXITCODE
+        if ($cfRc -ne 0) {
+            Say "note: could not fetch the tunnel helper (curl $cfRc)."
+            Say '      The app will download it from its original source.'
+        } else {
+            $cfGot = (Get-FileHash -LiteralPath $cfTmp -Algorithm SHA256).Hash.ToLowerInvariant()
+            if ($cfGot -ne $CF_SHA) {
+                Say 'note: the tunnel helper arrived damaged (checksum does not match).'
+                Say '      The app will download it from its original source.'
+            } else {
+                # Windows marks anything fetched from the internet with a
+                # Zone.Identifier stream, and the app runs this file as a
+                # child process. Same treatment the .exe above gets.
+                Unblock-File -LiteralPath $cfTmp -ErrorAction SilentlyContinue
+                # Renamed only once the hash matches. serve.py trusts the
+                # file's mere existence, so a truncated one left at the real
+                # name is a machine whose tunnel never works again - which is
+                # the WinError 193 row in the README's table.
+                Move-Item -LiteralPath $cfTmp -Destination $CF_BIN -Force
+                Say 'tunnel helper ready'
+            }
+        }
+    } catch {
+        Say "note: could not install the tunnel helper - $($_.Exception.Message)"
+        Say '      The app will download it from its original source.'
+    } finally {
+        # Whatever happened above, no .part survives it. The next start
+        # would otherwise resume onto bytes from a different attempt.
+        Remove-Item -LiteralPath $cfTmp -Force -ErrorAction SilentlyContinue
+    }
+}
+
 # ── Run ──────────────────────────────────────────────────────────────────
 $env:KREA2_BASE_DIR = $BASE
 

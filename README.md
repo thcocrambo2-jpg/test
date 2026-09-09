@@ -60,11 +60,13 @@ server, waits for it, and serves the web app. A public URL is printed when
 it is up (`>>> OPEN THE UI HERE: ...`). Press Ctrl-C to stop.
 
 That URL is a **Cloudflare quick tunnel** — `https://<words>.trycloudflare.com`,
-with an access token in the fragment. cloudflared is downloaded once on
-first launch and cached under the base directory. It needs no account and
-no signup. If the tunnel cannot be established the app says so and keeps
-running on the local port, which on a pod is still reachable through
-RunPod's own proxy. `--no-tunnel` skips it deliberately.
+with an access token in the fragment. It needs no account and no signup.
+cloudflared is fetched once and cached under the base directory: the
+start script pre-seeds it from our public Hugging Face mirror, pinned to
+a release and checksummed, and the app falls back to the GitHub release
+if that is unreachable. If the tunnel cannot be established the app says
+so and keeps running on the local port, which on a pod is still reachable
+through RunPod's own proxy. `--no-tunnel` skips it deliberately.
 
 The token rides in the URL **fragment** (`/#k=...`) rather than the query
 string, so it is never sent to a server: not to Cloudflare's edge, not to
@@ -151,7 +153,10 @@ a pod — one code path, both platforms. This is worth stating because it was
 not always true: the old Gradio UI got its link from `share=True`, a Gradio
 service, and `scripts/windows_start.ps1` has never had any tunnel logic of
 its own. cloudflared is fetched once (~55 MB,
-`cloudflared-windows-amd64.exe`) and cached under `KREA2_BASE_DIR`.
+`cloudflared-windows-amd64.exe`) and cached under `KREA2_BASE_DIR` —
+by `scripts/windows_start.ps1`, from the pinned Hugging Face mirror,
+before the app starts. So the usual case never touches github.com, and
+the app's own download of it stays as the fallback.
 
 If your DNS resolver is slow to pick up a freshly minted hostname — some
 mobile hotspots cache the NXDOMAIN — the tunnel is up before the name
@@ -264,7 +269,8 @@ first generation.
 | `OSError: [WinError 127] The specified procedure could not be found` | `torchvision`/`torchaudio` compiled against a different torch. `ensure_torch()` repairs this automatically; it only surfaces if something installed a mismatch afterwards. |
 | `no kernel image is available for execution on the device` | torch has no kernels for this GPU. The startup check catches it and prints the install command. |
 | `IndexError: list index out of range` in `resolve_model` | A model registry in `config.py` was emptied. Trimming one to a single entry is fine; emptying it is not — several are indexed at `[0]` during import. |
-| `WinError 193` from `cloudflared` | A Linux `cloudflared` was cached where the Windows one belongs — delete `cloudflared.exe` under `KREA2_BASE_DIR` and restart. This is what the pre-React fallback did on Windows; `serve.RELEASES` now picks the asset by `sys.platform`. |
+| `WinError 193` from `cloudflared` | A Linux `cloudflared` was cached where the Windows one belongs — delete `cloudflared.exe` under `KREA2_BASE_DIR` and restart. This is what the pre-React fallback did on Windows; `serve.RELEASES` now picks the asset by `sys.platform`, and the start script verifies a sha256 before putting one there. |
+| `note: could not fetch the tunnel helper` at startup | The Hugging Face mirror was unreachable. Harmless — the app downloads cloudflared from the GitHub release instead, which is what it did before the mirror existed. |
 | No public URL, tunnel times out | cloudflared could not reach the Cloudflare edge. The app says so and keeps serving the local port; on a pod that is still reachable through RunPod's proxy. `--no-tunnel` skips the attempt. |
 | The tunnel URL will not resolve for a minute | Some resolvers cache the NXDOMAIN for a hostname that did not exist a second ago. The local port works throughout. |
 | Exits within seconds, no downloads | `KREA2_LICENSE_KEY` / `KREA2_NODE_TAG` unset — the license seat is taken before any expensive work. |
