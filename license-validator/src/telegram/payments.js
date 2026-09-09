@@ -181,7 +181,36 @@ export async function handleSuccessfulPayment(message) {
  * provisioned or already delivered: every write inside is a conditional
  * transition, and the ones that no longer apply return null.
  */
-export async function fulfillOrder(order) {
+export async function fulfillOrder(stale) {
+  // Re-read, and refuse anything that has moved on.
+  //
+  // This is the gate that stops a second licence being written, and it has
+  // to be *before* provisioning rather than after. markProvisioned() is a
+  // conditional update and will refuse an order that is already
+  // PROVISIONED — but by then createLicense() has already run, and the
+  // refusal leaves an orphan key nobody paid for. The database is the only
+  // thing that knows the current status: the document handed in may have
+  // been read by the sweep seconds ago or printed by the CLI a minute ago.
+  //
+  // The residual race is two callers reading PAID at the same instant, and
+  // it is not reachable in practice: markPaid() hands the order to exactly
+  // one caller, and the sweep only looks at orders that have been settled
+  // for five minutes — longer than a serverless invocation is allowed to
+  // live. It is the same shape of accepted race as count-then-insert in
+  // /v1/acquire, and worth the same treatment: documented, not locked.
+  const order = await findOrder(stale?._id);
+  if (!order) {
+    console.warn(`order    ${short(stale?._id)}  vanished before fulfilment`);
+    return null;
+  }
+  if (
+    order.status !== ORDER_STATUS.PAID &&
+    order.status !== ORDER_STATUS.FAILED_PROVISION
+  ) {
+    console.log(`order    ${short(order._id)}  fulfil skipped (${order.status})`);
+    return null;
+  }
+
   // Retries must not re-send the apology; the customer has had it once.
   const firstAttempt = (order.provision_attempts ?? 0) === 0;
 
