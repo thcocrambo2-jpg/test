@@ -105,11 +105,16 @@ PREFIX = "/api/v1"
 # session, only this process's token.
 COOKIE = "krea2_key"
 
-# Off by default, on for scripts/dryrun.py --api-only. It exists because
-# the alternative during development is pasting a token by hand on every
-# restart, and the alternative to *that* is developers commenting the
-# auth out, which is how auth stops existing.
-ALLOW_ANON = bool(os.environ.get("KREA2_UI_ALLOW_ANON"))
+# On by default: whoever has the URL can use the app, and nothing has to
+# be pasted or kept. The token below is still generated and still works —
+# it is simply not demanded, so a link that lost its fragment (a chat app
+# that ate it, a copy-paste, a bookmark) still opens.
+#
+# Set KREA2_UI_REQUIRE_TOKEN=1 to put the gate back. Worth doing wherever
+# the URL travels further than the people meant to use it: the tunnel
+# hostname is the only thing standing between a stranger and this app's
+# GPU while the gate is down.
+ALLOW_ANON = not os.environ.get("KREA2_UI_REQUIRE_TOKEN")
 
 TOKEN = secrets.token_urlsafe(32)
 

@@ -139,13 +139,10 @@ def main() -> None:
 
     stub_comfy()
 
-    # No token, because the alternative during development is pasting one on
-    # every restart and the alternative to *that* is somebody commenting the
-    # auth out. Set before api is imported: it reads the variable once, at
-    # import. This is also why the script refuses to bind anything but
-    # loopback — an app with its auth switched off should not be reachable
+    # Nothing to set: the auth gate is open unless KREA2_UI_REQUIRE_TOKEN
+    # says otherwise. It is still why this script refuses to bind anything
+    # but loopback — an app that asks for no token should not be reachable
     # from the next desk.
-    os.environ["KREA2_UI_ALLOW_ANON"] = "1"
     import serve
 
     # webui.mount() logs which source it picked — the committed bundle or

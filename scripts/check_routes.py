@@ -45,10 +45,10 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(ROOT))
 os.environ.setdefault("KREA2_BASE_DIR", str(ROOT / ".dryrun"))
-# The gate is what is under test, not the token — a request that 401s
-# before it reaches the feature check would make every assertion below
-# pass for the wrong reason.
-os.environ.setdefault("KREA2_UI_ALLOW_ANON", "1")
+# No token is set here: the auth gate is open by default, and it is the
+# feature gate that is under test. A request that 401s before it reaches
+# the feature check would make every assertion below pass for the wrong
+# reason, so KREA2_UI_REQUIRE_TOKEN must stay unset.
 
 from config import log  # noqa: E402
 
