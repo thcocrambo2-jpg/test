@@ -1,6 +1,8 @@
+import { useState } from 'react'
 import { useSession } from '@/api/queries'
 import { useQueue } from '@/store/queue'
-import { Pill } from '@/components/ui'
+import { Button, Pill } from '@/components/ui'
+import { TermsDialog } from '@/features/terms'
 import s from './shell.module.css'
 
 /*
@@ -22,6 +24,12 @@ export function Footer() {
 
   const models = session?.modelCount ?? 0
   const gpus = session?.gpuCount ?? 0
+
+  /* The terms are agreed to once, at the gate, and would otherwise become
+   * unreadable the moment they were accepted. A document somebody is held to
+   * has to stay somewhere they can find it, and the footer is where every
+   * other app in the world puts it. */
+  const [terms, setTerms] = useState(false)
 
   return (
     <footer className={s.footer}>
@@ -51,7 +59,12 @@ export function Footer() {
         <Pill>
           <b>{gpus}</b> GPU{gpus === 1 ? '' : 's'}
         </Pill>
+        <Button variant="ghost" size="sm" onClick={() => setTerms(true)}>
+          Terms
+        </Button>
       </div>
+
+      <TermsDialog open={terms} onClose={() => setTerms(false)} />
     </footer>
   )
 }

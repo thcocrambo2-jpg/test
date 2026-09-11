@@ -1,0 +1,115 @@
+/* The gate, and the same text read back from the footer.
+ *
+ * Everything sits inside `Modal`'s body, which already supplies the padding
+ * and the scroll region — so there is no panel, no backdrop and no width
+ * here, only the content. */
+
+.title {
+  font-size: var(--t-xl);
+  font-weight: var(--fw-semibold);
+  line-height: var(--lh-tight);
+}
+
+.lede {
+  margin-top: var(--s-2);
+  color: var(--c-text-muted);
+  font-size: var(--t-sm);
+  line-height: var(--lh-normal);
+}
+
+.clauses {
+  display: flex;
+  flex-direction: column;
+  gap: var(--s-4);
+  margin-top: var(--s-5);
+}
+
+.clause {
+  border: 1px solid var(--c-border);
+  border-radius: var(--r-lg);
+  padding: var(--s-4);
+}
+
+/* The three that end access, marked by a rail rather than by colour alone —
+ * the difference has to survive a monochrome screenshot and a reader who
+ * does not see the tint. The heading says what the rule is either way. */
+.critical {
+  border-color: var(--c-accent-line);
+  background: var(--c-accent-soft);
+  border-left-width: 3px;
+}
+
+.clauseTitle {
+  font-size: var(--t-md);
+  font-weight: var(--fw-semibold);
+  line-height: var(--lh-snug);
+}
+
+.clauseBody {
+  margin-top: var(--s-2);
+  font-size: var(--t-sm);
+  line-height: var(--lh-normal);
+  color: var(--c-text-muted);
+}
+
+/* The sentence being agreed to. Deliberately the loudest block on the
+ * screen: it is the one people skip, and it is the one that is binding. */
+.agree {
+  display: flex;
+  align-items: flex-start;
+  gap: var(--s-3);
+  margin-top: var(--s-5);
+  padding: var(--s-4);
+  border: 1px solid var(--c-border-strong);
+  border-radius: var(--r-lg);
+  background: var(--c-bg-sunken);
+  cursor: pointer;
+}
+
+.box {
+  flex: none;
+  width: 18px;
+  height: 18px;
+  margin-top: 1px;
+  accent-color: var(--c-accent);
+  cursor: pointer;
+}
+
+.agreeText {
+  font-size: var(--t-sm);
+  font-weight: var(--fw-medium);
+  line-height: var(--lh-normal);
+}
+
+.foot {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--s-4);
+  margin-top: var(--s-5);
+}
+
+.version {
+  color: var(--c-text-faint);
+  font-size: var(--t-xs);
+  font-family: var(--font-mono);
+}
+
+/* A narrow phone gets the text and the button, without the boxes eating the
+ * width they need. */
+@media (max-width: 480px) {
+  .clause,
+  .agree {
+    padding: var(--s-3);
+  }
+
+  .foot {
+    flex-direction: column;
+    align-items: stretch;
+  }
+
+  .version {
+    order: 2;
+    text-align: center;
+  }
+}
