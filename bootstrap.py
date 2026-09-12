@@ -123,6 +123,20 @@ def runtime_python() -> str:
     )
 
 
+def _printable(text: str) -> str:
+    """`text` with anything this console cannot encode replaced.
+
+    Decoding a child's output safely is only half of it: the pod's own
+    stdout is ASCII for the same reason its pipes are — no LANG in the
+    container — so echoing pip's '━' progress bar raises UnicodeEncodeError
+    on the way out, having just been decoded on the way in. Nothing reads
+    this text but a human watching an install, so a replacement character
+    is always the better answer than a stack trace.
+    """
+    enc = sys.stdout.encoding or "utf-8"
+    return text.encode(enc, "replace").decode(enc, "replace")
+
+
 def run_cmd(cmd: list, cwd=None, desc: str | None = None) -> None:
     """Run a command, echoing its output, and raise with the tail on failure.
 
@@ -144,14 +158,24 @@ def run_cmd(cmd: list, cwd=None, desc: str | None = None) -> None:
     tail = deque(maxlen=25)
     # bufsize=1 is line buffering, so a long install appears as it happens
     # rather than in blocks whenever a pipe buffer happens to fill.
+    #
+    # encoding is named rather than left to text=True, which would decode
+    # with locale.getpreferredencoding(). A RunPod container sets no LANG,
+    # so that resolves to ANSI_X3.4-1968 and pip's download progress bar —
+    # drawn with U+2501 '━' since -q came off — killed the first run with
+    # 'ascii' codec can't decode byte 0xe2. Windows is no safer: cp1252 has
+    # no mapping for the 0x81 that follows. errors='replace' as well, so a
+    # stray byte from any child process can never abort an install; this
+    # output is shown to a human and parsed by nobody.
     process = subprocess.Popen(
         [str(c) for c in cmd], cwd=cwd, text=True, bufsize=1,
+        encoding="utf-8", errors="replace",
         stdout=subprocess.PIPE, stderr=subprocess.STDOUT,
     )
     for line in process.stdout:
         line = line.rstrip()
         tail.append(line)
-        print(line, flush=True)
+        print(_printable(line), flush=True)
     process.wait()
     if process.returncode != 0:
         raise RuntimeError(
@@ -234,7 +258,8 @@ def _probe_torch() -> dict:
     """What the runtime interpreter's torch stack actually is, and does."""
     result = subprocess.run(
         [runtime_python(), "-c", _TORCH_PROBE],
-        text=True, stdout=subprocess.PIPE, stderr=subprocess.DEVNULL,
+        text=True, encoding="utf-8", errors="replace",
+        stdout=subprocess.PIPE, stderr=subprocess.DEVNULL,
     )
     try:
         return json.loads(result.stdout.strip().splitlines()[-1])
@@ -455,6 +480,7 @@ def repin_checkout(dest, name: str) -> None:
         head = subprocess.run(
             ["git", "-C", str(dest), "rev-parse", "HEAD"],
             capture_output=True, text=True, timeout=60,
+            encoding="utf-8", errors="replace",
         ).stdout.strip()
     except (OSError, subprocess.SubprocessError) as exc:
         log.warning("Could not read %s's revision (%s) — leaving it as is.",
@@ -640,7 +666,8 @@ def _cuda_major() -> int | None:
     """torch's CUDA major version, or None if torch has no CUDA build."""
     result = subprocess.run(
         [runtime_python(), "-c", "import torch; print(torch.version.cuda or '')"],
-        text=True, stdout=subprocess.PIPE, stderr=subprocess.DEVNULL,
+        text=True, encoding="utf-8", errors="replace",
+        stdout=subprocess.PIPE, stderr=subprocess.DEVNULL,
     )
     try:
         return int(result.stdout.strip().split(".")[0])
