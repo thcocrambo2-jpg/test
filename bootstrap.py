@@ -5,6 +5,8 @@ base image, in a single pip resolver pass together with this app's own
 requirements.txt (Gradio 6, websocket-client, huggingface_hub, ...).
 Nothing is pinned or downgraded: current ComfyUI has no conflict with a
 standard PyTorch base image's torch / transformers / safetensors / requests.
+Last, the SageAttention build that torch can load, where the GPU runs it
+(install_sageattention), which decides ComfyUI's attention flag.
 """
 
 import json
@@ -26,6 +28,7 @@ from config import (
     REACTOR_LOCAL_NODES,
     REACTOR_NODES_DIR,
     REACTOR_NODES_REPO,
+    SAGE_ATTENTION,
     V2_NODE_REPOS,
     log,
 )
@@ -203,6 +206,11 @@ def run_cmd(cmd: list, cwd=None, desc: str | None = None) -> None:
 # real matmul rather than trusting version strings.
 TORCH_INDEX = "https://download.pytorch.org/whl/cu128"
 TORCH_STACK = ("torch==2.8.0", "torchvision==0.23.0", "torchaudio==2.8.0")
+
+# torchvision numbers itself separately from torch, so a repair has to be
+# told which one goes with which. torchaudio tracks torch exactly. 2.11.0 is
+# here because it is the other torch install_sageattention has a build for.
+TORCHVISION_FOR_TORCH = {"2.8.0": "0.23.0", "2.11.0": "0.26.0"}
 
 # Written next to the ComfyUI checkout and passed to every later pip call.
 # ComfyUI's requirements.txt lists `torch` unpinned, so without this a
@@ -401,8 +409,9 @@ def ensure_torch() -> None:
             if name == "torchaudio":
                 # Version-locked to torch, so this is always derivable.
                 wanted.append(f"torchaudio=={torch_version}")
-            elif torch_version == "2.8.0":
-                wanted.append("torchvision==0.23.0")
+            elif torch_version in TORCHVISION_FOR_TORCH:
+                wanted.append(
+                    f"torchvision=={TORCHVISION_FOR_TORCH[torch_version]}")
             else:
                 raise RuntimeError(
                     f"torchvision fails to import against torch "
@@ -427,6 +436,197 @@ def ensure_torch() -> None:
 
     _torch_info = info
     log.info("PyTorch OK — %s", _describe(info))
+
+
+# ── SageAttention ─────────────────────────────────────────────────────────────
+# Quantised attention kernels that ComfyUI switches to with
+# --use-sage-attention. Video models are where it pays: a MiniMax or Wan
+# clip is one very long attention sequence, and attention is most of the
+# sampler's time. It is approximate — outputs change slightly — and global
+# to the ComfyUI instance, so every tab gets it, as in the MiniMax template.
+# KREA2_SAGE_ATTENTION=0 turns it off.
+#
+# Nothing here chooses torch. ensure_torch keeps whatever working torch the
+# machine has, and this picks the SageAttention build that torch can load:
+#
+#   torch 2.11.0 (CUDA 12.8 or 13.0)
+#       SageAttention 2.2.0 — a CUDA extension with no PyPI wheel, so these
+#       are the wheels comfyui-runtime publishes as GitHub release assets
+#       and the MiniMax template image bakes in: thu-ml/SageAttention at
+#       d1a57a5 (Apache-2.0), built for torch 2.11.0, CPython 3.12, x86_64
+#       Linux, one per CUDA major. A compiled extension only loads on the
+#       torch it was built against, which is why they are keyed on 2.11.
+#   torch 2.8.0 — runpod/pytorch:1.0.2-cu1281-torch280-ubuntu2404
+#       SageAttention 1.0.6 from PyPI. Nobody publishes a 2.x wheel for
+#       Linux on 2.8, and 1.0.6 needs none: its kernels are Triton, which
+#       compiles them for the GPU at first use, and torch 2.8 ships Triton.
+#       Slower than 2.2 — it quantises less of the attention — but still
+#       faster than PyTorch attention on the cards below.
+#   anything else, or not Linux
+#       none. The Windows wheels that exist need triton-windows beside them
+#       and are not wired up here.
+#
+# Every requirement carries its sha256 as a #sha256= fragment, which pip
+# checks, so a changed asset fails the install instead of loading.
+SAGE2_WHEEL = ("https://github.com/Hearmeman24/comfyui-runtime/releases/"
+               "download/sage-d1a57a5-{cuda}-torch2.11.0/"
+               "sageattention-2.2.0-cp312-cp312-linux_x86_64.whl")
+SAGE2_WHEELS = {
+    # CUDA major -> (release tag suffix, sha256 of the wheel)
+    "12": ("cu128",
+           "487aeccc76236043c06154dfac34626692af25f520a3634c71d0bf160ab27ed6"),
+    "13": ("cu130",
+           "77803563ccc1f3a29e52b7873c058a665aa9de4ca0827c9c8c507d07e25f64a1"),
+}
+SAGE1_WHEEL = (
+    "https://files.pythonhosted.org/packages/53/06/"
+    "f7b47adb766bcb38b3f88763374a3e8dffea05ee9b556bc24dbcbd60fd29/"
+    "sageattention-1.0.6-py3-none-any.whl#sha256="
+    "fafc66569bed62a16839e820c2612141b5a20accf55b876d941bab9c0ac5d888"
+)
+
+# The GPUs SageAttention 2.2 has kernels for, as (major, minor) compute
+# capability: A100 (8.0), A40/A6000/3090 (8.6), L40S/4090 (8.9), H100/H200
+# (9.0), RTX 50xx/PRO 6000 (12.0, 12.1). T4 (7.5), V100 (7.0) and B200
+# (10.0) have no dispatch arm upstream, and no wheel fixes that. The same
+# set the template's sage_probe.py checks; 1.0.6 is held to it too rather
+# than tried on cards nobody has run it on.
+SAGE_ARCHES = {(8, 0), (8, 6), (8, 9), (9, 0), (12, 0), (12, 1)}
+
+
+def sage_requirement(info: dict) -> tuple[str, str] | None:
+    """(version, pip requirement) of the SageAttention for this torch, or None.
+
+    `info` is a _probe_torch result. Only the torch version and its CUDA
+    build are read, so the Dockerfile can ask the same question at build
+    time with no GPU to answer the rest.
+    """
+    torch_version = (info.get("torch") or "").split("+")[0]
+    cuda_major = (info.get("cuda") or "").split(".")[0]
+    if not cuda_major:
+        return None
+    if torch_version == "2.11.0" and cuda_major in SAGE2_WHEELS:
+        cuda, sha256 = SAGE2_WHEELS[cuda_major]
+        return "2.2.0", f"{SAGE2_WHEEL.format(cuda=cuda)}#sha256={sha256}"
+    if torch_version == "2.8.0":
+        return "1.0.6", SAGE1_WHEEL
+    return None
+
+
+# A real kernel launch, because an import proves nothing: a wheel built for
+# another torch imports fine and fails at the first call, and 1.0.6's
+# Triton kernels only compile when first used. Prints one JSON line;
+# `arch_ok` is decided before importing sageattention, so an unsupported
+# card is reported as that and not as a broken install.
+_SAGE_PROBE = r"""
+import json, sys
+arches = {tuple(a) for a in json.loads(sys.argv[1])}
+out = {}
+try:
+    import torch
+    cap = tuple(torch.cuda.get_device_capability(0))
+    out["arch"] = "sm_%d%d" % cap
+    out["arch_ok"] = cap in arches
+    if out["arch_ok"]:
+        try:
+            from importlib.metadata import version
+            from sageattention import sageattn
+            out["version"] = version("sageattention")
+            q = torch.randn(1, 8, 128, 64, dtype=torch.float16, device="cuda")
+            sageattn(q, q.clone(), q.clone())
+            torch.cuda.synchronize()
+            out["kernel"] = True
+        except ModuleNotFoundError:
+            out["missing"] = True
+        except Exception as exc:
+            out["error"] = "%s: %s" % (type(exc).__name__, exc)
+except Exception as exc:
+    out["error"] = "%s: %s" % (type(exc).__name__, exc)
+print(json.dumps(out))
+"""
+
+# Whether install_sageattention got a kernel to run. Read by
+# attention_args(), which comfy.start_comfyui calls for every instance and
+# every restart.
+_sage_ready = False
+
+
+def _probe_sage() -> dict:
+    result = subprocess.run(
+        [runtime_python(), "-c", _SAGE_PROBE,
+         json.dumps(sorted(SAGE_ARCHES))],
+        text=True, encoding="utf-8", errors="replace",
+        stdout=subprocess.PIPE, stderr=subprocess.DEVNULL,
+    )
+    try:
+        return json.loads(result.stdout.strip().splitlines()[-1])
+    except (ValueError, IndexError):
+        return {"error": "probe produced no output"}
+
+
+def install_sageattention() -> bool:
+    """Install the SageAttention this torch can load, and prove it runs.
+
+    Never fatal, and never on by assumption: ComfyUI only gets
+    --use-sage-attention after a kernel has actually run on this GPU, so a
+    failure anywhere here costs speed and nothing else. Call after
+    ensure_torch and before ComfyUI starts.
+
+    A build that is already installed is kept when its kernel runs — the
+    Docker image bakes one in — and replaced when it does not, which is
+    what a 2.2 wheel left behind under a different torch looks like.
+    """
+    global _sage_ready
+    _sage_ready = False
+    if not SAGE_ATTENTION:
+        log.info("SageAttention off (KREA2_SAGE_ATTENTION=0)")
+        return False
+    if not sys.platform.startswith("linux"):
+        log.info("SageAttention skipped — no build is wired up for this "
+                 "platform, so ComfyUI runs with PyTorch attention")
+        return False
+
+    probe = _probe_sage()
+    if "arch_ok" in probe and not probe["arch_ok"]:
+        log.info("SageAttention skipped — no kernels for this GPU (%s)",
+                 probe.get("arch"))
+        return False
+
+    if not probe.get("kernel"):
+        info = _torch_info if _torch_info is not None else _probe_torch()
+        wanted = sage_requirement(info)
+        if wanted is None:
+            log.info("SageAttention skipped — there is no build for torch "
+                     "%s (CUDA %s); it is wired up for torch 2.11.0 and "
+                     "2.8.0", info.get("torch"), info.get("cuda"))
+            return False
+        version, requirement = wanted
+        try:
+            # --no-deps: neither build needs anything torch does not
+            # already bring, and resolving would let pip reach for torch.
+            _pip_install(["--no-deps", "--force-reinstall", requirement],
+                         desc=f"Installing SageAttention {version} for "
+                              f"torch {info.get('torch')}")
+        except RuntimeError as exc:
+            log.warning("SageAttention would not install (%s) — ComfyUI "
+                        "runs without it", exc)
+            return False
+        probe = _probe_sage()
+
+    if not probe.get("kernel"):
+        log.warning("SageAttention is installed but its kernel failed on %s "
+                    "(%s) — ComfyUI runs without it",
+                    probe.get("arch"), probe.get("error", "not importable"))
+        return False
+    _sage_ready = True
+    log.info("SageAttention %s OK on %s — ComfyUI starts with "
+             "--use-sage-attention", probe.get("version"), probe.get("arch"))
+    return True
+
+
+def attention_args() -> tuple[str, ...]:
+    """ComfyUI's attention flag: Sage once install_sageattention proved it."""
+    return ("--use-sage-attention",) if _sage_ready else ()
 
 
 def clone_pinned(url: str, dest, name: str, desc: str) -> None:

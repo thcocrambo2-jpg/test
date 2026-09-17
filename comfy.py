@@ -17,7 +17,7 @@ import subprocess
 import time
 import urllib.request
 
-from bootstrap import runtime_python
+from bootstrap import attention_args, runtime_python
 from config import (
     COMFY_DIR,
     COMFY_HOST,
@@ -147,8 +147,9 @@ def start_comfyui(port: int = COMFY_PORT, log_path=COMFY_LOG, extra_args=()):
         "--temp-directory", str(TEMP_DIR / "comfy_temp"),
         "--disable-auto-launch",
         # Here rather than at the call sites so the Wan instance and the
-        # ensure_alive() restart get it too, not just the main one.
+        # ensure_alive() restart get them too, not just the main one.
         *dynamic_vram_args(),
+        *attention_args(),
         *[str(a) for a in extra_args],
     ]
     log.info("Starting ComfyUI on port %d (logs → %s)", port, log_path)

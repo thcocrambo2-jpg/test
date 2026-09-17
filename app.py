@@ -81,6 +81,10 @@ def main() -> None:
     bootstrap.install_custom_nodes()
     bootstrap.install_v2_nodes()
     bootstrap.install_reactor()
+    # Last of the installs, so nothing after it can move torch under the
+    # build it picked for that torch, and before ComfyUI starts, which reads
+    # the verdict through comfy.start_comfyui -> bootstrap.attention_args.
+    bootstrap.install_sageattention()
     bootstrap.link_model_dirs()
     log.info("Environment ready (Python %s)", sys.version.split()[0])
 

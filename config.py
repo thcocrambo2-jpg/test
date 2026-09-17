@@ -26,6 +26,7 @@ Every environment variable this module reads, in one place:
 
     KREA2_BASE_DIR              where models, outputs and logs live
     KREA2_KEEP_MODELS_LOADED    do not unload between model swaps
+    KREA2_SAGE_ATTENTION        0 runs ComfyUI without SageAttention
     KREA2_WAN_PARALLEL          second ComfyUI instance for video
     KREA2_MAIN_RESERVE_VRAM     GB left for Wan by the image instance
     KREA2_WAN_RESERVE_VRAM      GB left for images by the video instance
@@ -105,6 +106,15 @@ COMFY_PORT = 8188
 # swap already pays for. Set KREA2_KEEP_MODELS_LOADED=1 to turn it off on
 # a machine with room to spare, where keeping models warm is faster.
 FREE_ON_SWAP = not os.environ.get("KREA2_KEEP_MODELS_LOADED")
+
+# SageAttention: faster, slightly approximate attention kernels, used by
+# every ComfyUI instance once bootstrap.install_sageattention has proved
+# they run on this GPU (Linux, torch 2.8.0 or 2.11.0, an A100/A40/L40S/
+# H100/RTX 50xx class card). On by default, as in the MiniMax template; set
+# KREA2_SAGE_ATTENTION=0 to run with PyTorch attention instead — the thing
+# to try first if a tab's output looks wrong on a card where it did not.
+SAGE_ATTENTION = os.environ.get("KREA2_SAGE_ATTENTION", "1").strip().lower() \
+    not in ("0", "false", "no", "off")
 
 # ── Model selection ───────────────────────────────────────────────────────────
 # Variant-level defaults; a registry entry below can override them per-model.

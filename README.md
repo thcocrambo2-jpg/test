@@ -215,6 +215,34 @@ python -c "import torch, torchvision, torchaudio; print(torch.__version__, torch
 nvidia-smi
 ```
 
+### SageAttention
+
+After the installs and before ComfyUI starts, `bootstrap.install_sageattention()`
+puts in the SageAttention build the installed torch can load, runs a real
+attention kernel on the GPU, and only if that works starts every ComfyUI
+instance with `--use-sage-attention`. It never changes torch, and a failure
+anywhere costs speed, not the app.
+
+| Installed torch | SageAttention | Source |
+| --- | --- | --- |
+| 2.8.0 (`runpod/pytorch:1.0.2-cu1281-torch280-ubuntu2404`) | 1.0.6 | PyPI — Triton kernels, no compiled extension |
+| 2.11.0, CUDA 12.8 or 13.0 | 2.2.0 | the wheels the MiniMax template bakes (comfyui-runtime release assets) |
+| anything else, or Windows | none | — |
+
+Every download is sha256-pinned. It needs a card with Sage kernels — A100,
+A40/A6000/3090, L40S/4090, H100/H200, RTX 50xx/PRO 6000 — and skips T4, V100
+and B200. Measured on an RTX 5050 at 16k–64k tokens against PyTorch attention:
+1.8–1.9× with 1.0.6 on torch 2.8, 2.5–2.9× with 2.2 on torch 2.11. A healthy
+start logs:
+
+```
+SageAttention 1.0.6 OK on sm_120 — ComfyUI starts with --use-sage-attention
+```
+
+It is approximate attention and it applies to every tab. If a tab's output
+looks wrong on a card where it did not before, set `KREA2_SAGE_ATTENTION=0`
+first.
+
 For UI work you do not need any of this. `scripts/dryrun.py` stubs out ComfyUI
 and needs no GPU, no license and no weights:
 
@@ -460,6 +488,7 @@ prints what it was built from on boot.
 | `KREA2_BASE_DIR`           | Base directory for everything (default `/workspace/krea2`)     |
 | `KREA2_SKIP_LAUNCH`        | If set, run setup/downloads/server but skip launching the UI   |
 | `KREA2_KEEP_MODELS_LOADED` | If set, don't unload models between swaps (see Model swapping)  |
+| `KREA2_SAGE_ATTENTION`     | `0` runs ComfyUI without SageAttention (see SageAttention)      |
 | `KREA2_WAN_PARALLEL`       | If set, video jobs get their own ComfyUI instance (port 8189)   |
 | `KREA2_MAIN_RESERVE_VRAM`  | Parallel mode: GB the Krea instance leaves free (default 26)   |
 | `KREA2_WAN_RESERVE_VRAM`   | Parallel mode: GB the Wan instance leaves free (default 22)    |
