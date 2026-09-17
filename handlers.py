@@ -116,7 +116,9 @@ from workflow_krea2_v2_edit import (
 from workflow_minimax import (
     aspect_size as minimax_aspect_size,
     build_minimax_video_workflow,
+    crop_to_canvas as minimax_crop_to_canvas,
     frames_for as minimax_frames,
+    matches_image as minimax_matches_image,
     minimax_missing,
     minimax_models_available,
     resolve_size as minimax_resolve_size,
@@ -1269,6 +1271,11 @@ def generate_minimax_video(image, prompt, seed, randomize, steps, resolution,
         return
     image = image.convert("RGB")
     width, height = minimax_resolve_size(*image.size, resolution)
+    if minimax_matches_image(resolution):
+        # Match image trims to the canvas's shape first: the node stretches
+        # the first frame to fit, and a canvas in 32s is rarely the
+        # picture's exact shape. Standard and native send it whole.
+        image = minimax_crop_to_canvas(image, width, height)
     base_seed = random.randint(0, 2**32 - 1) if randomize else int(seed)
     tag = uuid.uuid4().hex[:8]
     try:

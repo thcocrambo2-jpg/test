@@ -45,10 +45,13 @@ from config import (
     MINIMAX_ASPECT_RATIOS,
     MINIMAX_AUDIO_VAE,
     MINIMAX_CANVAS_MULTIPLE,
+    MINIMAX_DEFAULT_RESOLUTION,
     MINIMAX_DEFAULTS,
     MINIMAX_FPS,
     MINIMAX_FRAME_OFFSET,
     MINIMAX_FRAME_STEP,
+    MINIMAX_MAX_SIDE,
+    MINIMAX_MIN_SIDE,
     MINIMAX_NATIVE_MAX_PIXELS,
     MINIMAX_NATIVE_SHORT_EDGE,
     MINIMAX_RESOLUTIONS,
@@ -101,13 +104,57 @@ def frames_for(seconds: float) -> int:
 def _snap(value: float) -> int:
     """One side: rounded to the canvas multiple, kept within [256, 1536]."""
     multiple = MINIMAX_CANVAS_MULTIPLE
-    return max(256, min(1536, int(round(value / multiple)) * multiple))
+    return max(MINIMAX_MIN_SIDE,
+               min(MINIMAX_MAX_SIDE, int(round(value / multiple)) * multiple))
+
+
+def _fit_to_image(nom_w: float, nom_h: float) -> tuple:
+    """Match image's canvas: the nominal size in 32s, keeping its shape.
+
+    Standard and native round each side to the nearest 32 and clamp each
+    side on its own (_snap) — that is their template's and node's
+    arithmetic, and it is left alone. Both bend the shape: rounding by up
+    to 2-3% (720 × 1280 -> 704 × 1280), and the clamp by a third for a
+    panorama (3000 × 600 -> 1536 × 448). This rule exists to keep the
+    picture's shape, so it does neither. The long edge is brought under
+    1536 and the short edge over 256 by scaling the pair together; then
+    each side is tried rounded down and up, and the pair nearest the
+    nominal shape wins (720 × 1280 -> 736 × 1312, 0.3% off), the area
+    nearest nominal breaking a tie. Past about 6:1 the two limits cannot
+    both hold and the shape gives way; crop_to_canvas trims the source to
+    match, so even then nothing stretches.
+    """
+    long_edge, short_edge = max(nom_w, nom_h), min(nom_w, nom_h)
+    if long_edge > MINIMAX_MAX_SIDE:
+        shrink = MINIMAX_MAX_SIDE / long_edge
+        nom_w, nom_h = nom_w * shrink, nom_h * shrink
+        short_edge *= shrink
+    if short_edge < MINIMAX_MIN_SIDE:
+        grow = MINIMAX_MIN_SIDE / short_edge
+        nom_w, nom_h = nom_w * grow, nom_h * grow
+
+    multiple = MINIMAX_CANVAS_MULTIPLE
+
+    def sides(value):
+        down = math.floor(value / multiple) * multiple
+        return {max(MINIMAX_MIN_SIDE, min(MINIMAX_MAX_SIDE, side))
+                for side in (down, down + multiple)}
+
+    ratio, area = nom_w / nom_h, nom_w * nom_h
+    return min(((w, h) for w in sides(nom_w) for h in sides(nom_h)),
+               key=lambda wh: (abs(math.log(wh[0] / wh[1] / ratio)),
+                               abs(math.log(wh[0] * wh[1] / area))))
+
+
+def matches_image(resolution: str) -> bool:
+    """True for the Match image rule — the one that crops its source."""
+    return MINIMAX_RESOLUTIONS.get(resolution) == "source"
 
 
 def resolve_size(width: int, height: int, resolution: str) -> tuple:
     """The canvas for a source (or aspect) of width × height.
 
-    Two rules, one per entry of MINIMAX_RESOLUTIONS:
+    Three rules, one per entry of MINIMAX_RESOLUTIONS:
 
       standard  ResolutionSelector's arithmetic at 0.7 MP — the template's
                 setting: scale so the area is 0.7 × 1024², round each side
@@ -115,13 +162,29 @@ def resolve_size(width: int, height: int, resolution: str) -> tuple:
       native    adapt_canvas from the node file: a 768 short edge, the area
                 capped at 768 × 1344, each side rounded to 32. It is what
                 the model was trained on, and 40-50% more pixels.
+      source    Match image, opt-in: the picture's own size, in 32s that
+                keep its shape (_fit_to_image) — scaled down, aspect kept,
+                only when it is bigger than native's 768 × 1344 area,
+                because past that the model is out of its trained range and
+                the clip gets much slower. A small picture stays small: it
+                never upscales, beyond the 256 floor. The handler crops the
+                source to this canvas (crop_to_canvas) so the node's
+                stretch has nothing left to bend.
 
-    Only the ratio of width to height matters, so the text-to-video tab
-    passes the two small integers of an aspect ratio and the image tab
-    passes the picture's pixel size. Sides are kept within [256, 1536] so
-    a panorama cannot ask for a 3000-pixel canvas.
+    Only the ratio of width to height matters to standard and native, so
+    the text-to-video tab passes the two small integers of an aspect ratio
+    and the image tab passes the picture's pixel size. Sides are kept
+    within [256, 1536] so a panorama cannot ask for a 3000-pixel canvas.
+    Source reads the size itself, so it is image-only; aspect_size falls
+    back to standard.
     """
     rule = MINIMAX_RESOLUTIONS[resolution]
+    if rule == "source":
+        nom_w, nom_h = float(width), float(height)
+        if nom_w * nom_h > MINIMAX_NATIVE_MAX_PIXELS:
+            shrink = math.sqrt(MINIMAX_NATIVE_MAX_PIXELS / (nom_w * nom_h))
+            nom_w, nom_h = nom_w * shrink, nom_h * shrink
+        return _fit_to_image(nom_w, nom_h)
     if rule == "native":
         ratio = width / height
         if ratio >= 1.0:
@@ -140,9 +203,43 @@ def resolve_size(width: int, height: int, resolution: str) -> tuple:
 
 
 def aspect_size(aspect: str, resolution: str) -> tuple:
-    """resolve_size for one of MINIMAX_ASPECT_RATIOS' labels."""
+    """resolve_size for one of MINIMAX_ASPECT_RATIOS' labels.
+
+    The text tab does not offer Match image, but a stale preset could
+    still carry it; with no picture to take a size from, it means standard.
+    """
     w_ratio, h_ratio = MINIMAX_ASPECT_RATIOS[aspect]
+    if matches_image(resolution):
+        resolution = MINIMAX_DEFAULT_RESOLUTION
     return resolve_size(w_ratio, h_ratio, resolution)
+
+
+def crop_to_canvas(image, width: int, height: int):
+    """The source, centre-cropped to the canvas's shape, so nothing stretches.
+
+    MiniMaxH3ImageToVideo resizes the first frame to the canvas with crop
+    "disabled" — a plain stretch (its own comment: "geometry anchor: plain
+    stretch to canvas"). A canvas in 32s is almost never exactly the
+    picture's shape, so cropping first turns that stretch into a uniform
+    scale. Match image only; standard and native hand the node the whole
+    picture as before. The trim is a thin strip off two opposite edges —
+    under 1% for ordinary shapes, more only past the ~6:1 _fit_to_image
+    can honour. `image` is a PIL image; the same object comes back when it
+    already fits.
+    """
+    src_w, src_h = image.size
+    target = width / height
+    if src_w / src_h > target:
+        new_w = max(1, round(src_h * target))
+        left = (src_w - new_w) // 2
+        box = (left, 0, left + new_w, src_h)
+    else:
+        new_h = max(1, round(src_w / target))
+        top = (src_h - new_h) // 2
+        box = (0, top, src_w, top + new_h)
+    if box == (0, 0, src_w, src_h):
+        return image
+    return image.crop(box)
 
 
 def build_minimax_video_workflow(
@@ -161,9 +258,9 @@ def build_minimax_video_workflow(
     """Build the MiniMax H3 graph in ComfyUI API format.
 
     `image_name` is a file already uploaded to ComfyUI's input folder
-    (client.upload_image); it becomes the first frame, stretched to the
+    (client.upload_image); it becomes the first frame, resized to the
     canvas by the node, which is why the caller derives width and height
-    from the picture's own aspect. None is text-to-video: the same graph
+    from the picture and crops it to that shape first (crop_to_canvas). None is text-to-video: the same graph
     with no LoadImage, and the node builds the clip from the prompt alone.
 
     `length` is the frame count on the 17k+5 grid (frames_for) and `fps`

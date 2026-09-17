@@ -3412,6 +3412,10 @@
             [
               "Native 768p (short edge 768, slower)",
               "Native 768p (short edge 768, slower)"
+            ],
+            [
+              "Match image (its own size, capped near 1 MP)",
+              "Match image (its own size, capped near 1 MP)"
             ]
           ]
         },

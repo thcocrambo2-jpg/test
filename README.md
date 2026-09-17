@@ -2467,11 +2467,19 @@ bypassed there — it was the old 4-step LoRA's recipe — so it is not in the
 graph.
 
 What the tabs expose: Steps (default 8), Duration 5–15 s, Sampler, Batch
-count, and a Resolution radio with two rules. *Standard* is the template's
+count, and a Resolution radio. *Standard* (the default) is the template's
 0.7 MP `ResolutionSelector`; *Native 768p* is the model's own canvas (a 768
 short edge capped at 768×1344 — what the node file calls `adapt_canvas`).
 I2V takes the aspect from the uploaded image; T2V offers
-`ResolutionSelector`'s eight aspect ratios. Duration snaps to the model's
+`ResolutionSelector`'s eight aspect ratios. Standard and Native round and
+clamp each side to 32 on its own, so the canvas is usually 1–2% off the
+picture's shape (a panorama far more), and the node stretches the picture
+to fit. I2V also offers an opt-in third rule, *Match image*: the upload's
+own size in 32s chosen to keep its shape, scaled down only when it is
+bigger than 768×1344's area (never up; the rounding can land a few percent
+over, about 1.1 MP at most), with the upload centre-cropped to that
+exact shape first — a sliver, typically under 1% — so nothing is
+stretched. 1080×1920 renders at 768×1376, 720×1280 at 736×1312. Duration snaps to the model's
 "17k+5" frame grid at 24 fps — 5 s is 124 frames, 15 s is 362, which is the
 trained range. Clips are saved as MP4 under `output/minimax/` and appear in
 the Gallery like Wan's.

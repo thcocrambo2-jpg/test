@@ -618,20 +618,31 @@ MINIMAX_MIN_SECONDS = 5.0
 MINIMAX_MAX_SECONDS = 15.0
 MINIMAX_DEFAULT_SECONDS = 5.0
 MINIMAX_CANVAS_MULTIPLE = 32
-# Two canvas rules, chosen per job with the Resolution radio; the actual
-# size keeps the source (or chosen) aspect either way — see
+MINIMAX_MIN_SIDE = 256
+MINIMAX_MAX_SIDE = 1536
+# Three canvas rules, chosen per job with the Resolution radio — see
 # workflow_minimax.resolve_size. "Standard" is the template's
-# ResolutionSelector at 0.7 MP. "Native" is the model's own canvas, which
-# the node file calls adapt_canvas: a 768 short edge with the area capped
-# at 768 × 1344 — 40-50% more pixels, slower, and what the 768p turbo LoRA
-# was trained against.
+# ResolutionSelector at 0.7 MP, and the default. "Native" is the model's
+# own canvas, which the node file calls adapt_canvas: a 768 short edge with
+# the area capped at 768 × 1344 — 40-50% more pixels, slower, and what the
+# 768p turbo LoRA was trained against. Both take the source (or chosen)
+# aspect, but round and clamp each side on its own, which bends it
+# slightly (a panorama badly), and the node stretches the picture to
+# match. "Match image" is opt-in and image-only: the upload's own size in
+# 32s that keep its shape, scaled down only past native's area cap, with
+# the upload centre-cropped to that shape so nothing is stretched. The
+# text tab has no picture, so it offers the first two only.
 MINIMAX_STANDARD_MEGAPIXELS = 0.7
 MINIMAX_NATIVE_SHORT_EDGE = 768
 MINIMAX_NATIVE_MAX_PIXELS = 768 * 1344
+MINIMAX_MATCH_IMAGE = "Match image (its own size, capped near 1 MP)"
 MINIMAX_RESOLUTIONS = {
     "Standard (0.7 MP — the template default)": "standard",
     "Native 768p (short edge 768, slower)": "native",
+    MINIMAX_MATCH_IMAGE: "source",
 }
+MINIMAX_T2V_RESOLUTIONS = [label for label, rule in MINIMAX_RESOLUTIONS.items()
+                           if rule != "source"]
 MINIMAX_DEFAULT_RESOLUTION = "Standard (0.7 MP — the template default)"
 # The text-to-video tab has no picture to take an aspect from, so it
 # offers ResolutionSelector's own list, labels verbatim. The template
