@@ -100,7 +100,7 @@
           0
         ],
         "sigmas": [
-          "sigmas_extended",
+          "sigmas",
           0
         ]
       }
@@ -133,19 +133,6 @@
         ],
         "scheduler": "simple",
         "steps": 9
-      }
-    },
-    "sigmas_extended": {
-      "class_type": "ExtendIntermediateSigmas",
-      "inputs": {
-        "end_at_sigma": 0.0,
-        "sigmas": [
-          "sigmas",
-          0
-        ],
-        "spacing": "linear",
-        "start_at_sigma": 0.8,
-        "steps": 2
       }
     },
     "source": {
@@ -294,7 +281,7 @@
           0
         ],
         "sigmas": [
-          "sigmas_extended",
+          "sigmas",
           0
         ]
       }
@@ -327,19 +314,6 @@
         ],
         "scheduler": "simple",
         "steps": 9
-      }
-    },
-    "sigmas_extended": {
-      "class_type": "ExtendIntermediateSigmas",
-      "inputs": {
-        "end_at_sigma": 0.0,
-        "sigmas": [
-          "sigmas",
-          0
-        ],
-        "spacing": "linear",
-        "start_at_sigma": 0.8,
-        "steps": 2
       }
     },
     "source": {

@@ -11,9 +11,9 @@ hearmeman/comfyui-minimax-template:v8 (kept under tmp/minimax-reference/,
 which is not shipped). Every node used here is core ComfyUI:
 UNETLoader, CLIPLoader(type="minimax"), VAELoader ×2 (video + audio),
 LoraLoaderModelOnly, MiniMaxH3ImageToVideo, BasicGuider, RandomNoise,
-KSamplerSelect, BasicScheduler, ExtendIntermediateSigmas,
-SamplerCustomAdvanced, VAEDecode, VAEDecodeAudio, CreateVideo and
-SaveVideo. Three things the template had were left out on purpose:
+KSamplerSelect, BasicScheduler, SamplerCustomAdvanced, VAEDecode,
+VAEDecodeAudio, CreateVideo and SaveVideo. Four things the template had
+were left out on purpose:
 
   * rgthree's Power Lora Loader — it was empty (one placeholder row named
     "Your_Character_LoRA_Here", switched off), and the V2 tab already
@@ -21,7 +21,11 @@ SaveVideo. Three things the template had were left out on purpose:
     the pack;
   * KJNodes' ModelPreviewOverrideKJ — a latent-preview override, cosmetic;
   * VHS_VideoCombine — CreateVideo takes an `audio` input, and it plus
-    SaveVideo is what the Wan tab already writes MP4s with.
+    SaveVideo is what the Wan tab already writes MP4s with;
+  * ExtendIntermediateSigmas — the template bypasses it (mode 4). It
+    belonged to the old 4-step turbo LoRA and was switched off when the
+    template moved to the 8-step one used here; running it would add two
+    sampler steps the LoRA was not tuned for.
 
 So no node pack is installed for this feature. What it needs instead is a
 ComfyUI that has the MiniMax nodes at all: they ship in **v0.34.0**, which
@@ -48,7 +52,6 @@ from config import (
     MINIMAX_NATIVE_MAX_PIXELS,
     MINIMAX_NATIVE_SHORT_EDGE,
     MINIMAX_RESOLUTIONS,
-    MINIMAX_SIGMA_EXTEND,
     MINIMAX_STANDARD_MEGAPIXELS,
     MINIMAX_TEXT_ENCODER,
     MINIMAX_TURBO_LORA,
@@ -249,15 +252,11 @@ def build_minimax_video_workflow(
                    "scheduler": MINIMAX_DEFAULTS["scheduler"],
                    "steps": int(steps), "denoise": 1.0},
     }
-    wf["sigmas_extended"] = {
-        "class_type": "ExtendIntermediateSigmas",
-        "inputs": {"sigmas": ["sigmas", 0], **MINIMAX_SIGMA_EXTEND},
-    }
     wf["sample"] = {
         "class_type": "SamplerCustomAdvanced",
         "inputs": {"noise": ["noise", 0], "guider": ["guider", 0],
                    "sampler": ["sampler", 0],
-                   "sigmas": ["sigmas_extended", 0],
+                   "sigmas": ["sigmas", 0],
                    "latent_image": ["i2v", 1]},
     }
     # The one latent carries both streams; each VAE decodes its half.

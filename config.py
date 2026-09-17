@@ -601,11 +601,12 @@ MINIMAX_TURBO_LORA_STRENGTH = 0.8
 
 # The sampler block, verbatim from the template: BasicScheduler "simple" at
 # 8 steps, euler, no CFG — a BasicGuider, because like Flux the model is
-# guidance-distilled and has no negative prompt — and an
-# ExtendIntermediateSigmas pass that inserts two extra sigmas below 0.8.
+# guidance-distilled and has no negative prompt. The template also carries
+# an ExtendIntermediateSigmas node, but bypassed (mode 4): it was the recipe
+# for the old 4-step v0.1 turbo LoRA, and the template switched it off in
+# the same commit that moved to this 8-step v1.0 LoRA. So the sigmas go to
+# the sampler as the scheduler makes them.
 MINIMAX_DEFAULTS = {"steps": 8, "sampler": "euler", "scheduler": "simple"}
-MINIMAX_SIGMA_EXTEND = {"steps": 2, "start_at_sigma": 0.8,
-                        "end_at_sigma": 0.0, "spacing": "linear"}
 
 # Geometry. 24 fps, and the frame count has to sit on the model's "17k + 5"
 # grid: 124 frames is 5 s and the node's default, 362 is 15 s and the top

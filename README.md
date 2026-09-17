@@ -2462,8 +2462,9 @@ is the whole reason one builder serves both tabs: text-to-video is the same
 graph with `LoadImage` left out. The 8-step turbo LoRA is always on at 0.8
 and the sampler block is its recipe — `BasicScheduler` `simple`, euler, no
 CFG and no negative prompt (a `BasicGuider`; like Flux, the model is
-guidance-distilled), plus an `ExtendIntermediateSigmas` pass below sigma
-0.8.
+guidance-distilled). The template's `ExtendIntermediateSigmas` node is
+bypassed there — it was the old 4-step LoRA's recipe — so it is not in the
+graph.
 
 What the tabs expose: Steps (default 8), Duration 5–15 s, Sampler, Batch
 count, and a Resolution radio with two rules. *Standard* is the template's
