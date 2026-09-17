@@ -24,16 +24,51 @@
 #     docker build -t krea2:latest .
 #     docker compose up
 
-# The OS, Python 3.12 and system libraries the app is tested on. Its torch
-# (2.8.0+cu128) is not the one that runs: the final stage installs MiniMax
-# template v8's torch 2.11.0+cu130 over it (docker/bake_torch.py), because
-# RunPod publishes no torch 2.11 image. Overriding this is choosing a
-# configuration nobody has run the app on; the assertions in the final
-# stage are the floor, not permission.
+# CUDA 13.0 and cuDNN on Ubuntu 24.04, and nothing else — the same family
+# MiniMax template v8 is built on. Deliberately NOT runpod/pytorch: that
+# image carries its own torch (2.8.0+cu128, ~7 GB) and the CUDA dev
+# toolchain (~9 GB more), all of it dead weight once docker/bake_torch.py's
+# torch 2.11.0+cu130 is installed over it. Starting slim is the difference
+# between a ~40 GB image and a ~15 GB one, which is what a pod pulls on
+# every cold start and what has to be pushed to a registry at all.
+#
+# Python comes from apt below rather than from the base: Ubuntu 24.04 ships
+# 3.12, which is what the SageAttention wheel (cp312) and the app's Nuitka
+# build target.
 #
 # CUDA 13 needs an R580+ driver on the host. On RunPod, set the template's
 # CUDA version filter to 13.0, as template v8 does.
-ARG BASE_IMAGE=runpod/pytorch:1.0.2-cu1281-torch280-ubuntu2404
+ARG BASE_IMAGE=nvidia/cuda:13.0.3-cudnn-runtime-ubuntu24.04
+
+
+# ── Stage 0: Python and the system libraries both stages need ─────────────
+# One stage so the clone stage and the image itself resolve `python3` and
+# `git` the same way, and share these layers.
+#
+# A venv rather than the system interpreter because Ubuntu 24.04 marks it
+# externally managed (PEP 668): `pip install` into it refuses outright.
+# /opt/venv/bin first on PATH makes that venv what `python3` means for
+# every RUN below, for the app (bootstrap.runtime_python resolves python3
+# from PATH) and for ComfyUI, which the app launches the same way.
+FROM ${BASE_IMAGE} AS python-base
+
+ENV DEBIAN_FRONTEND=noninteractive \
+    PIP_PREFER_BINARY=1 \
+    PYTHONUNBUFFERED=1 \
+    PATH=/opt/venv/bin:$PATH
+
+# What runpod_start.sh checks for (curl, coreutils, python3, git), what
+# opencv and ffmpeg-based nodes need, and libgomp1, which torch's own
+# kernels link against and a runtime CUDA image does not ship.
+RUN apt-get update && \
+    apt-get install -y --no-install-recommends \
+        python3.12 python3.12-venv \
+        curl coreutils git ca-certificates \
+        ffmpeg libgl1 libglib2.0-0 libgomp1 && \
+    python3.12 -m venv /opt/venv && \
+    /opt/venv/bin/pip install --no-cache-dir --upgrade pip setuptools wheel && \
+    apt-get clean && rm -rf /var/lib/apt/lists/* && \
+    python3 -c "import sys; print('python', sys.version)"
 
 
 # ── Stage 1: clone ────────────────────────────────────────────────────────
@@ -41,18 +76,7 @@ ARG BASE_IMAGE=runpod/pytorch:1.0.2-cu1281-torch280-ubuntu2404
 # bake_nodes.py needs config.py/bootstrap.py/mirror.py to resolve the pins,
 # and those are exactly the files build.sh compiles into a binary rather
 # than shipping. They stay in this stage; only /opt/krea2 is copied out.
-FROM ${BASE_IMAGE} AS nodes
-
-ENV DEBIAN_FRONTEND=noninteractive \
-    PIP_PREFER_BINARY=1 \
-    PYTHONUNBUFFERED=1
-
-# git is what clone_pinned shells out to, and the apt-get that guarantees it
-# is in the final stage, which this one does not inherit.
-RUN command -v git >/dev/null 2>&1 || ( \
-        apt-get update && \
-        apt-get install -y --no-install-recommends git ca-certificates && \
-        apt-get clean && rm -rf /var/lib/apt/lists/* )
+FROM python-base AS nodes
 
 # huggingface_hub for the mirror tarball path in bootstrap.node_pack_from_mirror;
 # hf_xet because without it a Xet-backed download falls back to single-stream
@@ -75,37 +99,27 @@ RUN python3 /src/bake_torch.py
 
 
 # ── Stage 2: the image ────────────────────────────────────────────────────
-FROM ${BASE_IMAGE} AS final
+FROM python-base AS final
 
-ENV DEBIAN_FRONTEND=noninteractive \
-    PIP_PREFER_BINARY=1 \
-    PYTHONUNBUFFERED=1 \
-    HF_XET_HIGH_PERFORMANCE=1 \
+ENV HF_XET_HIGH_PERFORMANCE=1 \
     KREA2_BASE_DIR=/workspace/krea2
 
 # `python3` on PATH is not a detail here: compiled with Nuitka the app's
 # sys.executable is the binary itself, so bootstrap.runtime_python() falls
 # back to `shutil.which("python3")` for every pip call and for launching
-# ComfyUI. Whatever that resolves to IS the app's interpreter, so every
-# install below goes through `python3 -m pip` rather than bare `pip` —
-# installing into a different interpreter than the app uses would produce
-# an image that looks complete and behaves like an empty one.
+# ComfyUI. Whatever that resolves to IS the app's interpreter — here the
+# venv python-base put first on PATH — so every install below goes through
+# `python3 -m pip` rather than bare `pip`. Installing into a different
+# interpreter than the app uses would produce an image that looks complete
+# and behaves like an empty one.
 #
-# Failing here rather than at boot is the point: if a future base image
-# hides torch from `python3`, this line says so in the build log.
-RUN python3 -c "import torch, sys; \
-    print('torch', torch.__version__, 'CUDA', torch.version.cuda); \
-    sys.exit(0 if torch.version.cuda else 'base image has no CUDA torch')"
-
-# What runpod_start.sh checks for (curl, coreutils, python3, git) plus the
-# two libraries opencv needs. All of these are already in the base image;
-# they are named anyway so a base image change cannot quietly remove one
-# and turn it into an apt-get on a customer's first boot.
-RUN apt-get update && \
-    apt-get install -y --no-install-recommends \
-        curl coreutils git ca-certificates \
-        ffmpeg libgl1 libglib2.0-0 && \
-    apt-get clean && rm -rf /var/lib/apt/lists/*
+# Failing here rather than at boot is the point: a base image whose python3
+# cannot install anything says so in the build log instead of on a pod.
+RUN python3 -c "import sys, pip; \
+    print('python', sys.version.split()[0], 'at', sys.executable, \
+          '- pip', pip.__version__); \
+    sys.exit(0 if sys.version_info[:2] == (3, 12) else \
+             'python 3.12 is what the wheels here are built for')"
 
 COPY --from=nodes /opt/krea2 /opt/krea2
 

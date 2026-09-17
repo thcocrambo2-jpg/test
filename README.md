@@ -306,9 +306,10 @@ first generation.
 
 ## Docker image
 
-An image that carries the environment — the ComfyUI checkout at its pinned
-SHA, the custom node packs, ComfyUI's Python requirements, ReActor's
-dependency set, a working onnxruntime — so a machine spends none of its
+An image that carries the environment — Python 3.12 and the pinned torch
+stack on a slim `nvidia/cuda` base, the ComfyUI checkout at its pinned SHA,
+the custom node packs, ComfyUI's Python requirements, ReActor's dependency
+set, a working onnxruntime, SageAttention — so a machine spends none of its
 first boot on them.
 
 It does **not** carry the app. `scripts/runpod_start.sh` is baked in
@@ -433,7 +434,10 @@ The image runs exactly what MiniMax template v8
 configuration, not a menu. `docker/bake_torch.py` holds those pins, takes the
 SageAttention from `bootstrap.sage_requirement` so the image and the app
 agree, and records both in `baked.json`. The build installs that torch over
-the base image's 2.8.0, asserts the result, and installs PyPI's
+the `nvidia/cuda:13.0.3-cudnn-runtime-ubuntu24.04` base (chosen over
+`runpod/pytorch`, which carries a torch and a CUDA toolchain this image
+would only replace — the difference between a ~40 GB image and this one),
+asserts the result, and installs PyPI's
 onnxruntime-gpu (CUDA 13, as the template does) and the hash-pinned
 SageAttention wheel. Every boot logs it:
 
