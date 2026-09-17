@@ -226,7 +226,7 @@ anywhere costs speed, not the app.
 | Installed torch | SageAttention | Source |
 | --- | --- | --- |
 | 2.8.0 (`runpod/pytorch:1.0.2-cu1281-torch280-ubuntu2404`) | 1.0.6 | PyPI — Triton kernels, no compiled extension |
-| 2.11.0, CUDA 12.8 or 13.0 | 2.2.0 | the wheels the MiniMax template bakes (comfyui-runtime release assets) |
+| 2.11.0, CUDA 13.0 (the Docker image) | 2.2.0 | the wheel MiniMax template v8 bakes (a comfyui-runtime release asset) |
 | anything else, or Windows | none | — |
 
 Every download is sha256-pinned. It needs a card with Sage kernels — A100,
@@ -416,41 +416,38 @@ customer fills them in on their own pod.
 Pods on the existing template are unaffected and keep fetching
 `start.sh` from `/v1/start.sh` as before.
 
-To get the image onto RunPod, push it to a registry RunPod can pull from and
-use that tag as the container image:
+To get the image onto RunPod, push it to a registry RunPod can pull from,
+use that tag as the container image, and set the template's **CUDA version
+filter to 13.0** (see below):
 
 ```
-make image TORCH_VERSION=2.11.0 TORCH_CUDA=cu128 TAG=torch2.11-cu128
-make image-push REGISTRY=docker.io/<user> TAG=torch2.11-cu128
+make image
+make image-push REGISTRY=docker.io/<user>
 ```
 
-### Choosing torch and CUDA
+### Torch and CUDA
 
-The image runs the base image's torch (2.8.0 on CUDA 12.8) unless both build
-args are set, in which case that torch is installed over it at build time:
-
-| Build args | Torch | SageAttention | Host driver |
-| --- | --- | --- | --- |
-| none (default) | 2.8.0+cu128, the base image's | 1.0.6 | what `runpod/pytorch:1.0.2-cu1281-torch280` needs |
-| `TORCH_VERSION=2.11.0 TORCH_CUDA=cu128` | 2.11.0+cu128 | 2.2.0 | the same |
-| `TORCH_VERSION=2.11.0 TORCH_CUDA=cu130` | 2.11.0+cu130 — the MiniMax template's | 2.2.0 | R580+; set the RunPod template's CUDA filter to 13.0 |
-
-`make image` passes `TORCH_VERSION`/`TORCH_CUDA` through, and `docker compose
-build` reads `KREA2_TORCH_VERSION`/`KREA2_TORCH_CUDA` from `.env`.
-`docker/bake_torch.py` checks the pair (a version with no known torchvision,
-or a CUDA build that is not `cuNNN`, fails the build), picks the
-SageAttention from `bootstrap.sage_requirement` so the image and a pod
-agree, and records the choice in `baked.json`. The build then asserts the
-installed torch is the one chosen, installs the onnxruntime that matches its
-CUDA major and the hash-pinned SageAttention, and every boot logs it:
+The image runs exactly what MiniMax template v8
+(`hearmeman/comfyui-minimax-template:v8`) runs: **torch 2.11.0, torchvision
+0.26.0 and torchaudio 2.11.0 on CUDA 13.0, with SageAttention 2.2.0.** One
+configuration, not a menu. `docker/bake_torch.py` holds those pins, takes the
+SageAttention from `bootstrap.sage_requirement` so the image and the app
+agree, and records both in `baked.json`. The build installs that torch over
+the base image's 2.8.0, asserts the result, and installs PyPI's
+onnxruntime-gpu (CUDA 13, as the template does) and the hash-pinned
+SageAttention wheel. Every boot logs it:
 
 ```
-[krea2-image] torch 2.11.0+cu128 (CUDA 12.8, chosen at build) - SageAttention 2.2.0
+[krea2-image] torch 2.11.0+cu130 (CUDA 13.0) - SageAttention 2.2.0
 ```
 
-Nothing at boot changes torch — `bootstrap.ensure_torch` keeps whatever
-working torch it finds, in the image or on a plain pod — and SageAttention
-is only switched on after its kernel runs on the pod's GPU (see
+CUDA 13 needs an **R580 or newer driver** on the host, which is why the
+RunPod template has to filter on CUDA 13.0, as template v8's does.
+
+The plain RunPod template (`runpod/pytorch:1.0.2-cu1281-torch280` plus the
+start command) does not use this image and is unchanged: nothing at boot
+changes torch — `bootstrap.ensure_torch` keeps whatever working torch it
+finds — so that flow keeps torch 2.8.0 and gets SageAttention 1.0.6 (see
 [SageAttention](#sageattention)).
 
 ### Running your working tree in the image

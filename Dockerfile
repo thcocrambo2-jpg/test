@@ -24,28 +24,16 @@
 #     docker build -t krea2:latest .
 #     docker compose up
 
-# The image bootstrap.TORCH_STACK exists to reproduce (bootstrap.py's
-# PyTorch section) and the one the app is tested on. Overriding this is
-# choosing a configuration nobody has run the app on; the torch assertion
-# in the final stage is the floor, not permission.
+# The OS, Python 3.12 and system libraries the app is tested on. Its torch
+# (2.8.0+cu128) is not the one that runs: the final stage installs MiniMax
+# template v8's torch 2.11.0+cu130 over it (docker/bake_torch.py), because
+# RunPod publishes no torch 2.11 image. Overriding this is choosing a
+# configuration nobody has run the app on; the assertions in the final
+# stage are the floor, not permission.
+#
+# CUDA 13 needs an R580+ driver on the host. On RunPod, set the template's
+# CUDA version filter to 13.0, as template v8 does.
 ARG BASE_IMAGE=runpod/pytorch:1.0.2-cu1281-torch280-ubuntu2404
-
-# Which torch the image runs, installed over the base image's. Both empty
-# (the default) keeps the base image's torch 2.8.0 — the image exactly as
-# it was before these args. Set both to choose:
-#
-#     TORCH_VERSION=2.11.0 TORCH_CUDA=cu128   torch 2.11 on any driver the
-#                                             base image runs on; gets
-#                                             SageAttention 2.2
-#     TORCH_VERSION=2.11.0 TORCH_CUDA=cu130   what the MiniMax template runs;
-#                                             hosts need an R580+ driver
-#
-# docker/bake_torch.py validates the pair, and picks the SageAttention for
-# it from bootstrap.sage_requirement, so the image and a pod booting
-# without it agree. `make image TORCH_VERSION=... TORCH_CUDA=...` passes
-# them through.
-ARG TORCH_VERSION=
-ARG TORCH_CUDA=
 
 
 # ── Stage 1: clone ────────────────────────────────────────────────────────
@@ -80,13 +68,10 @@ COPY docker/bake_nodes.py /src/bake_nodes.py
 
 RUN python3 /src/bake_nodes.py
 
-# After the clone, not inside it: the torch args are declared here so that
-# building a second torch variant reuses the cached ComfyUI and node packs.
+# After the clone rather than inside it, so a change to the torch pins
+# reuses the cached ComfyUI and node packs.
 COPY docker/bake_torch.py /src/bake_torch.py
-ARG TORCH_VERSION
-ARG TORCH_CUDA
-RUN KREA2_TORCH_VERSION="${TORCH_VERSION}" KREA2_TORCH_CUDA="${TORCH_CUDA}" \
-    python3 /src/bake_torch.py
+RUN python3 /src/bake_torch.py
 
 
 # ── Stage 2: the image ────────────────────────────────────────────────────
@@ -124,16 +109,11 @@ RUN apt-get update && \
 
 COPY --from=nodes /opt/krea2 /opt/krea2
 
-# The torch bake_torch.py chose, before anything that installs against it.
-# An empty torch-stack.txt keeps the base image's. Either way the result is
-# asserted against baked.json, so a wheel index that quietly served a
-# different build fails here rather than as a SageAttention kernel that
-# will not load on a customer's pod.
-RUN if grep -q '^torch==' /opt/krea2/torch-stack.txt; then \
-        python3 -m pip install --no-cache-dir -r /opt/krea2/torch-stack.txt; \
-    else \
-        echo "keeping the base image's torch"; \
-    fi && \
+# Template v8's torch (2.11.0+cu130), over the base image's, before anything
+# that installs against it. Asserted against baked.json, so a wheel index
+# that quietly served a different build fails here rather than as a
+# SageAttention kernel that will not load on a customer's pod.
+RUN python3 -m pip install --no-cache-dir -r /opt/krea2/torch-stack.txt && \
     python3 -c "import json, sys, torch; \
     want = json.load(open('/opt/krea2/baked.json'))['torch']['version']; \
     print('torch', torch.__version__, 'CUDA', torch.version.cuda); \
@@ -177,32 +157,22 @@ RUN set -eu; \
 
 # onnxruntime last, and uninstall-then-install, because several packs list
 # plain `onnxruntime` (CPU) in their requirements and both packages provide
-# the same `onnxruntime` module — last install wins. Which build follows
-# the torch's CUDA major, as bootstrap.install_onnxruntime decides it: on
-# CUDA 12 the pin and index are bootstrap.py's ONNXRUNTIME_CUDA12_*
-# constants, because PyPI's current onnxruntime-gpu links CUDA 13 and dies
-# at import there; beside a CUDA 13 torch that PyPI build is the right one.
+# the same `onnxruntime` module — last install wins. PyPI's current
+# onnxruntime-gpu, because it links CUDA 13 like the torch above; it is
+# also what template v8 installs. (bootstrap.py's ONNXRUNTIME_CUDA12_* pin
+# is for the CUDA 12 torch of a plain pod, not for this image.)
 RUN python3 -m pip uninstall -y -q onnxruntime onnxruntime-gpu || true; \
-    cuda_major="$(python3 -c 'import torch; print(torch.version.cuda.split(".")[0])')"; \
-    if [ "$cuda_major" = "12" ]; then \
-        python3 -m pip install --no-cache-dir "onnxruntime-gpu==1.22.0" \
-            --extra-index-url https://aiinfra.pkgs.visualstudio.com/PublicPackages/_packaging/onnxruntime-cuda-12/pypi/simple/; \
-    else \
-        python3 -m pip install --no-cache-dir onnxruntime-gpu; \
-    fi
+    python3 -m pip install --no-cache-dir onnxruntime-gpu
 
-# The SageAttention bake_torch.py chose for this torch, hash-pinned. Only
-# installed here: there is no GPU at build time, so the kernel probe runs
-# at boot in bootstrap.install_sageattention, which finds it present and
-# only has to prove it runs before ComfyUI gets --use-sage-attention.
-RUN if [ -s /opt/krea2/sage-wheel.txt ]; then \
-        python3 -m pip install --no-cache-dir --no-deps \
-            -r /opt/krea2/sage-wheel.txt && \
-        python3 -c "import importlib.metadata as m; \
-            print('sageattention', m.version('sageattention'))"; \
-    else \
-        echo "no SageAttention build for this torch"; \
-    fi
+# SageAttention 2.2.0 for that torch, hash-pinned, from the file bake_torch
+# wrote. Only installed here: there is no GPU at build time, so the kernel
+# probe runs at boot in bootstrap.install_sageattention, which finds it
+# present and only has to prove it runs before ComfyUI gets
+# --use-sage-attention.
+RUN python3 -m pip install --no-cache-dir --no-deps \
+        -r /opt/krea2/sage-wheel.txt && \
+    python3 -c "import importlib.metadata as m; \
+        print('sageattention', m.version('sageattention'))"
 
 # The same modules install_reactor() verifies after installing them, for
 # the same reason: these can install cleanly and still fail to import on an
@@ -210,7 +180,7 @@ RUN if [ -s /opt/krea2/sage-wheel.txt ]; then \
 # node rather than as a broken dependency. Importing them for real is the
 # check — a metadata lookup would pass on exactly the wheels this catches.
 # onnxruntime is in the list so a CUDA-mismatched build cannot reach a
-# customer, which is the failure ONNXRUNTIME_CUDA12_PIN exists to avoid.
+# customer.
 RUN python3 -c "import cv2, onnx, onnxruntime, albumentations, \
         segment_anything, ultralytics; \
     print('node dependencies import OK'); \

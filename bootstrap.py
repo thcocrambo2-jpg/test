@@ -449,13 +449,13 @@ def ensure_torch() -> None:
 # Nothing here chooses torch. ensure_torch keeps whatever working torch the
 # machine has, and this picks the SageAttention build that torch can load:
 #
-#   torch 2.11.0 (CUDA 12.8 or 13.0)
-#       SageAttention 2.2.0 — a CUDA extension with no PyPI wheel, so these
-#       are the wheels comfyui-runtime publishes as GitHub release assets
-#       and the MiniMax template image bakes in: thu-ml/SageAttention at
-#       d1a57a5 (Apache-2.0), built for torch 2.11.0, CPython 3.12, x86_64
-#       Linux, one per CUDA major. A compiled extension only loads on the
-#       torch it was built against, which is why they are keyed on 2.11.
+#   torch 2.11.0 on CUDA 13.0 — the Docker image, and MiniMax template v8
+#       SageAttention 2.2.0 — a CUDA extension with no PyPI wheel, so this
+#       is the wheel comfyui-runtime publishes as a GitHub release asset
+#       and the template image bakes in: thu-ml/SageAttention at d1a57a5
+#       (Apache-2.0), built for torch 2.11.0+cu130, CPython 3.12, x86_64
+#       Linux. A compiled extension only loads on the torch it was built
+#       against, which is why it is keyed on exactly that torch.
 #   torch 2.8.0 — runpod/pytorch:1.0.2-cu1281-torch280-ubuntu2404
 #       SageAttention 1.0.6 from PyPI. Nobody publishes a 2.x wheel for
 #       Linux on 2.8, and 1.0.6 needs none: its kernels are Triton, which
@@ -468,16 +468,12 @@ def ensure_torch() -> None:
 #
 # Every requirement carries its sha256 as a #sha256= fragment, which pip
 # checks, so a changed asset fails the install instead of loading.
-SAGE2_WHEEL = ("https://github.com/Hearmeman24/comfyui-runtime/releases/"
-               "download/sage-d1a57a5-{cuda}-torch2.11.0/"
-               "sageattention-2.2.0-cp312-cp312-linux_x86_64.whl")
-SAGE2_WHEELS = {
-    # CUDA major -> (release tag suffix, sha256 of the wheel)
-    "12": ("cu128",
-           "487aeccc76236043c06154dfac34626692af25f520a3634c71d0bf160ab27ed6"),
-    "13": ("cu130",
-           "77803563ccc1f3a29e52b7873c058a665aa9de4ca0827c9c8c507d07e25f64a1"),
-}
+SAGE2_WHEEL = (
+    "https://github.com/Hearmeman24/comfyui-runtime/releases/download/"
+    "sage-d1a57a5-cu130-torch2.11.0/"
+    "sageattention-2.2.0-cp312-cp312-linux_x86_64.whl#sha256="
+    "77803563ccc1f3a29e52b7873c058a665aa9de4ca0827c9c8c507d07e25f64a1"
+)
 SAGE1_WHEEL = (
     "https://files.pythonhosted.org/packages/53/06/"
     "f7b47adb766bcb38b3f88763374a3e8dffea05ee9b556bc24dbcbd60fd29/"
@@ -505,9 +501,8 @@ def sage_requirement(info: dict) -> tuple[str, str] | None:
     cuda_major = (info.get("cuda") or "").split(".")[0]
     if not cuda_major:
         return None
-    if torch_version == "2.11.0" and cuda_major in SAGE2_WHEELS:
-        cuda, sha256 = SAGE2_WHEELS[cuda_major]
-        return "2.2.0", f"{SAGE2_WHEEL.format(cuda=cuda)}#sha256={sha256}"
+    if torch_version == "2.11.0" and cuda_major == "13":
+        return "2.2.0", SAGE2_WHEEL
     if torch_version == "2.8.0":
         return "1.0.6", SAGE1_WHEEL
     return None

@@ -21,11 +21,6 @@ services:
     build:
       context: .
       dockerfile: Dockerfile
-      # Empty keeps the base image's torch. Set both in .env to build another,
-      # e.g. KREA2_TORCH_VERSION=2.11.0 and KREA2_TORCH_CUDA=cu128.
-      args:
-        TORCH_VERSION: ${KREA2_TORCH_VERSION:-}
-        TORCH_CUDA: ${KREA2_TORCH_CUDA:-}
 
     # KREA2_LICENSE_KEY and KREA2_NODE_TAG. Named explicitly rather than
     # relying on compose's automatic .env loading: that mechanism only

@@ -39,9 +39,8 @@ print("[krea2-image] built %s" % d.get("built_at"))
 print("[krea2-image] ComfyUI %s" % (d.get("comfyui_sha") or "?")[:12])
 t = d.get("torch") or {}
 if t:
-    print("[krea2-image] torch %s (CUDA %s, %s) - SageAttention %s"
+    print("[krea2-image] torch %s (CUDA %s) - SageAttention %s"
           % (t.get("version"), t.get("cuda"),
-             "chosen at build" if t.get("pinned_at_build") else "base image",
              t.get("sageattention") or "none"))
 for name, sha in sorted((d.get("custom_nodes") or {}).items()):
     # ASCII on purpose: this runs under whatever locale the base image
