@@ -416,6 +416,43 @@ customer fills them in on their own pod.
 Pods on the existing template are unaffected and keep fetching
 `start.sh` from `/v1/start.sh` as before.
 
+To get the image onto RunPod, push it to a registry RunPod can pull from and
+use that tag as the container image:
+
+```
+make image TORCH_VERSION=2.11.0 TORCH_CUDA=cu128 TAG=torch2.11-cu128
+make image-push REGISTRY=docker.io/<user> TAG=torch2.11-cu128
+```
+
+### Choosing torch and CUDA
+
+The image runs the base image's torch (2.8.0 on CUDA 12.8) unless both build
+args are set, in which case that torch is installed over it at build time:
+
+| Build args | Torch | SageAttention | Host driver |
+| --- | --- | --- | --- |
+| none (default) | 2.8.0+cu128, the base image's | 1.0.6 | what `runpod/pytorch:1.0.2-cu1281-torch280` needs |
+| `TORCH_VERSION=2.11.0 TORCH_CUDA=cu128` | 2.11.0+cu128 | 2.2.0 | the same |
+| `TORCH_VERSION=2.11.0 TORCH_CUDA=cu130` | 2.11.0+cu130 — the MiniMax template's | 2.2.0 | R580+; set the RunPod template's CUDA filter to 13.0 |
+
+`make image` passes `TORCH_VERSION`/`TORCH_CUDA` through, and `docker compose
+build` reads `KREA2_TORCH_VERSION`/`KREA2_TORCH_CUDA` from `.env`.
+`docker/bake_torch.py` checks the pair (a version with no known torchvision,
+or a CUDA build that is not `cuNNN`, fails the build), picks the
+SageAttention from `bootstrap.sage_requirement` so the image and a pod
+agree, and records the choice in `baked.json`. The build then asserts the
+installed torch is the one chosen, installs the onnxruntime that matches its
+CUDA major and the hash-pinned SageAttention, and every boot logs it:
+
+```
+[krea2-image] torch 2.11.0+cu128 (CUDA 12.8, chosen at build) - SageAttention 2.2.0
+```
+
+Nothing at boot changes torch — `bootstrap.ensure_torch` keeps whatever
+working torch it finds, in the image or on a plain pod — and SageAttention
+is only switched on after its kernel runs on the pod's GPU (see
+[SageAttention](#sageattention)).
+
 ### Running your working tree in the image
 
 `docker compose up` runs the binary the licence server hands out — whatever

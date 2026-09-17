@@ -38,6 +38,11 @@ WIN_START := scripts/windows_start.ps1
 IMAGE    := krea2
 TAG      := latest
 REGISTRY :=
+# The image's torch, installed over the base image's. Both empty keeps the
+# base image's own; see the Dockerfile's TORCH_VERSION comment. e.g.
+#     make image TORCH_VERSION=2.11.0 TORCH_CUDA=cu128 TAG=torch2.11-cu128
+TORCH_VERSION :=
+TORCH_CUDA    :=
 
 # What every recipe needs: the file, the deployment it talks to, and the
 # token that opens its admin routes.
@@ -376,7 +381,9 @@ promote:
 # so anyone with the repo can reproduce it. Bumping a pin in
 # scripts/PINS.json is the only thing that changes what comes out.
 image:
-	@docker build -t "$(IMAGE):$(TAG)" .
+	@docker build -t "$(IMAGE):$(TAG)" \
+	    --build-arg "TORCH_VERSION=$(TORCH_VERSION)" \
+	    --build-arg "TORCH_CUDA=$(TORCH_CUDA)" .
 	echo
 	echo "built $(IMAGE):$(TAG)"
 	echo "run it with: docker compose up   (after copying .env.example to .env)"

@@ -29,6 +29,7 @@
 !scripts/runpod_start.sh
 
 !docker/bake_nodes.py
+!docker/bake_torch.py
 !docker/entrypoint.sh
 
 # The dev image (docker/Dockerfile.dev) installs the app's own dependencies
