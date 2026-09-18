@@ -57,11 +57,11 @@ npm run issue-key -- --key KREA2-XXXX-XXXX-XXXX --features-extra "wan_i2v" --upd
 | `starter` | 599 | krea_t2i, gallery, community_prompts |
 | `creator` | 999 | + krea_v2_t2i, krea_edit, krea_v2_edit, json_batch |
 | `studio` | 1799 | + wan_i2v, minimax_i2v, minimax_t2v |
-| `admin` | 0 | everything, including the four withdrawn tabs; `is_public: false` |
+| `admin` | 0 | everything, including the three withdrawn tabs; `is_public: false` |
 
 Three public tiers since 2026-09-07. `pro` was deleted that day (no
-license was on it), and `krea_inpaint`, `faceswap`, `flux_t2i` and
-`klein_i2i` were **withdrawn**: on no public plan, and `enabled: false` in
+license was on it), and `krea_inpaint`, `flux_t2i` and `klein_i2i` were
+**withdrawn**: on no public plan, and `enabled: false` in
 the features collection so the pricing page does not list them. The app
 still ships those tabs and `admin` still grants them, so a dev pod can
 check one still works; putting one back on sale is a plan edit plus that
@@ -149,7 +149,6 @@ keep a plain name.
 | `krea_v2_edit` | Krea2 V2 Edit | editing |
 | `krea_inpaint` | Krea Inpaint — Img2Img | editing |
 | `klein_i2i` | Klein Edit — Image to Image | editing |
-| `faceswap` | Face Swap (ReActor) | editing |
 | `wan_i2v` | Wan 2.2 Video | video |
 | `minimax_i2v` | MiniMax H3 Video (image-to-video, with sound) | video |
 | `minimax_t2v` | MiniMax H3 Text to Video (with sound) | video |

@@ -379,8 +379,8 @@ export async function resolveEntitlement(license) {
 // ── The 2026-09-07 restructure ──────────────────────────────────────────
 //
 // Three public tiers, not four. `pro` is gone (no license was ever on it —
-// checked before it was deleted), and four tabs were withdrawn from every
-// plan: `krea_inpaint`, `faceswap`, `flux_t2i` and `klein_i2i`. Withdrawn,
+// checked before it was deleted), and three tabs were withdrawn from every
+// plan: `krea_inpaint`, `flux_t2i` and `klein_i2i`. Withdrawn,
 // not deleted: their code is still in the app and their rows are still in
 // the features collection, marked `enabled: false` there so the pricing
 // page stops listing them (see features.js). A license that does not name
@@ -389,7 +389,7 @@ export async function resolveEntitlement(license) {
 // advertising something no plan sells.
 //
 // `admin` does not keep them either. It is the plan on your own pods, and
-// the four withdrawn tabs are reachable from it by granting the keys with
+// the three withdrawn tabs are reachable from it by granting the keys with
 // `--features-extra` on the one licence you want them on, which is a
 // smaller thing to undo than a tier that quietly grants everything.
 //
@@ -460,7 +460,7 @@ export const DEFAULT_PLANS = [
     sort_order: 40,
   },
   // Not public, and the name that shows up in the server logs for your own
-  // pods. It grants every tab the binary can build — including the four
+  // pods. It grants every tab the binary can build — including the three
   // withdrawn ones, which no customer plan names any more — and it is
   // where a new tab lands first, before it is on anything a customer pays
   // for.

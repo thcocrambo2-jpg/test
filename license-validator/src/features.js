@@ -127,7 +127,7 @@ export const FEATURES = [
   },
   // ── Withdrawn 2026-09-07 ─────────────────────────────────────────────
   //
-  // The next four are on no plan at all and `enabled: false` here, so the
+  // The next three are on no plan at all and `enabled: false` here, so the
   // pricing page neither lists them nor shows them on a tier. The keys and
   // the app code behind them are untouched, so switching one back on is a
   // plan edit plus this flag, not a rebuild — and one licence can have any
@@ -140,15 +140,6 @@ export const FEATURES = [
     description: "Edit only specific parts of an image",
     category: "editing",
     sort_order: 50,
-    enabled: false,
-  },
-  {
-    key: "faceswap",
-    name: "Face Swap",
-    tab_label: "🎭 Face Swap",
-    description: "Easily replace faces in any image",
-    category: "editing",
-    sort_order: 60,
     enabled: false,
   },
   {
@@ -209,7 +200,7 @@ export const FEATURES = [
     description: "Generate many images at once using advanced controls",
     category: "tools",
     sort_order: 100,
-    // Off for the same reason as the four above, and no plan grants it.
+    // Off for the same reason as the three above, and no plan grants it.
     // The tab exists in the binary; nothing sells it.
     enabled: false,
   },
@@ -221,7 +212,7 @@ export const FEATURES = [
       "Browse ready-made prompts and load one into Krea2 or Krea2 V2 " +
       "with every setting already dialled in",
     category: "tools",
-    // 65, between faceswap (60) and flux_t2i (70), so it reads with the
+    // 65, between krea_inpaint (50) and flux_t2i (70), so it reads with the
     // rest of the everyday set rather than trailing the video and batch
     // tabs. This number is the *only* thing that decides where it appears
     // in a plan's feature list — /v1/plans sorts each plan's keys by it —
