@@ -4,7 +4,7 @@
     "Add a model or LoRA to config.py? Add it here too. Run `mirror_to_hf.py --audit` to be told what config.py has that this file does not.",
     "Entries are never removed. An item stays here after config.py stops mentioning it - that is the point of a mirror.",
     "local/path_in_repo are relative to MODELS_DIR and the repo root.",
-    "source.kind: civitai | hf | hf_dataset | url | dir | abliterated_merge | local"
+    "source.kind: civitai | hf | dir | abliterated_merge | local"
   ],
   "mirror_public": true,
   "repos": {
@@ -19,10 +19,6 @@
     "assets": {
       "name": "krea2-assets",
       "description": "Community HF weights"
-    },
-    "reactor": {
-      "name": "krea2-reactor",
-      "description": "Face-swap models + detectors"
     },
     "nodes": {
       "name": "krea2-nodes",
@@ -284,75 +280,6 @@
       }
     },
     {
-      "repo": "reactor",
-      "local": "insightface/inswapper_128.onnx",
-      "path_in_repo": "insightface/inswapper_128.onnx",
-      "source": {
-        "kind": "hf_dataset",
-        "repo": "Gourieff/ReActor",
-        "path": "models/inswapper_128.onnx"
-      }
-    },
-    {
-      "repo": "reactor",
-      "local": "facerestore_models/codeformer-v0.1.0.pth",
-      "path_in_repo": "facerestore_models/codeformer-v0.1.0.pth",
-      "source": {
-        "kind": "hf_dataset",
-        "repo": "Gourieff/ReActor",
-        "path": "models/facerestore_models/codeformer-v0.1.0.pth"
-      }
-    },
-    {
-      "repo": "reactor",
-      "local": "facerestore_models/GFPGANv1.4.pth",
-      "path_in_repo": "facerestore_models/GFPGANv1.4.pth",
-      "source": {
-        "kind": "hf_dataset",
-        "repo": "Gourieff/ReActor",
-        "path": "models/facerestore_models/GFPGANv1.4.pth"
-      },
-      "note": "commented out in config.py REACTOR_HF_FILES"
-    },
-    {
-      "repo": "reactor",
-      "local": "insightface/models/buffalo_l",
-      "path_in_repo": "insightface/models/buffalo_l",
-      "source": {
-        "kind": "dir"
-      },
-      "note": "unpacked by the app from buffalo_l.zip; mirrored flat"
-    },
-    {
-      "repo": "reactor",
-      "local": "nsfw_detector/vit-base-nsfw-detector",
-      "path_in_repo": "nsfw_detector/vit-base-nsfw-detector",
-      "source": {
-        "kind": "dir"
-      },
-      "note": "AdamCodd/vit-base-nsfw-detector snapshot"
-    },
-    {
-      "repo": "reactor",
-      "local": "facedetection/detection_Resnet50_Final.pth",
-      "path_in_repo": "facedetection/detection_Resnet50_Final.pth",
-      "source": {
-        "kind": "url",
-        "url": "https://github.com/xinntao/facexlib/releases/download/v0.1.0/detection_Resnet50_Final.pth"
-      },
-      "note": "GitHub release asset - a fork would not carry this"
-    },
-    {
-      "repo": "reactor",
-      "local": "facedetection/parsing_parsenet.pth",
-      "path_in_repo": "facedetection/parsing_parsenet.pth",
-      "source": {
-        "kind": "url",
-        "url": "https://github.com/sczhou/CodeFormer/releases/download/v0.1.0/parsing_parsenet.pth"
-      },
-      "note": "GitHub release asset - a fork would not carry this"
-    },
-    {
       "repo": "loras",
       "local": "diffusion_models/Krea2_FinePornV2_FP8.safetensors",
       "path_in_repo": "diffusion_models/Krea2_FinePornV2_FP8.safetensors",
@@ -432,11 +359,9 @@
     "Comfy-Org/Krea-2": "hf",
     "Comfy-Org/Wan_2.2_ComfyUI_Repackaged": "hf",
     "Comfy-Org/flux2-dev": "hf",
-    "Gourieff/ReActor": "hf-dataset",
     "conradlocke/krea2-identity-edit": "hf",
     "wangkanai/wan21-vae": "hf",
     "huihui-ai/Huihui-Qwen3-VL-4B-Instruct-abliterated": "hf",
-    "AdamCodd/vit-base-nsfw-detector": "hf",
     "black-forest-labs/FLUX.2-klein-9b-fp8": "hf",
     "edicamargo/qwen_3_8b_fp8mixed_abliterated": "hf",
     "https://github.com/comfyanonymous/ComfyUI.git": "git"

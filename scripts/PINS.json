@@ -1,8 +1,4 @@
 {
-  "AdamCodd/vit-base-nsfw-detector": {
-    "kind": "hf",
-    "sha": "8587de998f441aac03fdd57a85d2e4cb808c7d64"
-  },
   "Comfy-Org/Krea-2": {
     "kind": "hf",
     "sha": "952f49d49653cb42e7d6cf7cbfad74738073ec7d"
@@ -32,10 +28,6 @@
     "sha": "c49a05254795403648f2c1774b6f5ea39f96e7d5",
     "tarball": "ComfyUI-post-processing-nodes-c49a0525.tar.gz",
     "url": "https://github.com/EllangoK/ComfyUI-post-processing-nodes"
-  },
-  "Gourieff/ReActor": {
-    "kind": "hf-dataset",
-    "sha": "218401e38fb00476b38f319c043b2f85d4db5b87"
   },
   "RES4LYF": {
     "sha": "022c873c6d198c67b3312a1804336533a050df18",

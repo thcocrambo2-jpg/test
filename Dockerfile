@@ -2,8 +2,7 @@
 #
 # What this image is: everything a pod spends its first several minutes
 # doing, done once at build time. The ComfyUI checkout at its pinned SHA,
-# the custom node packs, ComfyUI's Python requirements, ReActor's heavy
-# dependency set, a working onnxruntime.
+# the custom node packs and ComfyUI's Python requirements.
 #
 # What it deliberately is NOT: the app. The binary is still fetched at boot
 # by scripts/runpod_start.sh, unmodified and baked in at /opt/krea2/bin.
@@ -151,12 +150,6 @@ RUN python3 -m pip install --no-cache-dir \
         -r /opt/krea2/ComfyUI/requirements.txt \
         --constraint /opt/krea2/torch-constraints.txt
 
-# ReActor is vendored rather than cloned, and copied rather than symlinked,
-# for the reason install_reactor() gives: the '../../models/...' paths
-# inside r_facelib resolve against the ComfyUI install, not against wherever
-# the pack came from.
-COPY deps/ComfyUI-ReActor /opt/krea2/ComfyUI/custom_nodes/ComfyUI-ReActor
-
 # Every baked pack's requirements, under the torch constraint. A pack that
 # fails here fails the build — unlike at boot, where install_v2_nodes()
 # logs it and leaves one tab broken. An image is built once and run by
@@ -169,15 +162,6 @@ RUN set -eu; \
             --constraint /opt/krea2/torch-constraints.txt; \
     done
 
-# onnxruntime last, and uninstall-then-install, because several packs list
-# plain `onnxruntime` (CPU) in their requirements and both packages provide
-# the same `onnxruntime` module — last install wins. PyPI's current
-# onnxruntime-gpu, because it links CUDA 13 like the torch above; it is
-# also what template v8 installs. (bootstrap.py's ONNXRUNTIME_CUDA12_* pin
-# is for the CUDA 12 torch of a plain pod, not for this image.)
-RUN python3 -m pip uninstall -y -q onnxruntime onnxruntime-gpu || true; \
-    python3 -m pip install --no-cache-dir onnxruntime-gpu
-
 # SageAttention 2.2.0 for that torch, hash-pinned, from the file bake_torch
 # wrote. Only installed here: there is no GPU at build time, so the kernel
 # probe runs at boot in bootstrap.install_sageattention, which finds it
@@ -188,17 +172,13 @@ RUN python3 -m pip install --no-cache-dir --no-deps \
     python3 -c "import importlib.metadata as m; \
         print('sageattention', m.version('sageattention'))"
 
-# The same modules install_reactor() verifies after installing them, for
-# the same reason: these can install cleanly and still fail to import on an
-# ABI or numpy mismatch, and ComfyUI reports that much later as a missing
-# node rather than as a broken dependency. Importing them for real is the
-# check — a metadata lookup would pass on exactly the wheels this catches.
-# onnxruntime is in the list so a CUDA-mismatched build cannot reach a
-# customer.
-RUN python3 -c "import cv2, onnx, onnxruntime, albumentations, \
-        segment_anything, ultralytics; \
-    print('node dependencies import OK'); \
-    print('onnxruntime providers:', onnxruntime.get_available_providers())"
+# The node packs' compiled dependency: RES4LYF and the post-processing pack
+# import cv2, and it can install cleanly and still fail to import on an ABI
+# or numpy mismatch, which ComfyUI reports much later as a missing node
+# rather than as a broken dependency. Importing it for real is the check —
+# a metadata lookup would pass on exactly the wheels this catches.
+RUN python3 -c "import cv2; \
+    print('node dependencies import OK - opencv', cv2.__version__)"
 
 # The start script, unmodified and byte-identical to the one published to
 # R2 by build.sh. The entrypoint execs it; everything about how a build is

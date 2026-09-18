@@ -38,10 +38,6 @@
 !requirements.txt
 !docker/Dockerfile.dev
 
-# The vendored ReActor pack, copied into custom_nodes exactly as
-# install_reactor() would.
-!deps/ComfyUI-ReActor
-
 # Junk inside the directories allowed above. Last match wins, so these
 # have to come after the exceptions.
 **/__pycache__

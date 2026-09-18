@@ -634,9 +634,6 @@ echo ">>> Compiling (the first build is slow — every package below is compiled
     ${libpython_flag[@]+"${libpython_flag[@]}"} \
     \
     `# Bundled next to __file__, which is where config.PROJECT_DIR points.` \
-    `# deps/ carries the vendored ReActor pack that install_reactor() copies` \
-    `# into custom_nodes instead of cloning from GitHub.` \
-    --include-data-dir=deps=deps \
     --include-data-files=requirements.txt=requirements.txt \
     \
     `# The pricing page's feature showcase — the copy only. A few KB of` \

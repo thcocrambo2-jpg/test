@@ -24,9 +24,6 @@ Which packs get baked, and why each is treated differently:
                             which is strictly weaker than a pin: two pods
                             from one image agreed, two images built a week
                             apart did not.
-
-ComfyUI-ReActor is absent on purpose — it is vendored in deps/ and the
-Dockerfile copies it in directly, the same way install_reactor() does.
 """
 
 import json
