@@ -12,7 +12,6 @@ LoRA lists and (optional) access tokens. In section order:
     MiniMax H3          video with sound — image-to-video and text-to-video
     Flux 2              text-to-image
     Klein Edit          Flux 2 Klein 9B image editing, self-contained
-    ReActor             face swap
     CivitAI LoRAs       shared LoRA lists, resolutions, samplers
     Licensing           seat check + access tokens
 
@@ -64,7 +63,7 @@ FROZEN = "__compiled__" in globals()
 # generated images and logs all live under one base directory and are lost
 # when the pod is destroyed. Override with the KREA2_BASE_DIR env var.
 # Under --onefile PROJECT_DIR is Nuitka's temp extraction dir, which is
-# correct: build.sh bundles deps/ and requirements.txt alongside the code.
+# correct: build.sh bundles requirements.txt alongside the code.
 # BASE_DIR is unaffected — it is absolute, so models outlive the extraction.
 PROJECT_DIR = Path(__file__).resolve().parent
 # The pricing page's showcase copy — prose only, a few kilobytes, bundled
@@ -841,75 +840,6 @@ KLEIN_LORA_STACK = [
     ("ultra_real_v4.safetensors", 1.0, True, 2846977),
     ("realistic_klein_v3.safetensors", 1.0, True, 2876634),
 ]
-
-# ── ReActor face swap ─────────────────────────────────────────────────────────
-# The Face Swap tab runs ComfyUI-ReActor: an ONNX face-swap pipeline
-# (inswapper_128) that is completely independent of the diffusion models.
-# It takes a finished image plus a reference face and replaces the face in
-# place — no UNet, no text encoder, no VAE — so it never touches the Krea 2
-# stack and costs nothing in VRAM while a generation is running.
-#
-# Everything it needs is downloaded up front by downloads.py, *including*
-# the three files ReActor would otherwise fetch during the first swap (the
-# RetinaFace detector, the face-parsing net and the NSFW classifier), so a
-# swap never reaches out to the network. ~1.8 GB in total. Off by default
-# (feature key "faceswap"); a license granting "faceswap" installs the
-# node pack, fetches the models and shows the tab.
-REACTOR_NODES_DIR = "ComfyUI-ReActor"
-# The node pack is vendored in deps/, so bootstrap installs it by copying
-# rather than cloning — nothing is fetched from GitHub. The repo URL stays
-# as the fallback for a checkout that does not carry deps/.
-REACTOR_LOCAL_NODES = PROJECT_DIR / "deps" / REACTOR_NODES_DIR
-REACTOR_NODES_REPO = "https://github.com/Gourieff/ComfyUI-ReActor"
-
-# Swap + restore models live in a HF *dataset* repo, so these downloads
-# need repo_type="dataset". Entries are (path in the repo, path under
-# MODELS_DIR) — the repo nests everything under models/, which is not the
-# layout ComfyUI wants, so each file is placed explicitly.
-REACTOR_HF_REPO = "Gourieff/ReActor"
-REACTOR_SWAP_MODEL = "inswapper_128.onnx"           # ~554 MB
-REACTOR_RESTORE_MODEL = "codeformer-v0.1.0.pth"     # ~377 MB
-REACTOR_HF_FILES = [
-    (f"models/{REACTOR_SWAP_MODEL}", f"insightface/{REACTOR_SWAP_MODEL}"),
-    (f"models/facerestore_models/{REACTOR_RESTORE_MODEL}",
-     f"facerestore_models/{REACTOR_RESTORE_MODEL}"),
-    # Add any other restorer from the same repo and it appears in the tab's
-    # "Face restoration" dropdown after a restart:
-    # ("models/facerestore_models/GFPGANv1.4.pth",
-    #  "facerestore_models/GFPGANv1.4.pth"),
-]
-
-# The models originate from insightface, but the package is not involved:
-# ReActor's own reactor_core/analyzer.py drives them through onnxruntime.
-# ReActorFaceAnalysis(name="buffalo_l", root=models/insightface) expects
-# the five ONNX files unpacked flat in models/insightface/models/buffalo_l/
-# — otherwise it downloads and unzips the archive itself on the first swap.
-REACTOR_INSIGHTFACE_PACK = "buffalo_l"
-REACTOR_INSIGHTFACE_ZIP = "models/buffalo_l.zip"    # ~289 MB
-
-# r_facelib resolves its '../../models/facedetection' against the node
-# pack's own directory, i.e. ComfyUI/models/facedetection — which
-# link_model_dirs symlinks at MODELS_DIR/facedetection. Pre-fetching these
-# two is what lets the *first* swap run without a network connection.
-REACTOR_FACEDETECTION_FILES = [
-    "https://github.com/xinntao/facexlib/releases/download/v0.1.0/"
-    "detection_Resnet50_Final.pth",                                  # ~110 MB
-    "https://github.com/sczhou/CodeFormer/releases/download/v0.1.0/"
-    "parsing_parsenet.pth",                                          # ~85 MB
-]
-
-# ComfyUI-ReActor is the SFW edition: it classifies every input image with
-# this ViT before swapping and returns flagged images unswapped. The node
-# looks for it under models/nsfw_detector/vit-base-nsfw-detector, and the
-# check runs whether or not the model is present — so it is downloaded
-# here rather than left to fetch itself mid-swap.
-REACTOR_NSFW_REPO = "AdamCodd/vit-base-nsfw-detector"
-REACTOR_NSFW_DIR = "nsfw_detector/vit-base-nsfw-detector"
-
-# Detector back-ends the ReActorFaceSwap node accepts, in its own order.
-REACTOR_DETECTORS = ["retinaface_resnet50", "retinaface_mobile0.25",
-                     "YOLOv5l", "YOLOv5n"]
-REACTOR_DEFAULT_DETECTOR = "retinaface_resnet50"
 
 # ── CivitAI LoRAs ─────────────────────────────────────────────────────────────
 # Entries are (model_version_id, filename_to_save_as). The version id is the

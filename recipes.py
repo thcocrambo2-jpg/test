@@ -77,8 +77,8 @@ _LINES = 0                                   # lines on file, for compaction
 # handler's wrapper before the work starts and read by the output hook
 # when ComfyUI reports what it wrote.
 #
-# Thread-local rather than passed down: the three executors (stills,
-# face swap, video) all reach ComfyUI through client.run, and the hook
+# Thread-local rather than passed down: the two executors (stills and
+# video) both reach ComfyUI through client.run, and the hook
 # fires inside it. Threading a recipe through every one of those call
 # chains would touch every generation handler in the app to carry
 # something none of them has any other use for. One worker per lane runs

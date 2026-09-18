@@ -24,8 +24,8 @@ class ComfyUIError(RuntimeError):
 
 
 # Called with the list of paths a finished prompt wrote. A registry rather
-# than a direct import because there are three separate consumers of the
-# "done" event upstream (the still, face-swap and video executors in ui.py)
+# than a direct import because there are two separate consumers of the
+# "done" event upstream (the still and video executors in ui.py)
 # and only one producer — and because bookkeeping about generated files is
 # not this module's business to know about.
 _output_hooks = []

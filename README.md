@@ -308,9 +308,8 @@ first generation.
 
 An image that carries the environment — Python 3.12 and the pinned torch
 stack on a slim `nvidia/cuda` base, the ComfyUI checkout at its pinned SHA,
-the custom node packs, ComfyUI's Python requirements, ReActor's dependency
-set, a working onnxruntime, SageAttention — so a machine spends none of its
-first boot on them.
+the custom node packs, ComfyUI's Python requirements, SageAttention — so a
+machine spends none of its first boot on them.
 
 It does **not** carry the app. `scripts/runpod_start.sh` is baked in
 unmodified and still fetches the binary from the licence server, which
@@ -437,9 +436,8 @@ agree, and records both in `baked.json`. The build installs that torch over
 the `nvidia/cuda:13.0.3-cudnn-runtime-ubuntu24.04` base (chosen over
 `runpod/pytorch`, which carries a torch and a CUDA toolchain this image
 would only replace — the difference between a ~40 GB image and this one),
-asserts the result, and installs PyPI's
-onnxruntime-gpu (CUDA 13, as the template does) and the hash-pinned
-SageAttention wheel. Every boot logs it:
+asserts the result, and installs the hash-pinned SageAttention wheel. Every
+boot logs it:
 
 ```
 [krea2-image] torch 2.11.0+cu130 (CUDA 13.0) - SageAttention 2.2.0
@@ -555,7 +553,6 @@ npm run issue-key -- --name "Acme Corp" --plan creator --seats 2
 | `krea_edit`    | ✨ Edit (Instruction)   | ~1.9 GB + base |
 | `krea_v2_edit` | 🔷 Krea 2 V2 Edit       | ~1.9 GB + V2   |
 | `krea_inpaint` | Inpaint / Img2Img       | base only      |
-| `faceswap`     | 🎭 Face Swap (ReActor)  | ~1.8 GB        |
 | `flux_t2i`     | 🌊 Flux 2               | ~57 GB         |
 | `klein_i2i`    | 🧩 Klein Edit           | ~19 GB         |
 | `wan_i2v`      | 🎬 Video (Wan 2.2)      | ~49 GB         |
@@ -567,7 +564,7 @@ npm run issue-key -- --name "Acme Corp" --plan creator --seats 2
 The three shipped plans stack: `starter` (₹599/mo) is `krea_t2i`, the
 gallery and the prompt library; `creator` (₹999) adds Krea 2 V2, both edit
 tabs and JSON batch; `studio` (₹1799) adds Wan and both MiniMax video tabs.
-`krea_inpaint`, `faceswap`, `flux_t2i` and `klein_i2i` are on no public
+`krea_inpaint`, `flux_t2i` and `klein_i2i` are on no public
 plan since 2026-09-07 and are hidden from the pricing page — the code is
 still here, and the internal `admin` plan still grants them.
 `license-validator/README.md` has the full table and how to change it.
@@ -1273,7 +1270,6 @@ error in the log points at a custom node instead.
 
 ## Layout
 
-- `deps/ComfyUI-ReActor` — vendored ReActor node pack, copied into `custom_nodes` at bootstrap
 - `app.py` — entry point; orchestrates the startup flow
 - `licensing.py` — license seat acquire / heartbeat / release (stdlib only)
 - `plans.py` — the public plan catalogue behind the `/pricing` page, read from the license server (stdlib only, read-only)
@@ -1288,7 +1284,6 @@ error in the log points at a custom node instead.
 - `workflow_klein.py` — Flux 2 Klein 9B edit builder (the Klein advanced Klein Edit graph)
 - `workflow_wan.py` — Wan 2.2 image-to-video workflow builder (two-expert A14B)
 - `workflow_minimax.py` — MiniMax H3 video-with-sound builder; one graph serves both the image-to-video and text-to-video tabs
-- `workflow_reactor.py` — ReActor face-swap workflow builder + availability checks
 - `client.py` — ComfyUI HTTP/websocket client (queue, progress, image upload, interrupt)
 - `jobqueue.py` — the visible job queue behind every Generate button (worker per lane, cancel, history)
 - `recipes.py` — what each generated file was made with, so the Gallery can load it back
@@ -1315,14 +1310,14 @@ Two things follow from that, and both were impossible before.
 
 **The nav is grouped, not a flat strip.** Four groups — Generate, Edit,
 Video, Library — in `CATEGORY_ORDER` (`webui/src/lib/nav.ts`). The old strip
-was twelve flat emoji tabs with generate and edit modes interleaved, in an
+was eleven flat emoji tabs with generate and edit modes interleaved, in an
 order that told you nothing about which of them made a picture from nothing
 and which changed one you already had.
 
 **Every tab has a URL.** `/generate/krea2`, `/edit/inpaint`,
 `/library/gallery`. They are bookmarkable, linkable and survive a reload;
 the browser Back button walks them. The Gradio app had one URL for all
-twelve tabs.
+eleven tabs.
 
 A feature the licence does not grant is not in `/api/v1/session`'s `features`
 array, so its nav entry is not rendered and its routes 403 — see
@@ -1401,10 +1396,9 @@ What the binary contains vs. what it still installs at runtime:
 | this app's code (compiled) | ComfyUI (`git clone`) |
 | fastapi, uvicorn, huggingface_hub, requests, safetensors, websocket-client, Pillow | torch + ComfyUI's requirements |
 | the compiled React bundle (`webui_bundle.py`) | |
-| `deps/ComfyUI-ReActor` (bundled data) | ReActor's requirements + onnxruntime |
 | | ~90 GB of models |
 
-ComfyUI's and ReActor's dependencies *cannot* be compiled in: the app never
+ComfyUI's dependencies *cannot* be compiled in: the app never
 imports them, and ComfyUI runs as a **separate process with its own
 interpreter**, so it needs them in the pod's system Python. That is also what
 keeps the artifact around 100–200 MB instead of multi-gigabyte. The target pod
@@ -1474,9 +1468,9 @@ straight to serving.
 ```
 
 Expect `ComfyUI already present … — skipping clone`,
-`ReActor nodes already present …`, `ComfyUI API on port 8188 is ready` and
-`Custom node ReActorFaceSwap is registered`. A **fresh** pod is the real
-end-to-end test — only that exercises the clone and download paths.
+`ComfyUI API on port 8188 is ready` and, on a licence granting a Krea 2 V2
+tab, `Custom node ClownsharKSampler_Beta is registered`. A **fresh** pod is
+the real end-to-end test — only that exercises the clone and download paths.
 
 ### Building locally in WSL2 (optional)
 
@@ -2031,8 +2025,8 @@ actually registered after ComfyUI starts:
 | [ComfyUI-RBG-SmartSeedVariance](https://github.com/RamonGuthrie/ComfyUI-RBG-SmartSeedVariance) | `RBG_Smart_Seed_Variance` | conditioning variance — required |
 | [ComfyUI-post-processing-nodes](https://github.com/EllangoK/ComfyUI-post-processing-nodes) | `FilmGrain` | the optional grain toggle only |
 
-A failed clone disables this tab and nothing else, the same contract the Wan,
-Flux and ReActor installs follow.
+A failed clone disables this tab and nothing else, the same contract the Wan
+and Flux installs follow.
 
 ### LoRA stack
 
@@ -2168,101 +2162,6 @@ code writes one.
 **Still missing from the canvas:** zoom and pan. `gr.ImageEditor` had them
 and this does not, which is a real gap for detailed work on a large image.
 It is not a parity break for the mask *output*.
-
-## Face swap (ReActor)
-
-The **🎭 Face Swap (ReActor)** tab replaces the face in one image with the
-face from a reference photo, using
-[ComfyUI-ReActor](https://github.com/Gourieff/ComfyUI-ReActor). The node
-pack is **vendored in `deps/ComfyUI-ReActor`** and bootstrap installs it by
-copying that folder into `custom_nodes` — nothing is fetched from GitHub.
-(It is copied rather than symlinked so the `../../models/...` paths inside
-`r_facelib` resolve against the ComfyUI install instead of this project
-directory.) A checkout without `deps/` falls back to cloning the repo, and
-an existing `custom_nodes/ComfyUI-ReActor` is always left alone. Pick the
-base image from the collapsed
-**"Use a previous generation"** picker — the same last-20 gallery the Edit
-and Video tabs use — or upload/paste one, then upload the reference face.
-
-This is not a diffusion pass. No UNet, text encoder or VAE is loaded: the
-graph is `LoadImage ×2 → ReActorFaceSwap → SaveImage`, ReActor detects the
-face, takes the reference identity embedding and rewrites only the face
-region with an ONNX model. So it runs in seconds, costs almost no VRAM,
-leaves the Krea 2 pipeline completely untouched, and the output keeps the
-base image's **exact resolution** — nothing on either side resizes (the
-one exception is a rejected input, see the SFW note below). The
-`SaveImage` node reads output 0 (`SWAPPED_IMAGE`), so exactly one file is
-written and it is the finished swap; it lands in `OUTPUT_DIR` with the
-usual ComfyUI PNG metadata and shows up in the Gallery tab and the zip
-download like every other output.
-
-Defaults match the ReActor recommendations: `inswapper_128`,
-`retinaface_resnet50`, CodeFormer restoration (visibility 1.0, weight 0.5)
-and face index 0 on both sides. Restoration is optional — set **Face
-restoration** to `none` to skip it. Both index boxes accept `0`, `0,1` or
-`0-2` to pick among several detected faces, counted left to right.
-
-Everything is downloaded up front by `downloads.py` (~1.8 GB) so a swap
-makes **no network calls at generation time**:
-
-| File | Destination |
-| --- | --- |
-| `inswapper_128.onnx` (~554 MB) | `models/insightface/` |
-| `buffalo_l` pack (~289 MB, unzipped) | `models/insightface/models/buffalo_l/` |
-| `codeformer-v0.1.0.pth` (~377 MB) | `models/facerestore_models/` |
-| `detection_Resnet50_Final.pth` (~110 MB) | `models/facedetection/` |
-| `parsing_parsenet.pth` (~85 MB) | `models/facedetection/` |
-| `AdamCodd/vit-base-nsfw-detector` (~350 MB) | `models/nsfw_detector/vit-base-nsfw-detector/` |
-
-The last three are the ones ReActor would otherwise fetch lazily during
-the first swap (via `r_facelib` and its SFW check), which is why they are
-pre-fetched here rather than left to download themselves. Add another
-restorer from the same repo to `REACTOR_HF_FILES` in `config.py` and it
-appears in the dropdown after a restart.
-
-Two things worth knowing:
-
-- **No C++ toolchain is needed.** Despite ReActor's reputation, this
-  version does *not* use the `insightface` package: it vendors its own face
-  analysis in `reactor_core/` (`ReActorFaceAnalysis`, `SCRFD`,
-  `ArcFaceONNX`, ...) and runs the `buffalo_l` ONNX files through
-  `onnxruntime` directly — `import insightface` appears nowhere in the pack
-  and it is absent from its `requirements.txt`. Everything bootstrap
-  installs (`onnxruntime-gpu`, `onnx`, `opencv-python`, `albumentations`,
-  `segment_anything`, `ultralytics`) is a wheel, so no `cmake`, no
-  compiler. The `models/insightface/` folder keeps that name only because
-  it is where ReActor looks for the swap model and the pack.
-
-- **onnxruntime is matched to the pod's CUDA.** PyPI's current
-  `onnxruntime-gpu` wheel links CUDA 13, so on a CUDA 12 pod it installs
-  cleanly and then dies at import with `libcudart.so.13: cannot open shared
-  object file` — which surfaces only as ComfyUI skipping the node pack and
-  the first swap failing with "node not found". `install_onnxruntime()`
-  therefore picks a build from `torch.version.cuda` (CUDA 12 → pinned
-  `onnxruntime-gpu==1.22.0` plus Microsoft's CUDA 12 feed), **verifies it
-  by actually importing it**, and removes and retries on failure, ending at
-  the CPU build — inswapper_128 is small, so a CPU swap still takes
-  seconds. After ComfyUI starts, `comfy.verify_custom_node()` confirms
-  `ReActorFaceSwap` registered and prints the traceback from `comfyui.log`
-  if it did not.
-- **This is the SFW edition of ReActor.** It classifies every input image
-  before swapping (`scripts/reactor_sfw.py`, flagging `nsfw` above score
-  0.979). A flagged image is *dropped*, and ReActor's empty-list branch
-  returns a **512×512 solid black frame** rather than the original — so the
-  job "succeeds" and writes a black PNG. The tab detects that frame and
-  says so in the status box instead of reporting success, but it is the one
-  case where the output does not keep the base resolution. Given the NSFW
-  LoRAs in `CIVITAI_LORAS`, expect it to trigger on some inputs.
-
-  The check also **fails closed**: `nsfw_image()` returns `True` for
-  everything when its model cannot be loaded, so a missing detector makes
-  *every* swap come back blank. That is why the ~350 MB
-  `vit-base-nsfw-detector` is in the pre-download list above and not
-  treated as optional — `ensure_nsfw_model` looks for exactly `config.json`,
-  `model.safetensors` and `preprocessor_config.json` in that directory.
-
-Feature key `faceswap` — a license granting it installs the node pack,
-fetches the ~1.8 GB of models and shows the tab.
 
 ## Krea 2 model switching
 
@@ -2452,9 +2351,9 @@ component owns its own textarea.
 
 ## Image input shortcuts
 
-All image inputs (Edit, Inpaint, Face Swap, Video) accept **clipboard
-paste** — press Ctrl+V with the component focused or use its paste source
-button. The Edit, Face Swap and Video tabs additionally have a collapsed
+All image inputs (Edit, Inpaint, Video) accept **clipboard paste** — press
+Ctrl+V with the component focused or use its paste source button. The Edit
+and Video tabs additionally have a collapsed
 **"Use a previous generation"** picker showing the last 20 generated
 images; clicking a thumbnail loads it as the source directly, no
 download/re-upload round-trip.
@@ -2563,7 +2462,7 @@ the Gallery like Wan's.
   what it has, and `comfy.verify_core_node` logs which tab that costs.
 - The move was checked before it was made. Under v0.34.0, the four pinned
   node packs (RES4LYF, RBG Smart Seed Variance, post-processing, Krea2Edit)
-  and the vendored ReActor all import without error, and all twelve golden
+  all import without error, and all twelve golden
   workflows — every existing tab's graph — pass its prompt validator
   unchanged. `python scripts/golden.py --check` is byte-identical before
   and after.

@@ -885,7 +885,7 @@ def _failure(status: str, text: str):
     as a success. FAILED itself is the narrower case: the handler raised.
 
     The cross is the whole convention and it is used consistently across
-    all twelve handlers, so matching on it is matching on a rule this app
+    all eleven handlers, so matching on it is matching on a rule this app
     already keeps rather than on a coincidence.
     """
     line = (text or "").strip()
@@ -1088,9 +1088,9 @@ def _job_title(schema, values) -> str:
     """A one-line name for a queued job — its prompt, where it has one.
 
     Truncated hard: the queue is a list to scan, not a place to read a
-    prompt back. Tabs whose work has no prompt at all (Face Swap, the JSON
-    batch) get a dash, which is honest — what identifies those jobs is
-    their tab and their place in the line.
+    prompt back. A tab whose work has no prompt at all (the JSON batch)
+    gets a dash, which is honest — what identifies those jobs is their
+    tab and their place in the line.
     """
     if not schema.prompt_field:
         return "—"

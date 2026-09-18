@@ -230,37 +230,6 @@
       ]
     },
 
-    "faceswap": {
-      "headline": "One face, every shot in the set.",
-      "body": [
-        "Give it one clear photograph of a face and it carries that person into any other picture, matching the angle, the lighting and the skin tone — so it reads as a photograph of them, not a cut-out pasted on top.",
-        "This is what makes a set hang together. Invent a character in the generation tabs, then run twenty scenes through here and the same person is in all of them. Trying it on a whole folder costs you nothing but the time to pick the reference."
-      ],
-      "highlights": [
-        "One photo is enough",
-        "Matches angle and lighting",
-        "Supports multi-face selection",
-        "Run a whole set at once"
-      ],
-      "blocks": [
-        {
-          "type": "fan",
-          "dir": "set-a",
-          "source": "reference.webp",
-          "source_label": "Reference",
-          "source_ratio": "1/1",
-          "ratio": "3/4",
-          "caption": "Four scenes, one person. The reference on the left is the only photograph of them that exists.",
-          "items": [
-            { "file": "01.webp" },
-            { "file": "02.webp" },
-            { "file": "03.webp" },
-            { "file": "04.webp" }
-          ]
-        }
-      ]
-    },
-
     "flux_t2i": {
       "headline": "The graphic designer of the bunch.",
       "body": [

@@ -15,7 +15,7 @@ import { OutputPanel } from './OutputPanel'
 import s from '@/components/SchemaForm/form.module.css'
 
 /*
- * Ten of the twelve tabs. All of them.
+ * Nine of the eleven tabs. All of them.
  *
  * There is no per-tab code anywhere in this app any more. Krea2 and Inpaint
  * were built first on purpose — they exercise the schema form, uploads, the

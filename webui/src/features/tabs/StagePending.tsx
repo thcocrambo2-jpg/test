@@ -8,7 +8,7 @@ import s from './tabs.module.css'
  *
  * Stage A ships two tabs on purpose. Mocks cannot validate an image upload,
  * SSE through a proxy, video playback or the mask contract, and finding out
- * that an assumption was wrong twelve tabs deep is the one way this project
+ * that an assumption was wrong eleven tabs deep is the one way this project
  * goes badly wrong. So Krea2 and Inpaint go end to end against the real API
  * in Section 2 first, and the rest follow.
  *

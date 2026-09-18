@@ -97,8 +97,6 @@ from config import (
     MINIMAX_MIN_SECONDS,
     MINIMAX_RESOLUTIONS,
     MINIMAX_T2V_RESOLUTIONS,
-    REACTOR_DEFAULT_DETECTOR,
-    REACTOR_DETECTORS,
     RESOLUTION_PRESETS,
     DEFAULT_RESOLUTION,
     SAMPLERS,
@@ -814,7 +812,7 @@ def _tail_json(tail: Repeat | None):
 # ══════════════════════════════════════════════════════ shared pieces
 # Written once and referenced from every tab that has them. Nine of the
 # ten forms are the same handful of blocks in a different order, which is
-# a fact twelve hand-written layouts could state only by repeating it.
+# a fact eleven hand-written layouts could state only by repeating it.
 
 def _lora_choices():
     """The Krea 2 LoRA folder, read now rather than at import.
@@ -1110,7 +1108,7 @@ PLAIN_KEYS = ("images", "status")
 VIDEO_KEYS = ("videos", "latest", "status", "seed")
 
 
-# ═══════════════════════════════════════════════════ the twelve tabs
+# ═══════════════════════════════════════════════════ the eleven tabs
 # Order is the order they appear in the navigation, which is ui.TAB_ORDER's
 # order with the two bespoke tabs (Gallery, Prompt Library) taken out —
 # those have no form and so no schema.
@@ -1441,49 +1439,6 @@ SCHEMAS = (
                       _klein_lora_choices,
                       _stack_slots(handlers.klein_default_lora_slots),
                       "LoRA stack — model + CLIP (loras/klein/)")),
-        ),
-    ),
-
-    TabSchema(
-        key=Key.FACESWAP, handler=handlers.generate_faceswap,
-        lane=handlers.COMFY_LANE, prompt_field=None,
-        result_keys=PLAIN_KEYS, tab_id="faceswap",
-        icon="🎭", blurb="Put one face into another photograph.",
-        category="edit", route="/edit/faceswap", submit_label="Swap",
-        groups=(G_INPUTS, Group("core", "Detection", dense=True),
-                Group("restore", "Restoration", dense=True)),
-        fields=(
-            Field("base_image",
-                  "Base image — the face here gets replaced "
-                  "(paste with Ctrl+V)",
-                  "image", None, group="inputs", column="right"),
-            Field("face_image",
-                  "Reference face — the face to put in (paste with Ctrl+V)",
-                  "image", None, group="inputs", column="right"),
-            Field("swap_model", "Swap model", "select",
-                  lambda: handlers.default_swap_model(),
-                  choices=lambda: handlers.SWAP_MODEL_CHOICES, group="core",
-                  wide=True),
-            Field("facedetection", "Face detector", "select",
-                  REACTOR_DEFAULT_DETECTOR, choices=REACTOR_DETECTORS,
-                  group="core", wide=True),
-            Field("restore_model", "Face restoration (optional)", "select",
-                  lambda: handlers.RESTORE_CHOICES[0],
-                  choices=lambda: handlers.RESTORE_CHOICES, group="restore",
-                  wide=True),
-            Field("restore_visibility", "Restoration visibility", "slider",
-                  1.0, lo=0.1, hi=1.0, step=0.05, group="restore", wide=True),
-            Field("codeformer_weight",
-                  "CodeFormer weight (0 = stronger cleanup, 1 = stay closer "
-                  "to the swap)",
-                  "slider", 0.5, lo=0.0, hi=1.0, step=0.05, group="restore",
-                  wide=True),
-            Field("input_index", "Face index in base image", "text", "0",
-                  lines=1, group="core",
-                  hint="Left to right. Also accepts 0,1 or 0-2"),
-            Field("source_index", "Face index in reference", "text", "0",
-                  lines=1, group="core",
-                  hint="Left to right. Also accepts 0,1 or 0-2"),
         ),
     ),
 

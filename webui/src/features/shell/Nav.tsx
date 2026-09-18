@@ -19,7 +19,7 @@ interface Item {
  * Grouped navigation, and a route per tab.
  *
  * Two things the Gradio app could not have: a URL you can bookmark or send to
- * someone (twelve `gr.Tab`s share one URL), and a grouping that says which of
+ * someone (eleven `gr.Tab`s share one URL), and a grouping that says which of
  * them make a picture and which of them change one.
  *
  * A tab absent from the licence is absent from here. That is the same render

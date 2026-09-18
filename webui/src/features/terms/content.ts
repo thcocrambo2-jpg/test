@@ -31,7 +31,7 @@ export const TERMS: Clause[] = [
       'You will not generate, edit, upscale or attempt to produce sexual or ' +
       'suggestive imagery of anyone under 18 — real, drawn, described, ' +
       'stylised or "synthetic". You will not upload a photograph of a child ' +
-      'to any edit, inpaint, variance or face-swap tool here, for any reason, ' +
+      'to any edit, inpaint or variance tool here, for any reason, ' +
       'including ones you consider harmless. There is no artistic exception, ' +
       'no research exception, and no "it is not a real person" exception. ' +
       'This is a crime in most of the world and it is the one line where ' +

@@ -19,7 +19,7 @@ import { labelText } from '@/lib/util'
 /*
  * Routing.
  *
- * A route per tab, which the twelve flat `gr.Tab`s never had: they share one
+ * A route per tab, which the eleven flat `gr.Tab`s never had: they share one
  * URL, so a link to "the inpaint tab with your settings" was not a thing that
  * could exist. Routes are `/{category}/{tab}` so the address bar says which
  * group you are in as well as which tab.

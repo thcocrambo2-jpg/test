@@ -29,7 +29,6 @@ from config import (
     KREA_RESERVE_VRAM_GB,
     MINIMAX_COMFYUI_MIN,
     MINIMAX_NODE,
-    REACTOR_NODES_DIR,
     TEMP_DIR,
     V2_NODE_REPOS,
     WAN_COMFY_LOG,
@@ -80,7 +79,6 @@ def main() -> None:
     bootstrap.install_comfyui()
     bootstrap.install_custom_nodes()
     bootstrap.install_v2_nodes()
-    bootstrap.install_reactor()
     # Last of the installs, so nothing after it can move torch under the
     # build it picked for that torch, and before ComfyUI starts, which reads
     # the verdict through comfy.start_comfyui -> bootstrap.attention_args.
@@ -120,20 +118,14 @@ def main() -> None:
                                log_path=WAN_COMFY_LOG)
 
     # Custom nodes register at ComfyUI startup, and a failed import is only
-    # reported in comfyui.log — surface it here instead of letting the
-    # first face swap fail with a bare "node not found".
-    if features.enabled(features.Key.FACESWAP):
-        comfy.verify_custom_node(
-            "ReActorFaceSwap", REACTOR_NODES_DIR,
-            COMFY_DIR / "custom_nodes" / REACTOR_NODES_DIR,
-        )
+    # reported in comfyui.log — surface it here instead of letting the first
+    # generation fail with a bare "node not found".
     if (features.enabled(features.Key.KREA_V2_T2I)
             or features.enabled(features.Key.KREA_V2_EDIT)):
-        # Same reasoning for the Krea 2 V2 packs — two of these nodes have
-        # no core equivalent, so a silent import failure would only show up
-        # as "node not found" on the first generation. Krea 2 V2 Edit runs
-        # the same sampler and variance nodes, so either feature is reason
-        # enough to check.
+        # Two of the Krea 2 V2 packs' nodes have no core equivalent, so a
+        # silent import failure would only show up as "node not found" on
+        # the first generation. Krea 2 V2 Edit runs the same sampler and
+        # variance nodes, so either feature is reason enough to check.
         for dirname, _repo, class_type in V2_NODE_REPOS:
             comfy.verify_custom_node(
                 class_type, dirname, COMFY_DIR / "custom_nodes" / dirname,

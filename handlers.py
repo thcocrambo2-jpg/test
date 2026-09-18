@@ -12,7 +12,7 @@ the FastAPI adapter (api.py) and the Gradio UI (ui.py) call exactly the
 same code while one of the two is being replaced — and what stops the
 replacement from quietly re-earning the bugs these functions encode: the
 VAE size snapping, the model-swap VRAM release, the 2 MP reference cap,
-the ReActor blank-frame detection, the Wan frame-count arithmetic.
+the Wan frame-count arithmetic.
 
 The one function that changed shape in the move is zip_outputs(), which
 used to return a `gr.update()` for the file component it fills. It now
@@ -123,13 +123,6 @@ from workflow_minimax import (
     minimax_models_available,
     resolve_size as minimax_resolve_size,
 )
-from workflow_reactor import (
-    build_faceswap_workflow,
-    default_swap_model,
-    list_restore_models,
-    list_swap_models,
-    reactor_status,
-)
 from workflow_wan import (
     build_wan_5b_workflow,
     build_wan_i2v_workflow,
@@ -152,8 +145,6 @@ LORA_CHOICES = ["None"] + list_lora_files()
 FLUX_MODEL_CHOICES = flux_model_names()
 FLUX_LORA_CHOICES = ["None"] + list_flux_lora_files()
 _f_steps, _f_guidance, _ = flux_model_defaults(resolve_flux_model(None))
-SWAP_MODEL_CHOICES = list_swap_models() or [default_swap_model()]
-RESTORE_CHOICES = list_restore_models()
 
 # The queue's lanes, and the ComfyUI instance each one is stopped through.
 # One worker per lane, which is the same "one at a time" rule the
@@ -1000,97 +991,6 @@ def generate_v2_edit(image, use_image2, image2, prompt, negative, seed,
         yield images, status, base_seed
 
 
-def _is_reactor_reject(path) -> bool:
-    """True for the blank frame ReActor returns when its SFW check fires.
-
-    A flagged input is dropped from the image list, and ReActor's empty-list
-    branch hands back a 512×512 solid black image rather than the original —
-    so the swap "succeeds" and writes a black PNG. Detecting it here is the
-    only way to tell the user what actually happened.
-    """
-    try:
-        with Image.open(path) as img:
-            return (img.size == (512, 512)
-                    and img.convert("RGB").getbbox() is None)
-    except Exception:
-        return False
-
-
-def generate_faceswap(base_image, face_image, swap_model, facedetection,
-                      restore_model, restore_visibility, codeformer_weight,
-                      input_index, source_index):
-    """Face Swap tab: put a reference face onto a base image with ReActor.
-
-    Deliberately resizes nothing: ReActor rewrites only the face region,
-    so the saved PNG keeps the base image's exact resolution. One job, no
-    seed and no batch — the swap is deterministic, so re-running the same
-    two images would just rewrite the same result.
-    """
-    if base_image is None:
-        yield [], ("❌ Choose a base image — pick one of your generations "
-                   "below or upload it.")
-        return
-    if face_image is None:
-        yield [], "❌ Upload a reference face image."
-        return
-    ready, message = reactor_status()
-    if not ready:
-        yield [], message
-        return
-    base_image = base_image.convert("RGB")
-    face_image = face_image.convert("RGB")
-    width, height = base_image.size
-    tag = uuid.uuid4().hex[:8]
-    try:
-        base_name = client.upload_image(_png_bytes(base_image),
-                                        f"swap_{tag}_base.png")
-        face_name = client.upload_image(_png_bytes(face_image),
-                                        f"swap_{tag}_face.png")
-    except Exception as exc:
-        yield [], f"❌ Uploading the images to ComfyUI failed: {exc}"
-        return
-    workflow = build_faceswap_workflow(
-        # `tag` again rather than a second draw: the swap is one job, and
-        # naming its output after the inputs it was built from is more
-        # use than a fresh number. See _run_tag for why it is there.
-        filename_prefix=f"Krea2FaceSwap_{tag}",
-        base_image_name=base_name, face_image_name=face_name,
-        swap_model=swap_model, facedetection=facedetection,
-        face_restore_model=restore_model,
-        face_restore_visibility=float(restore_visibility),
-        codeformer_weight=float(codeformer_weight),
-        input_faces_index=str(input_index or "0").strip() or "0",
-        source_faces_index=str(source_index or "0").strip() or "0",
-    )
-    yield [], f"⏳ Swapping face — queued ({width}×{height})"
-    images = []
-    try:
-        for event in client.run(workflow, timeout=600):
-            if event["type"] == "progress" and event["total"]:
-                yield images, (f"⏳ Swapping face — step "
-                               f"{event['step']}/{event['total']}")
-            elif event["type"] == "done":
-                images = event["images"]
-    except ComfyUIError as exc:
-        yield images, f"❌ Face swap failed: {exc}"
-        return
-    if not images:
-        yield [], ("❌ ReActor returned no image — usually no face was "
-                   "detected in one of the two inputs. Check the ComfyUI "
-                   "log, or try a clearer, more front-facing reference.")
-        return
-    if _is_reactor_reject(images[0]):
-        yield images, (
-            "⚠️ ReActor's SFW filter rejected an input, so no swap was "
-            "performed — it returned a blank 512×512 frame instead, which "
-            "was still saved. Note the check also fails closed: if its "
-            "detector model is missing, every swap comes back blank "
-            "(see the ComfyUI log)."
-        )
-        return
-    yield images, f"✅ Face swapped at {width}×{height}"
-
-
 def _fit_video_size(w: int, h: int, target_area: int, snap: int = 16) -> tuple:
     """Video size: keep the source aspect ratio at roughly target_area px.
 
@@ -1335,12 +1235,12 @@ def generate_from_json(json_file, json_text):
 
 # Every finished prompt tells the index what it wrote, which both keeps the
 # listing correct without a rescan and is what queues the new files'
-# thumbnails. Registered against the client rather than the three separate
-# places that consume its "done" event (_run_jobs, generate_faceswap,
-# _run_wan_jobs), so a fourth executor gets this for free.
+# thumbnails. Registered against the client rather than the two separate
+# places that consume its "done" event (_run_jobs, _run_wan_jobs), so a
+# third executor gets this for free.
 on_output(gallery_index.note_new)
 # And the same for the recipe behind them, for the same reason: one
-# producer of the "done" event, so a fourth executor gets this free too.
+# producer of the "done" event, so a third executor gets this free too.
 on_output(recipes.note_output)
 
 

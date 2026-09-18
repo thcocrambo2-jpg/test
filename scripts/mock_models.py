@@ -18,9 +18,9 @@ so the placeholders can be told apart from real downloads later.
 
 It uses the real fetch functions rather than a copy of their path logic,
 so a new model in config.py is covered the day it is added: the only
-things replaced are the two mirror lookups, huggingface_hub's two download
-calls, `requests.get` (CivitAI and GitHub release assets), and the
-abliterated-encoder merge, which cannot run on empty shards.
+things replaced are the mirror lookup, huggingface_hub's two download
+calls, `requests.get` (CivitAI), and the abliterated-encoder merge, which
+cannot run on empty shards.
 
 --check installs stubs that *fail* instead, runs the same groups, and lists
 every file a real run would have gone to the network for. Exit status 1 if
@@ -30,7 +30,6 @@ there is any — so it doubles as "is this base dir complete?".
 import logging
 import os
 import sys
-import zipfile
 from datetime import datetime
 from pathlib import Path
 
@@ -46,17 +45,7 @@ from config import (  # noqa: E402
     ABLITERATED_ENCODER_FILE,
     BASE_DIR,
     MODELS_DIR,
-    REACTOR_INSIGHTFACE_PACK,
 )
-
-# The unzipped buffalo_l pack, as fetch_insightface_pack expects to find
-# it inside the archive. det_10g.onnx is the one it checks for.
-BUFFALO_MEMBERS = ("det_10g.onnx", "w600k_r50.onnx", "genderage.onnx",
-                   "1k3d68.onnx", "2d106det.onnx")
-
-# What snapshot_download would leave for the NSFW detector; config.json is
-# the one fetch_nsfw_detector checks for.
-NSFW_MEMBERS = ("config.json", "preprocessor_config.json", "model.safetensors")
 
 
 def _touch(path: Path) -> Path:
@@ -70,33 +59,16 @@ def _touch(path: Path) -> Path:
 
 def fake_hf_hub_download(repo_id, filename, local_dir=None, token=None,
                          revision=None, repo_type=None, **_):
-    """The file lands where the real call would put it, empty.
-
-    The one exception is a .zip, which must be a real archive because
-    fetch_insightface_pack unpacks it with zipfile before deleting it.
-    """
+    """The file lands where the real call would put it, empty."""
     base = Path(local_dir) if local_dir else MODELS_DIR / ".hf-fake"
-    dest = base / filename
-    dest.parent.mkdir(parents=True, exist_ok=True)
-    if not dest.exists():
-        if dest.suffix == ".zip":
-            with zipfile.ZipFile(dest, "w") as zf:
-                for name in BUFFALO_MEMBERS:
-                    zf.writestr(f"{REACTOR_INSIGHTFACE_PACK}/{name}", b"")
-        else:
-            dest.touch()
-    return str(dest)
+    return str(_touch(base / filename))
 
 
-def fake_snapshot_download(repo_id, local_dir=None, token=None, revision=None,
-                           allow_patterns=None, ignore_patterns=None, **_):
-    """Only the NSFW detector reaches this (the encoder merge is stubbed)."""
-    if not local_dir:
-        raise RuntimeError(f"unexpected snapshot_download({repo_id}) with "
-                           "no local_dir — nothing to fake")
-    for name in NSFW_MEMBERS:
-        _touch(Path(local_dir) / name)
-    return str(local_dir)
+def fake_snapshot_download(repo_id, **_):
+    """Nothing should reach this: its one caller, the encoder merge, is
+    stubbed below. Raising keeps a new caller from going to the network."""
+    raise RuntimeError(f"unexpected snapshot_download({repo_id}) — "
+                       "nothing to fake")
 
 
 def fake_abliterated_encoder():
@@ -135,7 +107,6 @@ class _FakeRequests:
 
 def install_create_stubs():
     downloads.from_mirror = lambda dest, relpath: False
-    downloads.dir_from_mirror = lambda local_prefix: False
     downloads.hf_hub_download = fake_hf_hub_download
     downloads.snapshot_download = fake_snapshot_download
     downloads.fetch_abliterated_encoder = fake_abliterated_encoder
@@ -158,7 +129,6 @@ class _RefusingRequests:
 
 def install_check_stubs():
     downloads.from_mirror = lambda dest, relpath: False
-    downloads.dir_from_mirror = lambda local_prefix: False
     downloads.hf_hub_download = _refuse
     downloads.snapshot_download = _refuse
     downloads.requests = _RefusingRequests

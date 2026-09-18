@@ -188,8 +188,7 @@ def patch(module, capture) -> None:
         if hasattr(module, name):
             setattr(module, name, lambda *a, **k: True)
 
-    for name in ("v2_status", "v2_edit_status", "klein_status",
-                 "reactor_status"):
+    for name in ("v2_status", "v2_edit_status", "klein_status"):
         if hasattr(module, name):
             setattr(module, name, lambda *a, **k: (True, ""))
 

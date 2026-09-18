@@ -138,8 +138,8 @@ export interface TabSchema {
   lora: LoraSpec | null
   ready: boolean
   submitLabel: string
-  /** Which field names the job in the queue. Null for the tabs whose work
-   *  has no prompt (Face Swap, JSON Batch). */
+  /** Which field names the job in the queue. Null for a tab whose work
+   *  has no prompt (JSON Batch). */
   promptField: string | null
   /** What this tab's handler yields, position by position. */
   resultKeys: string[]

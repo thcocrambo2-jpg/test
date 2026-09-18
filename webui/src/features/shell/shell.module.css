@@ -303,7 +303,7 @@
 /* ------------------------------------------------------- narrow viewports */
 
 /* The old app stacked below 860px and the tab strip stayed a horizontal row
-   of twelve emoji. Here the sidebar becomes a scrolling strip of the same
+   of eleven emoji. Here the sidebar becomes a scrolling strip of the same
    grouped links, and everything else is already fluid. */
 @media (max-width: 900px) {
   .app {

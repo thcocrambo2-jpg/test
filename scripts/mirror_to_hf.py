@@ -33,7 +33,7 @@ disk, is what decides the work:
   • in the repo at a *different* size → re-uploaded from disk,
   • not in the repo, on disk → uploaded,
   • not in the repo, not on disk → downloaded from its original source
-    (CivitAI / community HF repo / URL — never from the mirror), then
+    (CivitAI / community HF repo — never from the mirror), then
     uploaded,
   • a file already on disk is not re-downloaded (the app's own fetchers
     key on the destination path),
@@ -148,11 +148,6 @@ def make_fetcher(source: dict, dest: Path) -> Callable[[], None] | None:
     if kind == "hf":
         return lambda: downloads.fetch_hf_file_to(
             source["repo"], source["path"], dest)
-    if kind == "hf_dataset":
-        return lambda: downloads.fetch_dataset_file(
-            source["repo"], source["path"], dest)
-    if kind == "url":
-        return lambda: downloads.fetch_url_file(source["url"], dest)
     if kind == "abliterated_merge":
         return downloads.fetch_abliterated_encoder
     # "dir" and "local" are produced by the app's own boot path; there is
@@ -212,9 +207,9 @@ def _expand_dir(root: Path, repo_key: str, prefix: str, note: str) -> list[Item]
     """Turn a manifest "dir" entry into one Item per file.
 
     Folder-level uploads would defeat the per-file skip logic, so every
-    directory (buffalo_l, the NSFW detector) is flattened at plan time. An
-    absent directory contributes no items, which would drop it from the
-    checklist silently — so say so out loud instead.
+    directory is flattened at plan time. An absent directory contributes
+    no items, which would drop it from the checklist silently — so say so
+    out loud instead.
     """
     if not root.is_dir():
         log.warning("directory %s is absent — nothing from it will be "
@@ -473,8 +468,7 @@ def add_upstream_revisions(api: HfApi, manifest: dict, pins: dict) -> None:
         if kind == "git":
             continue        # captured from the local checkout by pack_nodes
         try:
-            info = (api.dataset_info(repo_id) if kind == "hf-dataset"
-                    else api.model_info(repo_id))
+            info = api.model_info(repo_id)
             pins[repo_id] = {"kind": kind, "sha": info.sha}
         except Exception as exc:
             log.warning("Could not read revision of %s: %s", repo_id, exc)
