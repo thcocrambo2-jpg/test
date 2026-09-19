@@ -55,7 +55,7 @@ npm run issue-key -- --key KREA2-XXXX-XXXX-XXXX --features-extra "wan_i2v" --upd
 | Plan | ₹/mo | Grants |
 | --- | --- | --- |
 | `starter` | 599 | krea_t2i, gallery, community_prompts |
-| `creator` | 999 | + krea_v2_t2i, krea_edit, krea_v2_edit, json_batch |
+| `creator` | 999 | + krea_v2_t2i, krea_edit, krea_v2_edit |
 | `studio` | 1799 | + wan_i2v, minimax_i2v, minimax_t2v |
 | `admin` | 0 | everything, including the three withdrawn tabs; `is_public: false` |
 
@@ -153,7 +153,6 @@ keep a plain name.
 | `minimax_i2v` | MiniMax H3 Video (image-to-video, with sound) | video |
 | `minimax_t2v` | MiniMax H3 Text to Video (with sound) | video |
 | `gallery` | Gallery | tools |
-| `json_batch` | JSON Advanced Batch | tools |
 
 Seven of these were renamed from `single`, `v2`, `edit`, `inpaint`,
 `flux`, `klein` and `wan` before any key was issued. There is **no alias

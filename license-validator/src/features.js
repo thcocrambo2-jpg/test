@@ -173,7 +173,7 @@ export const FEATURES = [
   // core node takes an optional first frame — so image-to-video and
   // text-to-video are the same graph sold twice. The app downloads the
   // weights once whichever of the two a plan grants; they sit at 92 and 94
-  // so they read as one block after Wan and before the batch tab.
+  // so they read as one block after Wan.
   {
     key: "minimax_i2v",
     name: "MiniMax Video",
@@ -192,17 +192,6 @@ export const FEATURES = [
     category: "video",
     sort_order: 94,
     enabled: true,
-  },
-  {
-    key: "json_batch",
-    name: "Krea2 Batch",
-    tab_label: "📦 Krea2 Batch",
-    description: "Generate many images at once using advanced controls",
-    category: "tools",
-    sort_order: 100,
-    // Off for the same reason as the three above, and no plan grants it.
-    // The tab exists in the binary; nothing sells it.
-    enabled: false,
   },
   {
     key: "community_prompts",

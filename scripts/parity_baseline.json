@@ -3519,29 +3519,6 @@
           "elem_id": null
         }
       ]
-    },
-    "json_batch": {
-      "tab_id": "json",
-      "controls": [
-        {
-          "type": "File",
-          "label": "Upload JSON file",
-          "value": null,
-          "interactive": null,
-          "visible": true,
-          "elem_id": null
-        },
-        {
-          "type": "Textbox",
-          "label": "…or paste a JSON array here",
-          "value": null,
-          "lines": 14,
-          "placeholder": null,
-          "interactive": null,
-          "visible": true,
-          "elem_id": null
-        }
-      ]
     }
   },
   "handlers": {
@@ -3760,14 +3737,6 @@
         "seconds",
         "sampler",
         "batch_count"
-      ],
-      "varargs": null,
-      "keyword_only": []
-    },
-    "generate_from_json": {
-      "positional": [
-        "json_file",
-        "json_text"
       ],
       "varargs": null,
       "keyword_only": []

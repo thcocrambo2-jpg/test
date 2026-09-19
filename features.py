@@ -76,7 +76,6 @@ class Key(str, Enum):
     WAN_I2V = "wan_i2v"
     MINIMAX_I2V = "minimax_i2v"
     MINIMAX_T2V = "minimax_t2v"
-    JSON_BATCH = "json_batch"
     COMMUNITY_PROMPTS = "community_prompts"
 
     __str__ = str.__str__
@@ -156,11 +155,8 @@ FEATURES = (
     # ~56 GB, which is why both name the one group.
     Feature(Key.MINIMAX_I2V, "🎥 MiniMax I2V", needs=("minimax",)),
     Feature(Key.MINIMAX_T2V, "🎞️ MiniMax T2V", needs=("minimax",)),
-    # Runs whatever graph is pasted into it, so it has no assets of its
-    # own — it is only useful alongside the tabs whose models it names.
-    Feature(Key.JSON_BATCH, "📦 Krea2 Batch"),
     # Reads a collection on the licence server, so it needs no weights of
-    # its own either. Like JSON Batch it is only useful next to the tabs
+    # its own. It is only useful next to the tabs
     # it loads prompts into (Krea2 and Krea2 V2) — the cards for a tab
     # this licence does not grant still render, they just cannot be used.
     Feature(Key.COMMUNITY_PROMPTS, "🌟 Prompt Library", default=True),

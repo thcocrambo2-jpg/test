@@ -52,7 +52,7 @@ def list_model_names() -> list[str]:
 
 
 def resolve_model_entry(name) -> dict:
-    """Map a UI/JSON model name to its registry entry (default: first entry).
+    """Map a UI model name to its registry entry (default: first entry).
 
     Accepts the registry name, the filename, or any case-insensitive
     substring of either — the same forgiving spirit as resolve_lora_name.

@@ -2,7 +2,6 @@ import { useState, type ReactNode } from 'react'
 import type { Field, FieldColumn, GroupSpec, TabSchema } from '@/api/types'
 import {
   BoolField,
-  FileField,
   ImageDropField,
   NumberField,
   RadioField,
@@ -276,17 +275,6 @@ function FieldRenderer({
           label={field.label}
           hint={hint}
           wide
-          value={(value as File | null) ?? null}
-          onChange={set}
-        />
-      )
-    case 'file':
-      return (
-        <FileField
-          label={field.label}
-          hint={hint}
-          wide
-          accept={field.accept}
           value={(value as File | null) ?? null}
           onChange={set}
         />

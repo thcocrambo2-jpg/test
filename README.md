@@ -558,12 +558,11 @@ npm run issue-key -- --name "Acme Corp" --plan creator --seats 2
 | `wan_i2v`      | 🎬 Video (Wan 2.2)      | ~49 GB         |
 | `minimax_i2v`  | 🎥 MiniMax I2V (video with sound) | ~56 GB (shared with `minimax_t2v`) |
 | `minimax_t2v`  | 🎞️ MiniMax T2V (video with sound) | shared with `minimax_i2v` |
-| `json_batch`   | JSON Advanced Batch     | none           |
 | `community_prompts` | 🌟 Prompt Library  | none           |
 
 The three shipped plans stack: `starter` (₹599/mo) is `krea_t2i`, the
-gallery and the prompt library; `creator` (₹999) adds Krea 2 V2, both edit
-tabs and JSON batch; `studio` (₹1799) adds Wan and both MiniMax video tabs.
+gallery and the prompt library; `creator` (₹999) adds Krea 2 V2 and both edit
+tabs; `studio` (₹1799) adds Wan and both MiniMax video tabs.
 `krea_inpaint`, `flux_t2i` and `klein_i2i` are on no public
 plan since 2026-09-07 and are hidden from the pricing page — the code is
 still here, and the internal `admin` plan still grants them.
@@ -2174,8 +2173,7 @@ repo **or** `civitai_version` — the number after the `@` in a CivitAI AIR
 urn), and optional `trigger` words. Picking a model resets the Steps/CFG
 sliders to its defaults and, if it has trigger words, inserts them into
 the prompt box — visible and editable, never appended silently; delete
-them if you don't want them. JSON batch jobs select a model with an
-optional `"model"` key. A model whose download failed shows a warning
+them if you don't want them. A model whose download failed shows a warning
 under the dropdown and refuses to run, without affecting the others.
 
 The generate / edit / inpaint / Flux tabs each stack **`MAX_LORA_SLOTS`

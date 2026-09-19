@@ -20,7 +20,6 @@ export type FieldType =
   | 'bool'
   | 'image'
   | 'mask'
-  | 'file'
 
 /** Which column a field lands in.
  *
@@ -60,7 +59,6 @@ export interface Field {
   showIf?: FieldCondition
   /** Full-width inside a two-up group row. */
   wide?: boolean
-  accept?: string
   /** Folds away entirely rather than showing its first rows. The negative
    *  prompt wears this: two of the tabs default it to ~1,300 characters of
    *  boilerplate, and a couple of rows of that is a couple of rows of noise
@@ -139,7 +137,7 @@ export interface TabSchema {
   ready: boolean
   submitLabel: string
   /** Which field names the job in the queue. Null for a tab whose work
-   *  has no prompt (JSON Batch). */
+   *  has no prompt. */
   promptField: string | null
   /** What this tab's handler yields, position by position. */
   resultKeys: string[]

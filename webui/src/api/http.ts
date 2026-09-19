@@ -119,7 +119,7 @@ async function upload(blob: Blob, name: string): Promise<string> {
 /** Replace every blob in a submission with the id of its upload.
  *
  *  Driven off the schema rather than off the shape of each value: `field.type`
- *  already says which of the three kinds a control is, and guessing from the
+ *  already says which of the two kinds a control is, and guessing from the
  *  value would mean deciding what a `{background, layers}` object is by
  *  looking at it.
  *
@@ -137,7 +137,7 @@ async function resolveUploads(
   const out: Record<string, unknown> = { ...values }
   for (const field of schema.fields) {
     const value = values[field.name]
-    if (field.type === 'image' || field.type === 'file') {
+    if (field.type === 'image') {
       out[field.name] = value instanceof Blob ? await upload(value, field.name) : null
     } else if (field.type === 'mask') {
       out[field.name] = await uploadMask(value)
