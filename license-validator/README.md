@@ -144,7 +144,6 @@ keep a plain name.
 | --- | --- | --- |
 | `krea_t2i` | Single / Simple Batch | generation |
 | `krea_v2_t2i` | Krea 2 V2 | generation |
-| `flux_t2i` | Flux 2 — Text to Image | generation |
 | `krea_edit` | Krea Edit — Instruction | editing |
 | `krea_v2_edit` | Krea2 V2 Edit | editing |
 | `krea_inpaint` | Krea Inpaint — Img2Img | editing |

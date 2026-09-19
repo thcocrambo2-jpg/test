@@ -21,11 +21,6 @@ from config import (
     CIVITAI_TOKEN,
     EDIT_LORA_FILE,
     EDIT_LORA_REPO,
-    FLUX_CIVITAI_LORAS,
-    FLUX_HF_FILES,
-    FLUX_HF_REPO,
-    FLUX_LORA_SUBDIR,
-    FLUX_MODELS,
     HF_LORA_FILES,
     HF_MODEL_FILES,
     HF_MODEL_REPO,
@@ -461,38 +456,6 @@ def download_minimax_models() -> None:
                   MINIMAX_TURBO_LORA, exc)
 
 
-def download_flux_models() -> None:
-    """Fetch the Flux 2 model, text encoder, VAE and LoRAs (~57 GB)."""
-    for relpath in FLUX_HF_FILES:
-        try:
-            fetch_repackaged_file(FLUX_HF_REPO, relpath)
-        except Exception as exc:
-            log.error("Flux 2 file %s unavailable (%s) — the Flux tab "
-                      "will refuse to run until a later run fetches it.",
-                      relpath, exc)
-    for entry in FLUX_MODELS:
-        try:
-            if entry.get("hf_path"):
-                fetch_repackaged_file(FLUX_HF_REPO, entry["hf_path"])
-            elif entry.get("civitai_version"):
-                fetch_civitai_file(entry["civitai_version"], entry["file"],
-                                   subdir="diffusion_models")
-            else:
-                log.warning(
-                    "Flux model %r has no hf_path/civitai_version — "
-                    "expecting %s to be placed in diffusion_models/ "
-                    "manually.", entry["name"], entry["file"],
-                )
-        except Exception as exc:
-            log.error("Skipping Flux 2 model %s: %s", entry["name"], exc)
-    for version_id, filename in FLUX_CIVITAI_LORAS:
-        try:
-            fetch_civitai_file(version_id, filename,
-                               subdir=f"loras/{FLUX_LORA_SUBDIR}")
-        except Exception as exc:
-            log.error("Skipping Flux LoRA %s: %s", filename, exc)
-
-
 # Asset group → the function that fetches it. Iteration order is download
 # order, so the cheap shared pieces land before the tens of gigabytes.
 ASSET_GROUPS = {
@@ -500,14 +463,13 @@ ASSET_GROUPS = {
     "krea2": download_krea2_models,
     "edit_lora": download_edit_lora,
     "v2": download_v2_models,
-    "flux": download_flux_models,
     "wan": download_wan_models,
     "minimax": download_minimax_models,
 }
 
 # Groups that pull at least one file from CivitAI, which is the only
 # source here that usually needs a token.
-CIVITAI_GROUPS = {"krea2", "v2", "flux"}
+CIVITAI_GROUPS = {"krea2", "v2"}
 
 
 def download_everything() -> None:
@@ -515,7 +477,7 @@ def download_everything() -> None:
 
     Driven by features.assets() rather than a fixed sequence: a feature
     that is off never reaches its downloader, which is where the flags
-    actually save money — Wan is ~49 GB and Flux ~57 GB.
+    actually save money — Wan is ~49 GB.
     """
     groups = features.assets()
     if not groups:

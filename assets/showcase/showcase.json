@@ -230,28 +230,6 @@
       ]
     },
 
-    "flux_t2i": {
-      "headline": "The graphic designer of the bunch.",
-      "body": [
-        "A different engine with different instincts. Where the others reach for photography, this one reaches for design: flat colour, clean shapes, poster layouts, logos, packaging — anything meant to look made rather than taken.",
-        "It's also the best of them with lettering. When an idea stalls in another tab — the composition won't come, the type won't read — running it through here often gets it in one, and everything lands in the same gallery either way."
-      ],
-      "highlights": [
-        "Illustration and design work",
-        "Clean shapes, flat colour",
-        "Handles lettering well",
-        "A second opinion when you're stuck"
-      ],
-      "blocks": [
-        {
-          "type": "collage",
-          "dir": "gallery",
-          "placeholders": 8,
-          "caption": "Posters, packaging and type — the work that's supposed to look designed."
-        }
-      ]
-    },
-
     "wan_i2v": {
       "headline": "Give a still picture a few seconds of life.",
       "body": [

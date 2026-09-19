@@ -143,15 +143,6 @@ export const FEATURES = [
     enabled: false,
   },
   {
-    key: "flux_t2i",
-    name: "Flux2D",
-    tab_label: "🌊 Flux2D",
-    description: "Create high-quality images with Flux 2 Dev",
-    category: "generation",
-    sort_order: 70,
-    enabled: false,
-  },
-  {
     key: "wan_i2v",
     name: "Wan Video",
     tab_label: "🎬 Wan Video",
@@ -340,7 +331,7 @@ function applyToken(token, out, known) {
  */
 export function parseFeatureArg(raw, known = FEATURE_KEYS) {
   if (raw === true || raw === undefined) {
-    return { error: '--features needs a value, e.g. --features "wan,flux"' };
+    return { error: '--features needs a value, e.g. --features "wan_i2v,gallery"' };
   }
   const tokens = String(raw).split(/[,;\s]+/).map(normalizeKey).filter(Boolean);
 

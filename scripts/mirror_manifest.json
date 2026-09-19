@@ -323,7 +323,5 @@
     "huihui-ai/Huihui-Qwen3-VL-4B-Instruct-abliterated": "hf",
     "https://github.com/comfyanonymous/ComfyUI.git": "git"
   },
-  "scan_ignore_ids": [
-    1234567
-  ]
+  "scan_ignore_ids": []
 }

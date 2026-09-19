@@ -154,8 +154,8 @@ export interface TabSchema {
 
 /** One row of a model registry, flattened for the browser.
  *
- *  `defaults` is per-family: (steps, cfg) for Krea 2, (steps, guidance,
- *  turbo_lora) for Flux. The registries genuinely differ and pretending
+ *  `defaults` is per-family: (steps, cfg) for Krea 2, (steps, cfg,
+ *  turbo_lora) for V2. The registries genuinely differ and pretending
  *  otherwise would mean guessing which of the two a name means. */
 export interface ModelRow {
   name: string
