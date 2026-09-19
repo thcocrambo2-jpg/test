@@ -57,15 +57,10 @@ npm run issue-key -- --key KREA2-XXXX-XXXX-XXXX --features-extra "wan_i2v" --upd
 | `starter` | 599 | krea_t2i, gallery, community_prompts |
 | `creator` | 999 | + krea_v2_t2i, krea_edit, krea_v2_edit |
 | `studio` | 1799 | + wan_i2v, minimax_i2v, minimax_t2v |
-| `admin` | 0 | everything, including the three withdrawn tabs; `is_public: false` |
+| `admin` | 0 | everything; `is_public: false` |
 
 Three public tiers since 2026-09-07. `pro` was deleted that day (no
-license was on it), and `krea_inpaint`, `flux_t2i` and `klein_i2i` were
-**withdrawn**: on no public plan, and `enabled: false` in
-the features collection so the pricing page does not list them. The app
-still ships those tabs and `admin` still grants them, so a dev pod can
-check one still works; putting one back on sale is a plan edit plus that
-flag. `krea_t2i` is turbo-only by configuration (the Raw model is not in
+license was on it). `krea_t2i` is turbo-only by configuration (the Raw model is not in
 `KREA2_MODELS`), which is why V2 — turbo and raw — starts at Creator.
 
 Prices are **documentation, not enforcement.** Nothing here charges anyone;
@@ -151,8 +146,8 @@ keep a plain name.
 | `minimax_t2v` | MiniMax H3 Text to Video (with sound) | video |
 | `gallery` | Gallery | tools |
 
-Seven of these were renamed from `single`, `v2`, `edit`, `inpaint`,
-`flux`, `klein` and `wan` before any key was issued. There is **no alias
+Four of these were renamed from `single`, `v2`, `edit` and `wan`
+before any key was issued. There is **no alias
 map** for the old names — nothing needed translating, and a permanent map
 that translates nothing is a trap for whoever reads it next. An old key is
 simply unknown: the client warns and ignores it. If a key ever has to

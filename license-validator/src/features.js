@@ -39,7 +39,7 @@
 //
 // `name` vs `tab_label`: the pricing page wants prose that says what a tab
 // is ("MiniMax Text to Video"), the tab strip wants something short enough
-// to sit in a row of ten ("MiniMax T2V"). They were separate strings
+// to sit in a row of nine ("MiniMax T2V"). They were separate strings
 // in separate repos before this collection existed; keeping both fields
 // means unifying the source without flattening the two registers into one
 // awkward compromise. tab_label is optional — the client falls back to
@@ -166,9 +166,9 @@ export const FEATURES = [
       "Browse ready-made prompts and load one into Krea2 or Krea2 V2 " +
       "with every setting already dialled in",
     category: "tools",
-    // 65, between krea_inpaint (50) and flux_t2i (70), so it reads with the
-    // rest of the everyday set rather than trailing the video and batch
-    // tabs. This number is the *only* thing that decides where it appears
+    // 65, after krea_edit (40) and ahead of the video tabs (90 and up), so
+    // it reads with the rest of the everyday set rather than trailing the
+    // video tabs. This number is the *only* thing that decides where it appears
     // in a plan's feature list — /v1/plans sorts each plan's keys by it —
     // so keep it in step with the collection, or the next seed-catalog run
     // reverts an edit made in Atlas.
