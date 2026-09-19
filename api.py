@@ -592,7 +592,7 @@ def create_app() -> FastAPI:
                                        Depends(require_feature(
                                            features.Key.GALLERY))])
     def gallery(cursor: str = Query(default=""),
-                limit: int = Query(default=24, ge=1, le=100),
+                limit: int = Query(default=50, ge=1, le=100),
                 kind: str = Query(default="")):
         """One page of the listing, newest first.
 
