@@ -61,7 +61,7 @@ What is deliberately not here
 The ~150 lines of `*_changed` handlers in ui.py. `krea_model_changed`,
 `v2_model_changed`, `wan_mode_changed` and friends are reactivity over
 data that already sits in config.py — VARIANT_DEFAULTS, V2_VARIANT_
-DEFAULTS, WAN_MODE_DEFAULTS, FLUX_VARIANT_DEFAULTS, KLEIN_DEFAULTS. The
+DEFAULTS, WAN_MODE_DEFAULTS, KLEIN_DEFAULTS. The
 API ships that data in `/api/v1/catalog` (see `catalog()`) and React
 applies it, which is one round trip saved per keystroke and one fewer
 copy of the same three numbers.
@@ -75,8 +75,6 @@ import features
 import presets
 import handlers
 from config import (
-    FLUX_MODELS,
-    FLUX_VARIANT_DEFAULTS,
     KLEIN_DEFAULT_CUSTOM_SIZE,
     KLEIN_DEFAULT_MEGAPIXELS,
     KLEIN_DEFAULTS,
@@ -166,17 +164,14 @@ def _resolve(value):
 class Repeat:
     """The handler's `*varargs` tail, as a repeating row of sub-fields.
 
-    Two shapes exist in this app and the difference shifts every argument
-    after it (context.md 4.3):
+    Every tab submits **triples** `(enabled, name, weight)`, and the
+    order shifts every argument after it (context.md 4.3). The row
+    carries a per-row on/off checkbox, so switching one off keeps its
+    filename instead of resetting the dropdown to "None".
 
-      * **triples** `(enabled, name, weight)` — every tab but Flux. The
-        row carries a per-row on/off checkbox, so switching one off keeps
-        its filename instead of resetting the dropdown to "None".
-      * **pairs** `(name, weight)` — Flux alone, whose stack is a separate
-        folder and pipeline. Eight slots, from MAX_LORA_SLOTS.
-
-    The Krea2 family were pairs until the two shapes were unified; a
-    preset stored in the old shape still loads, see `preset_values`.
+    The Krea2 family were pairs `(name, weight)` until the two shapes were
+    unified; a preset stored in the old shape still loads, see
+    `preset_values`.
 
     `parts` is the submission order *within* one slot, so `call_args`
     flattens `slots x parts` and that is the tail. `slots()` returns one
@@ -824,10 +819,6 @@ def _lora_choices():
     return ["None"] + handlers.list_lora_files()
 
 
-def _flux_lora_choices():
-    return ["None"] + handlers.list_flux_lora_files()
-
-
 def _klein_lora_choices():
     return ["None"] + handlers.list_klein_lora_files()
 
@@ -849,27 +840,8 @@ def _stack_slots(loader):
                          for on, name, strength in loader())
 
 
-def _pair_tail(choices, title):
-    """`(name, weight)` slots — Flux, and nothing else any more.
-
-    The Krea2-family tabs used to be here too. They moved to `_triple_tail`
-    so that switching a row off keeps its filename, which is what the V2
-    tabs have always done; Flux keeps the two-part row because its stack is
-    a separate folder and a separate pipeline that nobody asked to change.
-    """
-    return Repeat(
-        parts=(
-            Field("name", "LoRA {n}", "select", "None", choices=choices),
-            Field("weight", "Weight", "slider", 0.8, lo=0.0, hi=2.0,
-                  step=0.05),
-        ),
-        slots=_blank_slots(handlers.MAX_LORA_SLOTS),
-        title=title,
-    )
-
-
 def _triple_tail(choices, slots, title):
-    """`(enabled, name, weight)` slots — every tab but Flux.
+    """`(enabled, name, weight)` slots — every tab.
 
     The order inside the row is the submission order of the handler's
     varargs tail, so `enabled` really does come first. Getting it wrong
@@ -1353,39 +1325,6 @@ SCHEMAS = (
     ),
 
     TabSchema(
-        model_registry='flux',
-        key=Key.FLUX_T2I, handler=handlers.generate_flux,
-        lane=handlers.COMFY_LANE, prompt_field="prompt",
-        result_keys=IMAGE_KEYS, tab_id="flux",
-        icon="🌊", blurb="The Flux pipeline, guidance-driven.",
-        category="generate", route="/generate/flux", submit_label="Generate",
-        groups=(G_PROMPT, Group("core", "Output", dense=True), G_SEED),
-        fields=(
-            Field("prompt", "Prompt", "textarea",
-                  "A photorealistic golden-hour portrait, natural skin "
-                  "texture, shallow depth of field", lines=5, group="prompt"),
-            *_seed_fields(),
-            Field("steps", "Steps", "slider", lambda: handlers._f_steps,
-                  lo=1, hi=50, step=1, group="core"),
-            Field("guidance", "Guidance", "slider",
-                  lambda: handlers._f_guidance, lo=0.0, hi=10.0, step=0.1,
-                  group="core"),
-            Field("resolution", "Resolution", "select", DEFAULT_RESOLUTION,
-                  choices=list(RESOLUTION_PRESETS), group="core", wide=True),
-            Field("sampler", "Sampler", "select", "euler", choices=SAMPLERS,
-                  group="core", wide=True),
-            Field("model", "Model", "select",
-                  lambda: handlers.FLUX_MODEL_CHOICES[0],
-                  choices=lambda: handlers.FLUX_MODEL_CHOICES, group="core",
-                  wide=True),
-            _batch_field(),
-            Field("lora_slots", "Flux LoRA stack", "repeat",
-                  repeat=_pair_tail(_flux_lora_choices,
-                                    "Flux LoRA stack (loras/flux2/)")),
-        ),
-    ),
-
-    TabSchema(
         model_registry='klein',
         key=Key.KLEIN_I2I, handler=handlers.generate_klein_edit,
         lane=handlers.COMFY_LANE, prompt_field="prompt",
@@ -1618,7 +1557,7 @@ BESPOKE = (
 # What the ~150 lines of *_changed handlers in ui.py were made of. Every
 # one of them is a lookup in a dict config.py already holds — a model
 # dropdown that resets Steps and CFG, a Wan mode radio that does the same,
-# a Flux model that swaps its trigger words into the prompt. Shipped as
+# a model that swaps its trigger words into the prompt. Shipped as
 # data so React applies them locally, with no round trip and no second
 # copy of the same three numbers.
 
@@ -1627,7 +1566,7 @@ def _model_rows(registry, variant_defaults, keys, available, info):
     """One model registry, flattened for the browser.
 
     `keys` names the per-variant numbers this family has — (steps, cfg)
-    for Krea 2, (steps, guidance, turbo_lora) for Flux — because the
+    for Krea 2, (steps, cfg, turbo_lora) for V2 — because the
     registries genuinely differ and pretending otherwise would mean the
     browser guessing which of the two a name means.
     """
@@ -1674,11 +1613,6 @@ def catalog() -> dict:
                 ("steps", "cfg", "turbo_lora"),
                 lambda e: handlers.v2_model_available(e),
                 handlers._v2_model_info_text),
-            "flux": _model_rows(
-                FLUX_MODELS, FLUX_VARIANT_DEFAULTS,
-                ("steps", "guidance", "turbo_lora"),
-                lambda e: handlers.flux_model_available(e),
-                handlers._flux_model_info_text),
             "klein": _model_rows(
                 KLEIN_MODELS, {}, ("steps", "cfg", "guidance"),
                 lambda e: handlers.klein_model_available(e),

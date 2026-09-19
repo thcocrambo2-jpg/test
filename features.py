@@ -71,7 +71,6 @@ class Key(str, Enum):
     KREA_EDIT = "krea_edit"
     KREA_V2_EDIT = "krea_v2_edit"
     KREA_INPAINT = "krea_inpaint"
-    FLUX_T2I = "flux_t2i"
     KLEIN_I2I = "klein_i2i"
     WAN_I2V = "wan_i2v"
     MINIMAX_I2V = "minimax_i2v"
@@ -147,7 +146,6 @@ FEATURES = (
             needs=("text_encoder", "v2", "edit_lora")),
     Feature(Key.KREA_INPAINT, "🖌️ Krea2 Inpaint",
             needs=("text_encoder", "krea2")),
-    Feature(Key.FLUX_T2I, "🌊 Flux2D", needs=("flux",)),
     Feature(Key.KLEIN_I2I, "🧩 Klein Edit", needs=("klein",)),
     Feature(Key.WAN_I2V, "🎬 Wan Video", needs=("wan",)),
     # Two tabs, one graph, one download. The core MiniMax node takes an

@@ -10,7 +10,6 @@ LoRA lists and (optional) access tokens. In section order:
     Krea 2 V2           the Krea2 advanced pipeline, self-contained
     Wan 2.2             image-to-video (+ the parallel-instance knobs)
     MiniMax H3          video with sound — image-to-video and text-to-video
-    Flux 2              text-to-image
     Klein Edit          Flux 2 Klein 9B image editing, self-contained
     CivitAI LoRAs       shared LoRA lists, resolutions, samplers
     Licensing           seat check + access tokens
@@ -100,7 +99,7 @@ COMFY_PORT = 8188
 # ComfyUI keeps what it loaded until memory pressure evicts it, so without
 # this a swap briefly holds two full model sets — the moment where the
 # server gets OOM-killed once several multi-GB UNets are in rotation
-# (Krea 2 V1 turbo/raw plus V2 turbo/raw, plus Flux and Wan). Freeing at
+# (Krea 2 V1 turbo/raw plus V2 turbo/raw, plus Wan). Freeing at
 # the boundary caps the peak at one set and costs only the reload that a
 # swap already pays for. Set KREA2_KEEP_MODELS_LOADED=1 to turn it off on
 # a machine with room to spare, where keeping models warm is faster.
@@ -241,8 +240,8 @@ HF_LORA_FILES = [
 # On by default (feature key "krea_v2_t2i", ~17 GB); a license that does not grant
 # "krea_v2_t2i" skips the downloads, the three node packs and the tab.
 
-# Variant-level defaults, same scheme as VARIANT_DEFAULTS / FLUX_VARIANT_
-# DEFAULTS: a registry entry picks one with its "variant" field and may
+# Variant-level defaults, same scheme as VARIANT_DEFAULTS:
+# a registry entry picks one with its "variant" field and may
 # override any value. `turbo_lora` is the on/off state the Krea 2 Turbo
 # LoRA slot takes when the variant is selected — that LoRA *is* the raw
 # recipe from the source workflow's companion guide (enable it at 0.6,
@@ -672,64 +671,8 @@ MINIMAX_DEFAULT_ASPECT = "9:16 (Portrait Widescreen)"
 MINIMAX_NODE = "MiniMaxH3ImageToVideo"
 MINIMAX_COMFYUI_MIN = "v0.34.0"
 
-# ── Flux 2 ────────────────────────────────────────────────────────────────────
-# The Flux tab generates images with Flux 2 Dev (32B, guidance-distilled:
-# no CFG/negative prompt — a FluxGuidance value steers it instead). The
-# fp8 model is ~35.5 GB and the Mistral text encoder ~18 GB, so on a 48 GB
-# A40 run Flux WITHOUT KREA2_WAN_PARALLEL (it needs nearly the whole GPU)
-# and expect a slow model swap when switching between Flux and Krea jobs.
-# Off by default (feature key "flux_t2i"); a license granting "flux_t2i" fetches
-# its ~57 GB and shows the tab.
 FLUX_HF_REPO = "Comfy-Org/flux2-dev"
-FLUX_TEXT_ENCODER = "mistral_3_small_flux2_fp8.safetensors"  # ~18.0 GB
 FLUX_VAE = "flux2-vae.safetensors"                           # ~0.34 GB
-FLUX_TURBO_LORA = "Flux2TurboComfyv2.safetensors"            # ~2.8 GB
-
-# Shared Flux files (all under split_files/ in the repo, flattened locally).
-FLUX_HF_FILES = [
-    f"text_encoders/{FLUX_TEXT_ENCODER}",
-    f"vae/{FLUX_VAE}",
-    f"loras/{FLUX_TURBO_LORA}",
-]
-
-# Variant-level defaults for Flux models. "turbo" applies the official
-# Turbo distillation LoRA (8 steps); "raw" is the undistilled 20-step
-# schedule (~2.5× slower). Add new keys ("hyper", ...) freely — a model
-# entry picks one via its "variant" field and can override any value.
-FLUX_VARIANT_DEFAULTS = {
-    "turbo": {"steps": 8, "guidance": 4.0, "turbo_lora": True},
-    "raw": {"steps": 20, "guidance": 4.0, "turbo_lora": False},
-}
-
-# Registry of selectable Flux 2 models — same scheme as KREA2_MODELS
-# (name / file / variant / optional steps, guidance, turbo_lora overrides /
-# hf_path within FLUX_HF_REPO or civitai_version / optional trigger).
-# The first entry is the default. Both official entries share one file:
-# turbo is the same weights plus the Turbo LoRA at generation time.
-FLUX_MODELS = [
-    {
-        "name": "Flux 2 Dev Turbo (official)",
-        "file": "flux2_dev_fp8mixed.safetensors",   # ~35.5 GB
-        "variant": "turbo",
-        "hf_path": "diffusion_models/flux2_dev_fp8mixed.safetensors",
-    },
-    {
-        "name": "Flux 2 Dev Raw (official)",
-        "file": "flux2_dev_fp8mixed.safetensors",   # same file, no Turbo LoRA
-        "variant": "raw",
-        "hf_path": "diffusion_models/flux2_dev_fp8mixed.safetensors",
-    },
-]
-
-# Flux LoRAs live in their own subfolder (loras/flux2/) so they never mix
-# with the Krea 2 LoRA dropdowns — the architectures are incompatible.
-# Entries are (civitai_version_id, filename_to_save_as), exactly like
-# CIVITAI_LORAS below; files dropped into loras/flux2/ by hand also appear
-# after a rescan.
-FLUX_LORA_SUBDIR = "flux2"
-FLUX_CIVITAI_LORAS = [
-    # (1234567, "some_flux2_lora.safetensors"),
-]
 
 # ── Flux 2 Klein 9B Edit ──────────────────────────────────────────────────────
 # The Klein Edit tab is the Klein i2i "FLUX.2 KLEIN 9B EDIT v1.3" workflow

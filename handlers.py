@@ -74,16 +74,6 @@ from workflow import (
     resolve_lora_name,
     resolve_model_entry,
 )
-from workflow_flux import (
-    build_flux_workflow,
-    flux_model_available,
-    flux_model_defaults,
-    flux_model_names,
-    flux_turbo_lora_available,
-    list_flux_lora_files,
-    resolve_flux_lora,
-    resolve_flux_model,
-)
 from workflow_klein import (
     build_klein_edit_workflow,
     default_lora_slots as klein_default_lora_slots,
@@ -142,9 +132,6 @@ MODEL_CHOICES = list_model_names()
 _d_steps, _d_cfg = model_defaults(resolve_model_entry(None))
 DEFAULTS = {"steps": _d_steps, "cfg": _d_cfg}
 LORA_CHOICES = ["None"] + list_lora_files()
-FLUX_MODEL_CHOICES = flux_model_names()
-FLUX_LORA_CHOICES = ["None"] + list_flux_lora_files()
-_f_steps, _f_guidance, _ = flux_model_defaults(resolve_flux_model(None))
 
 # The queue's lanes, and the ComfyUI instance each one is stopped through.
 # One worker per lane, which is the same "one at a time" rule the
@@ -357,14 +344,6 @@ def _resolve_lora_slots(*slots) -> list:
     return loras
 
 
-def _resolve_flux_lora_slots(*slots) -> list:
-    """_resolve_lora_slots for the Flux tab's separate LoRA folder."""
-    loras = []
-    for name, weight in zip(slots[::2], slots[1::2]):
-        lora_file = resolve_flux_lora(name)
-        if lora_file:
-            loras.append((lora_file, float(weight)))
-    return loras
 def _check_model(model):
     """Resolve the dropdown value; return (entry, error_message_or_None)."""
     entry = resolve_model_entry(model)
@@ -475,43 +454,6 @@ def _save_preset(tab, save, name, settings) -> str:
     return ("✅ " if ok else "⚠️ ") + message + "\n"
 
 
-def _flux_model_info_text(entry) -> str:
-    """One-line summary shown under the Flux Model dropdown."""
-    steps, guidance, turbo = flux_model_defaults(entry)
-    info = (f"**{entry.get('variant', 'raw').title()}** · "
-            f"defaults: {steps} steps, guidance {guidance:g}"
-            + (" · Turbo LoRA applied" if turbo else ""))
-    if entry.get("trigger"):
-        info += " · trigger words are inserted into the prompt (editable)"
-    if not flux_model_available(entry):
-        info += " · ⚠️ **not downloaded yet** — restart the app to fetch it"
-    return info
-
-def generate_flux(prompt, seed, randomize, steps, guidance, resolution,
-                  sampler, model, batch_count, *lora_slots):
-    """Flux tab: text-to-image with Flux 2 (guidance-distilled, no negative)."""
-    entry = resolve_flux_model(model)
-    if not flux_model_available(entry):
-        yield [], (f"❌ Model “{entry['name']}” is not downloaded yet — "
-                   "restart the app so the download step can fetch it."), 0
-        return
-    _s, _g, turbo = flux_model_defaults(entry)
-    if turbo and not flux_turbo_lora_available():
-        yield [], ("❌ The Flux 2 Turbo LoRA is missing — restart the app to "
-                   "download it, or pick a raw-variant model."), 0
-        return
-    base_seed = random.randint(0, 2**32 - 1) if randomize else int(seed)
-    width, height = parse_resolution(resolution)
-    loras = _resolve_flux_lora_slots(*lora_slots)
-    jobs = [{
-        "prompt": prompt, "seed": base_seed + i, "steps": int(steps),
-        "guidance": float(guidance), "width": width, "height": height,
-        "sampler": sampler, "loras": loras, "unet_file": entry["file"],
-        "turbo_lora": turbo,
-    } for i in range(int(batch_count))]
-    for images, status in _run_jobs(jobs, builder=build_flux_workflow,
-                                    prefix="Flux2"):
-        yield images, status, base_seed
 # ── Klein Edit (Klein advanced FLUX.2 Klein 9B graph) ────────────────────────────
 # Self-contained like the V2 tab: its own model, encoder, LoRA folder and
 # defaults, all from the source workflow. Nothing here reads DEFAULTS,

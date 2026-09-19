@@ -164,7 +164,7 @@ resolves, and the first load can fail for a minute. The local port works
 throughout.
 
 How much it downloads depends entirely on the license — see Features. A
-`krea_t2i` + `gallery` licence pulls ~31 GB; adding `flux_t2i` or `wan_i2v`
+`krea_t2i` + `gallery` licence pulls ~31 GB; adding `wan_i2v`
 pulls tens of GB more.
 
 ### PyTorch
@@ -553,7 +553,6 @@ npm run issue-key -- --name "Acme Corp" --plan creator --seats 2
 | `krea_edit`    | ✨ Edit (Instruction)   | ~1.9 GB + base |
 | `krea_v2_edit` | 🔷 Krea 2 V2 Edit       | ~1.9 GB + V2   |
 | `krea_inpaint` | Inpaint / Img2Img       | base only      |
-| `flux_t2i`     | 🌊 Flux 2               | ~57 GB         |
 | `klein_i2i`    | 🧩 Klein Edit           | ~19 GB         |
 | `wan_i2v`      | 🎬 Video (Wan 2.2)      | ~49 GB         |
 | `minimax_i2v`  | 🎥 MiniMax I2V (video with sound) | ~56 GB (shared with `minimax_t2v`) |
@@ -1216,7 +1215,7 @@ OS will not let go of, leaves the list alone and says so.
 
 ## Model swapping and crash recovery
 
-With Krea 2 V1 (turbo/raw), V2 (turbo mxfp8/raw), Flux and Wan all
+With Krea 2 V1 (turbo/raw), V2 (turbo mxfp8/raw) and Wan all
 selectable, several multi-gigabyte UNets are in rotation. ComfyUI keeps
 what it has loaded until memory pressure evicts it, so a swap has a window
 where **two full model sets are resident** — and that window is where the
@@ -1734,7 +1733,7 @@ the target machine needs
   ComfyUI's model folders; without the privilege ComfyUI silently sees no
   models and every generation fails validation with a message that never
   mentions symlinks.
-- **~45 GB free**, more with Flux or Wan.
+- **~45 GB free**, more with Wan.
 
 `scripts/windows_start.ps1` checks all of these and says which is missing
 before downloading anything.
@@ -1946,7 +1945,7 @@ and hides the tab.
 
 ### Turbo / Raw
 
-`V2_MODELS` works exactly like `KREA2_MODELS` and `FLUX_MODELS` — a **Model**
+`V2_MODELS` works exactly like `KREA2_MODELS` — a **Model**
 dropdown, and picking one resets that variant's defaults:
 
 | | Turbo (default) | Raw |
@@ -2026,7 +2025,7 @@ actually registered after ComfyUI starts:
 | [ComfyUI-post-processing-nodes](https://github.com/EllangoK/ComfyUI-post-processing-nodes) | `FilmGrain` | the optional grain toggle only |
 
 A failed clone disables this tab and nothing else, the same contract the Wan
-and Flux installs follow.
+installs follow.
 
 ### LoRA stack
 
@@ -2192,31 +2191,6 @@ slot is already in use so an active LoRA is never invisible. The nesting
 is purely visual — the slot lists stay flat and ordered. Set
 `VISIBLE_LORA_SLOTS >= MAX_LORA_SLOTS` to show every slot and skip the
 accordion entirely.
-
-## Flux 2
-
-The **🌊 Flux 2** tab does text-to-image with Flux 2 Dev (32B,
-`flux2_dev_fp8mixed`, ~35.5 GB) plus the Mistral-Small text encoder
-(~18 GB) and Flux 2 VAE — ~57 GB of downloads from `Comfy-Org/flux2-dev`,
-fetched only for a license granting feature key `flux_t2i`. Flux 2 is
-guidance-distilled, so there is no CFG/negative prompt — a **Guidance**
-value (~4) steers it, and sampling uses the official template's
-custom-sampler graph (`Flux2Scheduler` + `BasicGuider` +
-`SamplerCustomAdvanced`), all stock ComfyUI nodes.
-
-Models come from the `FLUX_MODELS` registry in `config.py` (same scheme
-as `KREA2_MODELS`: `variant` → defaults from `FLUX_VARIANT_DEFAULTS`,
-per-model overrides, `hf_path`/`civitai_version` sources, optional
-`trigger`). The two stock entries share one weights file: **Turbo**
-applies the official Flux 2 Turbo LoRA (8 steps, default) and **Raw**
-runs undistilled (20 steps). Flux LoRAs are listed in
-`FLUX_CIVITAI_LORAS` and live in `loras/flux2/`, so they never mix with
-the Krea 2 LoRA dropdowns (the architectures are incompatible).
-
-VRAM note: at ~35 GB the fp8 model wants nearly the whole A40 — run Flux
-**without** `KREA2_WAN_PARALLEL`, and expect a 1–3 min model swap when
-alternating Flux and Krea jobs (the two model sets cannot stay resident
-together).
 
 ## Klein Edit (Klein advanced FLUX.2 Klein 9B graph)
 

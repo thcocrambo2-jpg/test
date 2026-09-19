@@ -9,8 +9,8 @@ import s from '@/components/SchemaForm/form.module.css'
  * One LoRA stack, both shapes.
  *
  * Two submission shapes still exist and they are not interchangeable:
- * **triples** (enabled, name, weight) on every tab but Flux, whose rows
- * carry a per-row on/off checkbox, and **pairs** (name, weight) on Flux.
+ * **triples** (enabled, name, weight), whose rows carry a per-row on/off
+ * checkbox, and **pairs** (name, weight).
  * Flattening that distinction shifts every argument after the stack,
  * silently, and the pictures come back subtly wrong rather than the
  * request failing. See context.md §4.3.
