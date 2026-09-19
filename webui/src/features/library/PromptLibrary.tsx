@@ -16,8 +16,8 @@ import s from './library.module.css'
  * Cards come from the licence server (prompts.py) and a Use button writes a
  * whole recipe into the Krea2 or Krea2 V2 controls and takes you there. The
  * settings blob is the same one a preset carries, so the guarding is the same
- * too: it goes through `POST /schema/{tab}/apply`, which leaves a model or a
- * LoRA file this pod does not have alone and clamps a number from a build
+ * too: it goes through `POST /schema/{tab}/apply`, which leaves alone a model
+ * or a LoRA id this tab does not offer and clamps a number from a build
  * whose slider went further. A card written on someone else's pod is the
  * normal case, not the edge case.
  *

@@ -50,7 +50,17 @@ export interface Field {
   min?: number
   max?: number
   step?: number
+  /** The values a select or radio submits, in display order. */
   choices?: string[]
+  /** What to *show* for each value, when that is not the value itself.
+   *
+   *  The Model dropdown submits a model id (`krea2-turbo-mxfp8`) because
+   *  presets, prompts and recipes all store ids — a display name can be
+   *  renamed in the DB and a file can be shared by two model records, so
+   *  neither is a key. Nobody wants to pick from a list of slugs, though, so
+   *  the pod sends the name alongside. Absent on every field whose values
+   *  are already readable, and a value with no entry shows as itself. */
+  choiceLabels?: Record<string, string>
   lines?: number
   placeholder?: string
   /** Sub-label shown under the control. Not from the baseline — ours. */
@@ -69,7 +79,9 @@ export interface Field {
  *
  *  Every stack submits triples (enabled, name, weight), because each row
  *  carries a per-row on/off checkbox (context.md §4.3). Getting the order
- *  wrong shifts every argument after it. */
+ *  wrong shifts every argument after it. The `name` part is a LoRA *id*
+ *  from the licence server's catalogue, not a file name, or `"None"` for
+ *  an empty slot. */
 export interface LoraSpec {
   shape: 'triple'
   count: number
@@ -81,7 +93,13 @@ export interface LoraSpec {
    *  flattens slots x parts, so this is the thing that must not be
    *  reordered — see context.md 4.3. */
   parts: string[]
+  /** LoRA ids this tab's feature offers, in the catalogue's order, with
+   *  `"None"` first. Not a listing of the pod's disk: a LoRA the catalogue
+   *  lists is offered whether or not its file has arrived yet. */
   choices: string[]
+  /** The LoRA names to show for those ids — same meaning as
+   *  `Field.choiceLabels`. `"None"` is labelled `"None"`. */
+  choiceLabels?: Record<string, string>
   slotLabel: string
   weightLabel: string
   weightMin: number
@@ -90,10 +108,11 @@ export interface LoraSpec {
   weightDefault: number
   enabledLabel: string
   enabledDefault: boolean
-  /** Per-slot defaults. V2 takes its rows from the source
-   *  workflow's own stack rather than a blank row repeated N times, and a
-   *  row whose file did not download comes back off and blank — which is
-   *  a fact about the pod's disk that only the server can know. */
+  /** Per-slot defaults. Krea2 and Krea2 Edit have eight blank rows. The V2
+   *  tabs have one row per LoRA in their feature's list, in list order,
+   *  switched off, at that LoRA's default strength — so `count` is however
+   *  many LoRAs the feature lists, and the tab's Default preset is what
+   *  switches the usual ones on. */
   slots: Record<string, unknown>[]
 }
 
@@ -143,18 +162,27 @@ export interface TabSchema {
    *  wherever those dials exist — which includes the matching Edit tab. */
   presetTab: string | null
   presetNote: string
-  /** Which registry in `AppCatalog.models` this tab's Model dropdown names,
-   *  or null for a tab with no model control. It is what lets the browser
-   *  reproduce krea_model_changed and its three siblings locally. */
+  /** Which list in `AppCatalog.models` this tab's Model dropdown offers —
+   *  the tab's own feature key, since each feature's models are a list in
+   *  the licence server's `feature_assets` — or null for a tab with no
+   *  model control. It is what lets the browser reproduce
+   *  krea_model_changed and its three siblings locally. */
   modelRegistry: string | null
 }
 
-/** One row of a model registry, flattened for the browser.
+/** One model a tab offers, flattened for the browser.
  *
- *  `defaults` is per-family: (steps, cfg) for Krea 2, (steps, cfg,
- *  turbo_lora) for V2. The registries genuinely differ and pretending
- *  otherwise would mean guessing which of the two a name means. */
+ *  `id` is what the Model dropdown submits and what every stored blob
+ *  names; `name` is only its label. Rows are matched by id and never by
+ *  name or file: two records may share one file (the same weights at
+ *  different steps and CFG), and a name is free text somebody can edit.
+ *
+ *  `defaults` is per-family: (steps, cfg) for Krea2 and Krea2 Edit,
+ *  (steps, cfg, turbo_lora) for the V2 tabs. The families genuinely differ
+ *  and pretending otherwise would mean guessing which of the two a row
+ *  means. */
 export interface ModelRow {
+  id: string
   name: string
   file: string | null
   variant: string
@@ -166,8 +194,8 @@ export interface ModelRow {
   info: string
 }
 
-/** Everything the forms need that is not a field: the model registries and
- *  the per-variant defaults the ~150 lines of `*_changed` handlers in ui.py
+/** Everything the forms need that is not a field: each feature's models, keyed
+ *  by feature key, and the per-variant defaults the ~150 lines of `*_changed` handlers in ui.py
  *  were made of. Served whole so React applies them with no round trip. */
 export interface AppCatalog {
   tabs: TabSchema[]
@@ -417,8 +445,9 @@ export interface PromptCard {
   negative: string
   /** The same blob a preset carries — the dials without the words. Opaque
    *  here: it is guarded and unpacked by `POST /schema/{tab}/apply`, because
-   *  doing it in the browser would mean knowing which LoRA files this pod
-   *  has. */
+   *  the stored shape is not the form's — an empty LoRA slot is null there
+   *  and `"None"` here, and a V2 row is found by its LoRA id — and tabschema
+   *  already owns that mapping. */
   settings: Record<string, unknown>
 }
 
@@ -494,7 +523,8 @@ export interface ApiClient {
   getPresets(tab: string): Promise<PresetList>
   /** A preset name or a stored recipe -> the values it is safe to write
    *  into this tab. Server-side, because guarding a value means knowing
-   *  which LoRA files this pod has. */
+   *  which model and LoRA ids this tab's feature offers, and turning the
+   *  stored blob into form values is tabschema's job (see PromptCard). */
   applyPreset(tabKey: string, preset: string): Promise<Record<string, unknown>>
   applyRecipe(tabKey: string, pathId: string): Promise<Record<string, unknown>>
   applySettings(tabKey: string, settings: Record<string, unknown>): Promise<Record<string, unknown>>

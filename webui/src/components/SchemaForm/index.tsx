@@ -240,6 +240,7 @@ function FieldRenderer({
           wide={field.wide}
           value={String(value ?? '')}
           choices={field.choices ?? []}
+          labels={field.choiceLabels}
           onChange={set}
         />
       )
@@ -251,6 +252,7 @@ function FieldRenderer({
           wide
           value={String(value ?? '')}
           choices={field.choices ?? []}
+          labels={field.choiceLabels}
           onChange={set}
         />
       )

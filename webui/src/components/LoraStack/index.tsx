@@ -1,6 +1,6 @@
 import { useState } from 'react'
 import type { LoraSpec } from '@/api/types'
-import { BoolField, SelectField, SliderField } from '@/components/fields'
+import { BoolField, SelectField, SliderField, choiceLabel } from '@/components/fields'
 import { Button } from '@/components/ui'
 import { cx } from '@/lib/util'
 import s from '@/components/SchemaForm/form.module.css'
@@ -12,6 +12,12 @@ import s from '@/components/SchemaForm/form.module.css'
  * carries a per-row on/off checkbox. Getting that order wrong shifts every
  * argument after the stack, silently, and the pictures come back subtly
  * wrong rather than the request failing. See context.md §4.3.
+ *
+ * The `name` in each triple is a LoRA id from the licence server's catalogue
+ * and the dropdown shows that LoRA's name (`spec.choiceLabels`). An id is
+ * what a preset or a recipe stores, so it is also what the form holds —
+ * translating to a name and back on every keystroke would be one more place
+ * for a renamed record to go missing. `"None"` is still the empty slot.
  */
 export function LoraStack({
   spec,
@@ -60,8 +66,9 @@ export function LoraStack({
         <div className={s.groupBody}>
           {nothingToConfigure ? (
             <p className={s.loraEmpty}>
-              This pipeline has no LoRA slots configured. The count is static — see
-              V2_LORA_STACK in workflow_krea2_v2.py.
+              This tab offers no LoRAs. The V2 tabs get one row per LoRA in their
+              feature's list in the licence server's catalogue, and that list is
+              empty — or the catalogue could not be loaded when the pod started.
             </p>
           ) : (
             <>
@@ -88,6 +95,7 @@ export function LoraStack({
                         label={`${spec.slotLabel} ${index + 1}`}
                         value={chosen}
                         choices={spec.choices}
+                        labels={spec.choiceLabels}
                         onChange={(next) => {
                           onChange(nameKey, next)
                           // Choosing a LoRA and leaving the row switched off
@@ -111,15 +119,21 @@ export function LoraStack({
                   )
                 })}
               </div>
+              {/* Back to the rows the tab ships with, not to eight blanks.
+                * On Krea2 those are the same thing. On V2 each row *is* one
+                * LoRA from the feature's list, at that LoRA's own strength,
+                * and blanking them would leave a stack of "None" rows that
+                * only a reload could refill. */}
               {active.length > 0 && (
                 <Button
                   size="sm"
                   variant="ghost"
                   onClick={() =>
                     slots.forEach((index) => {
-                      onChange(`lora.${index}.name`, none)
-                      onChange(`lora.${index}.weight`, spec.weightDefault)
-                      onChange(`lora.${index}.enabled`, false)
+                      const slot = spec.slots[index] ?? {}
+                      onChange(`lora.${index}.name`, slot.name ?? none)
+                      onChange(`lora.${index}.weight`, slot.weight ?? spec.weightDefault)
+                      onChange(`lora.${index}.enabled`, slot.enabled ?? false)
                     })
                   }
                 >
@@ -136,8 +150,11 @@ export function LoraStack({
           <div className={s.loraSummary}>
             {active
               .map(
-                (index) =>
-                  `${values[`lora.${index}.name`]} @ ${values[`lora.${index}.weight`]}`,
+                (index) => {
+                  const name = String(values[`lora.${index}.name`])
+                  const label = choiceLabel(spec.choiceLabels, name)
+                  return `${label} @ ${values[`lora.${index}.weight`]}`
+                },
               )
               .join(' · ')}
           </div>
