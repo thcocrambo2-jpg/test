@@ -21,12 +21,14 @@ import s from './gallery.module.css'
 
 type Density = 'comfortable' | 'compact' | 'large'
 
-/** The narrowest a column may get, in px. The grid fits as many as it can
- *  and shares the leftover width between them. */
-const COLUMN: Record<Density, number> = {
-  large: 360,
-  comfortable: 260,
-  compact: 180,
+/** The narrowest a column may get, in px, and the fewest columns there may
+ *  be. The grid fits as many as it can and shares the leftover width between
+ *  them. The floor is what keeps the three sizes apart on a narrow screen,
+ *  where every width would otherwise bottom out at the same count. */
+const COLUMN: Record<Density, { width: number; fewest: number }> = {
+  large: { width: 420, fewest: 1 },
+  comfortable: { width: 280, fewest: 2 },
+  compact: { width: 180, fewest: 3 },
 }
 
 // Hoisted because `useTabState` holds its initial value in a dependency list.
@@ -83,7 +85,7 @@ export function Gallery() {
   const items = data?.items
   const selecting = selected.size > 0
   const [gridEl, setGridEl] = useState<HTMLDivElement | null>(null)
-  const columnCount = useColumnCount(gridEl, COLUMN[density])
+  const columnCount = useColumnCount(gridEl, COLUMN[density].width, COLUMN[density].fewest)
   const columns = useMemo(() => packColumns(items ?? [], columnCount), [items, columnCount])
 
   /** Toggle one tile, or — with Shift — add everything between it and the
@@ -406,21 +408,20 @@ export function Gallery() {
 
 /** How many columns of at least `minWidth` fit in the grid, kept current as
  *  it resizes. Measured before paint so the first frame is already laid out;
- *  the gap is read from the stylesheet so the two cannot disagree. Never
- *  fewer than two — one column on a phone is a list, not a gallery. */
-function useColumnCount(el: HTMLElement | null, minWidth: number) {
-  const [count, setCount] = useState(2)
+ *  the gap is read from the stylesheet so the two cannot disagree. */
+function useColumnCount(el: HTMLElement | null, minWidth: number, fewest: number) {
+  const [count, setCount] = useState(fewest)
   useLayoutEffect(() => {
     if (!el) return
     const measure = () => {
       const gap = parseFloat(getComputedStyle(el).columnGap) || 0
-      setCount(Math.max(2, Math.floor((el.clientWidth + gap) / (minWidth + gap))))
+      setCount(Math.max(fewest, Math.floor((el.clientWidth + gap) / (minWidth + gap))))
     }
     measure()
     const observer = new ResizeObserver(measure)
     observer.observe(el)
     return () => observer.disconnect()
-  }, [el, minWidth])
+  }, [el, minWidth, fewest])
   return count
 }
 
