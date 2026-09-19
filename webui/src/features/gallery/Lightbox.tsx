@@ -271,6 +271,7 @@ export function Lightbox({
             src={item.url}
             controls
             autoPlay
+            loop
             onClick={(event) => event.stopPropagation()}
           />
         ) : (
