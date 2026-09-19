@@ -44,9 +44,14 @@ import s from './preset.module.css'
 export function PresetBar({
   schema,
   onApply,
+  shouldApplyDefault,
 }: {
   schema: TabSchema
   onApply: (values: Record<string, unknown>) => void
+  /** Asked when the default preset's values arrive, so a form written by
+   *  something else in the meantime — a Gallery recipe — is not overwritten
+   *  by a request that was already on its way. */
+  shouldApplyDefault?: () => boolean
 }) {
   const { data, isLoading } = usePresets(schema.presetTab)
   /* Both of these are per tab and outlive it, and the second one is the
@@ -66,12 +71,19 @@ export function PresetBar({
   const [busy, setBusy] = useState(false)
   const toast = useToast()
 
-  async function apply(name: string) {
+  async function apply(name: string, isDefault = false) {
     setChosen(name)
     if (!name) return
     setBusy(true)
     try {
-      onApply(await api.applyPreset(schema.key, name))
+      const values = await api.applyPreset(schema.key, name)
+      if (isDefault && shouldApplyDefault && !shouldApplyDefault()) {
+        // Superseded while it was in flight. Named nowhere, then: the
+        // dropdown showing a preset the form does not hold would be a lie.
+        setChosen('')
+        return
+      }
+      onApply(values)
       toast(`Loaded the “${name}” preset`)
     } catch (error) {
       toast(error instanceof Error ? error.message : String(error))
@@ -83,7 +95,7 @@ export function PresetBar({
   useEffect(() => {
     if (applied || !data) return
     setApplied(true)
-    if (data.default) void apply(data.default)
+    if (data.default) void apply(data.default, true)
     // `apply` is deliberately not a dependency: it is redefined on every
     // render and the flag above is what decides whether this runs at all.
     // eslint-disable-next-line react-hooks/exhaustive-deps

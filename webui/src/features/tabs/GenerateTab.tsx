@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
+import { useCallback, useEffect, useMemo, useState } from 'react'
 import type { ModelRow, TabSchema } from '@/api/types'
 import { useModels } from '@/api/queries'
 import { TwoColumn } from '@/components/TwoColumn'
@@ -27,6 +27,13 @@ import s from '@/components/SchemaForm/form.module.css'
  * The two bespoke pages — Gallery and the Prompt Library — are not this
  * component, because neither submits a handler.
  */
+/** Tabs a handoff has been applied to this session.
+ *
+ *  Module level for the reason `tabState` is: it has to outlive this
+ *  component, which the Gallery unmounts — and it is read when a preset
+ *  request comes back, so it has to be live rather than a render's copy. */
+const HANDED_OFF = new Set<string>()
+
 export function GenerateTab({ schema }: { schema: TabSchema }) {
   const defaults = useMemo(() => defaultsFor(schema), [schema])
 
@@ -98,19 +105,6 @@ export function GenerateTab({ schema }: { schema: TabSchema }) {
     return row ? { model: <Inline text={row.info} /> } : undefined
   }, [models, values.model])
 
-  /* Declared above the two things that write whole bags of values, because
-   * both have to record the model they just wrote — see the model effect
-   * below for what happens to a recipe when they do not. */
-  const lastModel = useRef<string | null>(null)
-  const lastKey = useRef(schema.key)
-
-  /** A patch is about to be applied whole. If it names a model, that model
-   *  was *chosen by the patch* and not by the customer, so it is not a
-   *  change the model effect should react to. */
-  const notePatchedModel = useCallback((patch: Record<string, unknown>) => {
-    if (typeof patch.model === 'string') lastModel.current = patch.model
-  }, [])
-
   // A handoff — the Prompt Library's Use button, the Gallery's "load these
   // settings" — is drained on arrival and applied *over the defaults*, never
   // over whatever this tab was left holding: a recipe means "these values,
@@ -133,14 +127,28 @@ export function GenerateTab({ schema }: { schema: TabSchema }) {
   // which is what it always meant. `take` clears it, so this settles in one
   // extra pass and a later remount does not re-apply it over what has been
   // typed since.
+  //
+  // It also retires the tab's default preset, which is applied once per tab
+  // and asynchronously — see `shouldApplyDefault` below.
   const take = useHandoff((state) => state.take)
   const handed = useHandoff((state) => state.pending[schema.key])
   useEffect(() => {
     if (!handed) return
     take(schema.key)
-    notePatchedModel(handed)
+    HANDED_OFF.add(schema.key)
     setValues({ ...defaults, ...handed })
-  }, [handed, schema.key, defaults, take, setValues, notePatchedModel])
+  }, [handed, schema.key, defaults, take, setValues])
+
+  /* Whether the tab's default preset may still land.
+   *
+   * Not once a handoff has. The default preset is fetched the first time a
+   * tab is shown in a session, and "load these settings" from the Gallery is
+   * very often that first time: the recipe went in on arrival, the preset
+   * answer came back a moment later, and `apply` merged it over every control
+   * but the prompt — so the tab looked like it had loaded its defaults
+   * instead. Asked when the answer arrives rather than when it was requested,
+   * so a handoff that lands while the request is in flight still wins. */
+  const shouldApplyDefault = useCallback(() => !HANDED_OFF.has(schema.key), [schema.key])
 
   /* `setValues` is a dependency, and has to be.
    *
@@ -167,10 +175,9 @@ export function GenerateTab({ schema }: { schema: TabSchema }) {
    * values, together". */
   const apply = useCallback(
     (patch: Record<string, unknown>) => {
-      notePatchedModel(patch)
       setValues((previous) => ({ ...previous, ...patch }))
     },
-    [setValues, notePatchedModel],
+    [setValues],
   )
 
   /* Picking a model resets the dials that belong to it.
@@ -183,40 +190,46 @@ export function GenerateTab({ schema }: { schema: TabSchema }) {
    * Model dropdown. `model` below is the selected model's *id*, and the row
    * is found by id for the reason given at `hints`.
    *
-   * Only on an actual *change*, and only one the customer made. Applying a
-   * preset that names the model already selected must not overwrite the
-   * steps and CFG that preset just set — Gradio had that rule for the same
-   * reason, by accident, since a value that does not change fires nothing.
-   * A preset or a recipe naming a *different* model is the same case and
-   * Gradio's accident did not cover it: "load these settings" would restore
-   * a recipe and then, one render later, deal that model's default steps and
-   * CFG over the recorded ones and rewrite the prompt's trigger word — so
-   * the button loaded not quite the settings it was pointing at. Hence
-   * `notePatchedModel`: a model that arrived inside a patch is recorded as
-   * already seen, and only a hand on the dropdown gets here. */
-  const model = String(values.model ?? '')
-  useEffect(() => {
-    const row = models.find((candidate) => candidate.id === model)
-    const previous = lastModel.current
-    // Arriving on a tab is not picking a model, and the model on the way in
-    // is nearly always a different string — it belongs to a different tab.
-    // That was free when the form was reset in the same commit anyway; now it
-    // would deal one tab's steps and CFG over what you left on the next, and
-    // rewrite its prompt's trigger word on the way past.
-    const switched = lastKey.current !== schema.key
-    lastKey.current = schema.key
-    lastModel.current = model
-    if (switched || !row || previous === null || previous === model) return
-    for (const [name, value] of Object.entries(row.defaults)) {
-      if (value !== null && value !== undefined) set(name, value)
-    }
-    if (schema.fields.some((field) => field.name === 'prompt')) {
-      set('prompt', swapTrigger(String(values.prompt ?? ''), row, models))
-    }
-    // `values.prompt` is deliberately not a dependency: this must run when
-    // the model changes and not on every keystroke in the prompt box.
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [model, models, schema, set])
+   * Only on an actual *change*, and only one the customer made — which is
+   * why this is the dropdown's change handler and not an effect watching
+   * `values.model`. A preset or a recipe naming a different model means
+   * "these steps and CFG with that model"; dealing the model's defaults over
+   * them would load not quite the settings the button pointed at.
+   *
+   * It was an effect, with refs recording which model a patch had written so
+   * the effect could tell the two apart. That bookkeeping lost to effect
+   * order: a handoff is applied from an effect in the same commit as the
+   * model effect, which then read the model from the render *before* the
+   * recipe and took the recipe's model for a hand on the dropdown. So
+   * whenever a recipe named a different model from the one the tab was
+   * holding, "load these settings" dealt the old model's steps and CFG over
+   * the recipe, put the old prompt back, then dealt the recipe model's
+   * defaults over that. A handler has nothing to tell apart: only the
+   * dropdown calls it.
+   *
+   * One functional update, so the prompt it rewrites is the live one. */
+  const setField = useCallback(
+    (name: string, value: unknown) => {
+      if (name !== 'model') {
+        set(name, value)
+        return
+      }
+      setValues((previous) => {
+        if (Object.is(previous.model, value)) return previous
+        const next: Record<string, unknown> = { ...previous, model: value }
+        const row = models.find((candidate) => candidate.id === value)
+        if (!row) return next
+        for (const [key, fallback] of Object.entries(row.defaults)) {
+          if (fallback !== null && fallback !== undefined) next[key] = fallback
+        }
+        if (schema.fields.some((field) => field.name === 'prompt')) {
+          next.prompt = swapTrigger(String(previous.prompt ?? ''), row, models)
+        }
+        return next
+      })
+    },
+    [models, schema, set, setValues],
+  )
 
   const submit = useCallback(async () => {
     setSubmitting(true)
@@ -246,7 +259,11 @@ export function GenerateTab({ schema }: { schema: TabSchema }) {
     <TwoColumn
       left={
         <>
-          <PresetBar schema={schema} onApply={apply} />
+          <PresetBar
+            schema={schema}
+            onApply={apply}
+            shouldApplyDefault={shouldApplyDefault}
+          />
           {/* Keyed by tab, because a tab switch is a different form and
             * nothing else here remounts on one — React reconciles
             * `TabPage` with `TabPage`, so without this key every control
@@ -259,7 +276,7 @@ export function GenerateTab({ schema }: { schema: TabSchema }) {
             key={schema.key}
             schema={schema}
             values={values}
-            setValue={set}
+            setValue={setField}
             column="left"
             hints={hints}
           />
@@ -291,7 +308,7 @@ export function GenerateTab({ schema }: { schema: TabSchema }) {
             key={schema.key}
             schema={schema}
             values={values}
-            setValue={set}
+            setValue={setField}
             column="right"
             hints={hints}
           />
