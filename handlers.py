@@ -34,6 +34,7 @@ from pathlib import Path
 from PIL import Image
 
 import catalog
+import eta
 import gallery_index
 import jobqueue
 import presets
@@ -295,7 +296,10 @@ def _run_jobs(jobs, builder=build_workflow, prefix="Krea2"):
         yield images, note
         return
     if note:
+        eta.forget(client.base)            # restarted: nothing is loaded
         yield images, note
+    timer = eta.tracker(getattr(builder, "__name__", prefix), total,
+                        client.base)
     for idx, job in enumerate(jobs, start=1):
         label = f"{idx}/{total}"
         job_prefix = prefix
@@ -305,6 +309,10 @@ def _run_jobs(jobs, builder=build_workflow, prefix="Krea2"):
         # it ran with — still comes first in a directory listing.
         job_prefix += "_" + _run_tag()
         workflow = builder(filename_prefix=job_prefix, **job)
+        # Started before the swap, so the unload it may wait on counts as
+        # part of this picture's time — it is, from where the customer sits.
+        signature = model_signature(workflow)
+        timer.start(workflow, signature, eta.is_cold(client.base, signature))
         swap_note = _release_on_swap(client, workflow)
         if swap_note:
             yield images, f"{swap_note} — job {label} will be slower"
@@ -318,6 +326,7 @@ def _run_jobs(jobs, builder=build_workflow, prefix="Krea2"):
         yield images, f"⏳ Job {label} — queued (seed {job['seed']}{size})"
         try:
             for event in client.run(workflow):
+                timer.event(event)
                 if event["type"] == "progress" and event["total"]:
                     yield images, f"⏳ Job {label} — step {event['step']}/{event['total']}"
                 elif event["type"] == "done":
@@ -846,10 +855,16 @@ def _run_wan_jobs(jobs, builder=build_wan_i2v_workflow, comfy_client=None):
         yield videos, latest, note
         return
     if note:
+        eta.forget(comfy_client.base)      # restarted: nothing is loaded
         yield videos, latest, note
+    timer = eta.tracker(getattr(builder, "__name__", "video"), total,
+                        comfy_client.base)
     for idx, job in enumerate(jobs, start=1):
         label = f"{idx}/{total}"
         workflow = builder(**job)
+        signature = model_signature(workflow)          # see _run_jobs
+        timer.start(workflow, signature,
+                    eta.is_cold(comfy_client.base, signature))
         swap_note = _release_on_swap(comfy_client, workflow)
         if swap_note:
             yield videos, latest, f"{swap_note} — video {label} will be slower"
@@ -862,6 +877,7 @@ def _run_wan_jobs(jobs, builder=build_wan_i2v_workflow, comfy_client=None):
             # Raw 720p renders can take the better part of an hour on an
             # A40, so the video timeout is far above the image one.
             for event in comfy_client.run(workflow, timeout=7200):
+                timer.event(event)
                 if event["type"] == "progress" and event["total"]:
                     yield videos, latest, (
                         f"⏳ Video {label} — step "

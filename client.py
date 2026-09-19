@@ -270,7 +270,8 @@ class ComfyClient:
     def run(self, workflow: dict, timeout: int = 1200):
         """Generator that yields progress events, ending with a 'done' event.
 
-        Events: {"type": "progress", "step": int, "total": int}
+        Events: {"type": "progress", "step": int, "total": int,
+                 "node": str | None}
                 {"type": "status", "text": str}
                 {"type": "done", "images": [str, ...]}
         Uses the websocket API for live sampler progress and falls back to
@@ -319,9 +320,13 @@ class ComfyClient:
                         continue  # event belongs to a different queued prompt
                     mtype = msg.get("type")
                     if mtype == "progress":
+                        # `node` says which sampler the steps belong to:
+                        # a two-stage graph (Wan 14B) counts 0..max twice,
+                        # and eta.py times each stage on its own.
                         yield {"type": "progress",
                                "step": data.get("value", 0),
-                               "total": data.get("max", 0)}
+                               "total": data.get("max", 0),
+                               "node": data.get("node")}
                     elif mtype == "execution_error":
                         raise ComfyUIError(
                             data.get("exception_message", "execution error")

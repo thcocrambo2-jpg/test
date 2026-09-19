@@ -61,6 +61,9 @@ export interface Job {
   prompt: string
   startedAt: number
   endedAt: number | null
+  /** When a running job expects to be done, on this browser's clock (ms),
+   *  or null when the server has no estimate. See useEta. */
+  etaAt: number | null
   /** jobqueue's stamp on this job's last change — what makes "is the
    *  output I hold for this job the output it has now?" answerable. */
   revision: number
@@ -178,6 +181,7 @@ function merge(row: QueueJob, previous: Job | undefined): Job {
     seed: previous?.seed ?? null,
     prompt: previous?.prompt ?? (row.title === '—' ? '' : row.title),
     revision: row.revision,
+    etaAt: typeof row.eta === 'number' ? Date.now() + row.eta * 1000 : null,
     startedAt: previous?.startedAt ?? row.submitted * 1000,
     endedAt:
       status === 'queued' || status === 'running' ? null : (previous?.endedAt ?? Date.now()),
@@ -528,6 +532,7 @@ export const useQueue = create<QueueState>((set, get) => {
               seed: null,
               prompt,
               revision: 0,
+              etaAt: null,
               startedAt: Date.now(),
               endedAt: null,
             },
@@ -558,6 +563,7 @@ export const useQueue = create<QueueState>((set, get) => {
               seed: null,
               prompt,
               revision: 0,
+              etaAt: null,
               startedAt: Date.now(),
               endedAt: Date.now(),
             },

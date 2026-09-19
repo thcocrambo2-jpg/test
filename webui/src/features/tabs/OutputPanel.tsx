@@ -3,7 +3,7 @@ import type { MediaItem, TabSchema } from '@/api/types'
 import { isLive, useQueue, type Job } from '@/store/queue'
 import { Alert, Button, Card, EmptyState, Pill, ProgressBar, Skeleton } from '@/components/ui'
 import { Lightbox } from '@/features/gallery/Lightbox'
-import { cx, useCopy } from '@/lib/util'
+import { cx, useCopy, useEta } from '@/lib/util'
 import s from './tabs.module.css'
 
 /*
@@ -35,6 +35,7 @@ export function OutputPanel({
   const dismissError = useQueue((state) => state.dismissError)
   const select = useQueue((state) => state.select)
   const cancel = useQueue((state) => state.cancel)
+  const eta = useEta(job?.status === 'running' ? job.etaAt : null)
 
   const images = job?.images ?? []
   const running = job ? isLive(job) : false
@@ -76,6 +77,7 @@ export function OutputPanel({
               total={job?.progress?.total}
               label={job?.statusText}
               detail={job?.queuePosition ? `${job.queuePosition} ahead` : 'starting'}
+              eta={eta}
             />
           )}
 

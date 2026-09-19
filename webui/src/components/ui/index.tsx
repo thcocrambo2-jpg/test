@@ -192,21 +192,25 @@ export function ProgressBar({
   total,
   label,
   detail,
+  eta,
 }: {
   step?: number
   total?: number
   label?: ReactNode
   detail?: ReactNode
+  /** Time left, already worded ("~1m 20s left"). Shown after the count. */
+  eta?: string | null
 }) {
   const determinate = typeof step === 'number' && typeof total === 'number' && total > 0
   const percent = determinate ? Math.min(100, Math.round((step / total) * 100)) : 0
   return (
     <div className={cx(s.progress, !determinate && s.progressIndeterminate)}>
-      {(label || detail || determinate) && (
+      {(label || detail || determinate || eta) && (
         <div className={s.progressMeta}>
           <span>{label}</span>
           <span className={s.progressCount}>
             {determinate ? `${step}/${total} · ${percent}%` : detail}
+            {eta && (determinate || detail ? ` · ${eta}` : eta)}
           </span>
         </div>
       )}

@@ -94,6 +94,10 @@ class Job:
     revision: int = 0
     started: float | None = None
     finished: float | None = None
+    # When the running job expects to be done, as a server timestamp, or
+    # None when nothing can be said yet. Set by eta.py through report_eta;
+    # only ever meaningful while RUNNING.
+    eta_at: float | None = None
     _stop: threading.Event = field(default_factory=threading.Event)
 
 
@@ -117,6 +121,10 @@ class JobView:
     # Carried so a caller reading the queue can tell whether the output it
     # holds for this job is the output the job has now, without asking.
     revision: int = 0
+    # Seconds until the job expects to finish, as of when the snapshot was
+    # taken; None when there is no estimate. Relative on purpose: the
+    # browser's clock and this one need not agree.
+    eta: float | None = None
 
 
 # One lock for everything. The critical sections are all "read or write a
@@ -128,6 +136,12 @@ _WAKE = threading.Condition(_LOCK)
 _JOBS: list[Job] = []
 _LANES: dict[str, Callable[[], None]] = {}
 _WORKERS: dict[str, threading.Thread] = {}
+
+# The job each worker thread is running. How eta.py, deep inside a tab's
+# handler, finds the job its estimate is about without the handler having
+# to pass it down or yield it — the handlers' yield tuples are a contract
+# with every tab and stay as they are.
+_CURRENT = threading.local()
 
 # One counter behind both staleness checks the UI makes. Every change
 # stamps the job it touched and the queue as a whole, so a poll can ask
@@ -261,6 +275,25 @@ def clear_finished() -> str:
     return f"🧹 Cleared {len(gone)} finished job(s)." if gone else ""
 
 
+def on_worker() -> bool:
+    """True on a lane's worker thread while it is running a job."""
+    return getattr(_CURRENT, "job", None) is not None
+
+
+def report_eta(finish_at: float | None) -> None:
+    """Record when the job this thread is running expects to finish.
+
+    No stamp of its own: the handler yields right after every report, and
+    that yield stamps the job and carries the estimate out with it. A
+    no-op anywhere but on a worker.
+    """
+    job = getattr(_CURRENT, "job", None)
+    if job is None:
+        return
+    with _LOCK:
+        job.eta_at = finish_at
+
+
 def revision() -> int:
     """The queue's version. Changes on every submit, state change or
     removal, so a poll can skip redrawing when nothing has happened."""
@@ -292,7 +325,10 @@ def _view(job: Job) -> JobView:
                    tab_label=job.tab_label, title=job.title,
                    status=job.status, progress=job.progress,
                    submitted=job.submitted, place=place,
-                   revision=job.revision)
+                   revision=job.revision,
+                   eta=(max(0.0, job.eta_at - time.time())
+                        if job.status == RUNNING and job.eta_at is not None
+                        else None))
 
 
 def display_for(tab: str) -> tuple[str | None, int, dict | None]:
@@ -406,6 +442,7 @@ def _run(job: Job) -> None:
     """
     outcome = None
     failure = None
+    _CURRENT.job = job
     try:
         outcome = job.fn(*job.args)
         if hasattr(outcome, "__next__"):
@@ -434,9 +471,11 @@ def _run(job: Job) -> None:
         # is waiting on.
         if outcome is not None and hasattr(outcome, "close"):
             outcome.close()
+        _CURRENT.job = None
 
     with _LOCK:
         job.finished = time.time()
+        job.eta_at = None
         if failure is not None:
             job.status, job.progress = FAILED, failure
         elif job._stop.is_set():

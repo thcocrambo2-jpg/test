@@ -283,6 +283,11 @@ export interface QueueJob {
    *  one `display` carries, so a reader can tell whether the output it
    *  holds for the job is the output the job has now. */
   revision: number
+  /** Seconds until a running job expects to finish, as of this snapshot;
+   *  null while there is no estimate. Worked out by the server (eta.py),
+   *  because ComfyUI does not send one. Optional so a server one release
+   *  behind this build still parses. */
+  eta?: number | null
 }
 
 export interface QueueSnapshot {

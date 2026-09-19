@@ -878,6 +878,9 @@ def _queue_json() -> dict:
             "error": _failure(row.status, row.progress),
             "submitted": row.submitted, "place": row.place,
             "revision": row.revision,
+            # Seconds left, or null — see eta.py. Rounded: the browser
+            # counts down between snapshots itself.
+            "eta": None if row.eta is None else round(row.eta, 1),
         } for row in rows],
     }
 

@@ -3,7 +3,7 @@ import { useNavigate } from 'react-router-dom'
 import { useSchemas } from '@/api/queries'
 import { isLive, useQueue, type Job } from '@/store/queue'
 import { Button, EmptyState, ProgressBar } from '@/components/ui'
-import { cx, relativeTime } from '@/lib/util'
+import { cx, relativeTime, useEta } from '@/lib/util'
 import s from './queue.module.css'
 
 /*
@@ -83,6 +83,7 @@ function JobRow({ job, onNavigate }: { job: Job; onNavigate: () => void }) {
   const { data: schemas } = useSchemas()
   const select = useQueue((state) => state.select)
   const cancel = useQueue((state) => state.cancel)
+  const eta = useEta(job.status === 'running' ? job.etaAt : null)
 
   const route = schemas?.find((schema) => schema.key === job.tabKey)?.route
 
@@ -129,6 +130,7 @@ function JobRow({ job, onNavigate }: { job: Job; onNavigate: () => void }) {
           step={job.progress?.step}
           total={job.progress?.total}
           detail={job.statusText}
+          eta={eta}
         />
       )}
 

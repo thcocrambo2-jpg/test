@@ -228,3 +228,33 @@ export function labelText(label: string): string {
   const stripped = label.replace(/^[\p{Extended_Pictographic}\p{Emoji_Component}\uFE0F\u200D]+\s*/u, '')
   return stripped.trim() || label
 }
+
+/** "~1m 20s left" out of a number of seconds. Past a minute the seconds are
+ *  rounded to fives: an estimate quoted to the second claims a precision it
+ *  does not have, and reads as jitter as it is corrected. */
+export function formatEta(seconds: number): string {
+  if (seconds < 1) return 'almost done'
+  if (seconds < 60) return `~${Math.ceil(seconds)}s left`
+  const whole = Math.round(seconds / 5) * 5
+  const hours = Math.floor(whole / 3600)
+  const minutes = Math.floor((whole % 3600) / 60)
+  const secs = whole % 60
+  if (hours > 0) return `~${hours}h ${minutes}m left`
+  return secs > 0 ? `~${minutes}m ${secs}s left` : `~${minutes}m left`
+}
+
+/** A running job's ETA, counted down once a second between the server's
+ *  updates. `etaAt` is a deadline on this browser's clock — the store turns
+ *  the server's "seconds left" into one on arrival, so the two clocks never
+ *  have to agree. Null when there is no estimate yet. */
+export function useEta(etaAt: number | null | undefined): string | null {
+  const [now, setNow] = useState(() => Date.now())
+  const active = typeof etaAt === 'number'
+  useEffect(() => {
+    if (!active) return
+    const timer = setInterval(() => setNow(Date.now()), 1000)
+    return () => clearInterval(timer)
+  }, [active])
+  if (!active) return null
+  return formatEta(Math.max(0, (etaAt - now) / 1000))
+}
