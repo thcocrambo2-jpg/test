@@ -198,20 +198,24 @@ export function ProgressBar({
   total?: number
   label?: ReactNode
   detail?: ReactNode
-  /** Time left, already worded ("~1m 20s left"). Shown after the count. */
+  /** Time left, already worded ("~1m 20s left"). When given, it and the
+   *  step count move to a small, faint row under the bar — the way a video
+   *  player's timeline reads — so the row above keeps only the label and a
+   *  narrow queue card is not crowded. */
   eta?: string | null
 }) {
   const determinate = typeof step === 'number' && typeof total === 'number' && total > 0
   const percent = determinate ? Math.min(100, Math.round((step / total) * 100)) : 0
+  const count = determinate ? `${step}/${total} · ${percent}%` : null
+  // With an ETA the count lives in the row underneath; without one, the row
+  // above is exactly as it always was.
+  const above = eta ? (count ? null : detail) : (count ?? detail)
   return (
     <div className={cx(s.progress, !determinate && s.progressIndeterminate)}>
-      {(label || detail || determinate || eta) && (
+      {(label || above) && (
         <div className={s.progressMeta}>
           <span>{label}</span>
-          <span className={s.progressCount}>
-            {determinate ? `${step}/${total} · ${percent}%` : detail}
-            {eta && (determinate || detail ? ` · ${eta}` : eta)}
-          </span>
+          <span className={s.progressCount}>{above}</span>
         </div>
       )}
       <div
@@ -223,6 +227,12 @@ export function ProgressBar({
       >
         <div className={s.progressFill} style={{ width: `${percent}%` }} />
       </div>
+      {eta && (
+        <div className={s.progressFoot}>
+          <span>{eta}</span>
+          {count && <span>{count}</span>}
+        </div>
+      )}
     </div>
   )
 }
