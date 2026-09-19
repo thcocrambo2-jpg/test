@@ -304,6 +304,21 @@ export function SliderField({
 
 // ------------------------------------------------------------------ choice
 
+/* A choice is a value and, separately, what to call it.
+ *
+ * The two are the same string for most controls. They are not for the Model
+ * dropdown and the LoRA slots, whose values are catalogue ids — the thing a
+ * preset, a prompt card and a recipe store, and the only name that survives a
+ * record being renamed — and whose labels are the names people recognise. So
+ * the control shows `labels[value]` and hands back the value, and a value the
+ * map does not mention is shown as itself: that is every field that sends no
+ * map at all. */
+export type ChoiceLabels = Record<string, string> | undefined
+
+export function choiceLabel(labels: ChoiceLabels, value: string): string {
+  return labels?.[value] ?? value
+}
+
 export function SelectField({
   label,
   hint,
@@ -311,10 +326,12 @@ export function SelectField({
   value,
   onChange,
   choices,
+  labels,
 }: Common & {
   value: string
   onChange: (next: string) => void
   choices: string[]
+  labels?: ChoiceLabels
 }) {
   const id = useId()
   return (
@@ -327,7 +344,7 @@ export function SelectField({
       >
         {choices.map((choice) => (
           <option key={choice} value={choice}>
-            {choice}
+            {choiceLabel(labels, choice)}
           </option>
         ))}
       </select>
@@ -342,10 +359,12 @@ export function RadioField({
   value,
   onChange,
   choices,
+  labels,
 }: Common & {
   value: string
   onChange: (next: string) => void
   choices: string[]
+  labels?: ChoiceLabels
 }) {
   const name = useId()
   return (
@@ -363,7 +382,7 @@ export function RadioField({
               checked={choice === value}
               onChange={() => onChange(choice)}
             />
-            <span>{choice}</span>
+            <span>{choiceLabel(labels, choice)}</span>
           </label>
         ))}
       </div>

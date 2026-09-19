@@ -88,9 +88,13 @@ export function GenerateTab({ schema }: { schema: TabSchema }) {
   /* The line under the Model dropdown — variant, its step and CFG defaults,
    * whether the weights are actually on this pod. The Gradio app had it and
    * the React one did not; it is a hint rather than a field because
-   * "not downloaded yet" is a fact about the disk, not about the control. */
+   * "not downloaded yet" is a fact about the disk, not about the control.
+   *
+   * Looked up by id, which is what the dropdown holds. Its label is the
+   * model's name, but a name is not a key: it is free text in the DB, and
+   * two records can share one weights file at different steps and CFG. */
   const hints = useMemo(() => {
-    const row = models.find((candidate) => candidate.name === values.model)
+    const row = models.find((candidate) => candidate.id === values.model)
     return row ? { model: <Inline text={row.info} /> } : undefined
   }, [models, values.model])
 
@@ -172,9 +176,12 @@ export function GenerateTab({ schema }: { schema: TabSchema }) {
   /* Picking a model resets the dials that belong to it.
    *
    * This is what `krea_model_changed` and `v2_model_changed` did — Gradio
-   * `.change()` wiring over data that already sat in
-   * config.py. The registries arrive whole in `/catalog`, so it happens here
-   * with no round trip, and the same four lines serve all four tabs.
+   * `.change()` wiring over model data compiled into the binary. The models
+   * now come from the licence server's catalogue, and each tab's list
+   * arrives whole in `/catalog` under its feature key, so it happens here
+   * with no round trip, and the same four lines serve every tab with a
+   * Model dropdown. `model` below is the selected model's *id*, and the row
+   * is found by id for the reason given at `hints`.
    *
    * Only on an actual *change*, and only one the customer made. Applying a
    * preset that names the model already selected must not overwrite the
@@ -189,7 +196,7 @@ export function GenerateTab({ schema }: { schema: TabSchema }) {
    * already seen, and only a hand on the dropdown gets here. */
   const model = String(values.model ?? '')
   useEffect(() => {
-    const row = models.find((candidate) => candidate.name === model)
+    const row = models.find((candidate) => candidate.id === model)
     const previous = lastModel.current
     // Arriving on a tab is not picking a model, and the model on the way in
     // is nearly always a different string — it belongs to a different tab.
@@ -297,15 +304,15 @@ export function GenerateTab({ schema }: { schema: TabSchema }) {
 
 /** The selected model's trigger words, swapped into the prompt.
  *
- *  ui._swap_trigger, character for character in effect: any *other*
- *  registered model's trigger is removed first, so switching models swaps
+ *  ui._swap_trigger, character for character in effect: the trigger of any
+ *  *other* model this tab offers is removed first, so switching models swaps
  *  triggers instead of stacking them, and the text stays fully editable —
  *  whatever ends up in the box is what gets used, with nothing added silently
- *  at generation time. Most registries ship no triggers at all, in which case
+ *  at generation time. Most models carry no trigger at all, in which case
  *  this is the identity function. */
-function swapTrigger(text: string, entry: ModelRow, registry: ModelRow[]): string {
+function swapTrigger(text: string, entry: ModelRow, offered: ModelRow[]): string {
   let out = text ?? ''
-  for (const other of registry) {
+  for (const other of offered) {
     const trigger = (other.trigger ?? '').trim()
     if (!trigger) continue
     const index = out.toLowerCase().indexOf(trigger.toLowerCase())

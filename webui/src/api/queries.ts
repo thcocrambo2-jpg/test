@@ -24,14 +24,16 @@ export function useSchema(key: string | undefined): TabSchema | undefined {
   return data?.find((tab) => tab.key === key)
 }
 
-/** The model registries and per-variant defaults. Static for a session:
- *  they come from config.py, which is 909 lines with zero `def` and zero
- *  `class` — pure data compiled into the binary. */
+/** Each feature's models and their per-variant defaults. Static for a
+ *  session: the pod reads the licence server's catalogue once at start
+ *  (catalog.py) and freezes it for the life of the process, because a list
+ *  that changed under a running pod would disagree with what it downloaded. */
 export function useAppCatalog() {
   return useQuery({ queryKey: ['catalog'], queryFn: () => api.getAppCatalog(), ...FOREVER })
 }
 
-/** One tab's model registry, or an empty list for a tab with no models. */
+/** The models one tab offers — `models` is keyed by feature key and
+ *  `modelRegistry` is that key — or an empty list for a tab with no models. */
 export function useModels(schema: TabSchema | undefined): ModelRow[] {
   const { data } = useAppCatalog()
   if (!schema?.modelRegistry) return EMPTY_MODELS

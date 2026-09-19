@@ -19,12 +19,14 @@ import s from './preset.module.css'
  *
  * **The guarding is server-side.** `POST /schema/{tab}/apply` answers with
  * only the values it could safely set. A preset written on someone else's pod
- * may name a model or a LoRA file this one does not have, and a select handed
- * a value outside its options is a broken control rather than a wrong one —
- * so an unknown choice leaves that control alone and a number out of this
- * build's range is clamped into it (tabschema.preset_values, which is
- * ui._pick and ui._num). The browser cannot do that: `choices` for a LoRA
- * dropdown is a listing of the pod's disk.
+ * may name a model or a LoRA id this tab's feature no longer offers, and a
+ * select handed a value outside its options is a broken control rather than
+ * a wrong one — so an unknown choice leaves that control alone and a number
+ * out of this build's range is clamped into it (tabschema.preset_values,
+ * which is ui._pick and ui._num). The browser could check an id against
+ * `choices`, but the stored blob is not the form's shape either — an empty
+ * LoRA slot is null there and "None" here, and V2's rows are matched by LoRA
+ * id — and tabschema already owns that mapping.
  *
  * **The default is applied on load.** The preset a tab marks default is what
  * a fresh session opens on, so the shipped defaults are a row in Atlas rather

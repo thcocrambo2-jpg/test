@@ -65,6 +65,16 @@ rendering regroups freely. Index `i` of the result is positional parameter `i`.
 The LoRA tail is appended flat, as (enabled, name, weight) triples — getting
 that order wrong shifts every argument after the stack (context.md §4.3).
 
+**Values are ids, labels are for the eye.** Models and LoRAs come from the
+licence server's catalogue and are referenced by id everywhere — presets,
+prompt cards, recipes and the form itself. A select or radio `Field`, and the
+LoRA stack's `LoraSpec`, may carry `choiceLabels` (`{value: label}`) next to
+`choices`: the control shows the label and submits the value, and a value
+with no label shows as itself. The `name` part of a LoRA triple is a LoRA id,
+`"None"` for an empty slot. `/catalog` keys `models` by feature key, a tab's
+`modelRegistry` is that key, and a `ModelRow` is matched by `id` — never by
+`name`, which is only its label.
+
 ## Colours
 
 Every colour is a custom property on `:root` in `theme/tokens.css`, redefined
