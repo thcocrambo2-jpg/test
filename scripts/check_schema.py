@@ -27,8 +27,8 @@ who did not touch that control.
 `parity.py --structure-only` exists: the LoRA dropdowns are
 `available_lora_files()`, a listing of the disk this happens to run on, so
 a laptop and a pod disagree for reasons that are not regressions.
-Structure does not vary — slot counts come from the static V2_LORA_STACK /
-KLEIN_LORA_STACK, and only the enabled flag and the choice list read disk.
+Structure does not vary — slot counts come from the static V2_LORA_STACK,
+and only the enabled flag and the choice list read disk.
 
 Not a Gradio importer: it reads the committed baseline JSON and
 tabschema.py, so it runs with no GPU, no ComfyUI and (unlike parity.py)
@@ -78,20 +78,14 @@ COMPARED = ("label", "value", "minimum", "maximum", "step", "lines")
 # diff deserves the reason rather than a rule that swallows a whole class
 # of difference.
 #
-# All three are gr.Number, which in Gradio carries no bounds at all — so
-# a negative seed or a zero-width output was a form the UI would happily
+# It is a gr.Number, which in Gradio carries no bounds at all — so
+# a negative seed was a form the UI would happily
 # submit and ComfyUI would reject a minute later, on a worker thread,
 # into a status box. Floors are the same answer given earlier.
 TIGHTENED = {
     ("Seed", "minimum"): (None, 0,
                           "a negative seed is not a seed; there was no "
                           "floor because gr.Number has none"),
-    ("Width (custom mode)", "minimum"): (None, 64,
-                                         "below one VAE tile the graph "
-                                         "cannot build"),
-    ("Height (custom mode)", "minimum"): (None, 64,
-                                          "below one VAE tile the graph "
-                                          "cannot build"),
 }
 
 

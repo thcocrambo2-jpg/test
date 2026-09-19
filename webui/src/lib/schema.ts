@@ -19,7 +19,7 @@ import type { TabSchema } from '@/api/types'
  *  `tabschema.call_args` reads them back out of.
  *
  *  The per-slot defaults come from `lora.slots` rather than from one default
- *  repeated N times, because V2 and Klein take their rows from the source
+ *  repeated N times, because V2 takes its rows from the source
  *  workflow's own stack — and a row whose file did not download comes back
  *  off and blank, which only the pod's disk can say. */
 export function defaultsFor(schema: TabSchema): Record<string, unknown> {

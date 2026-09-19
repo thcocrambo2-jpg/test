@@ -9,7 +9,7 @@ card that can hold a 35 GB UNet.
     $env:KREA2_LICENSE_KEY="your_license_key";  $env:KREA2_NODE_TAG="your_node_tag"; .\.venv\Scripts\python.exe scripts\dryrun.py
 
     python scripts/dryrun.py                        # tabs from your license
-    python scripts/dryrun.py --features "single,klein"   # offline, no server
+    python scripts/dryrun.py --features "krea_t2i,wan_i2v"   # offline, no server
     python scripts/dryrun.py --features all
 
 Serves the React front end at http://127.0.0.1:7860 the same way the
@@ -103,7 +103,7 @@ def main() -> None:
     )
     parser.add_argument(
         "--features", metavar="LIST",
-        help='skip the license server and force this set, e.g. "single,klein" '
+        help='skip the license server and force this set, e.g. "krea_t2i,wan_i2v" '
              'or "all". Without it, the tabs come from your license key.',
     )
     parser.add_argument("--port", type=int, default=7860)

@@ -554,7 +554,6 @@ npm run issue-key -- --name "Acme Corp" --plan creator --seats 2
 | `krea_v2_edit` | 🔷 Krea 2 V2 Edit       | ~1.9 GB + V2   |
 | `krea_inpaint` | Inpaint / Img2Img       | base only      |
 | `flux_t2i`     | 🌊 Flux 2               | ~57 GB         |
-| `klein_i2i`    | 🧩 Klein Edit           | ~19 GB         |
 | `wan_i2v`      | 🎬 Video (Wan 2.2)      | ~49 GB         |
 | `minimax_i2v`  | 🎥 MiniMax I2V (video with sound) | ~56 GB (shared with `minimax_t2v`) |
 | `minimax_t2v`  | 🎞️ MiniMax T2V (video with sound) | shared with `minimax_i2v` |
@@ -1281,7 +1280,6 @@ error in the log points at a custom node instead.
 - `workflow.py` — Krea 2 workflow builders, text-to-image + inpainting + instruction edit (ComfyUI API format)
 - `workflow_krea2_v2.py` — Krea 2 V2 builder (the Krea2 advanced turbo/raw graph)
 - `workflow_krea2_v2_edit.py` — Krea 2 V2 Edit builder (that graph's instruction-edit variant)
-- `workflow_klein.py` — Flux 2 Klein 9B edit builder (the Klein advanced Klein Edit graph)
 - `workflow_wan.py` — Wan 2.2 image-to-video workflow builder (two-expert A14B)
 - `workflow_minimax.py` — MiniMax H3 video-with-sound builder; one graph serves both the image-to-video and text-to-video tabs
 - `client.py` — ComfyUI HTTP/websocket client (queue, progress, image upload, interrupt)
@@ -2217,85 +2215,6 @@ VRAM note: at ~35 GB the fp8 model wants nearly the whole A40 — run Flux
 **without** `KREA2_WAN_PARALLEL`, and expect a 1–3 min model swap when
 alternating Flux and Krea jobs (the two model sets cannot stay resident
 together).
-
-## Klein Edit (Klein advanced FLUX.2 Klein 9B graph)
-
-The **🧩 Klein Edit** tab is the Klein *FLUX.2 KLEIN 9B EDIT v1.3*
-workflow ported node-for-node into this app. It **edits** images rather
-than generating them: upload a picture, describe the change, and the
-source is scaled to 1 MP, VAE-encoded and attached to the conditioning as
-a `ReferenceLatent`, so the model actually sees what it is editing. Every
-node it runs is stock ComfyUI, so unlike the Krea 2 V2 tab it installs no
-custom node packs. Feature key `klein` — a license granting it fetches its
-~19 GB and shows the tab.
-
-| File | Source | Size |
-| --- | --- | --- |
-| `flux-2-klein-9b-fp8.safetensors` | `black-forest-labs/FLUX.2-klein-9b-fp8` | ~9.4 GB |
-| `qwen_3_8b_fp8mixed_abliterated.safetensors` | `edicamargo/qwen_3_8b_fp8mixed_abliterated` | ~9.2 GB |
-| `flux2-vae.safetensors` | `Comfy-Org/flux2-dev` | ~0.34 GB |
-| 3 LoRAs → `loras/klein/` | CivitAI (`CIVITAI_TOKEN` needed) | ~0.5 GB |
-
-Nothing is shared with the Flux 2 tab except that VAE file, and downloads
-are keyed on the destination path — so enabling both fetches it once, and
-enabling only `klein` still fetches it. At 9.4 GB Klein is a quarter the
-size of Flux 2 Dev, which is what makes swapping to and from the Krea
-tabs cheap rather than a 1–3 minute stall.
-
-**Two input images.** The source workflow's second image group is
-bypassed as shipped, so the tab starts with one. Tick **Enable input
-image 2** to combine two sources, and name them in the prompt the way its
-own note tells you to — *“the person from image 1 is wearing the hat from
-image 2”*. Both images go through the same 1 MP scale + encode chain and
-their reference latents stack on the conditioning in order.
-
-**Reference size and output size are different settings.** The reference
-is what the model looks at (the workflow's 1 MP); the output is the empty
-latent it paints into. The workflow's three resolution groups are
-reproduced as a **Mode** dropdown, with only the first live as shipped:
-
-| Mode | What it does |
-| --- | --- |
-| Same as image 1 (default) | renders at the source image's own resolution |
-| Scale image 1 to megapixels | keeps the aspect ratio at a chosen MP |
-| Custom width × height | exactly what you type |
-
-"Same as image 1" means what it says: a 12 MP phone photo asks for a
-12 MP render. Each side is snapped to /16 and clamped at 4096 px, and the
-tab warns under the controls once the resolved size passes ~4 MP —
-otherwise one paste can OOM-kill the ComfyUI server that every other tab
-shares. Switch to scale or custom mode to render smaller.
-
-**Sampling** is the workflow's `KSamplerAdvanced` at 8 steps, CFG 1.0,
-`euler`/`normal`, with `FluxGuidance` 4.0 and a `ConditioningZeroOut`
-negative — Klein is guidance-distilled, so at CFG 1.0 the negative branch
-is never evaluated and guidance is what steers prompt adherence. Steps,
-CFG, guidance, sampler and scheduler are all editable; the rest
-(`add_noise`, `start_at_step`/`end_at_step`, leftover noise) live in
-`KLEIN_SAMPLER_DEFAULTS` and spell "run the whole schedule in one pass".
-
-**LoRAs.** All three rows from the source workflow are present in its
-order, at strength 1.0, on by default, applied to the model *and* the
-CLIP (rgthree Power Lora Loader in Single Strength mode → a `LoraLoader`
-chain). They live in `loras/klein/` so they never mix with the Krea 2 or
-Flux dropdowns — Klein 9B is a third incompatible architecture. A row
-whose file did not download starts disabled and is named in the status
-line under the tab header.
-
-What was translated rather than copied, all of it pixel-neutral:
-
-| Source node | Here | Why |
-| --- | --- | --- |
-| Power Lora Loader (rgthree) | `LoraLoader` chain | identical math; on/off becomes the row's checkbox |
-| `GetImageSize` → `EmptyFlux2LatentImage` | `resolve_output_size()` in Python | integer plumbing; the tab shows the W×H it resolved to |
-| Any Switch (rgthree) | the Mode dropdown | it selects whichever resolution group is not bypassed |
-| WAS `Image Save` | `SaveImage` | the app finds outputs through ComfyUI's history, and WAS writes its own dated tree the Gallery tab would not see |
-
-Fast Groups Bypasser, Label, MarkdownNote, `PreviewImage` and Image
-Comparer are display-only and have no API-format counterpart, so they are
-dropped. The companion note's GGUF quants are **not** a registry entry
-away: they load through `UnetLoaderGGUF` from a custom node pack rather
-than `UNETLoader`, which would need a builder branch and a node install.
 
 ## Prompt undo / redo
 

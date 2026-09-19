@@ -84,18 +84,6 @@ from workflow_flux import (
     resolve_flux_lora,
     resolve_flux_model,
 )
-from workflow_klein import (
-    build_klein_edit_workflow,
-    default_lora_slots as klein_default_lora_slots,
-    list_lora_files as list_klein_lora_files,
-    model_available as klein_model_available,
-    model_defaults as klein_model_defaults,
-    model_names as klein_model_names,
-    resolve_lora as resolve_klein_lora,
-    resolve_model as klein_resolve_model,
-    resolve_output_size as klein_resolve_output_size,
-    status as klein_status,
-)
 from workflow_krea2_v2 import (
     build_v2_workflow,
     default_lora_slots as v2_default_lora_slots,
@@ -511,101 +499,6 @@ def generate_flux(prompt, seed, randomize, steps, guidance, resolution,
     } for i in range(int(batch_count))]
     for images, status in _run_jobs(jobs, builder=build_flux_workflow,
                                     prefix="Flux2"):
-        yield images, status, base_seed
-# ── Klein Edit (Klein advanced FLUX.2 Klein 9B graph) ────────────────────────────
-# Self-contained like the V2 tab: its own model, encoder, LoRA folder and
-# defaults, all from the source workflow. Nothing here reads DEFAULTS,
-# MODEL_CHOICES or the Flux constants, so tuning another tab never moves it.
-
-KLEIN_LORA_SLOTS = klein_default_lora_slots()
-KLEIN_LORA_CHOICES = ["None"] + list_klein_lora_files()
-KLEIN_MODEL_CHOICES = klein_model_names()
-_k_steps, _k_cfg, _k_guidance = klein_model_defaults(klein_resolve_model(None))
-
-
-def _klein_model_info_text(entry) -> str:
-    """One-line summary shown under the Klein Model dropdown."""
-    steps, cfg, guidance = klein_model_defaults(entry)
-    info = (f"defaults: {steps} steps, CFG {cfg:g}, guidance {guidance:g} · "
-            f"`{entry['file']}`")
-    if not klein_model_available(entry):
-        info += " · ⚠️ **not downloaded yet** — restart the app to fetch it"
-    return info
-
-def _resolve_klein_lora_slots(*slots) -> list:
-    """Flat (enabled, name, weight) × N UI values → (file, strength) pairs.
-
-    Mirrors the source workflow's Power Lora Loader, exactly as the V2 tab
-    does: a row contributes only while its checkbox is on, and the order is
-    preserved because LoRA application is not commutative.
-    """
-    loras = []
-    for enabled, name, weight in zip(slots[::3], slots[1::3], slots[2::3]):
-        if not enabled:
-            continue
-        lora_file = resolve_klein_lora(name)
-        if lora_file:
-            loras.append((lora_file, float(weight)))
-    return loras
-
-def generate_klein_edit(image, use_image2, image2, prompt, seed, randomize,
-                        model, steps, cfg, guidance, sampler, scheduler,
-                        reference_mp, output_mode, output_mp, custom_width,
-                        custom_height, batch_count, *lora_slots):
-    """Klein Edit tab: the Klein FLUX.2 Klein 9B editing graph.
-
-    One or two source images are attached to the conditioning as reference
-    latents, so the prompt describes the change rather than the whole
-    picture — and with two images it should name them ("the person from
-    image 1 wearing the hat from image 2"), which is how the source
-    workflow's own note puts it.
-    """
-    if image is None:
-        yield [], "❌ Upload image 1 first.", 0
-        return
-    ready, message = klein_status()
-    if not ready:
-        yield [], message, 0
-        return
-    entry = klein_resolve_model(model)
-    if not klein_model_available(entry):
-        yield [], (f"❌ Model “{entry['name']}” is not downloaded yet — "
-                   "restart the app so the download step can fetch it."), 0
-        return
-    if not str(prompt or "").strip():
-        yield [], "❌ Describe the edit you want.", 0
-        return
-    if use_image2 and image2 is None:
-        yield [], ("❌ Input image 2 is enabled but empty — upload it, or "
-                   "switch the toggle off."), 0
-        return
-
-    image = image.convert("RGB")
-    width, height = klein_resolve_output_size(
-        output_mode, image.size, output_mp, (custom_width, custom_height))
-    base_seed = random.randint(0, 2**32 - 1) if randomize else int(seed)
-    tag = uuid.uuid4().hex[:8]
-    try:
-        image_name = client.upload_image(_png_bytes(image), f"klein_{tag}.png")
-        image2_name = None
-        if use_image2:
-            image2_name = client.upload_image(
-                _png_bytes(image2.convert("RGB")), f"klein_{tag}_b.png")
-    except Exception as exc:
-        yield [], f"❌ Uploading the image to ComfyUI failed: {exc}", base_seed
-        return
-
-    jobs = [{
-        "prompt": prompt, "image_name": image_name,
-        "image2_name": image2_name, "seed": base_seed + i,
-        "width": width, "height": height, "steps": int(steps),
-        "cfg": float(cfg), "guidance": float(guidance), "sampler": sampler,
-        "scheduler": scheduler, "reference_megapixels": float(reference_mp),
-        "loras": _resolve_klein_lora_slots(*lora_slots),
-        "unet_file": entry["file"],
-    } for i in range(int(batch_count))]
-    for images, status in _run_jobs(jobs, builder=build_klein_edit_workflow,
-                                    prefix="KleinEdit"):
         yield images, status, base_seed
 
 # ── Krea 2 V2 (Krea2 advanced graph) ─────────────────────────────────────────────
