@@ -12,13 +12,19 @@ which is not shipped). Every node used here is core ComfyUI:
 UNETLoader, CLIPLoader(type="minimax"), VAELoader ×2 (video + audio),
 LoraLoaderModelOnly, MiniMaxH3ImageToVideo, BasicGuider, RandomNoise,
 KSamplerSelect, BasicScheduler, SamplerCustomAdvanced, VAEDecode,
-VAEDecodeAudio, CreateVideo and SaveVideo. Four things the template had
-were left out on purpose:
+VAEDecodeAudio, CreateVideo and SaveVideo.
 
-  * rgthree's Power Lora Loader — it was empty (one placeholder row named
-    "Your_Character_LoRA_Here", switched off), and the V2 tab already
-    translated that node into core loader chains rather than installing
-    the pack;
+rgthree's Power Lora Loader, where the template puts a character LoRA,
+became a chain of core LoraLoaderModelOnly nodes — the same translation
+the V2 tab makes of it, so the pack is not installed. The chain sits
+where the template has the loader, between the diffusion model and the
+turbo LoRA. The template also routes CLIP through it, but a character
+LoRA carries no text-encoder weights, so model-only is the same graph.
+The tabs offer the LoRAs the catalogue lists for their feature
+(catalog.py), none switched on by default.
+
+Three things the template had were left out on purpose:
+
   * KJNodes' ModelPreviewOverrideKJ — a latent-preview override, cosmetic;
   * VHS_VideoCombine — CreateVideo takes an `audio` input, and it plus
     SaveVideo is what the Wan tab already writes MP4s with;
@@ -253,6 +259,7 @@ def build_minimax_video_workflow(
     fps: int = 24,
     sampler: str = "euler",
     image_name: str | None = None,
+    loras=(),
     filename_prefix: str = "minimax/MiniMaxH3",
 ) -> dict:
     """Build the MiniMax H3 graph in ComfyUI API format.
@@ -267,6 +274,10 @@ def build_minimax_video_workflow(
     is what CreateVideo stamps on the MP4 — 24, the rate the model runs
     at. The soundtrack comes out of the same latent through the audio VAE
     and rides along on CreateVideo's `audio` input.
+
+    `loras` is a sequence of (filename, strength) pairs, already resolved
+    (handlers._resolve_lora_slots) — applied in order, ahead of the turbo
+    LoRA, as the template chains them.
     """
     wf = {
         "unet": {
@@ -304,6 +315,15 @@ def build_minimax_video_workflow(
             "inputs": {"vae": vae_ref, "device": "gpu:1"},
         }
         clip_ref, vae_ref = ["clip_gpu1", 0], ["vae_gpu1", 0]
+
+    for i, (lora_file, weight) in enumerate(loras):
+        node = f"lora{i}"
+        wf[node] = {
+            "class_type": "LoraLoaderModelOnly",
+            "inputs": {"lora_name": lora_file, "strength_model": float(weight),
+                       "model": model_ref},
+        }
+        model_ref = [node, 0]
 
     # Always on. The scheduler settings below are this LoRA's recipe, so
     # there is no raw mode to switch it off for — see the module docstring.

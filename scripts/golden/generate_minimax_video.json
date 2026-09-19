@@ -74,6 +74,28 @@
         "width": 1152
       }
     },
+    "lora0": {
+      "class_type": "LoraLoaderModelOnly",
+      "inputs": {
+        "lora_name": "HMNSFW-AIO-V2.5.safetensors",
+        "model": [
+          "unet",
+          0
+        ],
+        "strength_model": 0.55
+      }
+    },
+    "lora1": {
+      "class_type": "LoraLoaderModelOnly",
+      "inputs": {
+        "lora_name": "HMMisDog.safetensors",
+        "model": [
+          "lora0",
+          0
+        ],
+        "strength_model": 0.57
+      }
+    },
     "noise": {
       "class_type": "RandomNoise",
       "inputs": {
@@ -146,7 +168,7 @@
       "inputs": {
         "lora_name": "minimax_h3_fl2v_turbo_8step_v1.0_768p_comfyui_bf16.safetensors",
         "model": [
-          "unet",
+          "lora1",
           0
         ],
         "strength_model": 0.8
@@ -255,6 +277,28 @@
         "width": 1152
       }
     },
+    "lora0": {
+      "class_type": "LoraLoaderModelOnly",
+      "inputs": {
+        "lora_name": "HMNSFW-AIO-V2.5.safetensors",
+        "model": [
+          "unet",
+          0
+        ],
+        "strength_model": 0.55
+      }
+    },
+    "lora1": {
+      "class_type": "LoraLoaderModelOnly",
+      "inputs": {
+        "lora_name": "HMMisDog.safetensors",
+        "model": [
+          "lora0",
+          0
+        ],
+        "strength_model": 0.57
+      }
+    },
     "noise": {
       "class_type": "RandomNoise",
       "inputs": {
@@ -327,7 +371,7 @@
       "inputs": {
         "lora_name": "minimax_h3_fl2v_turbo_8step_v1.0_768p_comfyui_bf16.safetensors",
         "model": [
-          "unet",
+          "lora1",
           0
         ],
         "strength_model": 0.8

@@ -256,6 +256,15 @@ def cases(module) -> dict:
         v for i in range(module.MAX_LORA_SLOTS)
         for v in (*krea_named.get(i, (False, "None")),
                   round(0.35 + i / 100, 2)))
+    # MiniMax: the same eight blank slots over its own list, so the
+    # snapshots show the chain landing between the model and the turbo
+    # LoRA. The image tab has two on and one named but off; the text tab
+    # one of each.
+    def minimax_triples(named):
+        return tuple(
+            v for i in range(module.MAX_LORA_SLOTS)
+            for v in (*named.get(i, (False, "None")),
+                      round(0.55 + i / 100, 2)))
     # V2: one row per LoRA in the feature's list, as the form has them.
     # Rows 1-4 on (filter bypass, enhancer, realism v2, realism engine
     # v3.1), every other row off but still naming its LoRA.
@@ -307,13 +316,16 @@ def cases(module) -> dict:
             image, "the tide comes in and the gulls cry",
             7890123, False, 9, "Native 768p (short edge 768, slower)", 7,
             "dpmpp_2m", 2,
-        ),
+        ) + minimax_triples({0: (True, "hmnsfw-aio-v2-5"),
+                             1: (False, "vgna"),
+                             2: (True, "hmmisdog")}),
 
         "generate_minimax_t2v": (
             "a kettle comes to the boil and whistles", "16:9 (Widescreen)",
             8901234, False, 11, "Standard (0.7 MP — the template default)", 6,
             "euler_ancestral", 2,
-        ),
+        ) + minimax_triples({0: (False, "hmbrst"),
+                             1: (True, "hmcshot-v1-0")}),
     }
 
 

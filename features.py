@@ -133,9 +133,10 @@ class Feature:
 # "catalog" is the one group whose contents are not fixed here or in
 # config.py: it is every model and LoRA the catalogue (catalog.py, from the
 # licence server) lists for the enabled features that name it. Each Krea
-# tab names it, and downloads.download_catalog reads the lists of exactly
-# those that are on — so a feature's own models are what it pulls in, not
-# a group-wide set, and a file two tabs share is fetched once.
+# tab names it, and so do the MiniMax tabs for their LoRAs;
+# downloads.download_catalog reads the lists of exactly those that are on
+# — so a feature's own models are what it pulls in, not a group-wide set,
+# and a file two tabs share is fetched once.
 FEATURES = (
     Feature(Key.KREA_T2I, "🎨 Krea2", default=True,
             needs=("text_encoder", "krea2", "catalog")),
@@ -153,9 +154,12 @@ FEATURES = (
     # Two tabs, one graph, one download. The core MiniMax node takes an
     # optional first frame, so text-to-video is image-to-video without the
     # upload — sold as two features, but the weights they need are the same
-    # ~56 GB, which is why both name the one group.
-    Feature(Key.MINIMAX_I2V, "🎥 MiniMax I2V", needs=("minimax",)),
-    Feature(Key.MINIMAX_T2V, "🎞️ MiniMax T2V", needs=("minimax",)),
+    # ~56 GB, which is why both name the one group. "catalog" is for their
+    # LoRA lists, fetched per tab like the Krea tabs'.
+    Feature(Key.MINIMAX_I2V, "🎥 MiniMax I2V",
+            needs=("minimax", "catalog")),
+    Feature(Key.MINIMAX_T2V, "🎞️ MiniMax T2V",
+            needs=("minimax", "catalog")),
     # Reads a collection on the licence server, so it needs no weights of
     # its own. It is only useful next to the tabs
     # it loads prompts into (Krea2 and Krea2 V2) — the cards for a tab

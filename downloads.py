@@ -8,8 +8,8 @@ idempotent — re-running only downloads what is missing.
 Two kinds of weights, two sources of truth. The pipeline pieces every
 build needs — VAEs, text encoders, the Identity Edit LoRA, the Wan and
 MiniMax weights — are named in config.py and fetched by their own groups.
-The Krea models and style LoRAs a customer picks from are named by the
-catalogue (catalog.py, from the licence server) and fetched by the
+The Krea models and the Krea and MiniMax LoRAs a customer picks from are
+named by the catalogue (catalog.py, from the licence server) and fetched by the
 "catalog" group, which asks nothing of config.py at all.
 """
 
@@ -392,12 +392,13 @@ def fetch_catalog_file(record, subdir: str) -> None:
 
 
 def download_catalog() -> None:
-    """Fetch every model and LoRA the enabled Krea features offer.
+    """Fetch every model and LoRA the enabled catalogue features offer.
 
     What to fetch is the union of the catalogue lists of the features that
-    need this group and are on — the four Krea tabs today. A tab that is off
-    contributes nothing, so a V2-only licence never downloads a model only
-    Krea2 offers, and vice versa.
+    need this group and are on — the four Krea tabs and the two MiniMax
+    tabs, which list LoRAs only. A tab that is off contributes nothing, so
+    a V2-only licence never downloads a model only Krea2 offers, and vice
+    versa.
 
     Each file once. The same LoRA sits in every tab's list and two model
     records may share one file (same weights, different steps/CFG), so the
@@ -421,7 +422,7 @@ def download_catalog() -> None:
             wanted.setdefault(f"loras/{lora.file}", (lora, "loras", "LoRA"))
     if not wanted:
         log.warning("The catalogue lists no models or LoRAs for %s — "
-                    "nothing to download for the Krea tabs.",
+                    "nothing to download for those tabs.",
                     ", ".join(keys) or "(no enabled feature)")
         return
     log.info("Catalogue files for %s: %d", ", ".join(keys), len(wanted))
@@ -429,9 +430,9 @@ def download_catalog() -> None:
         try:
             fetch_catalog_file(record, subdir)
         except Exception as exc:
-            log.error("Krea %s %s (%s) unavailable (%s) — that dropdown "
-                      "choice will refuse to run until a later run fetches "
-                      "it.", kind, record.id, relpath, exc)
+            log.error("Catalogue %s %s (%s) unavailable (%s) — that "
+                      "dropdown choice will refuse to run until a later run "
+                      "fetches it.", kind, record.id, relpath, exc)
 
 
 def download_v2_models() -> None:

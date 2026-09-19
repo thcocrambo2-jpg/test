@@ -59,11 +59,12 @@ feature's lists as the licence server answered them at startup
 
 Ids and labels
 --------------
-The four Krea tabs' Model and LoRA dropdowns carry catalogue *ids* as
-their values — what presets, prompts and the handlers all speak — and the
-record's name as what the user reads. A Field whose values are ids has
-`labels`, and `to_json()` ships them as `choiceLabels` next to `choices`;
-every other Field's value is its own label, as it always was.
+The Krea tabs' Model and LoRA dropdowns, and the MiniMax tabs' LoRA
+dropdowns, carry catalogue *ids* as their values — what presets, prompts
+and the handlers all speak — and the record's name as what the user
+reads. A Field whose values are ids has `labels`, and `to_json()` ships
+them as `choiceLabels` next to `choices`; every other Field's value is its
+own label, as it always was.
 
 What is deliberately not here
 -----------------------------
@@ -879,11 +880,13 @@ def _triple_tail(feature, slots, title):
     )
 
 
-def _krea_lora_tail(feature):
-    """The Krea2 / Krea2 Edit stack: eight blank rows over the feature's list.
+def _blank_lora_tail(feature):
+    """The Krea2 / Krea2 Edit / MiniMax stack: eight blank rows, all off,
+    over the feature's list.
 
-    Model-only (`LoraLoaderModelOnly`, workflow.py), where the V2 stack is
-    model *and* CLIP, so the title stays plain rather than borrowing V2's.
+    Model-only (`LoraLoaderModelOnly`, workflow.py and workflow_minimax.py),
+    where the V2 stack is model *and* CLIP, so the title stays plain rather
+    than borrowing V2's.
     """
     return _triple_tail(feature,
                         _blank_slots(handlers.MAX_LORA_SLOTS),
@@ -1133,7 +1136,7 @@ SCHEMAS = (
             _batch_field(),
             *_save_fields(),
             Field("lora_slots", "LoRA stack", "repeat",
-                  repeat=_krea_lora_tail(handlers.KREA_T2I)),
+                  repeat=_blank_lora_tail(handlers.KREA_T2I)),
         ),
     ),
 
@@ -1228,7 +1231,7 @@ SCHEMAS = (
             _model_field(handlers.KREA_EDIT),
             _batch_field(),
             Field("lora_slots", "LoRA stack", "repeat",
-                  repeat=_krea_lora_tail(handlers.KREA_EDIT)),
+                  repeat=_blank_lora_tail(handlers.KREA_EDIT)),
         ),
     ),
 
@@ -1325,7 +1328,8 @@ SCHEMAS = (
     # see handlers._run_wan_jobs on why they never ride the Wan instance.
     # No negative prompt and no CFG, because the model is guidance-distilled
     # like Flux; the prompt carries the sound as well as the motion, since
-    # every clip comes back with a soundtrack.
+    # every clip comes back with a soundtrack. The LoRA stack is each tab's
+    # own catalogue list, eight blank rows like Krea2's; there are no presets.
     TabSchema(
         key=Key.MINIMAX_I2V, handler=handlers.generate_minimax_video,
         lane=handlers.COMFY_LANE, prompt_field="prompt",
@@ -1358,6 +1362,8 @@ SCHEMAS = (
             Field("sampler", "Sampler", "select", MINIMAX_DEFAULTS["sampler"],
                   choices=SAMPLERS + ["uni_pc"], group="sampling", wide=True),
             _batch_field(hi=10),
+            Field("lora_slots", "LoRA stack", "repeat",
+                  repeat=_blank_lora_tail(handlers.MINIMAX_I2V)),
         ),
     ),
 
@@ -1394,6 +1400,8 @@ SCHEMAS = (
             Field("sampler", "Sampler", "select", MINIMAX_DEFAULTS["sampler"],
                   choices=SAMPLERS + ["uni_pc"], group="sampling", wide=True),
             _batch_field(hi=10),
+            Field("lora_slots", "LoRA stack", "repeat",
+                  repeat=_blank_lora_tail(handlers.MINIMAX_T2V)),
         ),
     ),
 )

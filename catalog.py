@@ -1,4 +1,4 @@
-"""The model and LoRA catalogue — what each Krea feature offers, from the DB.
+"""The model and LoRA catalogue — what each Krea and MiniMax feature offers.
 
 The licence server holds three collections: `loras` and `models` (one
 record per file, keyed by a readable id) and `feature_assets` (per
@@ -24,7 +24,8 @@ Where the answer comes from, in order:
     .catalog.json        the last live answer, if the server did not answer
 
 With none of them the catalogue is empty: the Krea tabs report that they
-have no models, and the tabs that do not use it are unaffected.
+have no models, the MiniMax tabs offer no LoRAs but still run, and the
+tabs that do not use it are unaffected.
 
 Stdlib-only, like licensing.py and presets.py — it runs before the pip
 install that the heavier modules wait for.
