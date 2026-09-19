@@ -1,0 +1,559 @@
+{
+  "_note": [
+    "Seed data for the loras, models and feature_assets collections (npm run seed-assets).",
+    "Also the offline catalogue: POST /v1/catalog answers in this same shape, and the pod reads this file when KREA2_CATALOG_FILE points at it (dry runs and tests).",
+    "ids are what presets and prompts store. Never change or reuse one.",
+    "Each feature's lists are what its tab offers, in dropdown order; the first model is the default. An id may appear in any number of features."
+  ],
+  "loras": [
+    {
+      "id": "krea2-turbo",
+      "name": "Krea 2 Turbo LoRA",
+      "file": "krea2_turbo_lora_rank_64_bf16.safetensors",
+      "source": {
+        "kind": "hf",
+        "repo": "Comfy-Org/Krea-2",
+        "path": "loras/krea2_turbo_lora_rank_64_bf16.safetensors"
+      },
+      "mirror": null,
+      "default_strength": 0.6,
+      "trigger": "",
+      "enabled": true,
+      "sort_order": 10
+    },
+    {
+      "id": "filter-bypass-3",
+      "name": "Filter Bypass 3",
+      "file": "krea2filterbypass3.safetensors",
+      "source": {
+        "kind": "civitai",
+        "version": 3067151
+      },
+      "mirror": {
+        "repo": "thcocrambo2/krea2-loras",
+        "path": "loras/krea2filterbypass3.safetensors"
+      },
+      "default_strength": 0.93,
+      "trigger": "",
+      "enabled": true,
+      "sort_order": 20
+    },
+    {
+      "id": "enhancer",
+      "name": "Enhancer",
+      "file": "krea2_Enhancer.safetensors",
+      "source": {
+        "kind": "civitai",
+        "version": 3065628
+      },
+      "mirror": {
+        "repo": "thcocrambo2/krea2-loras",
+        "path": "loras/krea2_Enhancer.safetensors"
+      },
+      "default_strength": 0.4,
+      "trigger": "",
+      "enabled": true,
+      "sort_order": 30
+    },
+    {
+      "id": "realism-v2",
+      "name": "Realism V2",
+      "file": "Krea2-realism-V2.safetensors",
+      "source": {
+        "kind": "civitai",
+        "version": 3090634
+      },
+      "mirror": {
+        "repo": "thcocrambo2/krea2-loras",
+        "path": "loras/Krea2-realism-V2.safetensors"
+      },
+      "default_strength": 0.3,
+      "trigger": "",
+      "enabled": true,
+      "sort_order": 40
+    },
+    {
+      "id": "realism-engine-v3-1",
+      "name": "Realism Engine v3.1",
+      "file": "realism_engine_krea2_v3.1.safetensors",
+      "source": {
+        "kind": "civitai",
+        "version": 3109006
+      },
+      "mirror": {
+        "repo": "thcocrambo2/krea2-loras",
+        "path": "loras/realism_engine_krea2_v3.1.safetensors"
+      },
+      "default_strength": 0.6,
+      "trigger": "",
+      "enabled": true,
+      "sort_order": 50
+    },
+    {
+      "id": "realistic-snapshot",
+      "name": "Realistic Snapshot",
+      "file": "RealisticSnapshotKrea2.safetensors",
+      "source": {
+        "kind": "civitai",
+        "version": 3084537
+      },
+      "mirror": {
+        "repo": "thcocrambo2/krea2-loras",
+        "path": "loras/RealisticSnapshotKrea2.safetensors"
+      },
+      "default_strength": 0.8,
+      "trigger": "",
+      "enabled": true,
+      "sort_order": 60
+    },
+    {
+      "id": "purelens",
+      "name": "PureLens",
+      "file": "purelens_krea2.safetensors",
+      "source": {
+        "kind": "civitai",
+        "version": 3114242
+      },
+      "mirror": {
+        "repo": "thcocrambo2/krea2-loras",
+        "path": "loras/purelens_krea2.safetensors"
+      },
+      "default_strength": 0.6,
+      "trigger": "",
+      "enabled": true,
+      "sort_order": 70
+    },
+    {
+      "id": "lenovo",
+      "name": "Lenovo",
+      "file": "lenovo_krea2.safetensors",
+      "source": {
+        "kind": "civitai",
+        "version": 3075606
+      },
+      "mirror": {
+        "repo": "thcocrambo2/krea2-loras",
+        "path": "loras/lenovo_krea2.safetensors"
+      },
+      "default_strength": 0.5,
+      "trigger": "",
+      "enabled": true,
+      "sort_order": 80
+    },
+    {
+      "id": "mysticxxx-v3",
+      "name": "MysticXXX v3",
+      "file": "MysticXXX_KREA2_v3.safetensors",
+      "source": {
+        "kind": "civitai",
+        "version": 3116175
+      },
+      "mirror": {
+        "repo": "thcocrambo2/krea2-loras",
+        "path": "loras/MysticXXX_KREA2_v3.safetensors"
+      },
+      "default_strength": 1.0,
+      "trigger": "",
+      "enabled": true,
+      "sort_order": 90
+    },
+    {
+      "id": "knp-v4-1",
+      "name": "KNP v4.1",
+      "file": "KNPV4.1_pre.safetensors",
+      "source": {
+        "kind": "civitai",
+        "version": 3085473
+      },
+      "mirror": {
+        "repo": "thcocrambo2/krea2-loras",
+        "path": "loras/KNPV4.1_pre.safetensors"
+      },
+      "default_strength": 1.0,
+      "trigger": "",
+      "enabled": true,
+      "sort_order": 100
+    },
+    {
+      "id": "snofs-krea-v1",
+      "name": "SNOFS Krea v1",
+      "file": "snofs_krea_v1.safetensors",
+      "source": {
+        "kind": "civitai",
+        "version": 3104629
+      },
+      "mirror": {
+        "repo": "thcocrambo2/krea2-loras",
+        "path": "loras/snofs_krea_v1.safetensors"
+      },
+      "default_strength": 1.0,
+      "trigger": "",
+      "enabled": true,
+      "sort_order": 110
+    },
+    {
+      "id": "halide-v1",
+      "name": "Halide v1",
+      "file": "Halide-v1.safetensors",
+      "source": {
+        "kind": "civitai",
+        "version": 3265522
+      },
+      "mirror": null,
+      "default_strength": 1.0,
+      "trigger": "",
+      "enabled": true,
+      "sort_order": 120
+    },
+    {
+      "id": "realism-engine-v2-0",
+      "name": "Realism Engine v2.0",
+      "file": "Realism_Engine_Krea2_v2.0.safetensors",
+      "source": {
+        "kind": "civitai",
+        "version": 3070702
+      },
+      "mirror": {
+        "repo": "thcocrambo2/krea2-loras",
+        "path": "loras/Realism_Engine_Krea2_v2.0.safetensors"
+      },
+      "default_strength": 1.0,
+      "trigger": "",
+      "enabled": true,
+      "sort_order": 130
+    },
+    {
+      "id": "snofs-krea2-v1-0",
+      "name": "SNOFS Krea2 v1.0",
+      "file": "SNOFS_Krea2_v1.0.safetensors",
+      "source": {
+        "kind": "civitai",
+        "version": 3072664
+      },
+      "mirror": {
+        "repo": "thcocrambo2/krea2-loras",
+        "path": "loras/SNOFS_Krea2_v1.0.safetensors"
+      },
+      "default_strength": 1.0,
+      "trigger": "",
+      "enabled": true,
+      "sort_order": 140
+    },
+    {
+      "id": "aio-nsfw-v1-0",
+      "name": "AIO NSFW v1.0",
+      "file": "Krea2_AIO_NSFW_v1.0.safetensors",
+      "source": {
+        "kind": "civitai",
+        "version": 3071904
+      },
+      "mirror": {
+        "repo": "thcocrambo2/krea2-loras",
+        "path": "loras/Krea2_AIO_NSFW_v1.0.safetensors"
+      },
+      "default_strength": 1.0,
+      "trigger": "",
+      "enabled": true,
+      "sort_order": 150
+    },
+    {
+      "id": "galaxyace",
+      "name": "GalaxyAce",
+      "file": "galaxyace_krea2.safetensors",
+      "source": {
+        "kind": "civitai",
+        "version": 3069544
+      },
+      "mirror": {
+        "repo": "thcocrambo2/krea2-loras",
+        "path": "loras/galaxyace_krea2.safetensors"
+      },
+      "default_strength": 1.0,
+      "trigger": "",
+      "enabled": true,
+      "sort_order": 160
+    },
+    {
+      "id": "hmbody-d-e10",
+      "name": "HMBody D e10",
+      "file": "HMBody_D_e10.safetensors",
+      "source": {
+        "kind": "civitai",
+        "version": 3160327
+      },
+      "mirror": {
+        "repo": "thcocrambo2/krea2-loras",
+        "path": "loras/HMBody_D_e10.safetensors"
+      },
+      "default_strength": 1.0,
+      "trigger": "",
+      "enabled": true,
+      "sort_order": 170
+    },
+    {
+      "id": "elusarca-photo",
+      "name": "Elusarca Photo",
+      "file": "elusarca-photo.safetensors",
+      "source": {
+        "kind": "civitai",
+        "version": 3151907
+      },
+      "mirror": {
+        "repo": "thcocrambo2/krea2-loras",
+        "path": "loras/elusarca-photo.safetensors"
+      },
+      "default_strength": 1.0,
+      "trigger": "",
+      "enabled": true,
+      "sort_order": 180
+    },
+    {
+      "id": "nsfw-plus",
+      "name": "NSFW Plus",
+      "file": "Krea2_NSFW_plus.safetensors",
+      "source": {
+        "kind": "civitai",
+        "version": 3084588
+      },
+      "mirror": {
+        "repo": "thcocrambo2/krea2-loras",
+        "path": "loras/Krea2_NSFW_plus.safetensors"
+      },
+      "default_strength": 1.0,
+      "trigger": "",
+      "enabled": true,
+      "sort_order": 190
+    },
+    {
+      "id": "nicegirls",
+      "name": "Nicegirls",
+      "file": "nicegirls_krea2.safetensors",
+      "source": {
+        "kind": "civitai",
+        "version": 3075498
+      },
+      "mirror": {
+        "repo": "thcocrambo2/krea2-loras",
+        "path": "loras/nicegirls_krea2.safetensors"
+      },
+      "default_strength": 1.0,
+      "trigger": "",
+      "enabled": true,
+      "sort_order": 200
+    },
+    {
+      "id": "realism-v1",
+      "name": "Realism V1",
+      "file": "Krea2-realism-V1.safetensors",
+      "source": {
+        "kind": "civitai",
+        "version": 3066973
+      },
+      "mirror": {
+        "repo": "thcocrambo2/krea2-loras",
+        "path": "loras/Krea2-realism-V1.safetensors"
+      },
+      "default_strength": 1.0,
+      "trigger": "",
+      "enabled": true,
+      "sort_order": 210
+    },
+    {
+      "id": "desi-realism-v1",
+      "name": "Desi Realism v1",
+      "file": "desi-realism-v1.safetensors",
+      "source": {
+        "kind": "civitai",
+        "version": 3194454
+      },
+      "mirror": {
+        "repo": "thcocrambo2/krea2-loras",
+        "path": "loras/desi-realism-v1.safetensors"
+      },
+      "default_strength": 1.0,
+      "trigger": "",
+      "enabled": true,
+      "sort_order": 220
+    },
+    {
+      "id": "pawg",
+      "name": "PAWG",
+      "file": "pawg.safetensors",
+      "source": {
+        "kind": "civitai",
+        "version": 3173942
+      },
+      "mirror": {
+        "repo": "thcocrambo2/krea2-loras",
+        "path": "loras/pawg.safetensors"
+      },
+      "default_strength": 1.0,
+      "trigger": "",
+      "enabled": true,
+      "sort_order": 230
+    }
+  ],
+  "models": [
+    {
+      "id": "krea2-turbo-mxfp8",
+      "name": "Krea 2 Turbo mxfp8 (workflow default)",
+      "file": "krea2_turbo_mxfp8.safetensors",
+      "source": {
+        "kind": "hf",
+        "repo": "Comfy-Org/Krea-2",
+        "path": "diffusion_models/krea2_turbo_mxfp8.safetensors"
+      },
+      "mirror": null,
+      "variant": "turbo",
+      "steps": 10,
+      "cfg": 1.0,
+      "turbo_lora": null,
+      "trigger": "",
+      "enabled": true
+    },
+    {
+      "id": "krea2-raw-fp8",
+      "name": "Krea 2 Raw fp8",
+      "file": "krea2_raw_fp8_scaled.safetensors",
+      "source": {
+        "kind": "hf",
+        "repo": "Comfy-Org/Krea-2",
+        "path": "diffusion_models/krea2_raw_fp8_scaled.safetensors"
+      },
+      "mirror": null,
+      "variant": "raw",
+      "steps": 20,
+      "cfg": 2.5,
+      "turbo_lora": {
+        "lora": "krea2-turbo",
+        "strength": 0.6
+      },
+      "trigger": "",
+      "enabled": true
+    }
+  ],
+  "features": {
+    "krea_t2i": {
+      "models": [
+        "krea2-turbo-mxfp8"
+      ],
+      "loras": [
+        "krea2-turbo",
+        "filter-bypass-3",
+        "enhancer",
+        "realism-v2",
+        "realism-engine-v3-1",
+        "realistic-snapshot",
+        "purelens",
+        "lenovo",
+        "mysticxxx-v3",
+        "knp-v4-1",
+        "snofs-krea-v1",
+        "halide-v1",
+        "realism-engine-v2-0",
+        "snofs-krea2-v1-0",
+        "aio-nsfw-v1-0",
+        "galaxyace",
+        "hmbody-d-e10",
+        "elusarca-photo",
+        "nsfw-plus",
+        "nicegirls",
+        "realism-v1",
+        "desi-realism-v1",
+        "pawg"
+      ]
+    },
+    "krea_edit": {
+      "models": [
+        "krea2-turbo-mxfp8"
+      ],
+      "loras": [
+        "krea2-turbo",
+        "filter-bypass-3",
+        "enhancer",
+        "realism-v2",
+        "realism-engine-v3-1",
+        "realistic-snapshot",
+        "purelens",
+        "lenovo",
+        "mysticxxx-v3",
+        "knp-v4-1",
+        "snofs-krea-v1",
+        "halide-v1",
+        "realism-engine-v2-0",
+        "snofs-krea2-v1-0",
+        "aio-nsfw-v1-0",
+        "galaxyace",
+        "hmbody-d-e10",
+        "elusarca-photo",
+        "nsfw-plus",
+        "nicegirls",
+        "realism-v1",
+        "desi-realism-v1",
+        "pawg"
+      ]
+    },
+    "krea_v2_t2i": {
+      "models": [
+        "krea2-turbo-mxfp8",
+        "krea2-raw-fp8"
+      ],
+      "loras": [
+        "krea2-turbo",
+        "filter-bypass-3",
+        "enhancer",
+        "realism-v2",
+        "realism-engine-v3-1",
+        "realistic-snapshot",
+        "purelens",
+        "lenovo",
+        "mysticxxx-v3",
+        "knp-v4-1",
+        "snofs-krea-v1",
+        "halide-v1",
+        "realism-engine-v2-0",
+        "snofs-krea2-v1-0",
+        "aio-nsfw-v1-0",
+        "galaxyace",
+        "hmbody-d-e10",
+        "elusarca-photo",
+        "nsfw-plus",
+        "nicegirls",
+        "realism-v1",
+        "desi-realism-v1",
+        "pawg"
+      ]
+    },
+    "krea_v2_edit": {
+      "models": [
+        "krea2-turbo-mxfp8",
+        "krea2-raw-fp8"
+      ],
+      "loras": [
+        "krea2-turbo",
+        "filter-bypass-3",
+        "enhancer",
+        "realism-v2",
+        "realism-engine-v3-1",
+        "realistic-snapshot",
+        "purelens",
+        "lenovo",
+        "mysticxxx-v3",
+        "knp-v4-1",
+        "snofs-krea-v1",
+        "halide-v1",
+        "realism-engine-v2-0",
+        "snofs-krea2-v1-0",
+        "aio-nsfw-v1-0",
+        "galaxyace",
+        "hmbody-d-e10",
+        "elusarca-photo",
+        "nsfw-plus",
+        "nicegirls",
+        "realism-v1",
+        "desi-realism-v1",
+        "pawg"
+      ]
+    }
+  }
+}
