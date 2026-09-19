@@ -52,6 +52,7 @@ import { fileURLToPath } from "node:url";
 
 import { collections, ensureIndexes } from "../src/db.js";
 import {
+  emptyModelsProblem,
   featureProblem,
   idListProblems,
   loraProblems,
@@ -128,9 +129,8 @@ for (const [key, lists] of Object.entries(seedFeatures)) {
   for (const problem of idListProblems(lists.models, modelIds, "models")) {
     problems.push(`${where}: ${problem}`);
   }
-  if (Array.isArray(lists.models) && !lists.models.length) {
-    problems.push(`${where}: models must list at least one model`);
-  }
+  const empty = emptyModelsProblem(key, lists.models);
+  if (empty) problems.push(`${where}: ${empty}`);
   for (const problem of idListProblems(lists.loras, loraIds, "loras")) {
     problems.push(`${where}: ${problem}`);
   }

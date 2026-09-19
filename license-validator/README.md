@@ -168,7 +168,7 @@ touches a download.
 | `POST` | `/v1/heartbeat` | Keep it. Re-checks the license every call |
 | `POST` | `/v1/release` | Give it back. Idempotent |
 | `POST` | `/v1/build` | Which build this license gets + a signed R2 URL. `{license_key, instance_id, current_sha}`. Takes no seat |
-| `POST` | `/v1/catalog` | The model and LoRA catalogue the Krea tabs are built from. `{license_key, instance_id}`, licence checked like acquire. Takes no seat |
+| `POST` | `/v1/catalog` | The model and LoRA catalogue the Krea and MiniMax tabs are built from. `{license_key, instance_id}`, licence checked like acquire. Takes no seat |
 | `GET` | `/v1/start.sh` | 302 to a signed URL for the start script. Unauthenticated — the RunPod template fetches it |
 | `GET` | `/v1/plans` | Public catalogue — `is_public` plans, enabled features, enabled billing cycles |
 | `POST` | `/v1/prompts` | A pod submitting one prompt + its settings. Private on arrival, unless `publish` and the license is `is_admin` |

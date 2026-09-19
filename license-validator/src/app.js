@@ -55,8 +55,10 @@ import {
   assetIds,
   buildCatalog,
   checkSettings,
+  emptyModelsProblem,
   featureProblem,
   idListProblems,
+  LORA_ONLY_FEATURES,
   loraProblems,
   loraWire,
   modelProblems,
@@ -1667,9 +1669,8 @@ app.post(
     const problems = [];
     if (lists.models !== undefined) {
       problems.push(...idListProblems(lists.models, ids.models, "models"));
-      if (Array.isArray(lists.models) && !lists.models.length) {
-        problems.push("models must list at least one model (the first is the default)");
-      }
+      const empty = emptyModelsProblem(feature, lists.models);
+      if (empty) problems.push(empty);
     }
     if (lists.loras !== undefined) {
       problems.push(...idListProblems(lists.loras, ids.loras, "loras"));
@@ -1678,8 +1679,9 @@ app.post(
 
     const { feature_assets } = await collections();
     // A feature's first write must say what it runs, or it would be
-    // created with the empty model list refused just above.
-    if (lists.models === undefined &&
+    // created with the empty model list refused just above. A LoRA-only
+    // tab runs a fixed graph, so its empty model list is the right one.
+    if (lists.models === undefined && !LORA_ONLY_FEATURES.has(feature) &&
         !(await feature_assets.findOne({ _id: feature }))) {
       return badRequest(
         res,

@@ -102,7 +102,7 @@ export async function collections() {
     // bot has been blocked. It is not a CRM, and nothing on the licensing
     // path reads it.
     telegram_users: db.collection("telegram_users"),
-    // The model and LoRA catalogue the Krea tabs are built from — see
+    // The model and LoRA catalogue the Krea and MiniMax tabs are built from — see
     // src/assets.js for the rules every write goes through. All three are
     // keyed by a readable string `_id` that presets and prompts store, so
     // an id is permanent: renaming one orphans every preset that names it.

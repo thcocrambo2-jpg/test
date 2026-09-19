@@ -3,7 +3,8 @@
     "Seed data for the loras, models and feature_assets collections (npm run seed-assets).",
     "Also the offline catalogue: POST /v1/catalog answers in this same shape, and the pod reads this file when KREA2_CATALOG_FILE points at it (dry runs and tests).",
     "ids are what presets and prompts store. Never change or reuse one.",
-    "Each feature's lists are what its tab offers, in dropdown order; the first model is the default. An id may appear in any number of features."
+    "Each feature's lists are what its tab offers, in dropdown order; the first model is the default. An id may appear in any number of features.",
+    "A LoRA-only feature (minimax_i2v, minimax_t2v — src/assets.js LORA_ONLY_FEATURES) has an empty models list: its tab runs a fixed graph and offers LoRAs alone."
   ],
   "loras": [
     {
@@ -391,6 +392,76 @@
       "trigger": "",
       "enabled": true,
       "sort_order": 230
+    },
+    {
+      "id": "hmnsfw-aio-v2-5",
+      "name": "HMNSFW AIO v2.5",
+      "file": "HMNSFW-AIO-V2.5.safetensors",
+      "source": {
+        "kind": "civitai",
+        "version": 3268303
+      },
+      "mirror": null,
+      "default_strength": 1.0,
+      "trigger": "",
+      "enabled": true,
+      "sort_order": 240
+    },
+    {
+      "id": "vgna",
+      "name": "HMPussy v1 (VGNA)",
+      "file": "VGNA.safetensors",
+      "source": {
+        "kind": "civitai",
+        "version": 3252213
+      },
+      "mirror": null,
+      "default_strength": 1.0,
+      "trigger": "pussy",
+      "enabled": true,
+      "sort_order": 250
+    },
+    {
+      "id": "hmcshot-v1-0",
+      "name": "HMCumshot v1.0",
+      "file": "HMCSHOT_V1.0.safetensors",
+      "source": {
+        "kind": "civitai",
+        "version": 3329529
+      },
+      "mirror": null,
+      "default_strength": 1.0,
+      "trigger": "",
+      "enabled": true,
+      "sort_order": 260
+    },
+    {
+      "id": "hmbrst",
+      "name": "HMBreasts v2",
+      "file": "HMBRST.safetensors",
+      "source": {
+        "kind": "civitai",
+        "version": 3268969
+      },
+      "mirror": null,
+      "default_strength": 1.0,
+      "trigger": "tits",
+      "enabled": true,
+      "sort_order": 270
+    },
+    {
+      "id": "hmmisdog",
+      "name": "HMMisDog v1.0 (missionary / doggy POV)",
+      "file": "HMMisDog.safetensors",
+      "source": {
+        "kind": "civitai",
+        "version": 3308736
+      },
+      "mirror": null,
+      "default_strength": 1.0,
+      "trigger": "",
+      "enabled": true,
+      "sort_order": 280
     }
   ],
   "models": [
@@ -553,6 +624,26 @@
         "realism-v1",
         "desi-realism-v1",
         "pawg"
+      ]
+    },
+    "minimax_i2v": {
+      "models": [],
+      "loras": [
+        "hmnsfw-aio-v2-5",
+        "vgna",
+        "hmcshot-v1-0",
+        "hmbrst",
+        "hmmisdog"
+      ]
+    },
+    "minimax_t2v": {
+      "models": [],
+      "loras": [
+        "hmnsfw-aio-v2-5",
+        "vgna",
+        "hmcshot-v1-0",
+        "hmbrst",
+        "hmmisdog"
       ]
     }
   }

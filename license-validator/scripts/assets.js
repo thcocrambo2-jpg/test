@@ -1,4 +1,4 @@
-// Manage the model and LoRA catalogue the Krea tabs are built from.
+// Manage the model and LoRA catalogue the Krea and MiniMax tabs are built from.
 //
 //   npm run assets                                      # everything
 //   npm run assets -- --loras | --models | --features   # one part
@@ -41,9 +41,11 @@
 
 import { collections } from "../src/db.js";
 import {
+  emptyModelsProblem,
   featureProblem,
   idListProblems,
   idProblem,
+  LORA_ONLY_FEATURES,
   loraProblems,
   modelProblems,
 } from "../src/assets.js";
@@ -242,9 +244,10 @@ for (const [flag, field, collection, what, adding] of listEdits) {
   if (badKey) die(badKey);
 
   const doc = await feature_assets.findOne({ _id: feature });
-  if (!doc && field === "loras") {
+  if (!doc && field === "loras" && !LORA_ONLY_FEATURES.has(feature)) {
     // Creating it with LoRAs alone would leave it with no model, which is
-    // a tab with nothing to run. A feature starts with its default model.
+    // a tab with nothing to run. A feature starts with its default model —
+    // unless it is a LoRA-only tab, whose graph is fixed.
     die(`${feature} has no lists yet — --add-model its default model first`);
   }
   const current = [...(doc?.[field] || [])];
@@ -276,10 +279,10 @@ for (const [flag, field, collection, what, adding] of listEdits) {
   // an unrelated edit.
   const known = new Set(await collection.distinct("_id"));
   const problems = idListProblems(next, known, field);
-  if (field === "models" && !next.length) {
+  const empty = field === "models" && emptyModelsProblem(feature, next);
+  if (empty) {
     problems.push(
-      "models must list at least one model (the first is the default) — " +
-        "a feature with nothing to run is npm run remove-feature's job",
+      `${empty} — a feature with nothing to run is npm run remove-feature's job`,
     );
   }
   if (problems.length) die(...problems, "nothing written.");

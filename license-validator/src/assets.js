@@ -1,4 +1,4 @@
-// The model and LoRA catalogue — what each Krea tab offers, and the one
+// The model and LoRA catalogue — what each Krea and MiniMax tab offers, and the one
 // set of rules every writer of it goes through.
 //
 // Three collections (see db.js):
@@ -245,6 +245,23 @@ export function featureProblem(key) {
     return `feature ${show(key)} is not one of: ${FEATURE_KEYS.join(", ")}`;
   }
   return null;
+}
+
+// Tabs that offer LoRAs but no Model dropdown. The MiniMax tabs load one
+// fixed set of weights named in the app's config.py, so an empty `models`
+// list is what they are rather than a tab with nothing to run.
+export const LORA_ONLY_FEATURES = new Set(["minimax_i2v", "minimax_t2v"]);
+
+/**
+ * The "a tab needs a model" rule for one feature's `models` list, or null.
+ * Only an empty array breaks it — a missing or malformed list is
+ * idListProblems' to report — and never on a LORA_ONLY_FEATURES tab.
+ */
+export function emptyModelsProblem(feature, list) {
+  if (!Array.isArray(list) || list.length || LORA_ONLY_FEATURES.has(feature)) {
+    return null;
+  }
+  return "models must list at least one model (the first is the default)";
 }
 
 /**
