@@ -36,8 +36,10 @@ What is stubbed, and why each one is necessary
   every snapshot would be empty and the whole file would pass while
   proving nothing.
 * the model / LoRA availability checks -> True. Every handler guards on
-  "is this downloaded yet" and returns early when it is not; a laptop has
-  none of the weights.
+  "is this downloaded yet" and returns early when it is not — and a ticked
+  LoRA whose file is missing is skipped rather than wired — so without
+  this a laptop, which has none of the weights, would build graphs with
+  no LoRA chain at all.
 * `client.run` / `wan_client.run` -> capture and yield canned events.
 * `client.upload_image` -> a fixed name. The real one POSTs to ComfyUI,
   and the name it returns lands *in* the workflow, so it has to be stable
@@ -47,6 +49,12 @@ What is stubbed, and why each one is necessary
   the first one here.
 * `prompts.record` and `presets.save` -> nothing. Both POST to the licence
   server.
+
+The models and LoRAs come from the catalogue (catalog.py). Unless
+KREA2_CATALOG_FILE is already set, this points it at the seed document,
+license-validator/data/assets.json, so the snapshots are built from the
+same ids and files the licence server is seeded with — and never from
+whatever a live server or a cached .catalog.json happens to hold.
 
 Snapshots live in scripts/golden/, one JSON per handler, and are
 committed. Regenerate them deliberately — a diff here is either a bug you
@@ -71,6 +79,10 @@ sys.path.insert(0, str(ROOT))
 # the shipped default is the pod path /workspace/krea2. Share .dryrun with
 # the other scripts rather than making a third empty tree.
 os.environ.setdefault("KREA2_BASE_DIR", str(ROOT / ".dryrun"))
+# The catalogue the Krea tabs read their models and LoRAs from — the seed
+# document, so a snapshot never depends on a server. See the docstring.
+os.environ.setdefault("KREA2_CATALOG_FILE",
+                      str(ROOT / "license-validator" / "data" / "assets.json"))
 
 from config import log  # noqa: E402
 
@@ -178,8 +190,8 @@ def patch(module, capture) -> None:
     import prompts
 
     for name in (
-        "model_file_available", "edit_lora_available",
-        "v2_model_available", "v2_turbo_lora_available",
+        "model_file_available", "lora_file_available", "edit_lora_available",
+        "v2_turbo_lora_available",
         "wan_models_available", "wan_5b_available", "wan_lightning_available",
         "minimax_models_available",
     ):
@@ -223,17 +235,36 @@ def cases(module) -> dict:
     the swap this file exists to catch, so `cutoff_step` is 7 and
     `total_steps` is 23 rather than both being what the slider ships with.
 
-    The LoRA tails are triples `(enabled, name, weight)` (context.md 4.3):
-    every tab's row carries an on/off column.
+    The LoRA tails are triples `(enabled, lora id, weight)` (context.md
+    4.3): every tab's row carries an on/off column. Models and LoRAs are
+    catalogue ids, and each case switches a few rows on so the snapshot
+    holds a real LoRA chain — the file names in it are the one place the
+    id -> file mapping is visible. A named row left *off* is in each tail
+    too, so a regression that wires unticked rows shows up as a new node.
     """
-    model = module.MODEL_CHOICES[0]
-    v2_model = module.V2_MODEL_CHOICES[0]
+    model = module.default_model(module.KREA_T2I)
+    v2_model = module.default_model(module.KREA_V2_T2I)
+    v2_edit_model = module.default_model(module.KREA_V2_EDIT)
     image = _image()
 
-    krea_triples = tuple(v for i in range(module.MAX_LORA_SLOTS)
-                         for v in (False, "None", round(0.35 + i / 100, 2)))
-    v2_triples = tuple(v for i in range(len(module.V2_LORA_SLOTS))
-                       for v in (False, "None", round(0.45 + i / 100, 2)))
+    # Krea2: eight blank slots. The first three name LoRAs — two on, one
+    # off — and the rest stay "None".
+    krea_named = {0: (True, "hmbody-d-e10"),
+                  1: (True, "realism-engine-v2-0"),
+                  2: (False, "galaxyace")}
+    krea_triples = tuple(
+        v for i in range(module.MAX_LORA_SLOTS)
+        for v in (*krea_named.get(i, (False, "None")),
+                  round(0.35 + i / 100, 2)))
+    # V2: one row per LoRA in the feature's list, as the form has them.
+    # Rows 1-4 on (filter bypass, enhancer, realism v2, realism engine
+    # v3.1), every other row off but still naming its LoRA.
+    # Each V2 tab reads its own feature's list, so each gets its own tail.
+    def v2_triples(feature, on=frozenset({1, 2, 3, 4})):
+        return tuple(
+            v for i, (_on, lora_id, _strength)
+            in enumerate(module.v2_lora_slots(feature))
+            for v in (i in on, lora_id, round(0.45 + i / 100, 2)))
 
     return {
         "generate_single": (
@@ -249,16 +280,16 @@ def cases(module) -> dict:
             0.35, "res_2m", "beta57", 13, 0.85, 2.4, "unsample", False,
             "🌿 Balanced", 37, "🖼️ Qwen-Image", "decreasing",
             7, 23, 0.65, 140, True, True, 2, False, "", False, "",
-        ) + v2_triples,
+        ) + v2_triples(module.KREA_V2_T2I),
 
         "generate_v2_edit": (
             image, True, image, "put a red hat on the person",
-            "blurry, watermark", 5678901, False, v2_model,
+            "blurry, watermark", 5678901, False, v2_edit_model,
             640, 3.5, 2.5, "crop (legacy)", 0.35, "res_3m", "normal",
             13, 2.4, "resample", False,
             "🪴 Creative", 61, "🔮 Flux (Dev/Schnell)", "step_cutoff",
             7, 23, 0.65, 140, 2,
-        ) + v2_triples,
+        ) + v2_triples(module.KREA_V2_EDIT),
 
         "generate_wan_video": (
             image, "the waves roll in", "static, blurry",
