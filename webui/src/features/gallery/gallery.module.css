@@ -13,17 +13,22 @@
   font-family: var(--font-mono);
 }
 
-/* Grid with aspect-ratio, replacing the fixed `height=600` gallery no media
-   query could reach. The tile size is a custom property so the density
-   control is one variable rather than a second grid definition. */
+/* Masonry: equal-width columns, each a stack of tiles at their own shape.
+   The column count comes from Gallery.tsx (it measures the width against
+   the density's minimum and deals tiles into the shortest column, which is
+   what keeps newest-first reading across), so this only lays them out. */
 .grid {
-  display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(var(--tile, 220px), 1fr));
+  display: flex;
+  align-items: flex-start;
   gap: var(--s-3);
-  /* Tiles hug their own picture rather than stretching to the tallest one in
-     the row: the point of aspect-ratio tiles is that a portrait stays a
-     portrait, and a stretched tile just shows panel behind the image. */
-  align-items: start;
+}
+
+.column {
+  flex: 1 1 0;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: var(--s-3);
 }
 
 .tile {

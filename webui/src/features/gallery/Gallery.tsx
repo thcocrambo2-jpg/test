@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useRef, useState } from 'react'
+import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react'
 import { useQueryClient } from '@tanstack/react-query'
 import { api } from '@/api/client'
 import { useGallery } from '@/api/queries'
@@ -21,10 +21,12 @@ import s from './gallery.module.css'
 
 type Density = 'comfortable' | 'compact' | 'large'
 
-const TILE: Record<Density, string> = {
-  large: '320px',
-  comfortable: '220px',
-  compact: '150px',
+/** The narrowest a column may get, in px. The grid fits as many as it can
+ *  and shares the leftover width between them. */
+const COLUMN: Record<Density, number> = {
+  large: 360,
+  comfortable: 260,
+  compact: 180,
 }
 
 // Hoisted because `useTabState` holds its initial value in a dependency list.
@@ -33,9 +35,9 @@ const NO_STACK: string[] = []
 /** Everything that has been made, browsable.
  *
  *  The Gradio gallery is `gr.Gallery(height=600)` — a fixed pixel height no
- *  media query can reach, on a page that is otherwise fluid. This is a grid
- *  of `aspect-ratio` tiles that reflows, plus a density control, because
- *  "how many at once" is a preference and not a constant. */
+ *  media query can reach, on a page that is otherwise fluid. This is a
+ *  masonry of `aspect-ratio` tiles that reflows, plus a density control,
+ *  because "how many at once" is a preference and not a constant. */
 export function Gallery() {
   /* Where you were, and how you had it looking.
    *
@@ -80,6 +82,9 @@ export function Gallery() {
 
   const items = data?.items
   const selecting = selected.size > 0
+  const [gridEl, setGridEl] = useState<HTMLDivElement | null>(null)
+  const columnCount = useColumnCount(gridEl, COLUMN[density])
+  const columns = useMemo(() => packColumns(items ?? [], columnCount), [items, columnCount])
 
   /** Toggle one tile, or — with Shift — add everything between it and the
    *  last one touched. The range is what makes this worth having over
@@ -336,16 +341,23 @@ export function Gallery() {
           ))}
         </div>
       ) : data && data.items.length > 0 ? (
-        <div className={s.grid} style={{ ['--tile' as string]: TILE[density] }}>
-          {data.items.map((item, index) => (
-            <Tile
-              key={item.id}
-              item={item}
-              selected={selected.has(item.id)}
-              anySelected={selecting}
-              onSelect={(range) => toggle(index, range)}
-              onOpen={() => setLightbox(index)}
-            />
+        <div className={s.grid} ref={setGridEl}>
+          {columns.map((column, at) => (
+            <div key={at} className={s.column}>
+              {column.map((index) => {
+                const item = data.items[index]
+                return (
+                  <Tile
+                    key={item.id}
+                    item={item}
+                    selected={selected.has(item.id)}
+                    anySelected={selecting}
+                    onSelect={(range) => toggle(index, range)}
+                    onOpen={() => setLightbox(index)}
+                  />
+                )
+              })}
+            </div>
           ))}
         </div>
       ) : (
@@ -390,6 +402,50 @@ export function Gallery() {
       )}
     </>
   )
+}
+
+/** How many columns of at least `minWidth` fit in the grid, kept current as
+ *  it resizes. Measured before paint so the first frame is already laid out;
+ *  the gap is read from the stylesheet so the two cannot disagree. Never
+ *  fewer than two — one column on a phone is a list, not a gallery. */
+function useColumnCount(el: HTMLElement | null, minWidth: number) {
+  const [count, setCount] = useState(2)
+  useLayoutEffect(() => {
+    if (!el) return
+    const measure = () => {
+      const gap = parseFloat(getComputedStyle(el).columnGap) || 0
+      setCount(Math.max(2, Math.floor((el.clientWidth + gap) / (minWidth + gap))))
+    }
+    measure()
+    const observer = new ResizeObserver(measure)
+    observer.observe(el)
+    return () => observer.disconnect()
+  }, [el, minWidth])
+  return count
+}
+
+/** Deal items into columns, each into whichever is shortest so far.
+ *
+ *  Plain CSS masonry (`column-count`) fills one column top to bottom before
+ *  starting the next, so the second-newest file lands under the first and
+ *  the one at the top of column two is from the middle of the page. Going to
+ *  the shortest column keeps newest-first reading left to right, row by
+ *  row, give or take the shapes. Heights are in column widths, which is all
+ *  the comparison needs; the tile's own bar overlays the picture and adds
+ *  nothing. Returns indices into `items`, which is what selection and the
+ *  lightbox key on. */
+function packColumns(items: MediaItem[], count: number) {
+  const columns: number[][] = Array.from({ length: count }, () => [])
+  const heights = new Array<number>(count).fill(0)
+  items.forEach((item, index) => {
+    let shortest = 0
+    for (let at = 1; at < count; at += 1) {
+      if (heights[at] < heights[shortest] - 1e-6) shortest = at
+    }
+    columns[shortest].push(index)
+    heights[shortest] += item.width > 0 && item.height > 0 ? item.height / item.width : 1
+  })
+  return columns
 }
 
 function Tile({
