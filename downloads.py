@@ -4,6 +4,13 @@ Base models come from Hugging Face via huggingface_hub (which resumes
 partial downloads automatically); LoRAs come from CivitAI with manual
 resume (HTTP Range), retries and useful error messages. Everything is
 idempotent — re-running only downloads what is missing.
+
+Two kinds of weights, two sources of truth. The pipeline pieces every
+build needs — VAEs, text encoders, the Identity Edit LoRA, the Wan and
+MiniMax weights — are named in config.py and fetched by their own groups.
+The Krea models and style LoRAs a customer picks from are named by the
+catalogue (catalog.py, from the licence server) and fetched by the
+"catalog" group, which asks nothing of config.py at all.
 """
 
 import time
@@ -12,28 +19,24 @@ from pathlib import Path
 import requests
 from huggingface_hub import hf_hub_download, snapshot_download
 
+import catalog
 import features
 import mirror
 from config import (
     ABLITERATED_ENCODER_FILE,
     ABLITERATED_ENCODER_REPO,
-    CIVITAI_LORAS,
     CIVITAI_TOKEN,
     EDIT_LORA_FILE,
     EDIT_LORA_REPO,
-    HF_LORA_FILES,
     HF_MODEL_FILES,
     HF_MODEL_REPO,
     HF_TOKEN,
-    KREA2_MODELS,
     MINIMAX_HF_FILES,
     MINIMAX_HF_REPO,
     MINIMAX_TURBO_LORA,
     MINIMAX_TURBO_LORA_REPO,
     MODELS_DIR,
     TEXT_ENCODER_FILE,
-    V2_LORA_STACK,
-    V2_MODELS,
     V2_VAE_FILE,
     V2_VAE_HF_PATH,
     V2_VAE_HF_REPO,
@@ -315,30 +318,130 @@ def fetch_hf_file_to(repo: str, relpath: str, dest: Path) -> None:
     _with_retries(_download, desc=relpath)
 
 
-def download_v2_models() -> None:
-    """Fetch the Krea 2 V2 tab's UNet, VAE and LoRA stack (~17 GB).
+def _from_record_mirror(dest: Path, record) -> bool:
+    """Try the mirror a catalogue record names itself. True if dest now exists.
 
-    Every item is independent: a missing file disables or degrades only the
-    V2 tab, which names what it is waiting for, and the next run retries it.
+    The record's own `mirror` ({repo, path}) comes first because it is the
+    one place a LoRA added in the DB can say where its copy lives: the
+    bundled mirror_manifest.json is compiled into the binary, so it can only
+    ever know about files that existed when this build was made.
 
-    Self-sufficient on purpose. Slot 1 of the stack is the Krea 2 turbo
-    LoRA, which also appears in HF_LORA_FILES — but that list belongs to
-    the "krea2" asset group, and V2 can be the only enabled feature, so
-    this fetches it rather than assuming another group already did.
-    fetch_hf_file keys on the destination path, so when both groups are on
-    whichever runs first downloads it and the other logs a cache hit.
+    Same posture as from_mirror: never raises, not pinned (the mirror is
+    ours and only appended to), and anonymous when the mirror is public —
+    mirror.token() decides, so a stale HF_TOKEN cannot turn a public file
+    into a 401. KREA2_NO_MIRROR turns this off along with the manifest.
     """
-    for entry in V2_MODELS:
-        # Krea 2 Raw's file was also in KREA2_MODELS before that tab went
-        # turbo-only; this loop fetches it on its own regardless (see the
-        # docstring above), so nothing here depends on that. A missing
-        # model only greys out one dropdown choice.
+    if not record.mirror or not mirror.MIRROR_ENABLED:
+        return False
+    repo, path_in_repo = record.mirror["repo"], record.mirror["path"]
+    try:
+        got = _with_retries(
+            lambda: hf_hub_download(
+                repo_id=repo, filename=path_in_repo,
+                local_dir=MODELS_DIR, token=mirror.token(),
+            ),
+            desc=f"{record.file} (mirror)",
+        )
+        src = Path(got)
+        if src.resolve() != dest.resolve():
+            # The mirror's layout is its own business — a path in the repo
+            # that is not where ComfyUI looks lands under MODELS_DIR at that
+            # path, and is moved into place (same filesystem, no copy).
+            dest.parent.mkdir(parents=True, exist_ok=True)
+            src.replace(dest)
+        log.info("✓ %s (mirror: %s)", dest.relative_to(MODELS_DIR).as_posix(),
+                 repo)
+        return True
+    except Exception as exc:
+        log.warning("Mirror %s could not serve %s (%s) — falling back.",
+                    repo, path_in_repo, exc)
+        return False
+
+
+def fetch_catalog_file(record, subdir: str) -> None:
+    """Fetch one catalogue model or LoRA into MODELS_DIR/<subdir>/<file>.
+
+    Tried in order, first hit wins:
+
+      1. already on disk                  cached
+      2. the record's own `mirror`        _from_record_mirror
+      3. the bundled manifest's mirror    from_mirror, inside step 4's call
+      4. the record's `source`            CivitAI, or HF at the pinned revision
+
+    Step 3 is not called here because both upstream fetchers already try it
+    first, keyed on the same relative path. Calling it here as well would
+    make a failing manifest mirror run its whole retry cycle twice per file.
+
+    Raises when every source failed; download_catalog decides what that
+    costs, which is one dropdown choice rather than the setup.
+    """
+    relpath = f"{subdir}/{record.file}"
+    dest = MODELS_DIR / relpath
+    if dest.exists():
+        log.info("✓ %s (cached)", relpath)
+        return
+    if _from_record_mirror(dest, record):
+        return
+    source = record.source
+    if source["kind"] == "civitai":
+        fetch_civitai_file(source["version"], record.file, subdir=subdir)
+    else:
+        # Upstream's layout (e.g. vae/wan/ or a repo root) need not be
+        # ComfyUI's, so the file is placed at dest explicitly.
+        fetch_hf_file_to(source["repo"], source["path"], dest)
+
+
+def download_catalog() -> None:
+    """Fetch every model and LoRA the enabled Krea features offer.
+
+    What to fetch is the union of the catalogue lists of the features that
+    need this group and are on — the four Krea tabs today. A tab that is off
+    contributes nothing, so a V2-only licence never downloads a model only
+    Krea2 offers, and vice versa.
+
+    Each file once. The same LoRA sits in every tab's list and two model
+    records may share one file (same weights, different steps/CFG), so the
+    union is keyed on the destination path, not on the id — that is the
+    thing that actually costs bandwidth and disk.
+
+    Every item is independent: a missing file greys out one dropdown choice
+    (the tab reports it as not downloaded) and the next run retries it.
+    Models first, because a tab with no model cannot run at all and a tab
+    with a missing LoRA only loses one row.
+    """
+    keys = features.enabled_needing("catalog")
+    cat = catalog.get()
+    wanted: dict[str, tuple] = {}          # relpath -> (record, subdir, kind)
+    for key in keys:
+        for model in cat.feature_models(key):
+            wanted.setdefault(f"diffusion_models/{model.file}",
+                              (model, "diffusion_models", "model"))
+    for key in keys:
+        for lora in cat.feature_loras(key):
+            wanted.setdefault(f"loras/{lora.file}", (lora, "loras", "LoRA"))
+    if not wanted:
+        log.warning("The catalogue lists no models or LoRAs for %s — "
+                    "nothing to download for the Krea tabs.",
+                    ", ".join(keys) or "(no enabled feature)")
+        return
+    log.info("Catalogue files for %s: %d", ", ".join(keys), len(wanted))
+    for relpath, (record, subdir, kind) in wanted.items():
         try:
-            fetch_hf_file(entry["hf_path"])
+            fetch_catalog_file(record, subdir)
         except Exception as exc:
-            log.error("Krea 2 V2 model %s unavailable (%s) — that dropdown "
+            log.error("Krea %s %s (%s) unavailable (%s) — that dropdown "
                       "choice will refuse to run until a later run fetches "
-                      "it.", entry["file"], exc)
+                      "it.", kind, record.id, relpath, exc)
+
+
+def download_v2_models() -> None:
+    """Fetch the Wan 2.1 VAE the Krea 2 V2 pipeline decodes with (~0.25 GB).
+
+    The V2 tabs' models and LoRAs are catalogue entries, fetched by the
+    "catalog" group; this is the one V2-only pipeline file the catalogue
+    does not describe. A failure disables only the V2 tabs, which name what
+    they are waiting for, and the next run retries it.
+    """
     try:
         fetch_hf_file_to(V2_VAE_HF_REPO, V2_VAE_HF_PATH,
                          MODELS_DIR / "vae" / V2_VAE_FILE)
@@ -346,17 +449,6 @@ def download_v2_models() -> None:
         log.error("Krea 2 V2 VAE %s unavailable (%s) — the V2 tab will "
                   "refuse to run until a later run fetches it.",
                   V2_VAE_FILE, exc)
-    for filename, _strength, _enabled, version_id in V2_LORA_STACK:
-        try:
-            if version_id is None:
-                # No CivitAI version id means it comes from the Krea 2 HF
-                # repo — currently just the turbo LoRA in slot 1.
-                fetch_hf_file(f"loras/{filename}")
-            else:
-                fetch_civitai_file(version_id, filename)
-        except Exception as exc:
-            # One missing LoRA only empties one slot in the V2 stack.
-            log.error("Skipping Krea 2 V2 LoRA %s: %s", filename, exc)
 
 
 def download_text_encoder() -> None:
@@ -376,36 +468,16 @@ def download_text_encoder() -> None:
 
 
 def download_krea2_models() -> None:
-    """Fetch the Krea 2 base models, VAE and LoRAs (~26 GB).
+    """Fetch the Qwen image VAE the Krea2 and Krea2 Edit tabs decode with
+    (~0.25 GB).
 
-    Shared by the Single and Edit tabs — whichever of them is on
-    pulls this group in, and it is fetched once however many of them are.
+    Shared by both tabs — whichever of them is on pulls this group in, and
+    it is fetched once however many of them are. Their models and LoRAs
+    are catalogue entries, fetched by the "catalog" group; this is only the
+    pipeline file the catalogue does not describe.
     """
-    for relpath in HF_MODEL_FILES + HF_LORA_FILES:
+    for relpath in HF_MODEL_FILES:
         fetch_hf_file(relpath)
-    for entry in KREA2_MODELS:
-        # A missing model only greys out one dropdown choice; it must
-        # never sink the whole setup.
-        try:
-            if entry.get("hf_path"):
-                fetch_hf_file(entry["hf_path"])
-            elif entry.get("civitai_version"):
-                fetch_civitai_file(entry["civitai_version"], entry["file"],
-                                   subdir="diffusion_models")
-            else:
-                log.warning(
-                    "Model %r has no hf_path/civitai_version — expecting "
-                    "%s to be placed in diffusion_models/ manually.",
-                    entry["name"], entry["file"],
-                )
-        except Exception as exc:
-            log.error("Skipping Krea 2 model %s: %s", entry["name"], exc)
-    for version_id, filename in CIVITAI_LORAS:
-        try:
-            fetch_civitai_file(version_id, filename)
-        except Exception as exc:
-            # A missing LoRA must not sink the whole setup.
-            log.error("Skipping LoRA %s: %s", filename, exc)
 
 
 def download_edit_lora() -> None:
@@ -463,13 +535,16 @@ ASSET_GROUPS = {
     "krea2": download_krea2_models,
     "edit_lora": download_edit_lora,
     "v2": download_v2_models,
+    "catalog": download_catalog,
     "wan": download_wan_models,
     "minimax": download_minimax_models,
 }
 
-# Groups that pull at least one file from CivitAI, which is the only
-# source here that usually needs a token.
-CIVITAI_GROUPS = {"krea2", "v2"}
+# Groups that can pull a file from CivitAI, which is the only source here
+# that usually needs a token. Only the catalogue does now — whether it
+# actually will depends on the records, but a warning that is sometimes
+# unnecessary beats a silent run of refused downloads.
+CIVITAI_GROUPS = {"catalog"}
 
 
 def download_everything() -> None:
