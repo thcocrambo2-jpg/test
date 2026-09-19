@@ -26,23 +26,24 @@ They are built only when their toggle is on, so the defaults reproduce it
 as shipped: VAEDecode straight to SaveImage.
 """
 
+import catalog
 from comfy import GPU_COUNT
 from config import (
     MODELS_DIR,
     V2_ASPECT_RATIOS,
     V2_FILMGRAIN_DEFAULTS,
-    V2_LORA_STACK,
-    V2_MODELS,
     V2_NODE_REPOS,
     V2_SAMPLER_DEFAULTS,
     V2_SHARPEN_DEFAULTS,
-    V2_TURBO_LORA_FILE,
     V2_VAE_FILE,
     V2_VARIANCE_DEFAULTS,
-    V2_VARIANT_DEFAULTS,
     log,
 )
-from workflow import active_text_encoder
+from workflow import (
+    active_text_encoder,
+    lora_file_available,
+    model_file_available,
+)
 
 # Node classes this tab cannot run without. FilmGrain is deliberately not
 # here: it only powers an optional toggle, so a missing post-processing
@@ -50,62 +51,54 @@ from workflow import active_text_encoder
 REQUIRED_NODES = ("ClownsharKSampler_Beta", "RBG_Smart_Seed_Variance")
 
 
-def model_names() -> list[str]:
-    """Dropdown labels for every V2 model, in config order."""
-    return [entry["name"] for entry in V2_MODELS]
+# ── The catalogue, as the V2 tabs read it ────────────────────────────────────
+# Both V2 tabs (krea_v2_t2i, krea_v2_edit) go through these with their own
+# feature key, so each offers exactly its own feature's lists. The model
+# lookup itself is workflow.resolve_model, shared with the Krea2 tabs.
 
+def model_defaults(model) -> tuple[int, float, bool]:
+    """(steps, cfg, turbo_lora) for a model record.
 
-def resolve_model(name) -> dict:
-    """Map a UI model name to its V2_MODELS entry (default: first entry).
-
-    Accepts the registry name, the filename, or a case-insensitive
-    fragment of either — the same forgiving lookup resolve_model_entry
-    does for the Single tab, kept separate because the registries are.
+    `turbo_lora` is whether the record names a LoRA its recipe switches on
+    — V2's raw, whose companion guide is "enable the Turbo LoRA at 0.6,
+    raise steps to 20 and CFG to ~2.5". All three numbers are the
+    record's, so the two variants differ by exactly what the record says.
     """
-    if not name or str(name).strip().lower() in ("", "none", "default"):
-        return V2_MODELS[0]
-    wanted = str(name).strip().lower()
-    for entry in V2_MODELS:
-        if wanted in (entry["name"].lower(), entry["file"].lower()):
-            return entry
-    for entry in V2_MODELS:
-        if wanted in entry["name"].lower() or wanted in entry["file"].lower():
-            return entry
-    log.warning("Krea 2 V2 model %r not in V2_MODELS — using the default "
-                "(%s)", name, V2_MODELS[0]["name"])
-    return V2_MODELS[0]
+    return int(model.steps), float(model.cfg), model.turbo_lora is not None
 
 
-def model_defaults(entry: dict) -> tuple[int, float, bool]:
-    """(steps, cfg, turbo_lora) for an entry: overrides, else the variant."""
-    variant = V2_VARIANT_DEFAULTS.get(entry.get("variant", "turbo"),
-                                      V2_VARIANT_DEFAULTS["turbo"])
-    return (int(entry.get("steps", variant["steps"])),
-            float(entry.get("cfg", variant["cfg"])),
-            bool(entry.get("turbo_lora", variant["turbo_lora"])))
+def turbo_lora(model) -> "catalog.Lora | None":
+    """The LoRA record a model's recipe switches on, or None."""
+    if model is None or not model.turbo_lora:
+        return None
+    return catalog.lora(model.turbo_lora.get("lora"))
 
 
-def model_available(entry: dict | None = None) -> bool:
-    """True once that entry's UNet has been downloaded (default: the first)."""
-    entry = entry or V2_MODELS[0]
-    return (MODELS_DIR / "diffusion_models" / entry["file"]).exists()
+def turbo_lora_slot(feature, model) -> int | None:
+    """Index of the model's turbo LoRA among the feature's rows, or None.
 
-
-def turbo_lora_slot() -> int | None:
-    """Index of the Krea 2 Turbo LoRA in the stack, or None if absent.
-
-    The Model dropdown toggles this one slot, so the index is looked up
-    rather than assumed — reordering V2_LORA_STACK stays safe.
+    The Model dropdown toggles this one row, so it is found by the id the
+    model record names rather than by position or by file name — a list
+    reordered in the DB, or two records sharing a file, stays safe.
     """
-    for index, (name, _s, _e, _v) in enumerate(V2_LORA_STACK):
-        if name == V2_TURBO_LORA_FILE:
+    wanted = (model.turbo_lora or {}).get("lora") if model else None
+    if not wanted:
+        return None
+    for index, lora in enumerate(catalog.feature_loras(feature)):
+        if lora.id == wanted:
             return index
     return None
 
 
-def turbo_lora_available() -> bool:
-    """True once the Krea 2 Turbo LoRA raw mode switches on has downloaded."""
-    return (MODELS_DIR / "loras" / V2_TURBO_LORA_FILE).exists()
+def turbo_lora_available(model) -> bool:
+    """True once the LoRA this model's recipe switches on has downloaded.
+
+    True for a model that names none: nothing is missing.
+    """
+    if model is None or not model.turbo_lora:
+        return True
+    lora = turbo_lora(model)
+    return lora is not None and lora_file_available(lora)
 
 
 def vae_available() -> bool:
@@ -113,57 +106,84 @@ def vae_available() -> bool:
     return (MODELS_DIR / "vae" / V2_VAE_FILE).exists()
 
 
-def available_lora_files() -> set:
-    """Names from the V2 stack that are actually on disk."""
-    return {name for name, _s, _e, _v in V2_LORA_STACK
-            if (MODELS_DIR / "loras" / name).exists()}
+def default_lora_slots(feature) -> list:
+    """The feature's LoRA rows as (enabled, lora id, strength).
 
-
-def default_lora_slots() -> list:
-    """The workflow's LoRA rows as (enabled, filename, strength).
-
-    Order, strengths and on/off states come straight from the source
-    graph. A row whose file did not download starts disabled so the tab
-    never submits a lora_name ComfyUI cannot resolve.
+    One row per LoRA in the feature's list, in list order, every one off
+    and at its record's default strength. Which ones a fresh form turns on
+    is the tab's Default preset's business, applied on load — not a fact
+    this module restates. A row whose file has not downloaded is still a
+    row: the LoRA is listed, and reported as missing (status) rather than
+    silently absent from the stack.
     """
-    on_disk = available_lora_files()
-    return [(enabled and name in on_disk, name, strength)
-            for name, strength, enabled, _version in V2_LORA_STACK]
+    return [(False, lora.id, float(lora.default_strength))
+            for lora in catalog.feature_loras(feature)]
 
 
-def missing_enabled_loras() -> list:
-    """Files the workflow enables by default that have not downloaded."""
-    on_disk = available_lora_files()
-    return [name for name, _s, enabled, _v in V2_LORA_STACK
-            if enabled and name not in on_disk]
+def missing_loras(feature, lora_ids=None) -> list:
+    """Names of the feature's LoRAs that have not downloaded.
+
+    `lora_ids` narrows it to those rows — the ones a run has switched on;
+    None means every LoRA the feature lists.
+    """
+    wanted = None if lora_ids is None else set(lora_ids)
+    return [lora.name for lora in catalog.feature_loras(feature)
+            if (wanted is None or lora.id in wanted)
+            and not lora_file_available(lora)]
 
 
-def status() -> tuple[bool, str]:
+def blocking_problems(feature) -> list:
+    """What stops a V2 tab running at all — shared with the V2 Edit tab."""
+    problems = []
+    models = catalog.feature_models(feature)
+    if not models:
+        problems.append("the catalogue lists no model for this tab")
+    elif not any(model_file_available(model) for model in models):
+        problems.append("no V2 model has downloaded")
+    if not vae_available():
+        problems.append(f"the VAE `{V2_VAE_FILE}` has not downloaded")
+    return problems
+
+
+def status_notes(feature, enabled=None) -> list:
+    """What a V2 tab can run without, but should say — shared with Edit.
+
+    `enabled` is the LoRA ids a run has switched on. With it, the note
+    names only those that are missing (they will be skipped); without it,
+    every listed LoRA that has not downloaded.
+    """
+    notes = []
+    absent = [m.name for m in catalog.feature_models(feature)
+              if not model_file_available(m)]
+    if absent:
+        notes.append("these models have not downloaded and the dropdown "
+                     "will refuse them: " + ", ".join(f"`{n}`" for n in absent))
+    missing = missing_loras(feature, enabled)
+    if missing:
+        notes.append(("these LoRAs are switched on but have not downloaded, "
+                      "and will be skipped: " if enabled is not None else
+                      "these LoRAs are listed but have not downloaded: ")
+                     + ", ".join(f"`{m}`" for m in missing))
+    return notes
+
+
+def status(feature, enabled=None) -> tuple[bool, str]:
     """(ready, message) for the tab — what is missing, in plain words.
+
+    `enabled` is the LoRA ids the run being checked has switched on, so
+    the warning names the ones that will be skipped; None reports every
+    listed LoRA that has not downloaded.
 
     Node packs are not checked here: they register inside ComfyUI, which
     app.py verifies at startup (comfy.verify_custom_node). This covers the
     files, which is what a user can actually act on.
     """
-    problems = []
-    if not any(model_available(entry) for entry in V2_MODELS):
-        problems.append("no V2 model has downloaded")
-    if not vae_available():
-        problems.append(f"the VAE `{V2_VAE_FILE}` has not downloaded")
+    problems = blocking_problems(feature)
     if problems:
         return False, ("❌ Krea 2 V2 cannot run — " + " and ".join(problems)
                        + " yet. Restart the app so the download step can "
                          "fetch it.")
-    notes = []
-    absent = [e["name"] for e in V2_MODELS if not model_available(e)]
-    if absent:
-        notes.append("these models have not downloaded and the dropdown "
-                     "will refuse them: " + ", ".join(f"`{n}`" for n in absent))
-    missing = missing_enabled_loras()
-    if missing:
-        notes.append("these LoRAs from the workflow's stack did not download "
-                     "and their slots start off: "
-                     + ", ".join(f"`{m}`" for m in missing))
+    notes = status_notes(feature, enabled)
     if notes:
         return True, "⚠️ Ready, but " + "; ".join(notes)
     packs = ", ".join(f"`{d}`" for d, _r, _c in V2_NODE_REPOS)
@@ -200,7 +220,7 @@ def build_v2_workflow(
     width: int,
     height: int,
     loras=(),
-    unet_file: str | None = None,
+    model,
     sampler_settings=None,
     variance_settings=None,
     variance_seed: int | None = None,
@@ -212,9 +232,10 @@ def build_v2_workflow(
 
     `loras` is a sequence of (filename, strength) pairs, already resolved
     and filtered to the enabled rows; each strength drives strength_model
-    and strength_clip alike. `unet_file` selects the diffusion model
-    (V2_MODELS registry) and supplies the steps/CFG its variant defines,
-    which `sampler_settings` may then override key by key — as it does for
+    and strength_clip alike. `model` is the catalogue record the tab's
+    Model dropdown named (catalog.Model): its file is the UNet and its
+    steps/CFG are the sampler's starting point, which `sampler_settings`
+    may then override key by key — as it does for
     V2_SAMPLER_DEFAULTS, and `variance_settings` for
     V2_VARIANCE_DEFAULTS. The Turbo LoRA raw mode wants is not added here:
     it is an ordinary slot in `loras`, so a caller that also ticks it by
@@ -222,8 +243,7 @@ def build_v2_workflow(
     image seed so a reproducible seed reproduces the whole graph, the
     variance node included.
     """
-    entry = resolve_model(unet_file)
-    steps, cfg, _turbo_lora = model_defaults(entry)
+    steps, cfg, _turbo_lora = model_defaults(model)
     sampler = {**V2_SAMPLER_DEFAULTS, "steps": steps, "cfg": cfg,
                **(sampler_settings or {})}
     variance = {**V2_VARIANCE_DEFAULTS, **(variance_settings or {})}
@@ -231,7 +251,7 @@ def build_v2_workflow(
     wf = {
         "unet": {
             "class_type": "UNETLoader",
-            "inputs": {"unet_name": entry["file"], "weight_dtype": "default"},
+            "inputs": {"unet_name": model.file, "weight_dtype": "default"},
         },
         "clip": {
             "class_type": "CLIPLoader",

@@ -29,6 +29,28 @@
         "width": 1216
       }
     },
+    "lora0": {
+      "class_type": "LoraLoaderModelOnly",
+      "inputs": {
+        "lora_name": "HMBody_D_e10.safetensors",
+        "model": [
+          "unet",
+          0
+        ],
+        "strength_model": 0.35
+      }
+    },
+    "lora1": {
+      "class_type": "LoraLoaderModelOnly",
+      "inputs": {
+        "lora_name": "Realism_Engine_Krea2_v2.0.safetensors",
+        "model": [
+          "lora0",
+          0
+        ],
+        "strength_model": 0.36
+      }
+    },
     "negative": {
       "class_type": "CLIPTextEncode",
       "inputs": {
@@ -59,7 +81,7 @@
           0
         ],
         "model": [
-          "unet",
+          "lora1",
           0
         ],
         "negative": [
@@ -79,7 +101,7 @@
     "save": {
       "class_type": "SaveImage",
       "inputs": {
-        "filename_prefix": "Krea2_golden00",
+        "filename_prefix": "Krea2_HMBody_D_e10_golden00",
         "images": [
           "decode",
           0
@@ -89,7 +111,7 @@
     "unet": {
       "class_type": "UNETLoader",
       "inputs": {
-        "unet_name": "krea2_turbo_fp8_scaled.safetensors",
+        "unet_name": "krea2_turbo_mxfp8.safetensors",
         "weight_dtype": "default"
       }
     },
@@ -130,6 +152,28 @@
         "width": 1216
       }
     },
+    "lora0": {
+      "class_type": "LoraLoaderModelOnly",
+      "inputs": {
+        "lora_name": "HMBody_D_e10.safetensors",
+        "model": [
+          "unet",
+          0
+        ],
+        "strength_model": 0.35
+      }
+    },
+    "lora1": {
+      "class_type": "LoraLoaderModelOnly",
+      "inputs": {
+        "lora_name": "Realism_Engine_Krea2_v2.0.safetensors",
+        "model": [
+          "lora0",
+          0
+        ],
+        "strength_model": 0.36
+      }
+    },
     "negative": {
       "class_type": "CLIPTextEncode",
       "inputs": {
@@ -160,7 +204,7 @@
           0
         ],
         "model": [
-          "unet",
+          "lora1",
           0
         ],
         "negative": [
@@ -180,7 +224,7 @@
     "save": {
       "class_type": "SaveImage",
       "inputs": {
-        "filename_prefix": "Krea2_golden00",
+        "filename_prefix": "Krea2_HMBody_D_e10_golden00",
         "images": [
           "decode",
           0
@@ -190,7 +234,7 @@
     "unet": {
       "class_type": "UNETLoader",
       "inputs": {
-        "unet_name": "krea2_turbo_fp8_scaled.safetensors",
+        "unet_name": "krea2_turbo_mxfp8.safetensors",
         "weight_dtype": "default"
       }
     },

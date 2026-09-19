@@ -42,12 +42,76 @@
         "width": 2048
       }
     },
-    "negative": {
-      "class_type": "CLIPTextEncode",
+    "lora0": {
+      "class_type": "LoraLoader",
       "inputs": {
         "clip": [
           "clip",
           0
+        ],
+        "lora_name": "krea2filterbypass3.safetensors",
+        "model": [
+          "unet",
+          0
+        ],
+        "strength_clip": 0.46,
+        "strength_model": 0.46
+      }
+    },
+    "lora1": {
+      "class_type": "LoraLoader",
+      "inputs": {
+        "clip": [
+          "lora0",
+          1
+        ],
+        "lora_name": "krea2_Enhancer.safetensors",
+        "model": [
+          "lora0",
+          0
+        ],
+        "strength_clip": 0.47,
+        "strength_model": 0.47
+      }
+    },
+    "lora2": {
+      "class_type": "LoraLoader",
+      "inputs": {
+        "clip": [
+          "lora1",
+          1
+        ],
+        "lora_name": "Krea2-realism-V2.safetensors",
+        "model": [
+          "lora1",
+          0
+        ],
+        "strength_clip": 0.48,
+        "strength_model": 0.48
+      }
+    },
+    "lora3": {
+      "class_type": "LoraLoader",
+      "inputs": {
+        "clip": [
+          "lora2",
+          1
+        ],
+        "lora_name": "realism_engine_krea2_v3.1.safetensors",
+        "model": [
+          "lora2",
+          0
+        ],
+        "strength_clip": 0.49,
+        "strength_model": 0.49
+      }
+    },
+    "negative": {
+      "class_type": "CLIPTextEncode",
+      "inputs": {
+        "clip": [
+          "lora3",
+          1
         ],
         "text": "blurry, watermark"
       }
@@ -56,8 +120,8 @@
       "class_type": "CLIPTextEncode",
       "inputs": {
         "clip": [
-          "clip",
-          0
+          "lora3",
+          1
         ],
         "text": "a lighthouse in a storm, 35mm"
       }
@@ -74,7 +138,7 @@
           0
         ],
         "model": [
-          "unet",
+          "lora3",
           0
         ],
         "negative": [
@@ -96,7 +160,7 @@
     "save": {
       "class_type": "SaveImage",
       "inputs": {
-        "filename_prefix": "Krea2V2_golden00",
+        "filename_prefix": "Krea2V2_krea2filterbypass3_golden00",
         "images": [
           "grain",
           0
@@ -196,12 +260,76 @@
         "width": 2048
       }
     },
-    "negative": {
-      "class_type": "CLIPTextEncode",
+    "lora0": {
+      "class_type": "LoraLoader",
       "inputs": {
         "clip": [
           "clip",
           0
+        ],
+        "lora_name": "krea2filterbypass3.safetensors",
+        "model": [
+          "unet",
+          0
+        ],
+        "strength_clip": 0.46,
+        "strength_model": 0.46
+      }
+    },
+    "lora1": {
+      "class_type": "LoraLoader",
+      "inputs": {
+        "clip": [
+          "lora0",
+          1
+        ],
+        "lora_name": "krea2_Enhancer.safetensors",
+        "model": [
+          "lora0",
+          0
+        ],
+        "strength_clip": 0.47,
+        "strength_model": 0.47
+      }
+    },
+    "lora2": {
+      "class_type": "LoraLoader",
+      "inputs": {
+        "clip": [
+          "lora1",
+          1
+        ],
+        "lora_name": "Krea2-realism-V2.safetensors",
+        "model": [
+          "lora1",
+          0
+        ],
+        "strength_clip": 0.48,
+        "strength_model": 0.48
+      }
+    },
+    "lora3": {
+      "class_type": "LoraLoader",
+      "inputs": {
+        "clip": [
+          "lora2",
+          1
+        ],
+        "lora_name": "realism_engine_krea2_v3.1.safetensors",
+        "model": [
+          "lora2",
+          0
+        ],
+        "strength_clip": 0.49,
+        "strength_model": 0.49
+      }
+    },
+    "negative": {
+      "class_type": "CLIPTextEncode",
+      "inputs": {
+        "clip": [
+          "lora3",
+          1
         ],
         "text": "blurry, watermark"
       }
@@ -210,8 +338,8 @@
       "class_type": "CLIPTextEncode",
       "inputs": {
         "clip": [
-          "clip",
-          0
+          "lora3",
+          1
         ],
         "text": "a lighthouse in a storm, 35mm"
       }
@@ -228,7 +356,7 @@
           0
         ],
         "model": [
-          "unet",
+          "lora3",
           0
         ],
         "negative": [
@@ -250,7 +378,7 @@
     "save": {
       "class_type": "SaveImage",
       "inputs": {
-        "filename_prefix": "Krea2V2_golden00",
+        "filename_prefix": "Krea2V2_krea2filterbypass3_golden00",
         "images": [
           "grain",
           0

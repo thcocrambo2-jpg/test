@@ -1,17 +1,28 @@
 """Krea 2 on RunPod — configuration.
 
-Everything user-tunable lives in this module: paths, model registries,
-LoRA lists and (optional) access tokens. In section order:
+Everything user-tunable lives in this module: paths, the fixed pipeline
+assets each tab is built from, and (optional) access tokens. In section
+order:
 
     Build mode          FROZEN
     Disk layout         BASE_DIR and everything under it, ComfyUI's port
-    Model selection     Krea 2 base models, encoder, LoRAs — the
-                        Single / Edit tabs
+    Krea 2 pipeline     text encoder, VAE, the Identity Edit LoRA — the
+                        Krea2 / Krea2 Edit tabs
     Krea 2 V2           the Krea2 advanced pipeline, self-contained
     Wan 2.2             image-to-video (+ the parallel-instance knobs)
     MiniMax H3          video with sound — image-to-video and text-to-video
-    CivitAI LoRAs       shared LoRA lists, resolutions, samplers
+    Krea 2 forms        resolutions, samplers
     Licensing           seat check + access tokens
+
+What is *not* here: the Krea diffusion models and the style LoRAs. Those
+live in the licence-server database (the `models`, `loras` and
+`feature_assets` collections, seeded from license-validator/data/
+assets.json) and reach the pod through catalog.py, which every Krea tab's
+Model dropdown, LoRA stack and downloads read. Adding a model or a LoRA is
+a DB edit and a pod restart, not a change to this file. What stays here is
+what a tab's graph is wired around rather than what a user picks: the
+VAEs, the text encoders, the Identity Edit LoRA, Wan's Lightning LoRAs and
+MiniMax's turbo LoRA.
 
 Which *tabs* exist is not decided here — that is features.py, and the
 answer comes from the license key rather than from anything in this file
@@ -113,68 +124,14 @@ FREE_ON_SWAP = not os.environ.get("KREA2_KEEP_MODELS_LOADED")
 SAGE_ATTENTION = os.environ.get("KREA2_SAGE_ATTENTION", "1").strip().lower() \
     not in ("0", "false", "no", "off")
 
-# ── Model selection ───────────────────────────────────────────────────────────
-# Variant-level defaults; a registry entry below can override them per-model.
-# "turbo" = distilled models: few steps, CFG 1.0
-# "raw"   = undistilled models: many steps, CFG 3.5-4.5 (much slower)
-VARIANT_DEFAULTS = {
-    "turbo": {"steps": 8, "cfg": 1.0},
-    "raw": {"steps": 50, "cfg": 4.0},
-}
-
+# ── Krea 2 pipeline ───────────────────────────────────────────────────────────
+# The fixed half of the Krea 2 graphs. The diffusion models (UNets) and the
+# style LoRAs a tab offers are not listed here: they come from the
+# catalogue (catalog.py), per feature, by id. HF_MODEL_REPO is kept because
+# the shared VAE below is fetched from it.
 HF_MODEL_REPO = "Comfy-Org/Krea-2"
 TEXT_ENCODER_FILE = "qwen3vl_4b_fp8_scaled.safetensors"      # ~5.2 GB
 VAE_FILE = "qwen_image_vae.safetensors"                      # ~0.25 GB
-
-# Registry of selectable Krea 2 diffusion models (UNets) — same spirit as
-# the LoRA lists further down: add an entry, restart (downloads are
-# idempotent and a failed one never aborts setup), and it appears in the
-# Model dropdown of the generate / edit tabs. The FIRST entry is the
-# default. Fields:
-#   name            — unique label shown in the UI dropdown
-#   file            — filename saved under models/diffusion_models/
-#   variant         — "turbo" or "raw"; supplies the step/CFG defaults
-#                     from VARIANT_DEFAULTS when the model is selected
-#   steps, cfg      — optional per-model overrides of those defaults
-#   hf_path         — repo path inside HF_MODEL_REPO to download, OR
-#   civitai_version — CivitAI model *version* id: the number in
-#                     civitai.com/api/download/models/<id>, which is also
-#                     the part after the @ in an AIR urn like
-#                     urn:air:krea2:unet:civitai:2762538@3118978
-#                     (most downloads need CIVITAI_TOKEN)
-#   trigger         — optional trigger words, auto-prepended to the prompt
-#                     whenever this model is used (generate;
-#                     not in Edit instructions)
-KREA2_MODELS = [
-    {
-        "name": "Krea 2 Turbo (official)",
-        "file": "krea2_turbo_fp8_scaled.safetensors",   # ~13.1 GB
-        "variant": "turbo",
-        "hf_path": "diffusion_models/krea2_turbo_fp8_scaled.safetensors",
-    },
-    # Raw is deliberately not offered here — this tab is turbo-only by
-    # plan design. Krea 2 Raw is still offered on the V2 tab (V2_MODELS
-    # below), whose download_v2_models() fetches it independently of this
-    # list, so commenting this out is a dropdown-only change: nothing
-    # about what gets downloaded moves.
-    # {
-    #     "name": "Krea 2 Raw (official)",
-    #     "file": "krea2_raw_fp8_scaled.safetensors",     # ~13.1 GB
-    #     "variant": "raw",
-    #     "hf_path": "diffusion_models/krea2_raw_fp8_scaled.safetensors",
-    # },
-    # {
-    #     "name": "FinePn V2 (amateur phone photo)",
-    #     "file": "Krea2_FinePornV2_FP8.safetensors",       # ~12.2 GB
-    #     "variant": "turbo",
-    #     "civitai_version": 3118978,
-    #     "trigger": "this is an amateur photo taken from smartphone, "
-    #                "casual photo",
-    # },
-]
-
-# The default model's variant (first registry entry) — used for logging.
-KREA2_VARIANT = KREA2_MODELS[0].get("variant", "turbo")
 
 # Abliterated (uncensored) text encoder: its shards are downloaded from this
 # repo and merged into a single ComfyUI-loadable file. When the merged file
@@ -200,33 +157,19 @@ KREA2EDIT_NODES_REPO = "https://github.com/lbouaraba/comfyui-krea2edit"
 EDIT_LORA_REPO = "conradlocke/krea2-identity-edit"
 EDIT_LORA_FILE = "krea2_identity_edit_v1_2.safetensors"  # ~1.83 GB
 
-# Diffusion models come from the KREA2_MODELS registry above; only the
-# shared VAE is a fixed download.
+# Diffusion models come from the catalogue (catalog.py); only the shared
+# VAE is a fixed download.
 HF_MODEL_FILES = [
     f"vae/{VAE_FILE}",
-]
-
-# Official Krea 2 style LoRAs from the same HF repo (~0.5 GB each).
-# Trim this list to save download time and disk space.
-HF_LORA_FILES = [
-    "loras/krea2_turbo_lora_rank_64_bf16.safetensors",
-    # "loras/krea2_darkbrush.safetensors",
-    # "loras/krea2_dotmatrix.safetensors",
-    # "loras/krea2_kidsdrawing.safetensors",
-    # "loras/krea2_neondrip.safetensors",
-    # "loras/krea2_rainywindow.safetensors",
-    # "loras/krea2_retroanime.safetensors",
-    # "loras/krea2_softwatercolor.safetensors",
-    # "loras/krea2_sunsetblur.safetensors",
-    # "loras/krea2_vintagetarot.safetensors",
 ]
 
 # ── Krea 2 V2 (Krea2 advanced turbo/raw text-to-image) ────────────────────────────
 # A second, self-contained text-to-image pipeline: the Krea2 advanced
 # "KREA 2 TURBO/RAW" workflow, reproduced node-for-node in its own tab. It
-# deliberately shares nothing with the tabs above except the text encoder —
-# its own UNet quant, its own VAE, its own LoRA stack and its own defaults,
-# so tuning one never moves the other.
+# shares the text encoder with the tabs above, and today the same catalogue
+# model (the mxfp8 turbo UNet) — but its own VAE, its own sampler and its
+# own LoRA rows, so tuning one never moves the other. Which models and
+# LoRAs it offers is its feature's list in the catalogue (catalog.py).
 #
 # Three things make it different from the Single tab:
 #   • RES4LYF's ClownsharKSampler_Beta replaces KSampler (eta/bongmath and
@@ -238,50 +181,6 @@ HF_LORA_FILES = [
 #     LoraLoaderModelOnly chain the other Krea tabs build.
 # On by default (feature key "krea_v2_t2i", ~17 GB); a license that does not grant
 # "krea_v2_t2i" skips the downloads, the three node packs and the tab.
-
-# Variant-level defaults, same scheme as VARIANT_DEFAULTS:
-# a registry entry picks one with its "variant" field and may
-# override any value. `turbo_lora` is the on/off state the Krea 2 Turbo
-# LoRA slot takes when the variant is selected — that LoRA *is* the raw
-# recipe from the source workflow's companion guide (enable it at 0.6,
-# raise steps to 20 and CFG to ~2.5), so the two variants differ by
-# exactly the three things that guide lists.
-V2_VARIANT_DEFAULTS = {
-    "turbo": {"steps": 10, "cfg": 1.0, "turbo_lora": False},
-    "raw": {"steps": 20, "cfg": 2.5, "turbo_lora": True},
-}
-
-# The Krea 2 Turbo LoRA is slot 1 of V2_LORA_STACK below rather than
-# something the builder bolts on. Keeping it a normal, visible slot is what
-# stops it being applied twice when a raw run also has it ticked by hand —
-# the same "never applied silently" rule the trigger words follow.
-V2_TURBO_LORA_FILE = "krea2_turbo_lora_rank_64_bf16.safetensors"
-V2_TURBO_LORA_STRENGTH = 0.6
-
-# Selectable models for the V2 tab. Same fields as KREA2_MODELS
-# (name / file / variant / optional steps, cfg, turbo_lora overrides /
-# hf_path within HF_MODEL_REPO / optional trigger); the first entry is the
-# default and is the model the source workflow ships with.
-#
-# Raw's file (krea2_raw_fp8_scaled) was previously also offered on the
-# Krea 2 Turbo tab and shared between the two loops; that tab is
-# turbo-only now (plan design), so download_v2_models() is what fetches
-# this file — see its docstring for why it does so independently rather
-# than assuming another group already did.
-V2_MODELS = [
-    {
-        "name": "Krea 2 Turbo mxfp8 (workflow default)",
-        "file": "krea2_turbo_mxfp8.safetensors",        # ~13.5 GB
-        "variant": "turbo",
-        "hf_path": "diffusion_models/krea2_turbo_mxfp8.safetensors",
-    },
-    {
-        "name": "Krea 2 Raw fp8",
-        "file": "krea2_raw_fp8_scaled.safetensors",     # ~13.1 GB, shared
-        "variant": "raw",
-        "hf_path": "diffusion_models/krea2_raw_fp8_scaled.safetensors",
-    },
-]
 
 # The workflow's companion guide recommends the Wan 2.1 VAE over the stock
 # Qwen image VAE for this pipeline. Different repo, and it is stored under
@@ -307,48 +206,11 @@ V2_NODE_REPOS = [
      "FilmGrain"),
 ]
 
-# The workflow's LoRA stack, in its original order and with its original
-# strengths and on/off states. Entries are
-# (filename, strength, enabled_by_default, civitai_version_id) — the
-# version id is None for LoRAs already fetched from Hugging Face.
-# Every strength applies to the model and the CLIP alike (Single Strength).
-V2_LORA_STACK = [
-    # Slot 1 — toggled on/off by the Model dropdown (see V2_VARIANT_DEFAULTS).
-    (V2_TURBO_LORA_FILE, V2_TURBO_LORA_STRENGTH, False, None),
-    ("krea2filterbypass3.safetensors", 0.93, True, 3067151),
-    ("krea2_Enhancer.safetensors", 0.4, True, 3065628),
-    ("Krea2-realism-V2.safetensors", 0.3, True, 3090634),
-    # The companion guide links version 3109006 for this LoRA family; the
-    # workflow names the file v3.1. If CivitAI serves a different revision
-    # the graph still runs — only the filename on disk has to match.
-    ("realism_engine_krea2_v3.1.safetensors", 0.6, True, 3109006),
-    ("RealisticSnapshotKrea2.safetensors", 0.8, True, 3084537),
-    ("purelens_krea2.safetensors", 0.6, True, 3114242),
-    ("lenovo_krea2.safetensors", 0.5, True, 3075606),
-    ("MysticXXX_KREA2_v3.safetensors", 1.0, False, 3116175),
-    ("KNPV4.1_pre.safetensors", 1.0, False, 3085473),
-    ("snofs_krea_v1.safetensors", 1.0, False, 3104629),
-    ("Halide-v1.safetensors", 1.0, False, 3265522),
-    ("Krea2FilterBypass_3vector.safetensors", 1.0, False, 3067151),
-    ("Realism_Engine_Krea2_v2.0.safetensors", 1.0, False, 3070702),
-    ("SNOFS_Krea2_v1.0.safetensors", 1.0, False, 3072664),
-    ("Krea2_AIO_NSFW_v1.0.safetensors", 1.0, False, 3071904),
-    ("Realistic_Snapshot_Krea2_v0.5.safetensors", 1.0, False, 3084537),
-    ("galaxyace_krea2.safetensors", 1.0, False, 3069544),
-    ("HMBody_D_e10.safetensors", 1.0, False, 3160327),
-    ("elusarca-photo.safetensors", 1.0, False, 3151907),
-    ("Krea2_NSFW_plus.safetensors", 1.0, False, 3084588),
-    ("nicegirls_krea2.safetensors", 1.0, False, 3075498),
-    ("Krea2-realism-V1.safetensors", 1.0, False, 3066973),
-    ("snofs_krea_v1_1.safetensors", 1.0, False, 3104629),
-    ("desi-realism-v1.safetensors", 1.0, False, 3194454),
-    ("pawg.safetensors", 1.0, False, 3173942),
-]
-
 # ClownsharKSampler_Beta settings, straight from the workflow. These are
 # the knobs both variants share; steps and cfg are deliberately absent
-# because they belong to the model (V2_VARIANT_DEFAULTS) and would
-# otherwise be a second source of truth for the same two numbers.
+# because they belong to the model record (catalog.Model.steps / .cfg)
+# and would otherwise be a second source of truth for the same two
+# numbers.
 V2_SAMPLER_DEFAULTS = {
     "eta": 0.5,
     "sampler_name": "linear/euler",
@@ -445,10 +307,10 @@ V2_DEFAULT_NEGATIVE = (
 # ── Krea 2 V2 Edit (instruction editing on the V2 spine) ──────────────────────
 # The ✨ Krea2 Edit tab's recipe — the Identity Edit LoRA plus the
 # ComfyUI-Krea2Edit nodes — rebuilt on the V2 pipeline instead of the
-# Krea 2 v1 one: V2_MODELS, the Wan 2.1 VAE, the 11-slot model+CLIP LoRA
-# stack, ClownsharKSampler_Beta and Smart Seed Variance. Everything above
-# is reused verbatim, so tuning the V2 tab tunes this one too and there is
-# no second copy of those numbers to drift.
+# Krea 2 v1 one: its feature's catalogue models, the Wan 2.1 VAE, the
+# model+CLIP LoRA rows, ClownsharKSampler_Beta and Smart Seed Variance.
+# Everything above is reused verbatim, so tuning the V2 tab tunes this one
+# too and there is no second copy of those numbers to drift.
 #
 # The VAE swap is safe here specifically because the two are the same
 # family: Qwen-Image's VAE is a Wan 2.1 derivative with the same 16-channel
@@ -670,52 +532,8 @@ MINIMAX_DEFAULT_ASPECT = "9:16 (Portrait Widescreen)"
 MINIMAX_NODE = "MiniMaxH3ImageToVideo"
 MINIMAX_COMFYUI_MIN = "v0.34.0"
 
-# ── CivitAI LoRAs ─────────────────────────────────────────────────────────────
-# Entries are (model_version_id, filename_to_save_as). The version id is the
-# number in the CivitAI download URL: civitai.com/api/download/models/<id>
-# Most CivitAI downloads require an API token (set the CIVITAI_TOKEN env
-# var). Add or remove entries freely — a failed LoRA download is logged
-# and skipped, it never aborts the setup.
-CIVITAI_LORAS = [
-    (3067151, "Krea2FilterBypass_3vector.safetensors"),
-    (3070702, "Realism_Engine_Krea2_v2.0.safetensors"),
-    (3072664, "SNOFS_Krea2_v1.0.safetensors"),
-    (3090634, "Krea2-realism-V2.safetensors"),
-    (3071904, "Krea2_AIO_NSFW_v1.0.safetensors"),
-    (3084537, "Realistic_Snapshot_Krea2_v0.5.safetensors"),
-    (3069544, "galaxyace_krea2.safetensors"),
-    (3160327, "HMBody_D_e10.safetensors"),
-    (3151907, "elusarca-photo.safetensors"),
-    (3084588, "Krea2_NSFW_plus.safetensors"),
-    (3075498, "nicegirls_krea2.safetensors"),
-    (3066973, "Krea2-realism-V1.safetensors"),
-    (3075606, "lenovo_krea2.safetensors"),
-    (3114242, "purelens_krea2.safetensors"),
-    (3104629, "snofs_krea_v1_1.safetensors"),
-    (3085473, "KNPV4.1_pre.safetensors"),
-    (3194454, "desi-realism-v1.safetensors"),
-    (3173942, "pawg.safetensors"),
-    (3067151, "krea2filterbypass3.safetensors"),
-    (3065628, "krea2_Enhancer.safetensors"),
-    # The companion guide links version 3109006 for this LoRA family; the
-    # workflow names the file v3.1. If CivitAI serves a different revision
-    # the graph still runs — only the filename on disk has to match.
-    (3109006, "realism_engine_krea2_v3.1.safetensors"),
-    (3084537, "RealisticSnapshotKrea2.safetensors"),
-    (3116175, "MysticXXX_KREA2_v3.safetensors"),
-    (3104629, "snofs_krea_v1.safetensors"),
-    (3265522, "Halide-v1.safetensors"),
-]
-
-# LoRAs pre-selected in the UI's three slots (generate / edit tabs).
-# Entries are (filename, default weight); a file that failed to download is
-# silently skipped and the slot falls back to "None".
-DEFAULT_LORAS = [
-    ("HMBody_D_e10.safetensors", 0.8),
-    ("Realism_Engine_Krea2_v2.0.safetensors", 0.4),
-    ("galaxyace_krea2.safetensors", 0.8),
-]
-
+# ── Krea 2 forms ──────────────────────────────────────────────────────────────
+# The Krea2 / Krea2 Edit tabs' resolution and sampler lists.
 RESOLUTION_PRESETS = {
     "1024×1024 (Square)": (1024, 1024),
     "1216×832 (Landscape)": (1216, 832),
@@ -812,7 +630,6 @@ for _dir in (TEMP_DIR, MODELS_DIR, OUTPUT_DIR):
 # Which features are on is logged by app.py once features.py has resolved
 # them — this module deliberately does not know, so that importing config
 # from features.py stays acyclic.
-log.info(
-    "Variant: Krea 2 %s · models → %s · images → %s",
-    KREA2_VARIANT, MODELS_DIR, OUTPUT_DIR,
-)
+# The models and LoRAs themselves are logged by catalog.load(), which runs
+# after the licence check — this module cannot know them either.
+log.info("Weights → %s · images → %s", MODELS_DIR, OUTPUT_DIR)

@@ -8,10 +8,12 @@ Krea 2 V2 pipeline instead — exactly the relationship the 🔶 Krea2 V2 tab
 has to the 🎨 Krea2 one.
 
 Everything V2 about it is imported from workflow_krea2_v2 rather than
-restated, so the two tabs cannot drift: the same `V2_MODELS` registry and
-variant defaults, the same Wan 2.1 VAE, the same 11-slot model+CLIP LoRA
-stack, the same `ClownsharKSampler_Beta` settings and the same
-`RBG_Smart_Seed_Variance` node. What is new here is only the edit half.
+restated, so the two tabs cannot drift: the same catalogue helpers (read
+with this tab's own feature key, `krea_v2_edit`, so its dropdowns offer
+its own feature's lists), the same model-record defaults, the same Wan 2.1
+VAE, the same model+CLIP LoRA rows, the same `ClownsharKSampler_Beta`
+settings and the same `RBG_Smart_Seed_Variance` node. What is new here is
+only the edit half.
 
 Three things are deliberately *not* carried over from build_v2_workflow:
 
@@ -38,7 +40,6 @@ from comfy import GPU_COUNT
 from config import (
     EDIT_LORA_FILE,
     V2_EDIT_MAX_PIXELS,
-    V2_MODELS,
     V2_NODE_REPOS,
     V2_SAMPLER_DEFAULTS,
     V2_VAE_FILE,
@@ -48,15 +49,12 @@ from config import (
 from workflow import active_text_encoder, edit_lora_available
 from workflow_krea2_v2 import (
     REQUIRED_NODES as V2_REQUIRED_NODES,
+    blocking_problems,
     default_lora_slots,
-    missing_enabled_loras,
-    model_available,
     model_defaults,
-    model_names,
-    resolve_model,
+    status_notes,
     turbo_lora_available,
     turbo_lora_slot,
-    vae_available,
 )
 
 # Node classes this tab cannot run without: the V2 sampler and variance
@@ -66,13 +64,14 @@ from workflow_krea2_v2 import (
 REQUIRED_NODES = (*V2_REQUIRED_NODES,
                   "Krea2EditModelPatch", "Krea2EditGroundedEncode")
 
-# Re-exported so ui.py can import this tab's whole surface from one
-# module. They are the V2 registry helpers unchanged — the two tabs share
-# a model dropdown, a LoRA stack and a Turbo LoRA slot by design.
+# Re-exported so a caller can import this tab's whole surface from one
+# module. They are the V2 catalogue helpers unchanged — the two tabs build
+# their model dropdown, LoRA rows and Turbo LoRA slot the same way, each
+# from its own feature's lists.
 __all__ = [
     "REQUIRED_NODES", "build_v2_edit_workflow", "default_lora_slots",
-    "fit_size", "model_available", "model_defaults", "model_names",
-    "resolve_model", "status", "turbo_lora_available", "turbo_lora_slot",
+    "fit_size", "model_defaults", "status", "turbo_lora_available",
+    "turbo_lora_slot",
 ]
 
 
@@ -91,20 +90,17 @@ def fit_size(width: int, height: int,
             max(64, int(height * scale) // 16 * 16))
 
 
-def status() -> tuple[bool, str]:
+def status(feature, enabled=None) -> tuple[bool, str]:
     """(ready, message) for the tab — what is missing, in plain words.
 
-    The V2 half of this is workflow_krea2_v2.status(); the edit LoRA is
+    The V2 half of this is workflow_krea2_v2's, read with this tab's own
+    feature key; `enabled` means what it means there. The edit LoRA is
     the extra requirement, and it is fatal rather than a warning because
     without it the graph is just an expensive img2img that ignores the
     instruction. Node packs are not checked here — they register inside
     ComfyUI, which app.py verifies at startup.
     """
-    problems = []
-    if not any(model_available(entry) for entry in V2_MODELS):
-        problems.append("no V2 model has downloaded")
-    if not vae_available():
-        problems.append(f"the VAE `{V2_VAE_FILE}` has not downloaded")
+    problems = blocking_problems(feature)
     if not edit_lora_available():
         problems.append(f"the Identity Edit LoRA `{EDIT_LORA_FILE}` has not "
                         "downloaded")
@@ -119,16 +115,7 @@ def status() -> tuple[bool, str]:
         return False, ("❌ Krea 2 V2 Edit cannot run — " + listed
                        + " yet. Restart the app so the download step can "
                          "fetch it.")
-    notes = []
-    absent = [e["name"] for e in V2_MODELS if not model_available(e)]
-    if absent:
-        notes.append("these models have not downloaded and the dropdown "
-                     "will refuse them: " + ", ".join(f"`{n}`" for n in absent))
-    missing = missing_enabled_loras()
-    if missing:
-        notes.append("these LoRAs from the workflow's stack did not download "
-                     "and their slots start off: "
-                     + ", ".join(f"`{m}`" for m in missing))
+    notes = status_notes(feature, enabled)
     if notes:
         return True, "⚠️ Ready, but " + "; ".join(notes)
     packs = ", ".join(f"`{d}`" for d, _r, _c in V2_NODE_REPOS)
@@ -146,7 +133,7 @@ def build_v2_edit_workflow(
     image_name: str,
     image2_name: str | None = None,
     loras=(),
-    unet_file: str | None = None,
+    model,
     grounding_px: int = 768,
     ref_boost: float = 4.0,
     ref_boost_a: float = 1.0,
@@ -166,9 +153,10 @@ def build_v2_edit_workflow(
     them, because this builder prepends it itself, which is what makes it
     impossible to apply twice.
 
-    `unet_file` selects the diffusion model (V2_MODELS registry) and
-    supplies the steps/CFG its variant defines, which `sampler_settings`
-    may then override key by key — as it does for V2_SAMPLER_DEFAULTS, and
+    `model` is the catalogue record the Model dropdown named: its file is
+    the UNet and its steps/CFG the sampler's starting point, which
+    `sampler_settings` may then override key by key — as it does for
+    V2_SAMPLER_DEFAULTS, and
     `variance_settings` for V2_VARIANCE_DEFAULTS. `variance_seed` defaults
     to the image seed so a reproducible seed reproduces the whole graph.
 
@@ -200,8 +188,7 @@ def build_v2_edit_workflow(
     need to match its aspect ratio, because the patch node resamples every
     reference onto the target grid in pixel space.
     """
-    entry = resolve_model(unet_file)
-    steps, cfg, _turbo_lora = model_defaults(entry)
+    steps, cfg, _turbo_lora = model_defaults(model)
     sampler = {**V2_SAMPLER_DEFAULTS, "steps": steps, "cfg": cfg,
                **(sampler_settings or {}), "denoise": 1.0}
     variance = {**V2_VARIANCE_DEFAULTS, **(variance_settings or {})}
@@ -209,7 +196,7 @@ def build_v2_edit_workflow(
     wf = {
         "unet": {
             "class_type": "UNETLoader",
-            "inputs": {"unet_name": entry["file"], "weight_dtype": "default"},
+            "inputs": {"unet_name": model.file, "weight_dtype": "default"},
         },
         "clip": {
             "class_type": "CLIPLoader",

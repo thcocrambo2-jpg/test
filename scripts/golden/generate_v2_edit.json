@@ -37,7 +37,7 @@
       "inputs": {
         "fit_mode": "crop (legacy)",
         "model": [
-          "edit_lora",
+          "lora3",
           0
         ],
         "ref_boost": 3.5,
@@ -102,12 +102,76 @@
         "width": 640
       }
     },
-    "negative": {
-      "class_type": "Krea2EditGroundedEncode",
+    "lora0": {
+      "class_type": "LoraLoader",
       "inputs": {
         "clip": [
           "clip",
           0
+        ],
+        "lora_name": "krea2filterbypass3.safetensors",
+        "model": [
+          "edit_lora",
+          0
+        ],
+        "strength_clip": 0.46,
+        "strength_model": 0.46
+      }
+    },
+    "lora1": {
+      "class_type": "LoraLoader",
+      "inputs": {
+        "clip": [
+          "lora0",
+          1
+        ],
+        "lora_name": "krea2_Enhancer.safetensors",
+        "model": [
+          "lora0",
+          0
+        ],
+        "strength_clip": 0.47,
+        "strength_model": 0.47
+      }
+    },
+    "lora2": {
+      "class_type": "LoraLoader",
+      "inputs": {
+        "clip": [
+          "lora1",
+          1
+        ],
+        "lora_name": "Krea2-realism-V2.safetensors",
+        "model": [
+          "lora1",
+          0
+        ],
+        "strength_clip": 0.48,
+        "strength_model": 0.48
+      }
+    },
+    "lora3": {
+      "class_type": "LoraLoader",
+      "inputs": {
+        "clip": [
+          "lora2",
+          1
+        ],
+        "lora_name": "realism_engine_krea2_v3.1.safetensors",
+        "model": [
+          "lora2",
+          0
+        ],
+        "strength_clip": 0.49,
+        "strength_model": 0.49
+      }
+    },
+    "negative": {
+      "class_type": "Krea2EditGroundedEncode",
+      "inputs": {
+        "clip": [
+          "lora3",
+          1
         ],
         "grounding_px": 640,
         "image": [
@@ -125,8 +189,8 @@
       "class_type": "Krea2EditGroundedEncode",
       "inputs": {
         "clip": [
-          "clip",
-          0
+          "lora3",
+          1
         ],
         "grounding_px": 640,
         "image": [
@@ -174,7 +238,7 @@
     "save": {
       "class_type": "SaveImage",
       "inputs": {
-        "filename_prefix": "Krea2V2Edit_golden00",
+        "filename_prefix": "Krea2V2Edit_krea2filterbypass3_golden00",
         "images": [
           "decode",
           0
@@ -269,7 +333,7 @@
       "inputs": {
         "fit_mode": "crop (legacy)",
         "model": [
-          "edit_lora",
+          "lora3",
           0
         ],
         "ref_boost": 3.5,
@@ -334,12 +398,76 @@
         "width": 640
       }
     },
-    "negative": {
-      "class_type": "Krea2EditGroundedEncode",
+    "lora0": {
+      "class_type": "LoraLoader",
       "inputs": {
         "clip": [
           "clip",
           0
+        ],
+        "lora_name": "krea2filterbypass3.safetensors",
+        "model": [
+          "edit_lora",
+          0
+        ],
+        "strength_clip": 0.46,
+        "strength_model": 0.46
+      }
+    },
+    "lora1": {
+      "class_type": "LoraLoader",
+      "inputs": {
+        "clip": [
+          "lora0",
+          1
+        ],
+        "lora_name": "krea2_Enhancer.safetensors",
+        "model": [
+          "lora0",
+          0
+        ],
+        "strength_clip": 0.47,
+        "strength_model": 0.47
+      }
+    },
+    "lora2": {
+      "class_type": "LoraLoader",
+      "inputs": {
+        "clip": [
+          "lora1",
+          1
+        ],
+        "lora_name": "Krea2-realism-V2.safetensors",
+        "model": [
+          "lora1",
+          0
+        ],
+        "strength_clip": 0.48,
+        "strength_model": 0.48
+      }
+    },
+    "lora3": {
+      "class_type": "LoraLoader",
+      "inputs": {
+        "clip": [
+          "lora2",
+          1
+        ],
+        "lora_name": "realism_engine_krea2_v3.1.safetensors",
+        "model": [
+          "lora2",
+          0
+        ],
+        "strength_clip": 0.49,
+        "strength_model": 0.49
+      }
+    },
+    "negative": {
+      "class_type": "Krea2EditGroundedEncode",
+      "inputs": {
+        "clip": [
+          "lora3",
+          1
         ],
         "grounding_px": 640,
         "image": [
@@ -357,8 +485,8 @@
       "class_type": "Krea2EditGroundedEncode",
       "inputs": {
         "clip": [
-          "clip",
-          0
+          "lora3",
+          1
         ],
         "grounding_px": 640,
         "image": [
@@ -406,7 +534,7 @@
     "save": {
       "class_type": "SaveImage",
       "inputs": {
-        "filename_prefix": "Krea2V2Edit_golden00",
+        "filename_prefix": "Krea2V2Edit_krea2filterbypass3_golden00",
         "images": [
           "decode",
           0
