@@ -277,7 +277,7 @@ $env:KREA2_LICENSE_KEY="<key>"; $env:KREA2_NODE_TAG="<tag>"; .\.venv\Scripts\pyt
 
 ```powershell
 python scripts\dryrun.py --features all
-python scripts\dryrun.py --features "single,klein"
+python scripts\dryrun.py --features "krea_t2i,wan_i2v"
 ```
 
 **WSL/POD** equivalents:

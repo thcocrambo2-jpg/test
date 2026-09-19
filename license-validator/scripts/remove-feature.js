@@ -21,8 +21,8 @@
 //
 // Stored values are matched the way the server reads them (normalizeKey):
 // case-insensitive, surrounding whitespace ignored, and "-" or a space
-// standing in for "_". So a hand-typed "Klein-I2I" is found as well as
-// "klein_i2i".
+// standing in for "_". So a hand-typed "Wan-I2V" is found as well as
+// "wan_i2v".
 //
 // One consequence worth knowing before running it. A licence with a
 // literal `features` array that named *only* this key is left with

@@ -252,36 +252,6 @@
       ]
     },
 
-    "klein_i2i": {
-      "headline": "Turn a rough idea into a finished picture.",
-      "body": [
-        "Feed it anything — a phone snap, a pencil sketch, a screenshot of a rough 3D layout — say what it should become, and slide one control between “tidy this up” and “start again from this shape”.",
-        "Low keeps your composition exactly where you drew it and just makes it look finished. High keeps the layout and repaints everything else. It's the fastest way from the thing in your head, badly drawn, to something you'd actually show someone."
-      ],
-      "highlights": [
-        "One slider, gentle to total",
-        "Sketch to finished art",
-        "Restyle a photo completely",
-        "Keeps your composition"
-      ],
-      "blocks": [
-        {
-          "type": "fan",
-          "dir": "strength",
-          "source": "source.webp",
-          "source_label": "The sketch",
-          "ratio": "4/3",
-          "source_ratio": "4/3",
-          "caption": "One pencil sketch, the same prompt, three positions on the slider.",
-          "items": [
-            { "file": "s30.webp", "caption": "gentle — tidied up" },
-            { "file": "s60.webp", "caption": "halfway" },
-            { "file": "s85.webp", "caption": "fully repainted" }
-          ]
-        }
-      ]
-    },
-
     "wan_i2v": {
       "headline": "Give a still picture a few seconds of life.",
       "body": [

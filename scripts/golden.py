@@ -72,7 +72,7 @@ sys.path.insert(0, str(ROOT))
 # the other scripts rather than making a third empty tree.
 os.environ.setdefault("KREA2_BASE_DIR", str(ROOT / ".dryrun"))
 
-from config import KLEIN_OUTPUT_CUSTOM, log  # noqa: E402
+from config import log  # noqa: E402
 
 SNAPSHOTS = Path(__file__).resolve().parent / "golden"
 
@@ -180,7 +180,6 @@ def patch(module, capture) -> None:
     for name in (
         "model_file_available", "edit_lora_available",
         "v2_model_available", "v2_turbo_lora_available",
-        "klein_model_available",
         "flux_model_available", "flux_turbo_lora_available",
         "wan_models_available", "wan_5b_available", "wan_lightning_available",
         "minimax_models_available",
@@ -188,7 +187,7 @@ def patch(module, capture) -> None:
         if hasattr(module, name):
             setattr(module, name, lambda *a, **k: True)
 
-    for name in ("v2_status", "v2_edit_status", "klein_status"):
+    for name in ("v2_status", "v2_edit_status"):
         if hasattr(module, name):
             setattr(module, name, lambda *a, **k: (True, ""))
 
@@ -232,7 +231,6 @@ def cases(module) -> dict:
     """
     model = module.MODEL_CHOICES[0]
     v2_model = module.V2_MODEL_CHOICES[0]
-    klein_model = module.KLEIN_MODEL_CHOICES[0]
     flux_model = module.FLUX_MODEL_CHOICES[-1]      # the raw variant
     image = _image()
 
@@ -240,8 +238,6 @@ def cases(module) -> dict:
                   for v in ("None", round(0.35 + i / 100, 2)))
     krea_triples = tuple(v for i in range(module.MAX_LORA_SLOTS)
                          for v in (False, "None", round(0.35 + i / 100, 2)))
-    triples = tuple(v for i in range(len(module.KLEIN_LORA_SLOTS))
-                    for v in (False, "None", round(0.4 + i / 100, 2)))
     v2_triples = tuple(v for i in range(len(module.V2_LORA_SLOTS))
                        for v in (False, "None", round(0.45 + i / 100, 2)))
 
@@ -257,12 +253,6 @@ def cases(module) -> dict:
             2345678, False, 11, 3.3, "1024×1024 (Square)", "dpmpp_2m",
             flux_model, 2,
         ) + pairs,
-
-        "generate_klein_edit": (
-            image, True, image, "put a red hat on the person",
-            3456789, False, klein_model, 6, 1.3, 2.7, "euler", "karras",
-            1.25, KLEIN_OUTPUT_CUSTOM, 1.75, 912, 688, 2,
-        ) + triples,
 
         "generate_v2": (
             "a lighthouse in a storm, 35mm", "blurry, watermark",

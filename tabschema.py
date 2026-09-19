@@ -77,16 +77,6 @@ import handlers
 from config import (
     FLUX_MODELS,
     FLUX_VARIANT_DEFAULTS,
-    KLEIN_DEFAULT_CUSTOM_SIZE,
-    KLEIN_DEFAULT_MEGAPIXELS,
-    KLEIN_DEFAULTS,
-    KLEIN_MODELS,
-    KLEIN_OUTPUT_CUSTOM,
-    KLEIN_OUTPUT_MODES,
-    KLEIN_OUTPUT_SCALED,
-    KLEIN_REFERENCE_MEGAPIXELS,
-    KLEIN_SAMPLER_DEFAULTS,
-    KLEIN_SCHEDULERS,
     KREA2_MODELS,
     MINIMAX_ASPECT_RATIOS,
     MINIMAX_DEFAULT_ASPECT,
@@ -180,8 +170,8 @@ class Repeat:
 
     `parts` is the submission order *within* one slot, so `call_args`
     flattens `slots x parts` and that is the tail. `slots()` returns one
-    dict of per-slot default overrides each, because V2 and Klein take
-    their rows from the source workflow's own stack rather than from a
+    dict of per-slot default overrides each, because V2 takes
+    its rows from the source workflow's own stack rather than from a
     blank row repeated N times — and a row whose file did not download
     comes back off and blank, which is a fact about this pod's disk.
 
@@ -690,7 +680,7 @@ class TabSchema:
                 # offers these same presets and is entitled separately from
                 # the Krea2 tab, so a Krea2-shaped branch here would leave
                 # Edit reading them raw on a licence that grants only Edit.
-                # V2 and Klein rows have always been three long and never
+                # V2 rows have always been three long and never
                 # match.
                 if len(tail.parts) == 3 and len(row) == 2:
                     row = [row[0] != blank, row[0], row[1]]
@@ -798,7 +788,7 @@ def _tail_json(tail: Repeat | None):
         "enabledLabel": enabled.label if enabled else None,
         "enabledDefault": bool(_resolve(enabled.default)) if enabled else False,
         "parts": names,
-        # Per-slot defaults. V2 and Klein take their rows from the source
+        # Per-slot defaults. V2 takes its rows from the source
         # workflow's stack rather than from a blank row repeated N times,
         # and a row whose file did not download comes back off and blank.
         "slots": [dict(row) for row in tail.rows()],
@@ -824,10 +814,6 @@ def _flux_lora_choices():
     return ["None"] + handlers.list_flux_lora_files()
 
 
-def _klein_lora_choices():
-    return ["None"] + handlers.list_klein_lora_files()
-
-
 def _blank_slots(count):
     """`count` rows at the part defaults — the plain eight-slot stacks."""
     return lambda: tuple({} for _ in range(count))
@@ -836,7 +822,7 @@ def _blank_slots(count):
 def _stack_slots(loader):
     """(enabled, name, strength) rows from a source workflow's own stack.
 
-    V2 and Klein do not repeat a blank row: their rows, order, strengths
+    V2 does not repeat a blank row: its rows, order, strengths
     and on/off states come from the graph they were transcribed from, and
     `default_lora_slots()` has already switched off any row whose file did
     not download.
@@ -872,8 +858,8 @@ def _triple_tail(choices, slots, title):
     shifts every argument after it.
 
     `slots` is the rows callable rather than a loader, because the two
-    families fill their stack from different places: V2 and Klein take
-    theirs from the source workflow (`_stack_slots`), the Krea2 family
+    families fill their stack from different places: V2 takes
+    its rows from the source workflow (`_stack_slots`), the Krea2 family
     repeats a blank row (`_blank_slots`). Everything else about the row is
     the same, which is the point.
     """
@@ -1046,10 +1032,8 @@ def _reference_fields(group="reference"):
 def _two_image_fields(label1, toggle, label2):
     """Source image, the second-reference toggle and the second image.
 
-    Three tabs share it and they word it differently — Klein says "Input
-    image 1" where the two Edit tabs say "Source image" — so the labels
-    are arguments. They are transcribed verbatim; see the module docstring
-    on why that matters.
+    The two Edit tabs share it. The labels are arguments, transcribed
+    verbatim; see the module docstring on why that matters.
     """
     return (
         Field("image", label1, "image", None, group="inputs", column="right"),
@@ -1381,63 +1365,6 @@ SCHEMAS = (
     ),
 
     TabSchema(
-        model_registry='klein',
-        key=Key.KLEIN_I2I, handler=handlers.generate_klein_edit,
-        lane=handlers.COMFY_LANE, prompt_field="prompt",
-        result_keys=IMAGE_KEYS, tab_id="klein",
-        icon="🧩", blurb="Flux 2 Klein, with up to two reference images.",
-        category="edit", route="/edit/klein", submit_label="Edit",
-        groups=(G_INPUTS, G_PROMPT, Group("core", "Sampling", dense=True),
-                Group("size", "Output size", dense=True), G_SEED),
-        fields=(
-            *_two_image_fields("Input image 1 (paste with Ctrl+V)",
-                               "➕ Enable input image 2", "Input image 2"),
-            Field("prompt", "Edit prompt", "textarea", "", lines=4,
-                  group="prompt"),
-            *_seed_fields(),
-            Field("model", "Model", "select",
-                  lambda: handlers.KLEIN_MODEL_CHOICES[0],
-                  choices=lambda: handlers.KLEIN_MODEL_CHOICES, group="core",
-                  wide=True),
-            Field("steps", "Steps", "slider", lambda: handlers._k_steps,
-                  lo=1, hi=50, step=1, group="core"),
-            Field("cfg", "CFG", "slider", lambda: handlers._k_cfg, lo=0.5,
-                  hi=8.0, step=0.1, group="core"),
-            Field("guidance", "Guidance", "slider",
-                  lambda: handlers._k_guidance, lo=0.0, hi=10.0, step=0.1,
-                  group="core"),
-            Field("sampler", "Sampler", "select",
-                  KLEIN_DEFAULTS["sampler_name"], choices=SAMPLERS,
-                  group="core"),
-            Field("scheduler", "Scheduler", "select",
-                  KLEIN_DEFAULTS["scheduler"], choices=KLEIN_SCHEDULERS,
-                  group="core"),
-            Field("reference_mp",
-                  "Reference size (MP) — what the model looks at", "slider",
-                  KLEIN_REFERENCE_MEGAPIXELS, lo=0.25, hi=4.0, step=0.05,
-                  group="size", wide=True),
-            Field("output_mode", "Mode", "select", KLEIN_OUTPUT_MODES[0],
-                  choices=KLEIN_OUTPUT_MODES, group="size", wide=True),
-            Field("output_mp", "Megapixels (scale mode)", "slider",
-                  KLEIN_DEFAULT_MEGAPIXELS, lo=0.25, hi=4.0, step=0.05,
-                  group="size", wide=True,
-                  show_if=("output_mode", KLEIN_OUTPUT_SCALED)),
-            Field("custom_width", "Width (custom mode)", "number",
-                  KLEIN_DEFAULT_CUSTOM_SIZE[0], lo=64, step=1, group="size",
-                  show_if=("output_mode", KLEIN_OUTPUT_CUSTOM)),
-            Field("custom_height", "Height (custom mode)", "number",
-                  KLEIN_DEFAULT_CUSTOM_SIZE[1], lo=64, step=1, group="size",
-                  show_if=("output_mode", KLEIN_OUTPUT_CUSTOM)),
-            _batch_field(),
-            Field("lora_slots", "LoRA stack", "repeat",
-                  repeat=_triple_tail(
-                      _klein_lora_choices,
-                      _stack_slots(handlers.klein_default_lora_slots),
-                      "LoRA stack — model + CLIP (loras/klein/)")),
-        ),
-    ),
-
-    TabSchema(
         key=Key.WAN_I2V, handler=handlers.generate_wan_video,
         lane=handlers.WAN_LANE, prompt_field="prompt",
         result_keys=VIDEO_KEYS, tab_id="video", output="video",
@@ -1657,10 +1584,6 @@ def catalog() -> dict:
                 ("steps", "guidance", "turbo_lora"),
                 lambda e: handlers.flux_model_available(e),
                 handlers._flux_model_info_text),
-            "klein": _model_rows(
-                KLEIN_MODELS, {}, ("steps", "cfg", "guidance"),
-                lambda e: handlers.klein_model_available(e),
-                handlers._klein_model_info_text),
         },
         # The Wan tab's model radio disables the mode radio for the 5B —
         # it has no Lightning distillation — and both radios reset Steps
@@ -1673,11 +1596,6 @@ def catalog() -> dict:
             "maxSeconds": WAN_MAX_SECONDS,
             "modeless": WAN_MODEL_CHOICES[1],
             "resolutions": {k: v for k, v in WAN_RESOLUTIONS.items()},
-        },
-        "klein": {
-            "outputModes": KLEIN_OUTPUT_MODES,
-            "sampler": KLEIN_SAMPLER_DEFAULTS,
-            "defaults": KLEIN_DEFAULTS,
         },
         "resolutions": {k: list(v) for k, v in RESOLUTION_PRESETS.items()},
         "aspects": {k: list(v) if isinstance(v, (list, tuple)) else v

@@ -92,7 +92,7 @@ export interface LoraSpec {
   weightDefault: number
   enabledLabel: string | null
   enabledDefault: boolean
-  /** Per-slot defaults. V2 and Klein take their rows from the source
+  /** Per-slot defaults. V2 takes its rows from the source
    *  workflow's own stack rather than a blank row repeated N times, and a
    *  row whose file did not download comes back off and blank — which is
    *  a fact about the pod's disk that only the server can know. */
