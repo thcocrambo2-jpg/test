@@ -415,23 +415,6 @@
   color: var(--c-on-media-soft);
 }
 
-/* -------------------------------------------------------------------- file */
-
-.file {
-  display: flex;
-  align-items: center;
-  gap: var(--s-3);
-}
-
-.fileName {
-  font-size: var(--t-xs);
-  font-family: var(--font-mono);
-  color: var(--c-text-muted);
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-
 /* ------------------------------------------------------------------ undo
  * The two buttons under every prompt box. They exist for the keyboard that
  * has no Ctrl key — see `lib/undo.ts`, which measured what the native stack

@@ -529,38 +529,3 @@ export function ImageDropField({
     </div>
   )
 }
-
-// -------------------------------------------------------------------- file
-
-export function FileField({
-  label,
-  hint,
-  wide,
-  value,
-  onChange,
-  accept,
-}: Common & { value: File | null; onChange: (next: File | null) => void; accept?: string }) {
-  const inputRef = useRef<HTMLInputElement>(null)
-  return (
-    <FieldShell label={label} hint={hint} wide={wide}>
-      <div className={s.file}>
-        <Button size="sm" onClick={() => inputRef.current?.click()}>
-          Choose file
-        </Button>
-        <span className={s.fileName}>{value ? value.name : 'No file selected'}</span>
-        {value && (
-          <Button variant="ghost" size="sm" onClick={() => onChange(null)}>
-            Clear
-          </Button>
-        )}
-      </div>
-      <input
-        ref={inputRef}
-        type="file"
-        accept={accept}
-        hidden
-        onChange={(event) => onChange(event.target.files?.[0] ?? null)}
-      />
-    </FieldShell>
-  )
-}

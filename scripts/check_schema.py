@@ -60,7 +60,6 @@ KIND_TO_GRADIO = {
     "bool": "Checkbox",
     "image": "Image",
     "mask": "ImageEditor",
-    "file": "File",
 }
 
 # Attributes the baseline records that a schema field can be compared on.

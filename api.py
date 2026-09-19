@@ -22,9 +22,9 @@ that gate is not weakened, it is *removed*.
 
 The partial backstop is downloads.py:706 — weights for ungranted features
 are never fetched, so most tabs would fail at "the model is not
-downloaded". Two tabs have no weights at all: `json_batch` and
-`community_prompts` both declare `needs=()` (features.py:155,160), so
-they would be fully working for a licence that does not include them.
+downloaded". One tab has no weights at all: `community_prompts` declares
+`needs=()` (features.py:160), so it would be fully working for a licence
+that does not include it.
 
 Four layers, and each one alone would be enough on a good day:
 
@@ -37,7 +37,7 @@ Four layers, and each one alone would be enough on a good day:
   3. `/catalog` and `/schema/{tab}` describe only entitled tabs, so the
      navigation never learns an ungranted tab exists;
   4. `scripts/check_routes.py` imports the app with `features.resolve([])`
-     and asserts every `/api/v1/tabs/` path 403s, naming `json_batch` and
+     and asserts every `/api/v1/tabs/` path 403s, naming
      `community_prompts` explicitly.
 
 Path containment
@@ -262,7 +262,7 @@ def _resolve_uploads(schema, raw: dict) -> dict:
     in the line. Gradio decoded the upload on the click for the same
     reason.
 
-    Three kinds need it, and they want three different Python objects:
+    Two kinds need it, and they want two different Python objects:
 
       image  a PIL image
       mask   the `{background, layers}` pair gr.ImageEditor produced, which
@@ -270,16 +270,12 @@ def _resolve_uploads(schema, raw: dict) -> dict:
              change in the rewrite — the React canvas uploads a background
              and one PNG per painted layer, and the union / dilate / blur /
              snap-to-16 all still happen in handlers.py, byte for byte
-      file   a path on disk, because generate_from_json reads it with
-             Path(...).read_text()
     """
     values = dict(raw)
     for field in schema.named():
         value = values.get(field.name)
         if field.kind == "image":
             values[field.name] = _pil(value) if value else None
-        elif field.kind == "file":
-            values[field.name] = str(_upload_path(value)) if value else None
         elif field.kind == "mask":
             values[field.name] = _mask_value(value)
     return values
@@ -1088,7 +1084,7 @@ def _job_title(schema, values) -> str:
     """A one-line name for a queued job — its prompt, where it has one.
 
     Truncated hard: the queue is a list to scan, not a place to read a
-    prompt back. A tab whose work has no prompt at all (the JSON batch)
+    prompt back. A tab whose work has no prompt at all
     gets a dash, which is honest — what identifies those jobs is their
     tab and their place in the line.
     """

@@ -24,7 +24,6 @@ anything.
 """
 
 import io
-import json
 import random
 import re
 import time
@@ -50,7 +49,6 @@ from config import (
     MINIMAX_FPS,
     OUTPUT_DIR,
     RESOLUTION_PRESETS,
-    SAMPLERS,
     V2_TURBO_LORA_STRENGTH,
     WAN_5B_DEFAULTS,
     WAN_5B_FPS,
@@ -179,52 +177,6 @@ def parse_resolution(value) -> tuple:
         if compact and compact.split("(")[0] in label.lower().replace(" ", ""):
             return wh
     return RESOLUTION_PRESETS[DEFAULT_RESOLUTION]
-
-
-def _normalize_jobs(raw) -> list:
-    """Normalize parsed JSON into the job dicts _run_jobs expects."""
-    if isinstance(raw, dict) and "prompts" in raw:
-        raw = raw["prompts"]
-    if isinstance(raw, dict):
-        raw = [raw]
-    if not isinstance(raw, list):
-        raise ValueError(
-            "JSON must be a job object, a list of jobs, or {'prompts': [...]}"
-        )
-    jobs = []
-    for item in raw:
-        if not isinstance(item, dict):
-            raise ValueError(f"Every job must be a JSON object, got: {item!r}")
-        loras = dict(item.get("loras", {}))
-        for slot in range(1, MAX_LORA_SLOTS + 1):  # legacy flat keys lora1/lora1_w
-            name = item.get(f"lora{slot}")
-            if name and str(name).lower() != "none":
-                loras[name] = item.get(f"lora{slot}_w", 0.8)
-        resolved = []
-        for name, weight in list(loras.items())[:MAX_LORA_SLOTS]:
-            lora_file = resolve_lora_name(name)
-            if lora_file:
-                resolved.append((lora_file, float(weight)))
-        width, height = parse_resolution(item.get("resolution"))
-        sampler = item.get("sampler", SAMPLERS[0])
-        # Optional "model" key (registry name, filename or a fragment of
-        # either); absent/unknown falls back to the default model, and the
-        # model's own step/CFG defaults apply unless the job sets them.
-        entry = resolve_model_entry(item.get("model"))
-        model_steps, model_cfg = model_defaults(entry)
-        jobs.append({
-            "prompt": item.get("prompt", ""),
-            "negative": item.get("negative", ""),
-            "seed": int(item.get("seed", random.randint(0, 2**32 - 1))),
-            "steps": int(item.get("steps", model_steps)),
-            "cfg": float(item.get("cfg", model_cfg)),
-            "width": width,
-            "height": height,
-            "sampler": sampler if sampler in SAMPLERS else SAMPLERS[0],
-            "loras": resolved,
-            "unet_file": entry["file"],
-        })
-    return jobs
 
 
 # Base weights each ComfyUI instance currently has loaded, keyed by its
@@ -1216,22 +1168,6 @@ def generate_minimax_t2v(prompt, aspect, seed, randomize, steps, resolution,
             jobs, builder=build_minimax_video_workflow, comfy_client=client):
         yield videos, latest, status, base_seed
 
-
-def generate_from_json(json_file, json_text):
-    """JSON tab: file upload takes precedence over pasted text."""
-    try:
-        if json_file:
-            raw = json.loads(Path(json_file).read_text())
-        elif json_text and json_text.strip():
-            raw = json.loads(json_text)
-        else:
-            yield [], "❌ Provide a JSON file or paste JSON text."
-            return
-        jobs = _normalize_jobs(raw)
-    except (ValueError, OSError) as exc:
-        yield [], f"❌ Invalid JSON: {exc}"
-        return
-    yield from _run_jobs(jobs)
 
 # Every finished prompt tells the index what it wrote, which both keeps the
 # listing correct without a rescan and is what queues the new files'

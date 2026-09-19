@@ -253,7 +253,6 @@ class Field:
     hint: str | None = None
     show_if: tuple | None = None     # (other field name, value it must hold)
     wide: bool = False
-    accept: str | None = None
     # Folds away entirely rather than showing its first few rows.
     #
     # For the negative prompt, which is the only thing wearing it. Two of
@@ -290,7 +289,7 @@ class Field:
         or an attack and neither is improved by guessing.
         """
         kind = self.kind
-        if kind in ("image", "mask", "file"):
+        if kind in ("image", "mask"):
             return value                     # resolved by api.py's uploads
         if kind == "bool":
             if isinstance(value, str):
@@ -337,7 +336,7 @@ class Field:
             can express it.
         """
         kind = self.kind
-        if kind in ("image", "mask", "file"):
+        if kind in ("image", "mask"):
             return False, None               # never stored — see _UNRECORDED
         if kind == "bool":
             return True, bool(value)
@@ -393,8 +392,6 @@ class Field:
             row["showIf"] = {"field": self.show_if[0], "equals": self.show_if[1]}
         if self.wide:
             row["wide"] = True
-        if self.accept:
-            row["accept"] = self.accept
         if self.collapsed:
             row["collapsed"] = True
         return row
@@ -743,9 +740,8 @@ class TabSchema:
         decision, and they fail differently: a route that is accidentally
         registered unconditionally still cannot get past this line. See
         api.py's four layers, and context.md 4.5 for why one layer is not
-        enough — `json_batch` and `community_prompts` have `needs=()`, so
-        the downloads.py backstop that covers every other tab does not
-        cover them.
+        enough — `community_prompts` has `needs=()`, so the downloads.py
+        backstop that covers every other tab does not cover it.
         """
         if not features.enabled(self.key):
             raise PermissionError(
@@ -1104,7 +1100,6 @@ EDIT_PRESET_NOTE = ("The {} tab's presets, minus the dials an edit does not "
 # onto the tuple, so jobqueue stops carrying a status_index int and the
 # panel reads result["status"] instead of result[1]. See jobqueue._freeze.
 IMAGE_KEYS = ("images", "status", "seed")
-PLAIN_KEYS = ("images", "status")
 VIDEO_KEYS = ("videos", "latest", "status", "seed")
 
 
@@ -1563,23 +1558,6 @@ SCHEMAS = (
             Field("sampler", "Sampler", "select", MINIMAX_DEFAULTS["sampler"],
                   choices=SAMPLERS + ["uni_pc"], group="sampling", wide=True),
             _batch_field(hi=10),
-        ),
-    ),
-
-    TabSchema(
-        key=Key.JSON_BATCH, handler=handlers.generate_from_json,
-        lane=handlers.COMFY_LANE, prompt_field=None,
-        result_keys=PLAIN_KEYS, tab_id="json",
-        icon="📦", blurb="Run a JSON array of jobs straight through the "
-                        "graph.",
-        category="library", route="/library/batch",
-        submit_label="Run batch",
-        groups=(Group("core", "Batch source"),),
-        fields=(
-            Field("json_file", "Upload JSON file", "file", None,
-                  group="core", wide=True, accept="application/json,.json"),
-            Field("json_text", "…or paste a JSON array here", "textarea", "",
-                  lines=14, group="core", wide=True),
         ),
     ),
 )

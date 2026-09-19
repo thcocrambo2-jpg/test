@@ -26,9 +26,8 @@ export const CATEGORY_LABEL: Record<TabCategory, string> = {
 
 export const CATEGORY_ORDER: TabCategory[] = ['generate', 'edit', 'video', 'library']
 
-/** Tabs with no schema-driven form — bespoke pages. Gallery, Prompt Library
- *  and JSON Batch are the only three of the eleven that are genuinely their
- *  own thing; JSON Batch keeps a schema because it still submits a handler. */
+/** Tabs with no schema-driven form — bespoke pages. Gallery and Prompt Library
+ *  are the only two of the eleven that are genuinely their own thing. */
 export interface BespokeNavItem {
   key: string
   label: string

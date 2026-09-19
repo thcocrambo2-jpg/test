@@ -372,33 +372,6 @@
       ]
     },
 
-    "json_batch": {
-      "headline": "Set up a hundred images and go to bed.",
-      "body": [
-        "Line up a whole list of prompts and settings, press start, and walk away. Each one runs in turn and lands in the gallery — and if one trips over itself, the rest carry on without you.",
-        "It's the tab that turns a long afternoon into an overnight job: regenerate an entire shoot after changing one word, or work through every variation of an idea while you're doing something else."
-      ],
-      "highlights": [
-        "Queue as many as you like",
-        "Runs unattended",
-        "One failure doesn't stop the rest",
-        "Perfect for overnight"
-      ],
-      "blocks": [
-        {
-          "type": "row",
-          "dir": "run",
-          "ratio": "4/3",
-          "caption": "One list, one night, a full set waiting in the morning.",
-          "items": [
-            { "file": "01.webp" },
-            { "file": "02.webp" },
-            { "file": "03.webp" }
-          ]
-        }
-      ]
-    },
-
     "community_prompts": {
       "headline": "A shelf of prompts that already work.",
       "body": [

@@ -17,13 +17,12 @@ did not.
 
 The partial backstop is downloads.py:706: weights for ungranted features
 are never fetched, so most ungranted tabs would fail at "that model is
-not downloaded yet". Two would not. `json_batch` and `community_prompts`
-declare `needs=()` (features.py:155,160) because neither has weights of
-its own — JSON Batch runs whatever graph is pasted into it, and the
-Prompt Library reads a collection on the licence server. Both would be
-**fully functional** for a licence that does not include them, and both
-are named explicitly below so that a future refactor cannot quietly drop
-them from the check by making the loop cleverer.
+not downloaded yet". One would not. `community_prompts` declares
+`needs=()` (features.py:160) because it has no weights of its own — the
+Prompt Library reads a collection on the licence server. It would be
+**fully functional** for a licence that does not include it, and it is
+named explicitly below so that a future refactor cannot quietly drop
+it from the check by making the loop cleverer.
 
 How it works
 ------------
@@ -52,17 +51,15 @@ os.environ.setdefault("KREA2_BASE_DIR", str(ROOT / ".dryrun"))
 
 from config import log  # noqa: E402
 
-# Named in the source, not derived. See the module docstring: these are
-# the two features with no weights behind them, so they are the two the
-# downloads.py backstop does not cover, so they are the two that must
+# Named in the source, not derived. See the module docstring: this is
+# the feature with no weights behind it, so it is the one the
+# downloads.py backstop does not cover, so it is the one that must
 # never be reachable by accident.
-# The endpoint each one is reachable through, because they are not the
-# same shape: JSON Batch is a form tab with the usual per-tab routes,
-# while the Prompt Library is bespoke and its whole surface is /prompts.
+# The endpoint it is reachable through: the Prompt Library is bespoke
+# and its whole surface is /prompts.
 # Written out rather than derived, so that making the loop cleverer can
-# never quietly stop covering them.
+# never quietly stop covering it.
 NO_WEIGHTS_BACKSTOP = {
-    "json_batch": "/api/v1/tabs/json_batch/generate",
     "community_prompts": "/api/v1/prompts",
 }
 
@@ -207,7 +204,7 @@ def main() -> None:
                 "it must be 403" % (sorted(methods), path, status)
             )
 
-    # The two with no weights behind them, called by name.
+    # The one with no weights behind it, called by name.
     for key, path in NO_WEIGHTS_BACKSTOP.items():
         methods = next((m for p, m in _routes(empty) if p == path), {"GET"})
         status = _probe(client, path, methods)
