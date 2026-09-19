@@ -366,7 +366,5 @@
     "edicamargo/qwen_3_8b_fp8mixed_abliterated": "hf",
     "https://github.com/comfyanonymous/ComfyUI.git": "git"
   },
-  "scan_ignore_ids": [
-    1234567
-  ]
+  "scan_ignore_ids": []
 }
