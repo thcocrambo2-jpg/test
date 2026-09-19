@@ -17,10 +17,18 @@ introduced. What was created is appended to <KREA2_BASE_DIR>/mock-manifest.txt
 so the placeholders can be told apart from real downloads later.
 
 It uses the real fetch functions rather than a copy of their path logic,
-so a new model in config.py is covered the day it is added: the only
-things replaced are the mirror lookup, huggingface_hub's two download
-calls, `requests.get` (CivitAI), and the abliterated-encoder merge, which
-cannot run on empty shards.
+so a new model or LoRA is covered the day it is added: the only things
+replaced are the mirror lookup, huggingface_hub's two download calls,
+`requests.get` (CivitAI), and the abliterated-encoder merge, which cannot
+run on empty shards.
+
+The Krea models and LoRAs are not in config.py: they are the catalogue
+(catalog.py), and the `catalog` asset group fetches whatever its
+features list. Unless KREA2_CATALOG_FILE is already set, this points it
+at the seed document, license-validator/data/assets.json — the same ids
+and files the licence server is seeded with — so it never has to ask a
+server which files to fake. Point it at a saved POST /v1/catalog answer
+to mock exactly what one licence would download.
 
 --check installs stubs that *fail* instead, runs the same groups, and lists
 every file a real run would have gone to the network for. Exit status 1 if
@@ -39,6 +47,9 @@ sys.path.insert(0, str(ROOT))
 if not os.environ.get("KREA2_BASE_DIR"):
     sys.exit("Set KREA2_BASE_DIR to the base directory to mock into "
              "(e.g. KREA2_BASE_DIR=tmp2).")
+# Which models and LoRAs the `catalog` group fetches. See the docstring.
+os.environ.setdefault("KREA2_CATALOG_FILE",
+                      str(ROOT / "license-validator" / "data" / "assets.json"))
 
 import downloads  # noqa: E402
 from config import (  # noqa: E402

@@ -26,17 +26,21 @@ says which source it used.
 The first form is the one worth using: it calls the real license server
 with KREA2_LICENSE_KEY, so it verifies the whole entitlement path —
 key → features array → which tabs get built — against the record you
-actually edited. It takes a seat for as long as it runs, and gives it
-back on Ctrl-C. --features skips the server entirely and is for working
-on the UI itself, offline or on a key you would rather not spend a seat
-on.
+actually edited, and it reads the model and LoRA catalogue from the same
+server (POST /v1/catalog), so the Krea dropdowns show what the DB holds.
+It takes a seat for as long as it runs, and gives it back on Ctrl-C.
+--features skips the server entirely and is for working on the UI itself,
+offline or on a key you would rather not spend a seat on; the catalogue
+then comes from license-validator/data/assets.json (the seed document)
+unless KREA2_CATALOG_FILE names another file.
 
 What is deliberately NOT run: bootstrap (the ComfyUI clone and the pip
 install), downloads.download_everything(), and the ComfyUI server. So
 every tab renders and every control works, but pressing Generate reports
-that ComfyUI is not running — the model dropdowns are read from the
-registry in config.py, not from disk, which is what makes a weightless
-run possible at all.
+that ComfyUI is not running — the model and LoRA dropdowns are read from
+the catalogue (catalog.py), not from disk, which is what makes a
+weightless run possible at all. Every model and LoRA is simply reported
+as not downloaded.
 """
 
 import argparse
@@ -47,14 +51,16 @@ from pathlib import Path
 
 # The app's modules live one level up; this script is deliberately outside
 # the package so build.sh / Nuitka never sweep it into the shipped binary.
-sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
+ROOT = Path(__file__).resolve().parent.parent
+sys.path.insert(0, str(ROOT))
 
 # Somewhere local to put the (empty) models/output/temp tree, before
 # config is imported — it creates those directories at import time and the
 # shipped default is a pod path, /workspace/krea2.
-os.environ.setdefault(
-    "KREA2_BASE_DIR", str(Path(__file__).resolve().parent.parent / ".dryrun"),
-)
+os.environ.setdefault("KREA2_BASE_DIR", str(ROOT / ".dryrun"))
+
+# The seed catalogue, for the offline form (--features). See main().
+SEED_CATALOG = ROOT / "license-validator" / "data" / "assets.json"
 
 from config import log  # noqa: E402
 
@@ -120,6 +126,7 @@ def main() -> None:
     )
     args = parser.parse_args()
 
+    import catalog
     import features
 
     if args.features:
@@ -130,10 +137,18 @@ def main() -> None:
         log.warning("Skipping the license check — forcing features: %s",
                     ", ".join(keys))
         features.resolve(keys)
+        # No server to ask, so the seed document stands in for the DB —
+        # unless a KREA2_CATALOG_FILE already says which file to read.
+        os.environ.setdefault(catalog.FILE_ENV, str(SEED_CATALOG))
+        catalog.load()
     else:
         import licensing
         licensing.acquire_or_exit()
         features.resolve(licensing.entitlements())
+        # The same order app.py keeps: after the licence check (the
+        # catalogue request is licence-checked too), before anything
+        # builds a form out of it.
+        catalog.load(licensing.instance_id())
 
     log.info("Features — %s", features.summary())
 

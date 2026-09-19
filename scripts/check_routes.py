@@ -44,6 +44,13 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(ROOT))
 os.environ.setdefault("KREA2_BASE_DIR", str(ROOT / ".dryrun"))
+# The model and LoRA catalogue the Krea tabs read (catalog.py): the seed
+# document, so this never asks a licence server for it. Without a
+# catalogue the Krea tabs would still be gated, but /catalog's per-feature
+# model lists — which the checks below read — would be empty and prove
+# nothing.
+os.environ.setdefault("KREA2_CATALOG_FILE",
+                      str(ROOT / "license-validator" / "data" / "assets.json"))
 # No token is set here: the auth gate is open by default, and it is the
 # feature gate that is under test. A request that 401s before it reaches
 # the feature check would make every assertion below pass for the wrong
@@ -223,6 +230,11 @@ def main() -> None:
             "nothing: %s" % (len(body["tabs"]),
                              [t["key"] for t in body["tabs"]])
         )
+    # The model lists are keyed by feature key, so an ungranted feature's
+    # list is as much a description of that tab as its schema is.
+    if body.get("models"):
+        failures.append("/catalog listed models for %s under a licence that "
+                        "grants nothing" % sorted(body["models"]))
     if client.get("/api/v1/schemas").json():
         failures.append("/schemas listed tabs for an empty licence")
     session = client.get("/api/v1/session").json()
@@ -244,10 +256,14 @@ def main() -> None:
         failures.append(
             "a licence granting only krea_t2i could read krea_v2_t2i's "
             "schema (%d)" % closed)
-    tabs = [t["key"] for t in client.get("/api/v1/catalog").json()["tabs"]]
+    body = client.get("/api/v1/catalog").json()
+    tabs = [t["key"] for t in body["tabs"]]
     if tabs != ["krea_t2i"]:
         failures.append("/catalog described %s for a krea_t2i-only licence"
                         % tabs)
+    if sorted(body.get("models") or {}) != ["krea_t2i"]:
+        failures.append("/catalog listed models for %s under a krea_t2i-only "
+                        "licence" % sorted(body.get("models") or {}))
 
     if failures:
         print("%d licence-gate failure(s):" % len(failures))

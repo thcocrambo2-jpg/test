@@ -130,7 +130,7 @@ Read by `app.py`, `scripts/dryrun.py`, and the shipped binary.
 | `KREA2_WAN_PARALLEL` | no | Run the Wan instance alongside the main one. |
 | `KREA2_SKIP_LAUNCH` | no | Bootstrap without starting ComfyUI. |
 | `KREA2_UI_REQUIRE_TOKEN` | no | Demand the access key from the URL fragment. The UI is open to anyone with the link without it. |
-| `KREA2_MODELS` / `KREA2_VARIANT` | no | Model registry overrides. |
+| `KREA2_CATALOG_FILE` | no | Read the model/LoRA catalogue from this JSON file instead of the licence server (dry runs and tests; `license-validator/data/assets.json` is one). |
 | `KREA2_NO_MIRROR` | no | Never pull from the HF mirror. |
 | `KREA2_MIRROR_USER` | no | Which HF account the mirror lives under. |
 | `HF_TOKEN` | no | Hugging Face **read** token, for gated repos. |
