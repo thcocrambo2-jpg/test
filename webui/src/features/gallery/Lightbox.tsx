@@ -13,6 +13,7 @@ import {
   DownloadIcon,
   FlipHIcon,
   FlipVIcon,
+  ResetIcon,
   RotateIcon,
   ToolsIcon,
   TrashIcon,
@@ -435,19 +436,21 @@ export function Lightbox({
             >
               <FlipVIcon />
             </button>
-            {view.changed && (
-              <>
-                <span className={s.viewSep} aria-hidden="true" />
-                <button
-                  type="button"
-                  className={cx(s.viewTool, s.viewReset)}
-                  onClick={view.reset}
-                  title="Back to how it was (0)"
-                >
-                  Reset
-                </button>
-              </>
-            )}
+            {/* Always there, and only enabled once there is something to
+                undo. Appearing on the first change slid every button left of
+                it along by its width, from under the finger that had just
+                pressed one. */}
+            <span className={s.viewSep} aria-hidden="true" />
+            <button
+              type="button"
+              className={cx(s.viewTool, s.viewReset)}
+              onClick={view.reset}
+              disabled={!view.changed}
+              aria-label="Reset view"
+              title="Reset view (0)"
+            >
+              <ResetIcon />
+            </button>
           </div>
         )}
       </div>

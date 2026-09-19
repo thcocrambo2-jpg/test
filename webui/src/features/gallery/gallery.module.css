@@ -470,12 +470,7 @@
   color: var(--c-on-media-soft);
 }
 
-.viewReset {
-  width: auto;
-  padding: 0 var(--s-3);
-  font-size: var(--t-xs);
-  font-weight: 600;
-  line-height: 1;
+.viewReset:not(:disabled) {
   color: var(--c-accent);
 }
 
@@ -718,24 +713,22 @@
     padding: var(--s-2) var(--s-3);
   }
 
-  /* A thumb, not a cursor. Seven of these and the separators come to about
-     300px, which still clears a 360px screen. */
+  /* Sized for a thumb and for the narrowest phone at once: seven 36px
+     buttons, the readout and two separators come to about 300px, which
+     clears a 320px screen. At 40px the pill ran past the right edge. */
   .viewTools {
     bottom: var(--s-2);
   }
 
   .viewTool {
-    width: 40px;
-    height: 40px;
+    width: 36px;
+    height: 36px;
   }
 
   .viewZoom {
     width: auto;
-    min-width: 52px;
-  }
-
-  .viewReset {
-    width: auto;
+    min-width: 44px;
+    padding: 0 var(--s-1);
   }
 }
 
