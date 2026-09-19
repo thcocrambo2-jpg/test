@@ -38,8 +38,8 @@
 // honest fix is to reissue the affected licenses.
 //
 // `name` vs `tab_label`: the pricing page wants prose that says what a tab
-// is ("Krea Inpaint — Img2Img"), the tab strip wants something short enough
-// to sit in a row of ten ("Inpaint / Img2Img"). They were separate strings
+// is ("MiniMax Text to Video"), the tab strip wants something short enough
+// to sit in a row of ten ("MiniMax T2V"). They were separate strings
 // in separate repos before this collection existed; keeping both fields
 // means unifying the source without flattening the two registers into one
 // awkward compromise. tab_label is optional — the client falls back to
@@ -120,7 +120,7 @@ export const FEATURES = [
       "Describe a change to any image, run through the higher-quality " +
       "Krea2 V2 pipeline",
     category: "editing",
-    // 45, between krea_edit (40) and krea_inpaint (50), so the two
+    // 45, right after krea_edit (40), so the two
     // instruction-edit tabs read together in a plan's feature list.
     sort_order: 67,
     enabled: true,
@@ -133,15 +133,6 @@ export const FEATURES = [
   // plan edit plus this flag, not a rebuild — and one licence can have any
   // of them today with `--features-extra`. See plans.js for the whole
   // change.
-  {
-    key: "krea_inpaint",
-    name: "Krea2 Inpaint",
-    tab_label: "🖌️ Krea2 Inpaint",
-    description: "Edit only specific parts of an image",
-    category: "editing",
-    sort_order: 50,
-    enabled: false,
-  },
   {
     key: "flux_t2i",
     name: "Flux2D",

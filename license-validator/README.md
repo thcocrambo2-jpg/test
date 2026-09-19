@@ -147,7 +147,6 @@ keep a plain name.
 | `flux_t2i` | Flux 2 — Text to Image | generation |
 | `krea_edit` | Krea Edit — Instruction | editing |
 | `krea_v2_edit` | Krea2 V2 Edit | editing |
-| `krea_inpaint` | Krea Inpaint — Img2Img | editing |
 | `klein_i2i` | Klein Edit — Image to Image | editing |
 | `wan_i2v` | Wan 2.2 Video | video |
 | `minimax_i2v` | MiniMax H3 Video (image-to-video, with sound) | video |
