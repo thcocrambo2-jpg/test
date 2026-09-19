@@ -401,7 +401,10 @@
         "kind": "civitai",
         "version": 3268303
       },
-      "mirror": null,
+      "mirror": {
+        "repo": "thcocrambo2/krea2-loras",
+        "path": "loras/HMNSFW-AIO-V2.5.safetensors"
+      },
       "default_strength": 1.0,
       "trigger": "",
       "enabled": true,
@@ -415,7 +418,10 @@
         "kind": "civitai",
         "version": 3252213
       },
-      "mirror": null,
+      "mirror": {
+        "repo": "thcocrambo2/krea2-loras",
+        "path": "loras/VGNA.safetensors"
+      },
       "default_strength": 1.0,
       "trigger": "pussy",
       "enabled": true,
@@ -429,7 +435,10 @@
         "kind": "civitai",
         "version": 3329529
       },
-      "mirror": null,
+      "mirror": {
+        "repo": "thcocrambo2/krea2-loras",
+        "path": "loras/HMCSHOT_V1.0.safetensors"
+      },
       "default_strength": 1.0,
       "trigger": "",
       "enabled": true,
@@ -443,7 +452,10 @@
         "kind": "civitai",
         "version": 3268969
       },
-      "mirror": null,
+      "mirror": {
+        "repo": "thcocrambo2/krea2-loras",
+        "path": "loras/HMBRST.safetensors"
+      },
       "default_strength": 1.0,
       "trigger": "tits",
       "enabled": true,
@@ -457,7 +469,10 @@
         "kind": "civitai",
         "version": 3308736
       },
-      "mirror": null,
+      "mirror": {
+        "repo": "thcocrambo2/krea2-loras",
+        "path": "loras/HMMisDog.safetensors"
+      },
       "default_strength": 1.0,
       "trigger": "",
       "enabled": true,
