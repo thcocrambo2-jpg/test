@@ -120,9 +120,10 @@ export const SEED_PROMPTS = [
       },
       sharpen: false,
       film_grain: false,
-      // Matched to the tab's rows by id, so order does not matter and a
-      // LoRA left out simply stays off; the off rows are listed only to
-      // keep their weights with the recipe.
+      // Positional, like every stack: row i fills the tab's slot i with
+      // that LoRA, on or off, at that weight, and the tab's slots past
+      // the last row come back empty. The off rows keep their weights
+      // with the recipe.
       loras: [
         [false, "krea2-turbo", 0.6],
         [true, "filter-bypass-3", 0.93],

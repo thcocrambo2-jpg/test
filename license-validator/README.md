@@ -326,7 +326,7 @@ them is **an id**, never a file name or a label:
   seed: 42, randomize: true, batch_count: 1,
   loras: [[true, "hmbody-d-e10", 0.8], [false, null, 0.8], ...] }
 
-// krea_v2_t2i — one row per LoRA it sets, matched to the tab's rows by id
+// krea_v2_t2i — positional too: row i fills the tab's slot i
 { model: "krea2-turbo-mxfp8", aspect: "...", megapixels: 1.5, multiple: 8, ...,
   sampler: { ... }, variance: { ... }, sharpen: false, film_grain: false,
   loras: [[false, "krea2-turbo", 0.6], [true, "filter-bypass-3", 0.93], ...] }
