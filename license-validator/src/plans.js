@@ -393,9 +393,6 @@ export async function resolveEntitlement(license) {
 // `--features-extra` on the one licence you want them on, which is a
 // smaller thing to undo than a tier that quietly grants everything.
 //
-// `json_batch` is granted by no plan at present. The feature exists in the
-// registry and in the binary; nothing sells it.
-//
 // Prices were not changed by the restructure — the three surviving tiers
 // kept the figure they already had.
 //
