@@ -20,9 +20,8 @@ list embedded in code drifts from config.py without anyone noticing.
 Step 1 leaves ~200 GB on disk. The manifest mirrors only the ~18 GB that
 is actually at risk of disappearing — the CivitAI LoRAs, the community HF
 repos and the GitHub node packs. The Comfy-Org repos stay upstream: they
-are org-backed, built to serve that traffic, and in Flux 2's case carry a
-licence better left un-redistributed. What they need instead is a pinned
-revision, which this script records in scripts/PINS.json.
+are org-backed and built to serve that traffic. What they need instead is
+a pinned revision, which this script records in scripts/PINS.json.
 
 Everything is idempotent and resumable. The mirror repo, not the local
 disk, is what decides the work:

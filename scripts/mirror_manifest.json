@@ -317,7 +317,6 @@
   "pin_upstream": {
     "Comfy-Org/Krea-2": "hf",
     "Comfy-Org/Wan_2.2_ComfyUI_Repackaged": "hf",
-    "Comfy-Org/flux2-dev": "hf",
     "conradlocke/krea2-identity-edit": "hf",
     "wangkanai/wan21-vae": "hf",
     "huihui-ai/Huihui-Qwen3-VL-4B-Instruct-abliterated": "hf",

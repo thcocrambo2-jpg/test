@@ -11,10 +11,6 @@
     "kind": "hf",
     "sha": "fb1388adc906ab39ffc26ee40e96b22886b56bc4"
   },
-  "Comfy-Org/flux2-dev": {
-    "kind": "hf",
-    "sha": "03d6521e6f6a47396b3f951cbea50f7e6c2f482e"
-  },
   "ComfyUI": {
     "sha": "12d5279438bfefc058a269eae805ceab6047777f",
     "url": "https://github.com/comfyanonymous/ComfyUI.git"
