@@ -296,7 +296,7 @@ first generation.
 | --- | --- |
 | `OSError: [WinError 127] The specified procedure could not be found` | `torchvision`/`torchaudio` compiled against a different torch. `ensure_torch()` repairs this automatically; it only surfaces if something installed a mismatch afterwards. |
 | `no kernel image is available for execution on the device` | torch has no kernels for this GPU. The startup check catches it and prints the install command. |
-| `IndexError: list index out of range` in `resolve_model` | A model registry in `config.py` was emptied. Trimming one to a single entry is fine; emptying it is not — several are indexed at `[0]` during import. |
+| A Krea tab says the catalogue lists no model for it | The pod could not read the model/LoRA catalogue: the licence server did not answer POST /v1/catalog and there is no `.catalog.json` from an earlier start, or the tab's feature has no enabled model in the DB. The log line `Catalogue — N model(s) … from …` says which source was used. Fix the DB (`npm run assets`) or the network and restart. |
 | `WinError 193` from `cloudflared` | A Linux `cloudflared` was cached where the Windows one belongs — delete `cloudflared.exe` under `KREA2_BASE_DIR` and restart. This is what the pre-React fallback did on Windows; `serve.RELEASES` now picks the asset by `sys.platform`, and the start script verifies a sha256 before putting one there. |
 | `note: could not fetch the tunnel helper` at startup | The Hugging Face mirror was unreachable. Harmless — the app downloads cloudflared from the GitHub release instead, which is what it did before the mirror existed. |
 | No public URL, tunnel times out | cloudflared could not reach the Cloudflare edge. The app says so and keeps serving the local port; on a pod that is still reachable through RunPod's proxy. `--no-tunnel` skips the attempt. |
@@ -395,10 +395,11 @@ downloading more models locally, run it again and only the new files copy.
 The one thing it will not do is replace a file that is already in the
 volume — to refresh a corrupt one, delete it there first.
 
-Seeding is optional for anything in `config.py`'s registries; the app
-downloads what is missing on its own, and copying only saves the
-bandwidth. It is the *only* route for files you added by hand, such as a
-LoRA that no registry lists.
+Seeding is optional for anything the catalogue lists (see
+[Models and LoRAs](#models-and-loras-the-catalogue)); the app downloads
+what is missing on its own, and copying only saves the bandwidth. A file
+the catalogue does not list is never offered in a dropdown, so copying one
+in by hand does nothing on its own — add a record for it to the DB.
 
 Copy `models/` only. The image has its own ComfyUI at the pinned SHA, and
 the entrypoint leaves a real `$KREA2_BASE_DIR/ComfyUI` directory alone —
@@ -767,8 +768,10 @@ their prompts are saved cannot be told they have been throttled.
 A prompt written on one pod is loaded on another that may have different
 models and LoRA files. Every value is checked against what *this* build
 offers before it is applied: an unknown model, resolution or sampler
-leaves its control alone, a missing LoRA file resets that slot to `None`,
-and numbers are clamped into their slider's range. A card always loads —
+leaves its control alone, a LoRA id this tab does not offer resets that
+slot to `None` (and switches it off), and numbers are clamped into their
+slider's range. Models and LoRAs are stored by catalogue id, never by
+file name. A card always loads —
 worst case it loads slightly less of itself.
 
 A card for a tab this licence does not grant still renders, with its
@@ -806,7 +809,7 @@ an Edit tab simply reads it and writes the part it has controls for:
 
 Everything else transfers as stored: model, steps, CFG, sampler, seed,
 randomize, batch count and the LoRA stack on Krea2 Edit; the whole
-ClownsharKSampler and Smart Seed Variance blocks and the eleven-row stack
+ClownsharKSampler and Smart Seed Variance blocks and the LoRA rows
 on V2 Edit. The controls that belong to editing alone — grounding,
 reference fidelity, the second-reference switch, the fit mode — are left
 exactly where you set them, because no preset carries them.
@@ -895,8 +898,10 @@ Two flags decide what customers see:
   it on every other preset for that tab, so there is only ever one answer to
   "what does this tab open on".
 
-`npm run seed-presets` writes the values compiled into `config.py` as a
-preset called `Default` on each tab and marks it `is_default`. Nothing about
+`npm run seed-presets` writes each tab's usual settings as a preset
+called `Default` on each tab and marks it `is_default`. On the V2 tabs
+that preset is also what switches the usual LoRA rows on — every row
+starts off, one per LoRA in the tab's catalogue list. Nothing about
 what anyone gets changes on the day you run it — it makes what everyone
 already gets nameable, and therefore editable from Atlas without a rebuild.
 Those compiled values stay the floor: they are what the controls are built
@@ -917,8 +922,9 @@ timeout on every page load.
 ### Cross-pod safety
 
 Identical to the prompt library's, and the same code: an unknown model,
-resolution or sampler leaves its control alone, a missing LoRA file resets
-that slot to `None`, numbers are clamped into their slider's range, and a
+resolution or sampler leaves its control alone, a LoRA id the tab does not
+offer resets that slot to `None`, numbers are clamped into their slider's
+range, and a
 preset name that has since been disabled or renamed applies nothing rather
 than blanking the tab.
 
@@ -927,7 +933,7 @@ applying a preset that names a *different* model fires the Model dropdown's
 own change handler, so Steps and CFG land on that model's variant defaults
 rather than the preset's. Everything else applies as stored, and a preset
 for the model already selected — the ordinary case, and the only one when a
-registry holds a single model — is unaffected.
+tab's catalogue list holds a single model — is unaffected.
 
 ## The job queue
 
@@ -1267,7 +1273,8 @@ error in the log points at a custom node instead.
 - `licensing.py` — license seat acquire / heartbeat / release (stdlib only)
 - `plans.py` — the public plan catalogue behind the `/pricing` page, read from the license server (stdlib only, read-only)
 - `license-validator/` — the Node/Express + MongoDB license server
-- `config.py` — paths, Krea 2 model registry, LoRA lists, Wan 2.2 settings, tokens, presets
+- `config.py` — paths, the fixed pipeline assets (VAEs, encoders, Identity Edit LoRA), Wan 2.2 / MiniMax settings, tokens
+- `catalog.py` — the Krea models and LoRAs, read from the licence server (POST /v1/catalog) by id
 - `bootstrap.py` — clone ComfyUI + install requirements
 - `downloads.py` — HF / CivitAI model + LoRA downloads (resume + retries)
 - `comfy.py` — GPU detection + ComfyUI server start/wait (1–2 instances)
@@ -1927,17 +1934,17 @@ before any of its own error handling can say why.
 
 The **🔶 Krea 2 V2** tab is the Krea2 advanced *KREA 2 TURBO/RAW* workflow ported
 node-for-node into this app. It is a second text-to-image pipeline rather than
-a variation of the first: its own model registry, its own VAE
-(`wan21-vae.safetensors` from `wangkanai/wan21-vae`, which that workflow's
-guide recommends over the stock Qwen VAE), its own 11-slot LoRA stack and its
-own defaults. Nothing it does moves the Single tab, and vice versa. Feature
-key `v2` — a license that does not grant it skips the ~17 GB of downloads
-and hides the tab.
+a variation of the first: its own model and LoRA lists (the `krea_v2_t2i`
+feature in the catalogue), its own VAE (`wan21-vae.safetensors` from
+`wangkanai/wan21-vae`, which that workflow's guide recommends over the stock
+Qwen VAE), its own LoRA rows and its own sampler. Nothing it does moves the
+Krea2 tab, and vice versa. Feature key `krea_v2_t2i` — a license that does not
+grant it skips the downloads and hides the tab.
 
 ### Turbo / Raw
 
-`V2_MODELS` works exactly like `KREA2_MODELS` — a **Model**
-dropdown, and picking one resets that variant's defaults:
+The **Model** dropdown offers the feature's models from the catalogue, and
+picking one resets the defaults its record carries (seed data shown):
 
 | | Turbo (default) | Raw |
 | --- | --- | --- |
@@ -1948,12 +1955,13 @@ dropdown, and picking one resets that variant's defaults:
 | sampler | `linear/euler` + `bong_tangent`, eta 0.5, bongmath on, standard | same |
 
 That is precisely the raw recipe from the source workflow's companion note, so
-the two variants differ by exactly the three things it lists. **Raw costs no
-extra disk** — `krea2_raw_fp8_scaled` is already in `KREA2_MODELS`, and
-downloads are keyed on the destination path, so whichever registry asks for it
-first fetches it and the other logs a cache hit.
+the two variants differ by exactly the three things it lists. The raw record
+says so itself: its `turbo_lora` is `{lora: "krea2-turbo", strength: 0.6}`.
+The turbo model is the same record the Krea2 and Krea2 Edit tabs use, and
+every file downloads once however many features list it.
 
-The Turbo LoRA is toggled as **slot 1 of the visible LoRA stack**, not bolted
+The Turbo LoRA is toggled as **the row whose id the raw model's `turbo_lora`
+names** in the visible LoRA stack (found by id, not position), not bolted
 on inside the workflow builder. That is deliberate: it keeps the row editable
 and, more importantly, makes it impossible to apply the LoRA twice when a raw
 run also has that slot ticked by hand — the same "never applied silently" rule
@@ -1962,7 +1970,7 @@ dropdown fires; whatever is on screen is what gets submitted.
 
 Because steps and CFG belong to the model, they are **not** in
 `V2_SAMPLER_DEFAULTS` — that dict holds only the knobs both variants share, so
-the two numbers have one source of truth (`V2_VARIANT_DEFAULTS`).
+the two numbers have one source of truth: the model record in the catalogue.
 
 Three things differ from the tabs above, and they are why this needs its own
 builder (`workflow_krea2_v2.py`) rather than a flag on `build_workflow`:
@@ -2020,20 +2028,24 @@ installs follow.
 
 ### LoRA stack
 
-All eleven rows from the source workflow are present in its order, with its
-strengths and its on/off states — seven on by default. They download from
-CivitAI (`CIVITAI_TOKEN` needed for most) into the shared `loras/` folder.
-A row whose file did not download starts disabled and is named in the status
-line under the tab header, so a missing LoRA never submits an unresolvable
-`lora_name`.
+One row per LoRA in the feature's catalogue list, in that order, each **off**
+and at its record's `default_strength`. The tab's `Default` preset — applied
+on load — is what switches the usual ones on (the source workflow's seven).
+They download into the shared `loras/` folder from the record's mirror, the
+bundled mirror or its CivitAI / Hugging Face source (`CIVITAI_TOKEN` needed
+for most CivitAI files).
+
+A LoRA whose file has not downloaded stays in the list, labelled
+"(not downloaded)"; a run that ticks it skips it, says so in the status line
+and the log, and never submits an unresolvable `lora_name`.
 
 Two filenames are worth knowing about: the companion guide links CivitAI
 version `3109006` for the realism-engine family while the workflow names the
 file `realism_engine_krea2_v3.1.safetensors`, and `krea2_Enhancer.safetensors`
 is saved with the workflow's capitalisation rather than the guide's. Both are
-in `V2_LORA_STACK` in `config.py` — the graph only cares that the name on disk
-matches the name in the slot, so adjust the version id there if CivitAI serves
-a revision you did not expect.
+the records' `file` in the DB — the graph only cares that the name on disk
+matches the record, so adjust the record's source version if CivitAI serves a
+revision you did not expect.
 
 ## Instruction editing (Edit tab)
 
@@ -2073,10 +2085,11 @@ stands to Single. Feature key `krea_v2_edit`; builder
 `workflow_krea2_v2_edit.py`.
 
 Everything V2 about it is **imported from `workflow_krea2_v2.py` rather than
-restated**, so the two tabs cannot drift: the same `V2_MODELS` registry and
-turbo/raw defaults, the same Wan 2.1 VAE, the same 11-slot model+CLIP LoRA
-stack (with the Turbo LoRA still on slot 1, still toggled by the Model
-dropdown), the same `ClownsharKSampler_Beta` settings and the same
+restated**, so the two tabs cannot drift: the same catalogue helpers (read
+with its own feature key, `krea_v2_edit`, so its lists are its own), the same
+model-record defaults, the same Wan 2.1 VAE, the same model+CLIP LoRA rows
+(with the Turbo LoRA row still toggled by the Model dropdown), the same
+`ClownsharKSampler_Beta` settings and the same
 `RBG_Smart_Seed_Variance` node. The edit half — `Krea2EditModelPatch`,
 `Krea2EditGroundedEncode`, the Identity Edit LoRA, **Grounding** and
 **Reference fidelity** — behaves as described for the Edit tab above.
@@ -2115,26 +2128,58 @@ This tab needs **both** sets of node packs: the three V2 ones above plus
 `bootstrap.install_v2_nodes` each run when *either* of the features that
 wants them is on, and `app.py` verifies all four classes registered.
 
-## Krea 2 model switching
+## Models and LoRAs (the catalogue)
 
-The generate / edit tabs each have a **Model** dropdown fed by
-the `KREA2_MODELS` registry in `config.py` — the same add-an-entry-and-
-restart workflow as the LoRA lists. Each entry names its file, a
-`variant` flag (`turbo` or `raw`) that supplies the step/CFG defaults
-(overridable per model), a download source (`hf_path` in the official
-repo **or** `civitai_version` — the number after the `@` in a CivitAI AIR
-urn), and optional `trigger` words. Picking a model resets the Steps/CFG
-sliders to its defaults and, if it has trigger words, inserts them into
-the prompt box — visible and editable, never appended silently; delete
-them if you don't want them. A model whose download failed shows a warning
-under the dropdown and refuses to run, without affecting the others.
+The Krea diffusion models and style LoRAs are **not in `config.py`**. They
+live in the licence-server database, in three collections:
 
-The generate / edit tabs each stack **`MAX_LORA_SLOTS`
-LoRA slots** (`tabschema.py`, currently 8). That one constant drives the rows,
+- `models` — one record per selectable model, keyed by a readable id
+  (`krea2-turbo-mxfp8`): its name, file, download source (a CivitAI version
+  or a Hugging Face repo path), optional mirror, `variant`, `steps`, `cfg`,
+  an optional `turbo_lora` (the LoRA id and strength its recipe switches
+  on) and optional `trigger` words;
+- `loras` — one record per LoRA (`realism-engine-v3-1`): name, file, source,
+  mirror, `default_strength`, `trigger`, and a `sort_order`;
+- `feature_assets` — per Krea feature (`krea_t2i`, `krea_edit`,
+  `krea_v2_t2i`, `krea_v2_edit`), the ordered model ids and LoRA ids that
+  tab offers. The first model is the tab's default. An id may appear in any
+  number of features.
+
+The pod reads all three once at startup, right after the licence check
+(POST /v1/catalog, `catalog.py`), keeps the answer in `.catalog.json` for a
+start where the server does not answer, and downloads every model and LoRA
+the enabled features list, each file once. So:
+
+- **Adding or removing a model or LoRA is a DB edit and a pod restart.**
+  `npm run assets` (in `license-validator/`) is the admin CLI for the three
+  collections; `npm run seed-assets` loads `license-validator/data/assets.json`
+  — the seed data, and also the shape of the catalogue answer — into them.
+- **Ids are the contract.** Presets, prompts and every form value store the
+  id, never the file name; the only place an id becomes a file is when a
+  graph is built. Never rename or reuse an id.
+- **A tab offers exactly its feature's list.** A file in `models/loras/`
+  that the catalogue does not list is never offered; a listed LoRA or model
+  whose file has not downloaded stays in the list and is reported as not
+  downloaded, and a run that picks it refuses (model) or skips it (LoRA)
+  with a warning.
+- `KREA2_CATALOG_FILE=<json>` makes the pod read a file in the same shape
+  instead of asking the server — what `scripts/dryrun.py --features …`,
+  `scripts/golden.py` and the other checks do with the seed document.
+
+Picking a model resets the Steps/CFG sliders to its record's defaults and,
+if it has trigger words, inserts them into the prompt box — visible and
+editable, never appended silently; delete them if you don't want them. A
+model whose download failed shows a warning under the dropdown and refuses
+to run, without affecting the others.
+
+The Krea2 / Krea2 Edit tabs each stack **`MAX_LORA_SLOTS`
+LoRA slots** (`handlers.py`, currently 8), all starting empty; each slot's
+dropdown offers the feature's LoRAs. That one constant drives the rows,
 the handlers and the `LoraLoaderModelOnly` chain, so changing it is the
 whole change — the handlers take their slots as a variadic tail and the
 workflow builder already loops over the resolved list. Slots left at
-"None" drop out, and slots beyond `DEFAULT_LORAS` simply start empty.
+"None" drop out. (The V2 tabs have one row per listed LoRA instead — see
+[LoRA stack](#lora-stack).)
 
 To keep a tall stack from eating the column, only the first
 `VISIBLE_LORA_SLOTS` (3) are shown; the rest sit in a collapsed
