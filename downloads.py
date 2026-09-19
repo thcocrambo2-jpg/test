@@ -92,8 +92,8 @@ def from_mirror(dest: Path, relpath: str) -> bool:
         )
         src = Path(got)
         if src.resolve() != dest.resolve():
-            # Alias case: the mirror stores one canonical filename and
-            # config.py asked for the other spelling of the same blob.
+            # The mirror's path in its repo need not be where ComfyUI
+            # looks, so the file is moved into place (same filesystem).
             dest.parent.mkdir(parents=True, exist_ok=True)
             src.replace(dest)
         log.info("✓ %s (mirror: %s)", relpath, repo)

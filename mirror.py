@@ -24,7 +24,6 @@ the transport stays in theirs.
 
 import json
 import os
-from pathlib import Path
 
 from config import HF_TOKEN, PROJECT_DIR, log
 
@@ -59,13 +58,9 @@ _PINS = _load("PINS.json")
 
 # local path under MODELS_DIR → (repo key, path inside that repo)
 _INDEX: dict[str, tuple[str, str]] = {}
-# a filename config.py uses → the local path the mirror actually stores
-_ALIASES: dict[str, str] = {}
 
 for _entry in _MANIFEST.get("items", []):
     _INDEX[_entry["local"]] = (_entry["repo"], _entry["path_in_repo"])
-    for _alias in _entry.get("aliases", []):
-        _ALIASES[_alias] = _entry["local"]
 
 _REPO_NAMES = {k: v["name"] for k, v in _MANIFEST.get("repos", {}).items()}
 
@@ -89,33 +84,17 @@ def repo_id(repo_key: str) -> str | None:
     return f"{MIRROR_USER}/{name}" if name else None
 
 
-def resolve(relpath: str) -> str:
-    """Map a filename config.py asks for onto what the mirror stores.
-
-    Some blobs are referenced by two names — config.py's active entry and
-    its commented twin disagree on spelling. Storing the bytes twice would
-    be the obvious fix and the wrong one, so the mirror keeps one canonical
-    copy and the alias is resolved here.
-    """
-    if relpath in _INDEX:
-        return relpath
-    alias_target = _ALIASES.get(Path(relpath).name)
-    if alias_target:
-        log.info("%s is an alias for %s in the mirror",
-                 Path(relpath).name, alias_target)
-        return alias_target
-    return relpath
-
-
 def location(relpath: str) -> tuple[str, str] | None:
     """(mirror repo id, path in repo) for a path under MODELS_DIR, or None.
 
     None means "not mirrored, go upstream" — which is the correct answer
     for the ~185 GB of Comfy-Org weights that are deliberately pinned-only.
+    Catalogue LoRAs are not here either: their records carry their own
+    mirror location (see downloads.fetch_catalog_file).
     """
     if not MIRROR_ENABLED:
         return None
-    entry = _INDEX.get(resolve(relpath))
+    entry = _INDEX.get(relpath)
     if not entry:
         return None
     repo = repo_id(entry[0])

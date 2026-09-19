@@ -128,8 +128,8 @@ ADMIN_TIMEOUT = 30
 
 # How to record a mirror by hand, from license-validator/, when this script
 # cannot (no KREA2_ADMIN_TOKEN, no KREA2_NODE_TAG, or the request failed).
-ASSETS_COMMAND = ("npm run assets -- --lora {id} "
-                  "--mirror-repo {repo} --mirror-path {path}")
+ASSETS_COMMAND = ("npm run assets -- --mirror {id} "
+                  "--repo {repo} --path {path}")
 
 SCRIPT_DIR = Path(__file__).resolve().parent
 MANIFEST_PATH = SCRIPT_DIR / "mirror_manifest.json"

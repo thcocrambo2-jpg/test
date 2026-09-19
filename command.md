@@ -130,7 +130,7 @@ Read by `app.py`, `scripts/dryrun.py`, and the shipped binary.
 | `KREA2_WAN_PARALLEL` | no | Run the Wan instance alongside the main one. |
 | `KREA2_SKIP_LAUNCH` | no | Bootstrap without starting ComfyUI. |
 | `KREA2_UI_REQUIRE_TOKEN` | no | Demand the access key from the URL fragment. The UI is open to anyone with the link without it. |
-| `KREA2_MODELS` / `KREA2_VARIANT` | no | Model registry overrides. |
+| `KREA2_CATALOG_FILE` | no | Read the model and LoRA catalogue from this JSON file instead of the licence server — dry runs and tests (`license-validator/data/assets.json`). |
 | `KREA2_NO_MIRROR` | no | Never pull from the HF mirror. |
 | `KREA2_MIRROR_USER` | no | Which HF account the mirror lives under. |
 | `HF_TOKEN` | no | Hugging Face **read** token, for gated repos. |
@@ -255,8 +255,9 @@ cd license-validator && npm install
 ```bash
 npm run init-db          # create indexes — the serverless path never does
 npm run seed-catalog     # plans + features
-npm run seed-presets     # starting presets
-npm run seed-prompts     # starter prompts
+npm run seed-assets      # models, LoRAs, and what each Krea tab offers
+npm run seed-presets     # starting presets (needs seed-assets first)
+npm run seed-prompts     # starter prompts (needs seed-assets first)
 ```
 
 ---
@@ -566,6 +567,32 @@ once seeded, the *collection* is what the API reads, so a price or feature
 list can be changed in Atlas without a redeploy — and a hand edit there is
 reverted by the next seed run unless the code is updated to match.
 
+### 8.4b Models and LoRAs
+
+```bash
+npm run seed-assets                              # data/assets.json -> Atlas
+npm run seed-assets -- --dry-run
+npm run assets                                   # everything
+npm run assets -- --loras | --models | --features
+npm run assets -- --disable-lora  realism-v2     # offered nowhere, keeps its place
+npm run assets -- --enable-lora   realism-v2
+npm run assets -- --feature krea_t2i --add-lora    pawg [--at 3]
+npm run assets -- --feature krea_t2i --remove-lora pawg
+npm run assets -- --feature krea_v2_t2i --add-model krea2-raw-fp8 [--at 1]
+npm run assets -- --mirror halide-v1 --repo thcocrambo2/krea2-loras                   --path loras/Halide-v1.safetensors
+```
+
+Which models and LoRAs the Krea tabs offer lives in three collections —
+`loras`, `models` and `feature_assets` — not in `config.py`. Presets and
+prompts refer to them by id. A pod reads the catalogue once at startup
+(`POST /v1/catalog`), downloads what its features list and offers exactly
+that, so an edit here reaches a pod on its next start, with no rebuild.
+
+Adding a LoRA: add its record to `data/assets.json` (or `POST
+/v1/admin/loras`), add its id to the features that should offer it, run
+`npm run seed-assets`, then mirror it (§11.1) so pods without
+`CIVITAI_TOKEN` can download it.
+
 ### 8.5 Prompt library moderation
 
 ```bash
@@ -804,8 +831,13 @@ python3 scripts/mirror_to_hf.py
 Flags: `--dry-run`, `--audit`, `--pins-only`, `--public`, `--skip-downloads`,
 `--include-disabled`, `--only KEY` (repeatable), `--staging PATH`.
 
-What gets mirrored is decided by `scripts/mirror_manifest.json`, never by the
-script. Adding a LoRA means editing that JSON.
+Pipeline assets (encoders, VAEs, the Identity Edit LoRA) are listed in
+`scripts/mirror_manifest.json`. Catalogue LoRAs come from the DB instead
+(`--catalog FILE` reads a file in the same shape): a LoRA whose record has
+no `mirror` is uploaded to the `loras` repo, and with `KREA2_ADMIN_TOKEN`
+set the script records the location on the record itself
+(`POST /v1/admin/loras`); without it, it prints the `npm run assets --
+--mirror ...` command to run by hand. `--audit` lists what is not mirrored.
 
 ### 11.2 Showcase images for the pricing page
 
