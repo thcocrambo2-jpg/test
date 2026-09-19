@@ -82,9 +82,9 @@ from fastapi import (
 from fastapi.responses import FileResponse, JSONResponse, StreamingResponse
 from PIL import Image
 
+import catalog as assets  # the route below is called catalog()
 import features
 import gallery_index
-import handlers
 import jobqueue
 import licensing
 import plans
@@ -456,7 +456,9 @@ def create_app() -> FastAPI:
             "tagline": "ComfyUI generation suite",
             "planName": plan_name,
             "expiresAt": expires.isoformat() if expires else None,
-            "modelCount": len(handlers.MODEL_CHOICES),
+            # Every model the catalogue offers this pod, counted once however
+            # many tabs list it.
+            "modelCount": len(assets.get().models),
             "gpuCount": GPU_COUNT,
             "isAdmin": licensing.is_admin(),
             # Layer three: the navigation is built from this, so a tab
@@ -467,11 +469,11 @@ def create_app() -> FastAPI:
 
     @api.get("/catalog", dependencies=[Depends(require_auth)])
     def catalog():
-        """Every entitled tab's schema, plus the model registries.
+        """Every entitled tab's schema, plus each Krea feature's model list.
 
-        The registries are what the ~150 lines of `*_changed` handlers in
+        The model lists are what the ~150 lines of `*_changed` handlers in
         ui.py were made of: picking a model resets Steps and CFG to that
-        variant's defaults and swaps its trigger words into the prompt.
+        model record's defaults and swaps its trigger words into the prompt.
         Shipped as data so React does it locally — see tabschema.catalog.
         """
         return tabschema.catalog()

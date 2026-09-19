@@ -33,6 +33,7 @@ from pathlib import Path
 
 from PIL import Image
 
+import catalog
 import gallery_index
 import jobqueue
 import presets
@@ -40,16 +41,15 @@ import prompts
 import recipes
 from client import ComfyUIError, client, model_signature, on_output, wan_client
 from comfy import ensure_alive as comfy_ensure_alive
+from features import Key
 from config import (
     COMFY_LOG,
     COMFY_PORT,
     DEFAULT_RESOLUTION,
     FREE_ON_SWAP,
-    KREA2_MODELS,
     MINIMAX_FPS,
     OUTPUT_DIR,
     RESOLUTION_PRESETS,
-    V2_TURBO_LORA_STRENGTH,
     WAN_5B_DEFAULTS,
     WAN_5B_FPS,
     WAN_COMFY_LOG,
@@ -64,20 +64,16 @@ from workflow import (
     build_edit_workflow,
     build_workflow,
     edit_lora_available,
-    list_lora_files,
-    list_model_names,
+    feature_lora,
+    lora_file_available,
     model_defaults,
     model_file_available,
-    resolve_lora_name,
-    resolve_model_entry,
+    resolve_model,
 )
 from workflow_krea2_v2 import (
     build_v2_workflow,
     default_lora_slots as v2_default_lora_slots,
-    model_available as v2_model_available,
     model_defaults as v2_model_defaults,
-    model_names as v2_model_names,
-    resolve_model as v2_resolve_model,
     resolve_size as v2_resolve_size,
     status as v2_status,
     turbo_lora_available as v2_turbo_lora_available,
@@ -106,17 +102,90 @@ from workflow_wan import (
     wan_models_available,
 )
 
-# Number of LoRA slots every stacking tab renders (Single and Edit).
+# Number of LoRA slots the Krea2 and Krea2 Edit tabs render, all blank.
 # The UI rows, the handlers and the workflow chain are all driven
-# from this, so changing it here is the whole change.
+# from this, so changing it here is the whole change. (The V2 tabs have
+# one row per LoRA in their feature's list instead — see
+# workflow_krea2_v2.default_lora_slots.)
 MAX_LORA_SLOTS = 8
 # Slots past this stay in a collapsed accordion so a tall stack does not
 # eat the whole column. Set it >= MAX_LORA_SLOTS to show every slot.
 VISIBLE_LORA_SLOTS = 3
-MODEL_CHOICES = list_model_names()
-_d_steps, _d_cfg = model_defaults(resolve_model_entry(None))
-DEFAULTS = {"steps": _d_steps, "cfg": _d_cfg}
-LORA_CHOICES = ["None"] + list_lora_files()
+
+# The four tabs whose models and LoRAs come from the catalogue, by the
+# feature key the catalogue files their lists under. Each handler below
+# reads its own, so Krea2 and Krea2 Edit (and the two V2 tabs) can offer
+# different lists without a second code path.
+KREA_T2I = str(Key.KREA_T2I)
+KREA_EDIT = str(Key.KREA_EDIT)
+KREA_V2_T2I = str(Key.KREA_V2_T2I)
+KREA_V2_EDIT = str(Key.KREA_V2_EDIT)
+
+# Steps/CFG a Krea form starts on when its feature lists no model at all —
+# an empty catalogue, which the tab reports and cannot run anyway. Only
+# here so the form still has numbers to draw; a model record always wins.
+_NO_MODEL_DEFAULTS = {"steps": 10, "cfg": 1.0}
+
+
+# ── The catalogue, as the forms see it ───────────────────────────────────────
+# Read late, never at import: the catalogue is loaded once by app.py after
+# the licence check, and a list captured at import would be whatever an
+# earlier import happened to see. Values are ids; labels are names.
+
+def model_choices(feature) -> list:
+    """The Model dropdown's values: the feature's model ids, in order."""
+    return [model.id for model in catalog.feature_models(feature)]
+
+
+def model_labels(feature) -> dict:
+    """{model id: name} — what the dropdown shows for each value."""
+    return {model.id: model.name for model in catalog.feature_models(feature)}
+
+
+def default_model(feature) -> str:
+    """The feature's first model id — its default — or "" when it has none."""
+    choices = model_choices(feature)
+    return choices[0] if choices else ""
+
+
+def model_settings(feature) -> dict:
+    """{steps, cfg} of the feature's default model, for the form defaults."""
+    models = catalog.feature_models(feature)
+    if not models:
+        return dict(_NO_MODEL_DEFAULTS)
+    steps, cfg = model_defaults(models[0])
+    return {"steps": steps, "cfg": cfg}
+
+
+def lora_choices(feature) -> list:
+    """A LoRA dropdown's values: "None" and the feature's LoRA ids.
+
+    Exactly the feature's list. Files on this disk that the catalogue does
+    not list are not offered, and a listed LoRA whose file has not
+    downloaded is — it is labelled as missing (lora_labels) and skipped,
+    with a warning, if a run switches it on.
+    """
+    return [catalog.NONE] + [lora.id for lora in catalog.feature_loras(feature)]
+
+
+def lora_labels(feature) -> dict:
+    """{lora id: name} for the LoRA dropdowns, "None" included."""
+    labels = {catalog.NONE: catalog.NONE}
+    for lora in catalog.feature_loras(feature):
+        labels[lora.id] = (lora.name if lora_file_available(lora)
+                           else f"{lora.name} (not downloaded)")
+    return labels
+
+
+def stored_lora(value):
+    """A LoRA slot's form value as the settings blob stores it.
+
+    The form spells an empty slot "None" (a select needs a string); the
+    blob stores null, so a preset never carries a magic string the licence
+    server would have to know. tabschema.settings() calls this too, which
+    is what keeps the two blobs byte-identical.
+    """
+    return None if value in (None, catalog.NONE) else value
 
 # The queue's lanes, and the ComfyUI instance each one is stopped through.
 # One worker per lane, which is the same "one at a time" rule the
@@ -260,36 +329,68 @@ def _run_jobs(jobs, builder=build_workflow, prefix="Krea2"):
     yield images, f"✅ All {total} job(s) done"
 
 
-def _resolve_lora_slots(*slots) -> list:
-    """Flat (enabled, name, weight) × N UI values → (file, strength) pairs.
+def _resolve_lora_slots(feature, slots) -> tuple[list, list]:
+    """Flat (enabled, lora id, weight) × N UI values → (file, strength) pairs.
 
-    The same contract as _resolve_v2_lora_slots, and deliberately so: a row
-    contributes only while its checkbox is on, and order is preserved
-    because LoRA application is not commutative. Switching a row off now
-    keeps its filename in the dropdown instead of throwing it away, which
-    is the whole reason the column exists.
+    Every Krea tab's stack, the V2 ones included: a row contributes only
+    while its checkbox is on, and order is preserved because LoRA
+    application is not commutative. Switching a row off keeps its id in
+    the dropdown instead of throwing it away, which is the whole reason
+    the column exists.
 
-    Variadic on purpose: the slot count then lives only in MAX_LORA_SLOTS,
-    so adding a slot needs no change here or in any handler signature.
-    Slots left at "None" resolve to nothing and drop out even when ticked.
+    Values are exact ids from the feature's list, and this is the one
+    place an id becomes a file name. A ticked row whose id the feature
+    does not offer, or whose file has not downloaded, is skipped rather
+    than failing the run — logged, and returned as the second value so the
+    handler can say so in its status line. Slots left at "None" drop out
+    even when ticked.
+
+    `slots` is the handler's whole varargs tail, so the slot count lives
+    only in the schema and adding a row needs no change here.
     """
-    loras = []
-    for enabled, name, weight in zip(slots[::3], slots[1::3], slots[2::3]):
-        if not enabled:
+    loras, skipped = [], []
+    for enabled, lora_id, weight in zip(slots[::3], slots[1::3], slots[2::3]):
+        if not enabled or lora_id in (None, "", catalog.NONE):
             continue
-        lora_file = resolve_lora_name(name)
-        if lora_file:
-            loras.append((lora_file, float(weight)))
-    return loras
+        lora = feature_lora(feature, lora_id)
+        if lora is None:
+            log.warning("LoRA %r is not offered on %s — skipping it",
+                        lora_id, feature)
+            skipped.append(f"`{lora_id}` (not offered on this tab)")
+            continue
+        if not lora_file_available(lora):
+            log.warning("LoRA %s (%s) has not downloaded — skipping it",
+                        lora.id, lora.file)
+            skipped.append(f"`{lora.name}` (not downloaded)")
+            continue
+        loras.append((lora.file, float(weight)))
+    return loras, skipped
 
 
-def _check_model(model):
-    """Resolve the dropdown value; return (entry, error_message_or_None)."""
-    entry = resolve_model_entry(model)
-    if not model_file_available(entry):
-        return entry, (f"❌ Model “{entry['name']}” is not downloaded yet — "
+def _skipped_note(skipped) -> str:
+    """A status-line prefix naming the LoRAs a run had to leave out."""
+    if not skipped:
+        return ""
+    return "⚠️ Skipped LoRA: " + ", ".join(skipped) + "\n"
+
+
+def _enabled_lora_ids(slots) -> list:
+    """The ids of the rows a run switched on — for the V2 status notes."""
+    return [lora_id for enabled, lora_id in zip(slots[::3], slots[1::3])
+            if enabled and lora_id not in (None, "", catalog.NONE)]
+
+
+def _check_model(feature, model_id):
+    """Resolve the dropdown value; return (model, error_message_or_None)."""
+    model = resolve_model(feature, model_id)
+    if model is None:
+        return None, ("❌ The model catalogue lists no model for this tab — "
+                      "restart the app once the licence server can be "
+                      "reached.")
+    if not model_file_available(model):
+        return model, (f"❌ Model “{model.name}” is not downloaded yet — "
                        "restart the app so the download step can fetch it.")
-    return entry, None
+    return model, None
 
 
 def _krea_settings(seed, randomize, steps, cfg, resolution, sampler, model,
@@ -298,15 +399,14 @@ def _krea_settings(seed, randomize, steps, cfg, resolution, sampler, model,
 
     Deliberately the *UI* values, not the resolved job dict: what goes in
     here comes back out into these same controls on another pod, so the
-    dropdown label is the useful thing to keep and the resolved filename
-    is not. Mirrors the generate_single signature — when that gains a
-    control, this is the other half of the change.
+    model and LoRA *ids* are the useful thing to keep and the file names
+    they resolve to are not. Mirrors the generate_single signature — when
+    that gains a control, this is the other half of the change.
 
-    LoRA rows are [enabled, name, weight], the shape V2 has always stored.
-    Presets written before the stack grew its On column hold [name, weight]
-    and still load: tabschema.preset_values sniffs the row length and reads
-    a two-part row as on-if-named. Nothing on the licence server is
-    rewritten — both shapes sit in the collection side by side.
+    LoRA rows are [enabled, lora id or None, weight] — the shape every
+    Krea tab stores, and the one the licence server checks a preset
+    against. An empty slot is None here and "None" in the form; see
+    stored_lora.
     """
     return {
         "model": model,
@@ -317,7 +417,8 @@ def _krea_settings(seed, randomize, steps, cfg, resolution, sampler, model,
         "seed": int(seed or 0),
         "randomize": bool(randomize),
         "batch_count": int(batch_count),
-        "loras": [[bool(on), name, float(weight)] for on, name, weight
+        "loras": [[bool(on), stored_lora(name), float(weight)]
+                  for on, name, weight
                   in zip(lora_slots[::3], lora_slots[1::3], lora_slots[2::3])],
     }
 
@@ -326,7 +427,7 @@ def generate_single(prompt, negative, seed, randomize, steps, cfg, resolution,
                     sampler, model, batch_count, publish, publish_title,
                     save_preset, preset_name, *lora_slots):
     """First tab: run batch_count jobs on sequential seeds."""
-    entry, error = _check_model(model)
+    entry, error = _check_model(KREA_T2I, model)
     if error:
         yield [], error, 0
         return
@@ -344,11 +445,12 @@ def generate_single(prompt, negative, seed, randomize, steps, cfg, resolution,
     notice = _save_preset(presets.TAB_KREA2, save_preset, preset_name, settings)
     base_seed = random.randint(0, 2**32 - 1) if randomize else int(seed)
     width, height = parse_resolution(resolution)
-    loras = _resolve_lora_slots(*lora_slots)
+    loras, skipped = _resolve_lora_slots(KREA_T2I, lora_slots)
+    notice += _skipped_note(skipped)
     jobs = [{
         "prompt": prompt, "negative": negative or "", "seed": base_seed + i,
         "steps": int(steps), "cfg": float(cfg), "width": width, "height": height,
-        "sampler": sampler, "loras": loras, "unet_file": entry["file"],
+        "sampler": sampler, "loras": loras, "unet_file": entry.file,
     } for i in range(int(batch_count))]
     for images, status in _run_jobs(jobs):
         yield images, notice + status, base_seed
@@ -394,47 +496,47 @@ def _save_preset(tab, save, name, settings) -> str:
 
 
 # ── Krea 2 V2 (Krea2 advanced graph) ─────────────────────────────────────────────
-# This tab is deliberately self-contained: its own model, VAE, LoRA stack,
-# sampler and defaults, all taken from the source workflow. Nothing here
-# reads DEFAULTS, MODEL_CHOICES or LORA_CHOICES, so tuning the Single tab
-# never moves it.
+# This tab is deliberately self-contained: its own VAE, LoRA rows, sampler
+# and defaults. Its models and LoRAs are its own feature's lists in the
+# catalogue (krea_v2_t2i, and krea_v2_edit for the Edit tab), so tuning
+# the Krea2 tab's lists never moves it.
 
-V2_LORA_SLOTS = v2_default_lora_slots()
-V2_LORA_CHOICES = ["None"] + list_lora_files()
-V2_MODEL_CHOICES = v2_model_names()
-V2_TURBO_SLOT = v2_turbo_lora_slot()
-_v2_steps, _v2_cfg, _ = v2_model_defaults(v2_resolve_model(None))
+def v2_lora_slots(feature) -> list:
+    """The V2 rows for one of the two V2 features: (enabled, id, strength)."""
+    return v2_default_lora_slots(feature)
+
+
+def v2_turbo_slot(feature, model_id=None):
+    """Index of the row a model's recipe switches on, for that feature.
+
+    `model_id` defaults to the feature's raw model — the first one whose
+    record names a turbo LoRA — which is the only kind that has one.
+    """
+    models = catalog.feature_models(feature)
+    model = (resolve_model(feature, model_id) if model_id else
+             next((m for m in models if m.turbo_lora), None))
+    return v2_turbo_lora_slot(feature, model)
 
 
 def _v2_model_info_text(entry) -> str:
-    """One-line summary shown under the V2 Model dropdown."""
+    """One-line summary shown under the V2 Model dropdown.
+
+    The strength quoted is the model record's own turbo_lora strength —
+    what its recipe switches the row on at — not the LoRA's default.
+    """
     steps, cfg, turbo_lora = v2_model_defaults(entry)
-    info = (f"**{entry.get('variant', 'turbo').title()}** · "
+    info = (f"**{entry.variant.title()}** · "
             f"defaults: {steps} steps, CFG {cfg:g} · Turbo LoRA "
-            + ("**on** at " f"{V2_TURBO_LORA_STRENGTH:g}" if turbo_lora
-               else "off"))
-    if not v2_model_available(entry):
+            + ("**on** at " f"{float(entry.turbo_lora['strength']):g}"
+               if turbo_lora else "off"))
+    if entry.trigger:
+        info += " · trigger words are inserted into the prompt (editable)"
+    if not model_file_available(entry):
         info += " · ⚠️ **not downloaded yet** — restart the app to fetch it"
-    if turbo_lora and not v2_turbo_lora_available():
+    if turbo_lora and not v2_turbo_lora_available(entry):
         info += (" · ⚠️ **the Turbo LoRA this variant needs has not "
                  "downloaded** — raw output will be undistilled")
     return info
-
-def _resolve_v2_lora_slots(*slots) -> list:
-    """Flat (enabled, name, weight) × N UI values → (file, strength) pairs.
-
-    Mirrors the source workflow's Power Lora Loader: a row contributes only
-    while its checkbox is on, and order is preserved because LoRA
-    application is not commutative.
-    """
-    loras = []
-    for enabled, name, weight in zip(slots[::3], slots[1::3], slots[2::3]):
-        if not enabled:
-            continue
-        lora_file = resolve_lora_name(name)
-        if lora_file:
-            loras.append((lora_file, float(weight)))
-    return loras
 
 def generate_v2(prompt, negative, seed, randomize, model, aspect, megapixels,
                 multiple, eta, sampler_name, scheduler, steps, denoise, cfg,
@@ -444,18 +546,17 @@ def generate_v2(prompt, negative, seed, randomize, model, aspect, megapixels,
                 film_grain, batch_count, publish, publish_title,
                 save_preset, preset_name, *lora_slots):
     """Krea 2 V2 tab: the Krea2 advanced turbo/raw text-to-image graph."""
-    ready, message = v2_status()
+    ready, message = v2_status(KREA_V2_T2I, _enabled_lora_ids(lora_slots))
     if not ready:
         yield [], message, 0
         return
-    entry = v2_resolve_model(model)
-    if not v2_model_available(entry):
-        yield [], (f"❌ Model “{entry['name']}” is not downloaded yet — "
-                   "restart the app so the download step can fetch it."), 0
+    entry, error = _check_model(KREA_V2_T2I, model)
+    if error:
+        yield [], error, 0
         return
     base_seed = random.randint(0, 2**32 - 1) if randomize else int(seed)
     width, height = v2_resolve_size(aspect, megapixels, multiple)
-    loras = _resolve_v2_lora_slots(*lora_slots)
+    loras, skipped = _resolve_lora_slots(KREA_V2_T2I, lora_slots)
     sampler_settings = {
         "eta": float(eta), "sampler_name": sampler_name,
         "scheduler": scheduler, "steps": int(steps),
@@ -493,17 +594,19 @@ def generate_v2(prompt, negative, seed, randomize, model, aspect, megapixels,
         "variance": variance_settings,
         "sharpen": bool(sharpen),
         "film_grain": bool(film_grain),
-        "loras": [[bool(on), name, float(weight)] for on, name, weight
+        "loras": [[bool(on), stored_lora(name), float(weight)]
+                  for on, name, weight
                   in zip(lora_slots[::3], lora_slots[1::3], lora_slots[2::3])],
     }
     prompts.record(prompts.TAB_KREA2_V2, prompt, negative or "", settings,
                    publish=publish, title=publish_title)
     notice = _save_preset(presets.TAB_KREA2_V2, save_preset, preset_name,
                           settings)
+    notice += _skipped_note(skipped)
     jobs = [{
         "prompt": prompt, "negative": negative or "", "seed": base_seed + i,
         "width": width, "height": height, "loras": loras,
-        "unet_file": entry["file"],
+        "model": entry,
         "sampler_settings": sampler_settings,
         "variance_settings": variance_settings,
         "sharpen": bool(sharpen), "film_grain": bool(film_grain),
@@ -553,7 +656,7 @@ def generate_edit(image, use_image2, image2, prompt, negative, seed,
         yield [], ("❌ Second reference is enabled but empty — upload it, "
                    "or switch the toggle off."), 0
         return
-    entry, error = _check_model(model)
+    entry, error = _check_model(KREA_EDIT, model)
     if error:
         yield [], error, 0
         return
@@ -589,6 +692,8 @@ def generate_edit(image, use_image2, image2, prompt, negative, seed,
     except Exception as exc:
         yield [], f"❌ Uploading the image to ComfyUI failed: {exc}", base_seed
         return
+    loras, skipped = _resolve_lora_slots(KREA_EDIT, lora_slots)
+    note = _skipped_note(skipped)
     jobs = [{
         "prompt": prompt, "negative": negative or "", "seed": base_seed + i,
         "steps": int(steps), "cfg": float(cfg), "width": width,
@@ -596,12 +701,12 @@ def generate_edit(image, use_image2, image2, prompt, negative, seed,
         "image2_name": image2_name,
         "grounding_px": int(grounding), "ref_boost": float(ref_boost),
         "ref_boost_a": float(ref_boost_a),
-        "loras": _resolve_lora_slots(*lora_slots),
-        "unet_file": entry["file"],
+        "loras": loras,
+        "unet_file": entry.file,
     } for i in range(int(batch_count))]
     for images, status in _run_jobs(jobs, builder=build_edit_workflow,
                                     prefix="Krea2Edit"):
-        yield images, status, base_seed
+        yield images, note + status, base_seed
 
 
 def generate_v2_edit(image, use_image2, image2, prompt, negative, seed,
@@ -628,14 +733,14 @@ def generate_v2_edit(image, use_image2, image2, prompt, negative, seed,
         yield [], ("❌ Second reference is enabled but empty — upload it, "
                    "or switch the toggle off."), 0
         return
-    ready, message = v2_edit_status()
+    ready, message = v2_edit_status(KREA_V2_EDIT,
+                                    _enabled_lora_ids(lora_slots))
     if not ready:
         yield [], message, 0
         return
-    entry = v2_resolve_model(model)
-    if not v2_model_available(entry):
-        yield [], (f"❌ Model “{entry['name']}” is not downloaded yet — "
-                   "restart the app so the download step can fetch it."), 0
+    entry, error = _check_model(KREA_V2_EDIT, model)
+    if error:
+        yield [], error, 0
         return
     if not str(prompt or "").strip():
         yield [], "❌ Describe the change (e.g. “make the jacket red”).", 0
@@ -677,12 +782,14 @@ def generate_v2_edit(image, use_image2, image2, prompt, negative, seed,
         "cutoff_strength": float(cutoff_strength),
         "shift_strength": int(shift_strength),
     }
+    loras, skipped = _resolve_lora_slots(KREA_V2_EDIT, lora_slots)
+    note = _skipped_note(skipped)
     jobs = [{
         "prompt": prompt, "negative": negative or "", "seed": base_seed + i,
         "width": width, "height": height, "image_name": image_name,
         "image2_name": image2_name,
-        "loras": _resolve_v2_lora_slots(*lora_slots),
-        "unet_file": entry["file"],
+        "loras": loras,
+        "model": entry,
         "grounding_px": int(grounding), "ref_boost": float(ref_boost),
         "ref_boost_a": float(ref_boost_a),
         "fit_mode": fit_mode,
@@ -691,7 +798,7 @@ def generate_v2_edit(image, use_image2, image2, prompt, negative, seed,
     } for i in range(int(batch_count))]
     for images, status in _run_jobs(jobs, builder=build_v2_edit_workflow,
                                     prefix="Krea2V2Edit"):
-        yield images, status, base_seed
+        yield images, note + status, base_seed
 
 
 def _fit_video_size(w: int, h: int, target_area: int, snap: int = 16) -> tuple:
@@ -965,24 +1072,24 @@ def zip_outputs():
     return (str(zip_path),
             f"📦 Zipped {len(images)} file(s) ({size_mb:.0f} MB)")
 
-def _swap_trigger(text, entry, registry=None) -> str:
+def _swap_trigger(text, entry, feature) -> str:
     """Put the selected model's trigger words into the prompt text.
 
-    Any other registered model's trigger (within the same registry) is
-    removed first, so switching models swaps triggers instead of stacking
-    them. The text stays fully editable — whatever ends up in the box is
-    used verbatim (nothing is added silently at generation time).
+    Any other model's trigger in the same feature's list is removed first,
+    so switching models swaps triggers instead of stacking them. The text
+    stays fully editable — whatever ends up in the box is used verbatim
+    (nothing is added silently at generation time).
     """
     text = text or ""
-    for other in (registry if registry is not None else KREA2_MODELS):
-        trig = (other.get("trigger") or "").strip()
+    for other in catalog.feature_models(feature):
+        trig = (other.trigger or "").strip()
         if not trig:
             continue
         idx = text.lower().find(trig.lower())
         if idx >= 0:
             text = text[:idx] + text[idx + len(trig):]
     text = text.strip().strip(",").strip()
-    trigger = (entry.get("trigger") or "").strip()
+    trigger = (entry.trigger or "").strip()
     if trigger:
         return f"{trigger}, {text}" if text else trigger
     return text
@@ -991,9 +1098,9 @@ def _swap_trigger(text, entry, registry=None) -> str:
 def _model_info_text(entry) -> str:
     """One-line summary shown under the Model dropdown."""
     steps, cfg = model_defaults(entry)
-    info = (f"**{entry.get('variant', 'turbo').title()}** · "
+    info = (f"**{entry.variant.title()}** · "
             f"defaults: {steps} steps, CFG {cfg:g}")
-    if entry.get("trigger"):
+    if entry.trigger:
         info += " · trigger words are inserted into the prompt (editable)"
     if not model_file_available(entry):
         info += " · ⚠️ **not downloaded yet** — restart the app to fetch it"

@@ -9,74 +9,79 @@ gpu:1 does not exist, so the same workflow can never fail for lack of a
 GPU). The instruction-edit workflow additionally needs the
 ComfyUI-Krea2Edit custom nodes and the Identity Edit LoRA (both fetched
 during bootstrap/downloads).
+
+Which diffusion model and which style LoRAs a graph loads is not decided
+here: the builders take file names, and the helpers below turn a tab's
+catalogue ids (catalog.py) into those names. The catalogue is per
+feature, so every helper that reads it takes the feature key — the Krea2
+and Krea2 Edit tabs each read their own lists, and so do the two V2 tabs
+(workflow_krea2_v2.py).
 """
 
-import difflib
-
+import catalog
 from comfy import GPU_COUNT
 from config import (
     ABLITERATED_ENCODER_FILE,
     EDIT_LORA_FILE,
-    KREA2_MODELS,
     MODELS_DIR,
     TEXT_ENCODER_FILE,
     VAE_FILE,
-    VARIANT_DEFAULTS,
-    WAN_LIGHTNING_HIGH,
-    WAN_LIGHTNING_LOW,
     log,
 )
 
-# LoRAs that live in the same folder but do not belong in the Krea style
-# stack: the Identity Edit LoRA (added by build_edit_workflow itself) and the
-# Wan 2.2 Lightning speed LoRAs (Wan-architecture, video tab only).
-_NON_STYLE_LORAS = {EDIT_LORA_FILE, WAN_LIGHTNING_HIGH, WAN_LIGHTNING_LOW}
 
+# ── The catalogue, per feature ───────────────────────────────────────────────
+# Ids are what forms, presets and prompts carry; a file name appears only
+# once a graph is being built. These are shared by all four Krea tabs, so
+# they live here rather than in either family's builder module.
 
-def list_lora_files() -> list[str]:
-    """Style LoRA files currently available to ComfyUI."""
-    return sorted(p.name for p in (MODELS_DIR / "loras").glob("*.safetensors")
-                  if p.name not in _NON_STYLE_LORAS)
+def resolve_model(feature, model_id) -> "catalog.Model | None":
+    """The feature's model record for a form value (an id).
 
-
-# ── Krea 2 model registry helpers ────────────────────────────────────────────
-
-def list_model_names() -> list[str]:
-    """Dropdown labels for every registered Krea 2 model, in config order."""
-    return [entry["name"] for entry in KREA2_MODELS]
-
-
-def resolve_model_entry(name) -> dict:
-    """Map a UI model name to its registry entry (default: first entry).
-
-    Accepts the registry name, the filename, or any case-insensitive
-    substring of either — the same forgiving spirit as resolve_lora_name.
+    Exact ids only: the value came from a dropdown this pod described, or
+    from a preset the licence server checked against the same ids. An id
+    the feature does not list — a model switched off since the preset was
+    saved — falls back to the feature's first model, loudly, rather than
+    refusing the run. None only when the feature lists no model at all.
     """
-    if not name or str(name).strip().lower() in ("", "none", "default"):
-        return KREA2_MODELS[0]
-    wanted = str(name).strip().lower()
-    for entry in KREA2_MODELS:
-        if wanted in (entry["name"].lower(), entry["file"].lower()):
-            return entry
-    for entry in KREA2_MODELS:
-        if wanted in entry["name"].lower() or wanted in entry["file"].lower():
-            return entry
-    log.warning("Krea 2 model %r not in KREA2_MODELS — using the default "
-                "(%s)", name, KREA2_MODELS[0]["name"])
-    return KREA2_MODELS[0]
+    models = catalog.feature_models(feature)
+    if not models:
+        return None
+    for model in models:
+        if model.id == model_id:
+            return model
+    if model_id not in (None, "", catalog.NONE):
+        log.warning("Model %r is not offered on %s — using the default (%s)",
+                    model_id, feature, models[0].id)
+    return models[0]
 
 
-def model_defaults(entry: dict) -> tuple[int, float]:
-    """(steps, cfg) for a registry entry: per-model override, else variant."""
-    variant = VARIANT_DEFAULTS.get(entry.get("variant", "turbo"),
-                                   VARIANT_DEFAULTS["turbo"])
-    return (int(entry.get("steps", variant["steps"])),
-            float(entry.get("cfg", variant["cfg"])))
+def model_defaults(model) -> tuple[int, float]:
+    """(steps, cfg) for a model record — the record carries them now."""
+    return int(model.steps), float(model.cfg)
 
 
-def model_file_available(entry: dict) -> bool:
-    """True once the entry's UNet file has been downloaded."""
-    return (MODELS_DIR / "diffusion_models" / entry["file"]).exists()
+def model_file_available(model) -> bool:
+    """True once the model record's UNet file has been downloaded."""
+    return (MODELS_DIR / "diffusion_models" / model.file).exists()
+
+
+def lora_file_available(lora) -> bool:
+    """True once the LoRA record's file has been downloaded."""
+    return (MODELS_DIR / "loras" / lora.file).exists()
+
+
+def feature_lora(feature, lora_id) -> "catalog.Lora | None":
+    """The LoRA record for a form value, if the feature offers that id.
+
+    A tab's stack offers exactly its feature's list, so an id outside it —
+    one from a preset saved on another tab, or a LoRA switched off since —
+    is not this tab's to load, even when the catalogue knows it.
+    """
+    if lora_id in (None, "", catalog.NONE):
+        return None
+    return next((lora for lora in catalog.feature_loras(feature)
+                 if lora.id == lora_id), None)
 
 
 def edit_lora_available() -> bool:
@@ -91,48 +96,18 @@ def active_text_encoder() -> str:
     return TEXT_ENCODER_FILE
 
 
-def resolve_lora_name(name) -> str | None:
-    """Map a user-supplied LoRA name to an on-disk file (fuzzy match)."""
-    if not name or str(name).strip().lower() in ("", "none"):
-        return None
-    name = str(name).strip()
-    available = list_lora_files()
-    if name in available:
-        return name
-
-    def norm(s: str) -> str:
-        s = s.lower()
-        for junk in (".safetensors", ".pt", "_", "-", " "):
-            s = s.replace(junk, "")
-        return s
-
-    wanted = norm(name)
-    for f in available:
-        if wanted and wanted in norm(f):
-            return f
-    close = difflib.get_close_matches(
-        wanted, [norm(f) for f in available], n=1, cutoff=0.5
-    )
-    if close:
-        for f in available:
-            if norm(f) == close[0]:
-                return f
-    log.warning("LoRA %r not found in %s — ignoring it", name, MODELS_DIR / "loras")
-    return None
-
-
-def _model_nodes(loras, unet_file: str | None = None) -> tuple[dict, list, list, list]:
+def _model_nodes(loras, unet_file: str) -> tuple[dict, list, list, list]:
     """Loader, GPU-placement and LoRA nodes shared by every workflow.
 
-    `unet_file` picks the diffusion model (default: the first registry
-    entry). Returns (wf, model_ref, clip_ref, vae_ref); the refs point at
-    the end of each chain so callers can keep wiring nodes onto them.
+    `unet_file` is the diffusion model's file name, already resolved from
+    the tab's model id. Returns (wf, model_ref, clip_ref, vae_ref); the
+    refs point at the end of each chain so callers can keep wiring nodes
+    onto them.
     """
     wf = {
         "unet": {
             "class_type": "UNETLoader",
-            "inputs": {"unet_name": unet_file or KREA2_MODELS[0]["file"],
-                       "weight_dtype": "default"},
+            "inputs": {"unet_name": unet_file, "weight_dtype": "default"},
         },
         "clip": {
             "class_type": "CLIPLoader",
@@ -203,7 +178,7 @@ def build_workflow(
     height: int = 1024,
     sampler: str = "er_sde",
     loras=(),
-    unet_file: str | None = None,
+    unet_file: str,
     filename_prefix: str = "Krea2",
 ) -> dict:
     """Build a Krea 2 text-to-image workflow in ComfyUI API format.
@@ -212,7 +187,8 @@ def build_workflow(
     (shift 1.15 is built into ComfyUI's Krea2 model class), LoRAs apply to
     the diffusion model only.
     `loras` is a sequence of (filename, strength) pairs, already resolved;
-    `unet_file` selects the diffusion model (KREA2_MODELS registry).
+    `unet_file` is the diffusion model's file, resolved from the tab's
+    catalogue model id (resolve_model).
     """
     wf, model_ref, clip_ref, vae_ref = _model_nodes(loras, unet_file)
     _conditioning_nodes(wf, prompt, negative, clip_ref)
@@ -258,7 +234,7 @@ def build_edit_workflow(
     ref_boost_a: float = 1.0,
     fit_mode: str = "fit",
     loras=(),
-    unet_file: str | None = None,
+    unet_file: str,
     filename_prefix: str = "Krea2Edit",
 ) -> dict:
     """Build an instruction-edit workflow (Krea 2 Identity Edit LoRA).

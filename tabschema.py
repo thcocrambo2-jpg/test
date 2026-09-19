@@ -52,30 +52,40 @@ recipe. Split here, because the two want opposite things:
   the control alone* (`ui._pick`, :2868) or *clamp it* (`ui._num`, :2880),
   and never an error — the rest of the recipe still loads.
 
-`restore()` runs server-side rather than in the browser because
-`choices()` for a LoRA dropdown is `available_lora_files()` — a listing of
-**this pod's disk**. The browser cannot know it.
+`restore()` runs server-side rather than in the browser because the
+choices for a Model or LoRA dropdown are **this pod's catalogue** — the
+feature's lists as the licence server answered them at startup
+(catalog.py). The browser only ever sees them through this module.
+
+Ids and labels
+--------------
+The four Krea tabs' Model and LoRA dropdowns carry catalogue *ids* as
+their values — what presets, prompts and the handlers all speak — and the
+record's name as what the user reads. A Field whose values are ids has
+`labels`, and `to_json()` ships them as `choiceLabels` next to `choices`;
+every other Field's value is its own label, as it always was.
 
 What is deliberately not here
 -----------------------------
 The ~150 lines of `*_changed` handlers in ui.py. `krea_model_changed`,
 `v2_model_changed`, `wan_mode_changed` and friends are reactivity over
-data that already sits in config.py — VARIANT_DEFAULTS, V2_VARIANT_
-DEFAULTS, WAN_MODE_DEFAULTS. The
-API ships that data in `/api/v1/catalog` (see `catalog()`) and React
-applies it, which is one round trip saved per keystroke and one fewer
-copy of the same three numbers.
+data the pod already holds — each catalogue model record's steps, CFG and
+turbo LoRA, and config.py's WAN_MODE_DEFAULTS. The API ships that data in
+`/api/v1/catalog` (see `catalog()`) and React applies it, which is one
+round trip saved per keystroke and one fewer copy of the same three
+numbers.
 """
 
 import inspect
 from dataclasses import dataclass, field as dc_field, replace
 from typing import Any, Callable
 
+# As `assets`: this module has a catalog() of its own — the /catalog answer.
+import catalog as assets
 import features
 import presets
 import handlers
 from config import (
-    KREA2_MODELS,
     MINIMAX_ASPECT_RATIOS,
     MINIMAX_DEFAULT_ASPECT,
     MINIMAX_DEFAULT_RESOLUTION,
@@ -96,7 +106,6 @@ from config import (
     V2_EDIT_DEFAULT_GROUNDING,
     V2_EDIT_DEFAULT_REF_BOOST,
     V2_EDIT_FIT_MODES,
-    V2_MODELS,
     V2_SAMPLER_DEFAULTS,
     V2_SAMPLER_MODES,
     V2_SAMPLER_NAMES,
@@ -105,8 +114,6 @@ from config import (
     V2_VARIANCE_MODEL_TYPES,
     V2_VARIANCE_PRESETS,
     V2_VARIANCE_SCHEDULES,
-    V2_VARIANT_DEFAULTS,
-    VARIANT_DEFAULTS,
     WAN_5B_DEFAULTS,
     WAN_5B_FPS,
     WAN_DEFAULT_NEGATIVE,
@@ -139,11 +146,11 @@ class Invalid(ValueError):
 def _resolve(value):
     """A default or a choice list, which may be a callable.
 
-    Callables are how the disk-derived lists stay honest. `LORA_CHOICES`
-    is `available_lora_files()` read at import; a pod that downloads a
-    LoRA while the app runs has a longer list, and the Rescan button in
-    the Gradio UI existed exactly to pick that up. Resolving late gives
-    the API the same behaviour without a button.
+    Callables are how the catalogue-derived lists stay honest. The
+    catalogue is loaded by app.py after the licence check, which is after
+    this module could have captured anything at import; and a label that
+    says whether a LoRA has downloaded is a fact about this disk *now*.
+    Resolving late gives the API both without a restart.
     """
     return value() if callable(value) else value
 
@@ -154,21 +161,16 @@ def _resolve(value):
 class Repeat:
     """The handler's `*varargs` tail, as a repeating row of sub-fields.
 
-    Every tab submits **triples** `(enabled, name, weight)`, and the
+    Every tab submits **triples** `(enabled, lora id, weight)`, and the
     order shifts every argument after it (context.md 4.3). The row
     carries a per-row on/off checkbox, so switching one off keeps its
-    filename instead of resetting the dropdown to "None".
-
-    The Krea2 family were pairs `(name, weight)` until the two shapes were
-    unified; a preset stored in the old shape still loads, see
-    `preset_values`.
+    LoRA instead of resetting the dropdown to "None".
 
     `parts` is the submission order *within* one slot, so `call_args`
     flattens `slots x parts` and that is the tail. `slots()` returns one
-    dict of per-slot default overrides each, because V2 takes
-    its rows from the source workflow's own stack rather than from a
-    blank row repeated N times — and a row whose file did not download
-    comes back off and blank, which is a fact about this pod's disk.
+    dict of per-slot default overrides each, because V2 has one row per
+    LoRA in its feature's list (off, at the LoRA's default strength)
+    rather than a blank row repeated N times.
 
     `key` is the prefix the browser sends values under (`lora.0.weight`).
     It is not the varargs parameter name, which is `lora_slots` on every
@@ -255,6 +257,11 @@ class Field:
     # is that flag, and without it a preset from a pod with a newer
     # RES4LYF would 422 on submit.
     allow_custom: bool = False
+    # {value: label}, or a callable returning one, for a choice field
+    # whose values are catalogue ids: the Model dropdowns and the LoRA
+    # stacks. Shipped as `choiceLabels`; None means every value is its own
+    # label, which is every other field.
+    labels: Any = None
 
     def options(self) -> tuple:
         """This field's choices, resolved. Empty for a non-choice field."""
@@ -263,6 +270,12 @@ class Field:
     def initial(self):
         """The value a fresh form starts on."""
         return _resolve(self.default)
+
+    def choice_labels(self) -> dict | None:
+        """{value: label} for an id-valued choice field, else None."""
+        if self.labels is None:
+            return None
+        return dict(_resolve(self.labels) or {})
 
     # ── the two coercion paths ──────────────────────────────────────
 
@@ -365,6 +378,9 @@ class Field:
             row["step"] = self.step
         if self.choices is not None:
             row["choices"] = list(self.options())
+        labels = self.choice_labels()
+        if labels is not None:
+            row["choiceLabels"] = labels
         if self.allow_custom:
             row["allowCustom"] = True
         if self.lines is not None:
@@ -431,10 +447,11 @@ class TabSchema:
     groups: tuple = ()
     preset_tab: str | None = None   # presets.TAB_* this tab's dropdown reads
     preset_note: str = ""
-    # Which registry in catalog()["models"] this tab's Model dropdown is
-    # naming. It is what lets the browser do what krea_model_changed and
-    # its three siblings did: pick a model, get that variant's step and
-    # CFG defaults and its trigger words, with no round trip.
+    # Which list in catalog()["models"] this tab's Model dropdown is
+    # naming — the tab's feature key, since each Krea feature has its own
+    # list in the catalogue. It is what lets the browser do what
+    # krea_model_changed and its three siblings did: pick a model, get its
+    # step and CFG defaults and its trigger words, with no round trip.
     model_registry: str | None = None
 
     # ── derived ─────────────────────────────────────────────────────
@@ -587,7 +604,8 @@ class TabSchema:
         "sampler.eta", "variance.cutoff_step" — so the nesting the V2 tab
         stores falls out of the field list rather than out of a second
         hand-written function. The LoRA rows are appended as
-        [enabled, name, weight].
+        [enabled, lora id, weight], with the form's "None" stored as null
+        (handlers.stored_lora — the same call the handlers make).
 
         `test_settings_match_ui()` asserts this equals `_krea_settings`
         for the Krea2 tab. That local check is the whole proof, because
@@ -611,7 +629,9 @@ class TabSchema:
             for index in range(tail.count()):
                 row = [values.get(tail.value_key(index, part.name))
                        for part in tail.parts]
-                rows.append([_cast(part, v) for part, v in zip(tail.parts, row)])
+                rows.append([handlers.stored_lora(v) if part.name == "name"
+                             else _cast(part, v)
+                             for part, v in zip(tail.parts, row)])
             blob["loras"] = rows
         return blob
 
@@ -625,10 +645,11 @@ class TabSchema:
         survive), so every lookup goes through a type check first.
 
         One difference from the guarded scalars, and it is deliberate,
-        lifted from ui._lora_updates: a LoRA file this pod does not have
-        becomes "None" **explicitly** rather than being left alone. The
-        slots are being reset to a whole other recipe, and a leftover LoRA
-        from whatever was loaded before would silently join it.
+        lifted from ui._lora_updates: a LoRA id this tab does not offer
+        becomes "None" **explicitly**, and its row off, rather than being
+        left alone. The slots are being reset to a whole other recipe, and
+        a leftover LoRA from whatever was loaded before would silently join
+        it. A stored null is an empty slot and comes back as "None".
         """
         if not isinstance(settings, dict):
             return {}
@@ -654,43 +675,26 @@ class TabSchema:
             rows = settings.get("loras")
             rows = rows if isinstance(rows, list) else []
             defaults = tail.rows()
-            # What "no LoRA here" is spelled as, for the migration below.
-            blank = next((p.default for p in tail.parts if p.name == "name"),
-                         "None")
             for index in range(tail.count()):
                 row = rows[index] if index < len(rows) else None
                 row = list(row) if isinstance(row, (list, tuple)) else []
-                # A Krea2 preset saved before the stack grew its On column
-                # stores [name, weight], and five of its eight rows are
-                # ["None", 0.8]. Read such a row the way the pair world
-                # meant it: a row naming a real file was on, and "None" was
-                # how off was spelled. Prepending a bare True instead would
-                # come back with every empty row ticked, because "None" is
-                # a valid choice and so the not-on-this-pod guard below
-                # never fires for it.
-                #
-                # Length-sniffed rather than keyed on the tab: Krea2 Edit
-                # offers these same presets and is entitled separately from
-                # the Krea2 tab, so a Krea2-shaped branch here would leave
-                # Edit reading them raw on a licence that grants only Edit.
-                # V2 rows have always been three long and never
-                # match.
-                if len(tail.parts) == 3 and len(row) == 2:
-                    row = [row[0] != blank, row[0], row[1]]
                 known = None
                 for offset, part in enumerate(tail.parts):
                     key = tail.value_key(index, part.name)
                     stored = row[offset] if offset < len(row) else None
                     if part.name == "name":
+                        if stored is None:            # an empty slot
+                            known, values[key] = True, assets.NONE
+                            continue
                         known = stored in part.options()
-                        values[key] = stored if known else "None"
+                        values[key] = stored if known else assets.NONE
                     elif part.name == "enabled":
                         values[key] = bool(stored) if known is not False else False
                     else:
                         ok, value = part.restore(stored)
                         values[key] = value if ok else defaults[index][part.name]
-                # `enabled` is submitted before `name`, so the "this pod
-                # does not have the file" answer is only known after the
+                # `enabled` is submitted before `name`, so the "this tab
+                # does not offer that id" answer is only known after the
                 # loop. Re-applied here rather than by reordering the
                 # parts, which are submission order and cannot move.
                 if known is False and "enabled" in [p.name for p in tail.parts]:
@@ -763,7 +767,7 @@ def _tail_json(tail: Repeat | None):
     slot = next(p for p in tail.parts if p.name == "name")
     weight = next(p for p in tail.parts if p.name == "weight")
     enabled = next(p for p in tail.parts if p.name == "enabled")
-    return {
+    spec = {
         "shape": "triple",
         "count": tail.count(),
         "title": tail.title,
@@ -779,11 +783,16 @@ def _tail_json(tail: Repeat | None):
         "enabledLabel": enabled.label,
         "enabledDefault": bool(_resolve(enabled.default)),
         "parts": names,
-        # Per-slot defaults. V2 takes its rows from the source
-        # workflow's stack rather than from a blank row repeated N times,
-        # and a row whose file did not download comes back off and blank.
+        # Per-slot defaults. V2 has one row per LoRA in its feature's
+        # list, off, at the LoRA's default strength; Krea2 repeats a blank
+        # row.
         "slots": [dict(row) for row in tail.rows()],
     }
+    # The LoRA dropdown's values are ids; these are what it shows.
+    labels = slot.choice_labels()
+    if labels is not None:
+        spec["choiceLabels"] = labels
+    return spec
 
 
 # ══════════════════════════════════════════════════════ shared pieces
@@ -791,14 +800,37 @@ def _tail_json(tail: Repeat | None):
 # forms are the same handful of blocks in a different order, which is
 # a fact seven hand-written layouts could state only by repeating it.
 
-def _lora_choices():
-    """The Krea 2 LoRA folder, read now rather than at import.
+def _lora_choices(feature):
+    """The feature's LoRA ids (plus "None"), read late — see `_resolve`.
 
-    The Gradio UI had a "🔄 Rescan LoRA folder" button for exactly this:
-    the lists were captured at import and a file dropped in afterwards was
-    invisible until a restart. Reading late makes the button unnecessary.
+    Exactly the catalogue's list for this feature: a file on this disk the
+    catalogue does not name is not offered, and a listed LoRA that has not
+    downloaded still is (its label says so; the handler skips it).
     """
-    return ["None"] + handlers.list_lora_files()
+    return lambda: handlers.lora_choices(feature)
+
+
+def _lora_labels(feature):
+    """{lora id: name} for the same dropdown, "None" included."""
+    return lambda: handlers.lora_labels(feature)
+
+
+def _model_field(feature):
+    """The Model dropdown of a Krea tab: its feature's model ids, named.
+
+    The first model in the feature's list is the default, as the
+    catalogue defines it.
+    """
+    return Field("model", "Model", "select",
+                 lambda: handlers.default_model(feature),
+                 choices=lambda: handlers.model_choices(feature),
+                 labels=lambda: handlers.model_labels(feature),
+                 group="core", preset="model", wide=True)
+
+
+def _model_setting(feature, key):
+    """The feature's default model's `steps` or `cfg`, read late."""
+    return lambda: handlers.model_settings(feature)[key]
 
 
 def _blank_slots(count):
@@ -806,35 +838,39 @@ def _blank_slots(count):
     return lambda: tuple({} for _ in range(count))
 
 
-def _stack_slots(loader):
-    """(enabled, name, strength) rows from a source workflow's own stack.
+def _stack_slots(feature):
+    """(enabled, lora id, strength) rows — one per LoRA the feature lists.
 
-    V2 does not repeat a blank row: its rows, order, strengths
-    and on/off states come from the graph they were transcribed from, and
-    `default_lora_slots()` has already switched off any row whose file did
-    not download.
+    V2 does not repeat a blank row: it has a row for every LoRA in its
+    feature's list, in that order, all off and each at its record's
+    default strength (handlers.v2_lora_slots). The tab's Default preset,
+    applied on load, is what switches the usual ones on.
     """
     return lambda: tuple({"enabled": on, "name": name, "weight": strength}
-                         for on, name, strength in loader())
+                         for on, name, strength
+                         in handlers.v2_lora_slots(feature))
 
 
-def _triple_tail(choices, slots, title):
-    """`(enabled, name, weight)` slots — every tab.
+def _triple_tail(feature, slots, title):
+    """`(enabled, lora id, weight)` slots — every Krea tab.
 
     The order inside the row is the submission order of the handler's
     varargs tail, so `enabled` really does come first. Getting it wrong
     shifts every argument after it.
 
     `slots` is the rows callable rather than a loader, because the two
-    families fill their stack from different places: V2 takes
-    its rows from the source workflow (`_stack_slots`), the Krea2 family
-    repeats a blank row (`_blank_slots`). Everything else about the row is
-    the same, which is the point.
+    families fill their stack from different places: V2 has a row per
+    LoRA in its feature's list (`_stack_slots`), the Krea2 family repeats
+    a blank row (`_blank_slots`). The dropdown offers the feature's LoRA
+    ids either way. Everything else about the row is the same, which is
+    the point.
     """
     return Repeat(
         parts=(
             Field("enabled", "On", "bool", False),
-            Field("name", "LoRA {n}", "select", "None", choices=choices),
+            Field("name", "LoRA {n}", "select", assets.NONE,
+                  choices=_lora_choices(feature),
+                  labels=_lora_labels(feature)),
             Field("weight", "Strength", "slider", 1.0, lo=0.0, hi=2.0,
                   step=0.01),
         ),
@@ -843,13 +879,13 @@ def _triple_tail(choices, slots, title):
     )
 
 
-def _krea_lora_tail():
-    """The Krea 2 folder's stack — Krea2 and Edit share it.
+def _krea_lora_tail(feature):
+    """The Krea2 / Krea2 Edit stack: eight blank rows over the feature's list.
 
     Model-only (`LoraLoaderModelOnly`, workflow.py), where the V2 stack is
     model *and* CLIP, so the title stays plain rather than borrowing V2's.
     """
-    return _triple_tail(_lora_choices,
+    return _triple_tail(feature,
                         _blank_slots(handlers.MAX_LORA_SLOTS),
                         "LoRA stack")
 
@@ -904,13 +940,14 @@ def _save_fields():
     )
 
 
-def _v2_sampler_fields(denoise=True):
+def _v2_sampler_fields(feature, denoise=True):
     """The ClownsharKSampler block, shared by the V2 and V2 Edit tabs.
 
     V2 Edit has no Denoise: the source image reaches the model through
     conditioning rather than through the starting latent, so it is pinned
     at 1.0 in the builder. That single difference is the `denoise` flag
-    rather than a second copy of the block.
+    rather than a second copy of the block. Steps and CFG start on the
+    feature's default model record's numbers.
     """
     rows = [
         Field("eta", "Eta", "slider", V2_SAMPLER_DEFAULTS["eta"], lo=0.0,
@@ -922,7 +959,7 @@ def _v2_sampler_fields(denoise=True):
               choices=V2_SCHEDULERS, group="sampler",
               preset="sampler.scheduler", allow_custom=True),
         Field("steps", "Steps", "slider",
-              V2_VARIANT_DEFAULTS["turbo"]["steps"], lo=1, hi=100, step=1,
+              _model_setting(feature, "steps"), lo=1, hi=100, step=1,
               group="sampler", preset="sampler.steps"),
     ]
     if denoise:
@@ -931,7 +968,7 @@ def _v2_sampler_fields(denoise=True):
                   V2_SAMPLER_DEFAULTS["denoise"], lo=0.0, hi=1.0, step=0.01,
                   group="sampler", preset="sampler.denoise"))
     rows += [
-        Field("cfg", "CFG", "slider", V2_VARIANT_DEFAULTS["turbo"]["cfg"],
+        Field("cfg", "CFG", "slider", _model_setting(feature, "cfg"),
               lo=0.0, hi=20.0, step=0.1, group="sampler",
               preset="sampler.cfg", hint=_CFG_NOTE),
         Field("sampler_mode", "Sampler mode", "select", V2_SAMPLER_MODES[0],
@@ -1063,7 +1100,7 @@ VIDEO_KEYS = ("videos", "latest", "status", "seed")
 SCHEMAS = (
 
     TabSchema(
-        model_registry='krea2',
+        model_registry=handlers.KREA_T2I,
         key=Key.KREA_T2I, handler=handlers.generate_single,
         lane=handlers.COMFY_LANE, prompt_field="prompt",
         result_keys=IMAGE_KEYS, tab_id="krea2",
@@ -1080,9 +1117,10 @@ SCHEMAS = (
                   group="prompt", collapsed=True, hint=_CFG_NOTE),
             *_seed_fields(),
             Field("steps", "Steps", "slider",
-                  lambda: handlers.DEFAULTS["steps"], lo=1, hi=60, step=1,
-                  group="sampler", preset="steps"),
-            Field("cfg", "CFG", "slider", lambda: handlers.DEFAULTS["cfg"],
+                  _model_setting(handlers.KREA_T2I, "steps"), lo=1, hi=60,
+                  step=1, group="sampler", preset="steps"),
+            Field("cfg", "CFG", "slider",
+                  _model_setting(handlers.KREA_T2I, "cfg"),
                   lo=0.5, hi=8.0, step=0.1, group="sampler", preset="cfg",
                   hint=_CFG_NOTE),
             Field("resolution", "Resolution", "select", DEFAULT_RESOLUTION,
@@ -1091,19 +1129,16 @@ SCHEMAS = (
             Field("sampler", "Sampler", "select", SAMPLERS[0],
                   choices=SAMPLERS, group="sampler", preset="sampler",
                   wide=True),
-            Field("model", "Model", "select",
-                  lambda: handlers.MODEL_CHOICES[0],
-                  choices=lambda: handlers.MODEL_CHOICES, group="core",
-                  preset="model", wide=True),
+            _model_field(handlers.KREA_T2I),
             _batch_field(),
             *_save_fields(),
             Field("lora_slots", "LoRA stack", "repeat",
-                  repeat=_krea_lora_tail()),
+                  repeat=_krea_lora_tail(handlers.KREA_T2I)),
         ),
     ),
 
     TabSchema(
-        model_registry='v2',
+        model_registry=handlers.KREA_V2_T2I,
         key=Key.KREA_V2_T2I, handler=handlers.generate_v2,
         lane=handlers.COMFY_LANE, prompt_field="prompt",
         result_keys=IMAGE_KEYS, tab_id="krea2v2",
@@ -1127,10 +1162,7 @@ SCHEMAS = (
                   collapsed=True, hint=_CFG_NOTE),
             # The seed the source workflow shipped with, kept as-is.
             *_seed_fields(default=370102505887178),
-            Field("model", "Model", "select",
-                  lambda: handlers.V2_MODEL_CHOICES[0],
-                  choices=lambda: handlers.V2_MODEL_CHOICES, group="core",
-                  preset="model", wide=True),
+            _model_field(handlers.KREA_V2_T2I),
             Field("aspect", "Resolution", "select", V2_DEFAULT_ASPECT,
                   choices=list(V2_ASPECT_RATIOS), group="core",
                   preset="aspect", wide=True),
@@ -1139,7 +1171,7 @@ SCHEMAS = (
                   group="core", preset="megapixels"),
             Field("multiple", "Multiple of", "slider", V2_DEFAULT_MULTIPLE,
                   lo=8, hi=64, step=8, group="core", preset="multiple"),
-            *_v2_sampler_fields(),
+            *_v2_sampler_fields(handlers.KREA_V2_T2I),
             *_v2_variance_fields(),
             Field("sharpen", "Sharpen (radius 1, sigma 0.35, alpha 1)",
                   "bool", False, group="post", preset="sharpen", wide=True),
@@ -1150,14 +1182,14 @@ SCHEMAS = (
             *_save_fields(),
             Field("lora_slots", "LoRA stack", "repeat",
                   repeat=_triple_tail(
-                      _lora_choices,
-                      _stack_slots(handlers.v2_default_lora_slots),
+                      handlers.KREA_V2_T2I,
+                      _stack_slots(handlers.KREA_V2_T2I),
                       "LoRA stack — model + CLIP")),
         ),
     ),
 
     TabSchema(
-        model_registry='krea2',
+        model_registry=handlers.KREA_EDIT,
         key=Key.KREA_EDIT, handler=handlers.generate_edit,
         lane=handlers.COMFY_LANE, prompt_field="prompt",
         result_keys=IMAGE_KEYS, tab_id="edit",
@@ -1183,27 +1215,25 @@ SCHEMAS = (
                   group="prompt", collapsed=True, hint=_CFG_NOTE),
             *_seed_fields(),
             Field("steps", "Steps", "slider",
-                  lambda: handlers.DEFAULTS["steps"], lo=1, hi=60, step=1,
-                  group="sampler", preset="steps"),
-            Field("cfg", "CFG", "slider", lambda: handlers.DEFAULTS["cfg"],
+                  _model_setting(handlers.KREA_EDIT, "steps"), lo=1, hi=60,
+                  step=1, group="sampler", preset="steps"),
+            Field("cfg", "CFG", "slider",
+                  _model_setting(handlers.KREA_EDIT, "cfg"),
                   lo=0.5, hi=8.0, step=0.1, group="sampler", preset="cfg",
                   hint=_CFG_NOTE),
             Field("sampler", "Sampler", "select", SAMPLERS[0],
                   choices=SAMPLERS, group="sampler", preset="sampler",
                   wide=True),
             *_reference_fields(),
-            Field("model", "Model", "select",
-                  lambda: handlers.MODEL_CHOICES[0],
-                  choices=lambda: handlers.MODEL_CHOICES, group="core",
-                  preset="model", wide=True),
+            _model_field(handlers.KREA_EDIT),
             _batch_field(),
             Field("lora_slots", "LoRA stack", "repeat",
-                  repeat=_krea_lora_tail()),
+                  repeat=_krea_lora_tail(handlers.KREA_EDIT)),
         ),
     ),
 
     TabSchema(
-        model_registry='v2',
+        model_registry=handlers.KREA_V2_EDIT,
         key=Key.KREA_V2_EDIT, handler=handlers.generate_v2_edit,
         lane=handlers.COMFY_LANE, prompt_field="prompt",
         result_keys=IMAGE_KEYS, tab_id="v2edit",
@@ -1223,10 +1253,7 @@ SCHEMAS = (
                   V2_DEFAULT_NEGATIVE, lines=3, group="prompt",
                   collapsed=True, hint=_CFG_NOTE),
             *_seed_fields(),
-            Field("model", "Model", "select",
-                  lambda: handlers.V2_MODEL_CHOICES[0],
-                  choices=lambda: handlers.V2_MODEL_CHOICES, group="core",
-                  preset="model", wide=True),
+            _model_field(handlers.KREA_V2_EDIT),
             *_reference_fields(),
             Field("fit_mode",
                   "Reference geometry (fit = v1.2; the legacy crop is for "
@@ -1235,13 +1262,13 @@ SCHEMAS = (
                   group="reference", wide=True),
             # No Denoise: the source reaches the model through conditioning
             # rather than the starting latent, so the builder pins it at 1.0.
-            *_v2_sampler_fields(denoise=False),
+            *_v2_sampler_fields(handlers.KREA_V2_EDIT, denoise=False),
             *_v2_variance_fields(),
             _batch_field(),
             Field("lora_slots", "LoRA stack", "repeat",
                   repeat=_triple_tail(
-                      _lora_choices,
-                      _stack_slots(handlers.v2_default_lora_slots),
+                      handlers.KREA_V2_EDIT,
+                      _stack_slots(handlers.KREA_V2_EDIT),
                       "LoRA stack — model + CLIP")),
         ),
     ),
@@ -1403,39 +1430,48 @@ BESPOKE = (
 
 # ══════════════════════════════════════════════ the reactivity catalogue
 # What the ~150 lines of *_changed handlers in ui.py were made of. Every
-# one of them is a lookup in a dict config.py already holds — a model
-# dropdown that resets Steps and CFG, a Wan mode radio that does the same,
-# a model that swaps its trigger words into the prompt. Shipped as
-# data so React applies them locally, with no round trip and no second
-# copy of the same three numbers.
+# one of them is a lookup in data the pod already holds — a model
+# dropdown that resets Steps and CFG from the model record, a Wan mode
+# radio that does the same, a model that swaps its trigger words into the
+# prompt. Shipped as data so React applies them locally, with no round
+# trip and no second copy of the same three numbers.
+
+# The V2 family's rows carry one more default than the Krea2 family's:
+# whether the model's recipe switches its turbo LoRA on.
+_V2_FEATURES = (handlers.KREA_V2_T2I, handlers.KREA_V2_EDIT)
 
 
-def _model_rows(registry, variant_defaults, keys, available, info):
-    """One model registry, flattened for the browser.
+def _model_rows(feature):
+    """One feature's model list, flattened for the browser.
 
-    `keys` names the per-variant numbers this family has — (steps, cfg)
-    for Krea 2, (steps, cfg, turbo_lora) for V2 — because the
-    registries genuinely differ and pretending otherwise would mean the
-    browser guessing which of the two a name means.
+    `defaults` is (steps, cfg) for Krea2 / Krea2 Edit and (steps, cfg,
+    turbo_lora) for the V2 tabs, because the two families genuinely
+    differ and pretending otherwise would mean the browser guessing which
+    of the two a row means. `id` is the dropdown's value; `name` its label.
     """
+    v2 = feature in _V2_FEATURES
     rows = []
-    for entry in registry:
-        variant = entry.get("variant", "turbo")
-        defaults = dict(variant_defaults.get(variant, {}))
-        for key in keys:
-            if key in entry:
-                defaults[key] = entry[key]
+    for model in assets.feature_models(feature):
+        if v2:
+            steps, cfg, turbo = handlers.v2_model_defaults(model)
+            defaults = {"steps": steps, "cfg": cfg, "turbo_lora": turbo}
+            info = handlers._v2_model_info_text(model)
+        else:
+            steps, cfg = handlers.model_defaults(model)
+            defaults = {"steps": steps, "cfg": cfg}
+            info = handlers._model_info_text(model)
         rows.append({
-            "name": entry["name"],
-            "file": entry.get("file"),
-            "variant": variant,
-            "trigger": entry.get("trigger") or "",
-            "defaults": {key: defaults.get(key) for key in keys},
+            "id": model.id,
+            "name": model.name,
+            "file": model.file,
+            "variant": model.variant,
+            "trigger": model.trigger or "",
+            "defaults": defaults,
             # The model info line under every Model dropdown, which the
             # React app has no other way to render: whether the weights
             # are on this pod is a fact about this pod's disk.
-            "available": bool(available(entry)),
-            "info": info(entry),
+            "available": bool(handlers.model_file_available(model)),
+            "info": info,
         })
     return rows
 
@@ -1451,16 +1487,11 @@ def catalog() -> dict:
         "tabs": [s.to_json() for s in entitled()],
         "bespoke": [row for row in BESPOKE
                     if features.enabled(row["key"])],
+        # Keyed by feature key — each entitled Krea tab's own list, which
+        # is what its schema's `modelRegistry` names.
         "models": {
-            "krea2": _model_rows(
-                KREA2_MODELS, VARIANT_DEFAULTS, ("steps", "cfg"),
-                lambda e: handlers.model_file_available(e),
-                handlers._model_info_text),
-            "v2": _model_rows(
-                V2_MODELS, V2_VARIANT_DEFAULTS,
-                ("steps", "cfg", "turbo_lora"),
-                lambda e: handlers.v2_model_available(e),
-                handlers._v2_model_info_text),
+            s.model_registry: _model_rows(s.model_registry)
+            for s in entitled() if s.model_registry
         },
         # The Wan tab's model radio disables the mode radio for the 5B —
         # it has no Lightning distillation — and both radios reset Steps
