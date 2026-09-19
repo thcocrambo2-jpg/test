@@ -8,7 +8,7 @@ import s from './tabs.module.css'
  *
  * Stage A ships one tab on purpose. Mocks cannot validate an image upload,
  * SSE through a proxy or video playback, and finding out
- * that an assumption was wrong eleven tabs deep is the one way this project
+ * that an assumption was wrong seven tabs deep is the one way this project
  * goes badly wrong. So Krea2 goes end to end against the real API
  * in Section 2 first, and the rest follow.
  *

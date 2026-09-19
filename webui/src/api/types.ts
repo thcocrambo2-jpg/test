@@ -24,7 +24,7 @@ export type FieldType =
  *
  *  This is a property of the *schema*, not of the layout code — which is the
  *  fix for the defect where V2 and V2 Edit put Steps/CFG/Sampler in the output
- *  column and the other eight tabs did not. The layout renders what the schema
+ *  column and the other five tabs did not. The layout renders what the schema
  *  says; moving a control is a one-word edit in `tabMeta.ts`. */
 export type FieldColumn = 'left' | 'right'
 
@@ -67,12 +67,11 @@ export interface Field {
 
 /** How a tab's LoRA tail is shaped.
  *
- *  Two shapes exist and the difference is real (context.md §4.3): `pair`
- *  slots submit (name, weight); `triple` slots submit (enabled, name, weight)
- *  because the Power-Lora-Loader tabs carry a per-row on/off checkbox.
- *  Getting this wrong shifts every argument after it. */
+ *  Every stack submits triples (enabled, name, weight), because each row
+ *  carries a per-row on/off checkbox (context.md §4.3). Getting the order
+ *  wrong shifts every argument after it. */
 export interface LoraSpec {
-  shape: 'pair' | 'triple'
+  shape: 'triple'
   count: number
   /** The prefix values are sent under: `lora.0.weight`. */
   key: string
@@ -89,7 +88,7 @@ export interface LoraSpec {
   weightMax: number
   weightStep: number
   weightDefault: number
-  enabledLabel: string | null
+  enabledLabel: string
   enabledDefault: boolean
   /** Per-slot defaults. V2 takes its rows from the source
    *  workflow's own stack rather than a blank row repeated N times, and a
@@ -107,7 +106,7 @@ export type TabCategory = 'generate' | 'edit' | 'video' | 'library'
  *  Section 2 serves these from `tabschema.py`. */
 export interface GroupSpec {
   id: string
-  title?: string
+  title: string
   /** Which component renders the group's body. */
   renderer?: 'default' | 'seed' | 'sampler' | 'variance'
   collapsible?: boolean
@@ -135,9 +134,8 @@ export interface TabSchema {
   lora: LoraSpec | null
   ready: boolean
   submitLabel: string
-  /** Which field names the job in the queue. Null for a tab whose work
-   *  has no prompt. */
-  promptField: string | null
+  /** Which field names the job in the queue. */
+  promptField: string
   /** What this tab's handler yields, position by position. */
   resultKeys: string[]
   /** The presets tab this tab's dropdown reads, or null. A preset is

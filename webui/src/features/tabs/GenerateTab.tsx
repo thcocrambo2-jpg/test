@@ -14,12 +14,12 @@ import { OutputPanel } from './OutputPanel'
 import s from '@/components/SchemaForm/form.module.css'
 
 /*
- * Nine of the eleven tabs. All of them.
+ * Seven of the nine tabs. All of them.
  *
  * There is no per-tab code anywhere in this app any more. Krea2 was built
  * first on purpose — it exercises the schema form, SSE, the queue panel and
  * the gallery plumbing — and once those worked end to end against the real
- * API the remaining eight arrived as data. Labels, types, defaults, ranges,
+ * API the remaining six arrived as data. Labels, types, defaults, ranges,
  * choices, grouping, column, conditional visibility and submission order all
  * come from `tabschema.py`, which is checked against the handler signatures
  * at import and against the parity baseline by `scripts/check_schema.py`.
@@ -171,9 +171,8 @@ export function GenerateTab({ schema }: { schema: TabSchema }) {
 
   /* Picking a model resets the dials that belong to it.
    *
-   * This is what `krea_model_changed`, `v2_model_changed`,
-   * `flux_model_changed` and `klein_model_changed` did — roughly 150 lines of
-   * Gradio `.change()` wiring between them, over data that already sat in
+   * This is what `krea_model_changed` and `v2_model_changed` did — Gradio
+   * `.change()` wiring over data that already sat in
    * config.py. The registries arrive whole in `/catalog`, so it happens here
    * with no round trip, and the same four lines serve all four tabs.
    *
@@ -217,7 +216,7 @@ export function GenerateTab({ schema }: { schema: TabSchema }) {
     try {
       await submitJob({
         schema,
-        prompt: String(schema.promptField ? (values[schema.promptField] ?? '') : ''),
+        prompt: String(values[schema.promptField] ?? ''),
         values,
       })
     } finally {

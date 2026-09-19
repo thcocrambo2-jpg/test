@@ -106,8 +106,8 @@ from workflow_wan import (
     wan_models_available,
 )
 
-# Number of LoRA slots every stacking tab renders (Single, Edit,
-# Flux). The UI rows, the handlers and the workflow chain are all driven
+# Number of LoRA slots every stacking tab renders (Single and Edit).
+# The UI rows, the handlers and the workflow chain are all driven
 # from this, so changing it here is the whole change.
 MAX_LORA_SLOTS = 8
 # Slots past this stay in a collapsed accordion so a tall stack does not

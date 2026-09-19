@@ -129,8 +129,8 @@ VAE_FILE = "qwen_image_vae.safetensors"                      # ~0.25 GB
 # Registry of selectable Krea 2 diffusion models (UNets) — same spirit as
 # the LoRA lists further down: add an entry, restart (downloads are
 # idempotent and a failed one never aborts setup), and it appears in the
-# Model dropdown of the generate / edit tabs and as "model" in
-# JSON batch jobs. The FIRST entry is the default. Fields:
+# Model dropdown of the generate / edit tabs. The FIRST entry is the
+# default. Fields:
 #   name            — unique label shown in the UI dropdown
 #   file            — filename saved under models/diffusion_models/
 #   variant         — "turbo" or "raw"; supplies the step/CFG defaults
@@ -143,7 +143,7 @@ VAE_FILE = "qwen_image_vae.safetensors"                      # ~0.25 GB
 #                     urn:air:krea2:unet:civitai:2762538@3118978
 #                     (most downloads need CIVITAI_TOKEN)
 #   trigger         — optional trigger words, auto-prepended to the prompt
-#                     whenever this model is used (generate/JSON;
+#                     whenever this model is used (generate;
 #                     not in Edit instructions)
 KREA2_MODELS = [
     {
@@ -669,9 +669,6 @@ MINIMAX_DEFAULT_ASPECT = "9:16 (Portrait Widescreen)"
 # in. app.py asks the running server for it whenever either tab is granted.
 MINIMAX_NODE = "MiniMaxH3ImageToVideo"
 MINIMAX_COMFYUI_MIN = "v0.34.0"
-
-FLUX_HF_REPO = "Comfy-Org/flux2-dev"
-FLUX_VAE = "flux2-vae.safetensors"                           # ~0.34 GB
 
 # ── CivitAI LoRAs ─────────────────────────────────────────────────────────────
 # Entries are (model_version_id, filename_to_save_as). The version id is the

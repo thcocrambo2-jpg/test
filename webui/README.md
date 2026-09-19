@@ -15,10 +15,10 @@ npm run typecheck
 
 Stage A is done: the spine plus **Krea2 t2i**, the pricing and
 showcase page, the header/footer, the queue panel, the gallery and the theme
-toggle. The other eight schema-driven tabs have their schemas derived already
+toggle. The other six schema-driven tabs have their schemas derived already
 but render a "Stage B" page instead of a form — deliberately, because a mock
 cannot validate an image upload, SSE through a proxy or video playback, and
-finding out an assumption was wrong ten tabs later is
+finding out an assumption was wrong six tabs later is
 expensive. Section 2 wires it to the real API first.
 
 ## Where things are
@@ -62,9 +62,8 @@ becomes `tabschema.py`.
 **Submission order.** `schema.fields` is baseline order is the Python
 handler's positional order. `toSubmission()` (`lib/schema.ts`) walks that list;
 rendering regroups freely. Index `i` of the result is positional parameter `i`.
-The LoRA tail is appended flat, as pairs *or* triples per `schema.lora.shape`
-— both shapes exist and confusing them shifts every argument after the stack
-(context.md §4.3).
+The LoRA tail is appended flat, as (enabled, name, weight) triples — getting
+that order wrong shifts every argument after the stack (context.md §4.3).
 
 ## Colours
 

@@ -451,7 +451,7 @@ def _freeze(job: Job, value) -> dict:
     """A yield, named and copied so it cannot change under its reader.
 
     **Named**, because a positional tuple was the one Gradio-shaped thing
-    left in this module: `result[1]` is the status on nine tabs and
+    left in this module: `result[1]` is the status on four tabs and
     `result[2]` on the video one, and every consumer had to be told which.
     Zipping `job.result_keys` on removes the question.
 

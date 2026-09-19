@@ -368,7 +368,7 @@ def _recipe_prompt(recipe) -> str:
     fields are in submission order, so the two line up exactly.
     """
     schema = tabschema.BY_KEY.get(str(recipe.get("tab")))
-    if schema is None or not schema.prompt_field:
+    if schema is None:
         return ""
     names = [f.name for f in schema.named()]
     try:
@@ -853,7 +853,7 @@ def _failure(status: str, text: str):
     as a success. FAILED itself is the narrower case: the handler raised.
 
     The cross is the whole convention and it is used consistently across
-    all eleven handlers, so matching on it is matching on a rule this app
+    all seven handlers, so matching on it is matching on a rule this app
     already keeps rather than on a coincidence.
     """
     line = (text or "").strip()
@@ -1053,15 +1053,12 @@ def _preset_settings(tab, name):
 
 
 def _job_title(schema, values) -> str:
-    """A one-line name for a queued job — its prompt, where it has one.
+    """A one-line name for a queued job — its prompt.
 
     Truncated hard: the queue is a list to scan, not a place to read a
-    prompt back. A tab whose work has no prompt at all
-    gets a dash, which is honest — what identifies those jobs is their
-    tab and their place in the line.
+    prompt back. An empty prompt gets a dash, which is honest — what
+    identifies that job is its tab and its place in the line.
     """
-    if not schema.prompt_field:
-        return "—"
     text = " ".join(str(values.get(schema.prompt_field) or "").split())
     if not text:
         return "—"

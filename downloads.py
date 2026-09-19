@@ -210,7 +210,7 @@ def fetch_edit_lora() -> None:
 def fetch_repackaged_file(repo: str, relpath: str) -> None:
     """Download one file from a Comfy-Org repackaged repo into MODELS_DIR.
 
-    These repos (Wan 2.2, Flux 2) keep everything under split_files/,
+    The Wan 2.2 repo keeps everything under split_files/,
     which local_dir downloads would mirror — so the file is moved up one
     level afterwards (a same-filesystem rename, no extra disk needed).
     """

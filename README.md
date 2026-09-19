@@ -560,9 +560,6 @@ npm run issue-key -- --name "Acme Corp" --plan creator --seats 2
 The three shipped plans stack: `starter` (₹599/mo) is `krea_t2i`, the
 gallery and the prompt library; `creator` (₹999) adds Krea 2 V2 and both edit
 tabs; `studio` (₹1799) adds Wan and both MiniMax video tabs.
-`krea_inpaint`, `flux_t2i` and `klein_i2i` are on no public
-plan since 2026-09-07 and are hidden from the pricing page — the code is
-still here, and the internal `admin` plan still grants them.
 `license-validator/README.md` has the full table and how to change it.
 
 Shared weights are handled for you — `krea_edit` runs the same Krea 2
@@ -579,7 +576,7 @@ customer can buy.
 
 Keys are permanent and names are not: a key is compiled into every shipped
 binary, so renaming one drops that tab for anyone on an older build — the
-client warns and ignores it. The seven model-bound keys were renamed to
+client warns and ignores it. Four of the model-bound keys were renamed to
 `<model>_<task>` before any key was issued, which is the only window in
 which that is free. There is no alias map for the old names.
 
@@ -1106,7 +1103,7 @@ recorded cannot drift from what is submitted.
 
 Three things are deliberately left out:
 
-- **Uploaded files** — a source image, a JSON batch file.
+- **Uploaded files** — a source image.
   Storing those would turn a few hundred bytes a picture into a second
   copy of the input; the panel says how many a recipe needed so you know
   to pick them again.
@@ -1282,7 +1279,7 @@ error in the log points at a custom node instead.
 - `client.py` — ComfyUI HTTP/websocket client (queue, progress, image upload, interrupt)
 - `jobqueue.py` — the visible job queue behind every Generate button (worker per lane, cancel, history)
 - `recipes.py` — what each generated file was made with, so the Gallery can load it back
-- `handlers.py` — the ten `generate_*` generators and the queue runners; imports no web framework at all
+- `handlers.py` — the seven `generate_*` generators and the queue runners; imports no web framework at all
 - `tabschema.py` — one declarative schema per tab: every control, its label, bounds and submission order
 - `api.py` — FastAPI routes, the licence gate on each of them, uploads and the SSE event stream
 - `serve.py` — uvicorn plus the Cloudflare quick tunnel that provides the public URL
@@ -1305,14 +1302,14 @@ Two things follow from that, and both were impossible before.
 
 **The nav is grouped, not a flat strip.** Four groups — Generate, Edit,
 Video, Library — in `CATEGORY_ORDER` (`webui/src/lib/nav.ts`). The old strip
-was eleven flat emoji tabs with generate and edit modes interleaved, in an
-order that told you nothing about which of them made a picture from nothing
-and which changed one you already had.
+was seven flat emoji tabs in one row, which told you nothing about which
+of them made a picture from nothing and which changed one you already
+had.
 
 **Every tab has a URL.** `/generate/krea2`, `/edit/krea2-edit`,
 `/library/gallery`. They are bookmarkable, linkable and survive a reload;
 the browser Back button walks them. The Gradio app had one URL for all
-eleven tabs.
+seven tabs.
 
 A feature the licence does not grant is not in `/api/v1/session`'s `features`
 array, so its nav entry is not rendered and its routes 403 — see
@@ -2132,7 +2129,7 @@ the prompt box — visible and editable, never appended silently; delete
 them if you don't want them. A model whose download failed shows a warning
 under the dropdown and refuses to run, without affecting the others.
 
-The generate / edit / Flux tabs each stack **`MAX_LORA_SLOTS`
+The generate / edit tabs each stack **`MAX_LORA_SLOTS`
 LoRA slots** (`tabschema.py`, currently 8). That one constant drives the rows,
 the handlers and the `LoraLoaderModelOnly` chain, so changing it is the
 whole change — the handlers take their slots as a variadic tail and the
@@ -2312,7 +2309,7 @@ the Gallery like Wan's.
   what it has, and `comfy.verify_core_node` logs which tab that costs.
 - The move was checked before it was made. Under v0.34.0, the four pinned
   node packs (RES4LYF, RBG Smart Seed Variance, post-processing, Krea2Edit)
-  all import without error, and all twelve golden
+  all import without error, and all eight golden
   workflows — every existing tab's graph — pass its prompt validator
   unchanged. `python scripts/golden.py --check` is byte-identical before
   and after.

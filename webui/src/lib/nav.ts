@@ -3,11 +3,10 @@ import type { TabCategory } from '@/api/types'
 /*
  * The navigation, grouped.
  *
- * The Gradio app had eleven flat emoji tabs with generate and edit modes
- * interleaved — Krea2, Krea2 V2, Inpaint, Krea2 Edit, V2 Edit, Flux2D,
- * Klein Edit, Wan Video, Prompt Library, Gallery, JSON Batch, in that order.
- * Nothing about that order tells you that three of them make pictures from
- * nothing and four of them change a picture you already have.
+ * The Gradio app had seven flat emoji tabs in one row — Krea2, Krea2 V2,
+ * Krea2 Edit, V2 Edit, Wan Video, Prompt Library, Gallery. Nothing about a
+ * flat row tells you that two of them make pictures from nothing and two of
+ * them change a picture you already have.
  *
  * The categories are not invented here: the licence server already stores
  * `category` per feature (generation / editing / video / tools) in the
@@ -27,7 +26,7 @@ export const CATEGORY_LABEL: Record<TabCategory, string> = {
 export const CATEGORY_ORDER: TabCategory[] = ['generate', 'edit', 'video', 'library']
 
 /** Tabs with no schema-driven form — bespoke pages. Gallery and Prompt Library
- *  are the only two of the eleven that are genuinely their own thing. */
+ *  are the only two of the nine that are genuinely their own thing. */
 export interface BespokeNavItem {
   key: string
   label: string

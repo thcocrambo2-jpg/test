@@ -173,10 +173,6 @@
   transition: border-color var(--d-fast) var(--e-out), opacity var(--d-fast) var(--e-out);
 }
 
-.loraSlotPair {
-  grid-template-columns: minmax(0, 1fr);
-}
-
 .loraSlotIdle {
   opacity: 0.62;
 }

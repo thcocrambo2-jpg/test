@@ -6,17 +6,12 @@ import { cx } from '@/lib/util'
 import s from '@/components/SchemaForm/form.module.css'
 
 /*
- * One LoRA stack, both shapes.
+ * One LoRA stack.
  *
- * Two submission shapes still exist and they are not interchangeable:
- * **triples** (enabled, name, weight), whose rows carry a per-row on/off
- * checkbox, and **pairs** (name, weight).
- * Flattening that distinction shifts every argument after the stack,
- * silently, and the pictures come back subtly wrong rather than the
- * request failing. See context.md §4.3.
- *
- * `spec.shape` is read off the baseline in `fromBaseline.ts`, so this
- * component never guesses which one it has.
+ * Every stack submits **triples** (enabled, name, weight), and each row
+ * carries a per-row on/off checkbox. Getting that order wrong shifts every
+ * argument after the stack, silently, and the pictures come back subtly
+ * wrong rather than the request failing. See context.md §4.3.
  */
 export function LoraStack({
   spec,
@@ -35,8 +30,7 @@ export function LoraStack({
   const active = slots.filter((index) => {
     const name = String(values[`lora.${index}.name`] ?? none)
     if (name === none) return false
-    if (spec.shape === 'triple') return Boolean(values[`lora.${index}.enabled`])
-    return true
+    return Boolean(values[`lora.${index}.enabled`])
   })
 
   // A stack of eight "None" dropdowns is eight rows of nothing, which is what
@@ -77,35 +71,28 @@ export function LoraStack({
                   const weightKey = `lora.${index}.weight`
                   const enabledKey = `lora.${index}.enabled`
                   const chosen = String(values[nameKey] ?? none)
-                  const enabled =
-                    spec.shape === 'triple' ? Boolean(values[enabledKey]) : chosen !== none
+                  const enabled = Boolean(values[enabledKey])
                   return (
                     <div
                       key={index}
-                      className={cx(
-                        s.loraSlot,
-                        spec.shape === 'pair' && s.loraSlotPair,
-                        !enabled && s.loraSlotIdle,
-                      )}
+                      className={cx(s.loraSlot, !enabled && s.loraSlotIdle)}
                     >
-                      {spec.shape === 'triple' && (
-                        <div className={s.loraToggle}>
-                          <BoolField
-                            label=""
-                            value={Boolean(values[enabledKey])}
-                            onChange={(next) => onChange(enabledKey, next)}
-                          />
-                        </div>
-                      )}
+                      <div className={s.loraToggle}>
+                        <BoolField
+                          label=""
+                          value={Boolean(values[enabledKey])}
+                          onChange={(next) => onChange(enabledKey, next)}
+                        />
+                      </div>
                       <SelectField
                         label={`${spec.slotLabel} ${index + 1}`}
                         value={chosen}
                         choices={spec.choices}
                         onChange={(next) => {
                           onChange(nameKey, next)
-                          // Choosing a LoRA in a triple row and leaving the row
-                          // switched off is never what anyone meant.
-                          if (spec.shape === 'triple' && next !== none) {
+                          // Choosing a LoRA and leaving the row switched off
+                          // is never what anyone meant.
+                          if (next !== none) {
                             onChange(enabledKey, true)
                           }
                         }}
@@ -132,7 +119,7 @@ export function LoraStack({
                     slots.forEach((index) => {
                       onChange(`lora.${index}.name`, none)
                       onChange(`lora.${index}.weight`, spec.weightDefault)
-                      if (spec.shape === 'triple') onChange(`lora.${index}.enabled`, false)
+                      onChange(`lora.${index}.enabled`, false)
                     })
                   }
                 >

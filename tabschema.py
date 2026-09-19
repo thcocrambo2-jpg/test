@@ -61,7 +61,7 @@ What is deliberately not here
 The ~150 lines of `*_changed` handlers in ui.py. `krea_model_changed`,
 `v2_model_changed`, `wan_mode_changed` and friends are reactivity over
 data that already sits in config.py — VARIANT_DEFAULTS, V2_VARIANT_
-DEFAULTS, WAN_MODE_DEFAULTS, KLEIN_DEFAULTS. The
+DEFAULTS, WAN_MODE_DEFAULTS. The
 API ships that data in `/api/v1/catalog` (see `catalog()`) and React
 applies it, which is one round trip saved per keystroke and one fewer
 copy of the same three numbers.
@@ -214,7 +214,7 @@ class Field:
     shown — which lives here rather than in the React layout so that
     moving a control is a one-word edit in one language (Section 1's
     decision 5, and the fix for V2's Steps/CFG/Sampler having sat in the
-    *output* column while the other eight tabs put them with the controls).
+    *output* column while the other five tabs put them with the controls).
     """
 
     # ── the contract ────────────────────────────────────────────────
@@ -387,7 +387,7 @@ class Group:
     """How a tab's fields are gathered for the eye. Layout, not contract."""
 
     id: str
-    title: str | None = None
+    title: str
     renderer: str = "default"        # default|seed|sampler|variance
     collapsible: bool = False
     default_open: bool = True
@@ -395,9 +395,8 @@ class Group:
     column: str | None = None
 
     def to_json(self) -> dict:
-        row = {"id": self.id, "renderer": self.renderer}
-        if self.title:
-            row["title"] = self.title
+        row = {"id": self.id, "renderer": self.renderer,
+               "title": self.title}
         if self.collapsible:
             row["collapsible"] = True
             row["defaultOpen"] = self.default_open
@@ -416,7 +415,7 @@ class TabSchema:
     key: Key                        # features.Key — what the licence gates
     handler: Callable               # the generator in handlers.py
     lane: str                       # jobqueue lane; video gets its own
-    prompt_field: str | None        # names the queue row; None = "—"
+    prompt_field: str               # names the queue row
     result_keys: tuple              # what the handler's yield tuple means
     fields: tuple                   # SUBMISSION ORDER. Never reorder.
 
@@ -587,8 +586,7 @@ class TabSchema:
         Built from `Field.preset`, which is a dotted path — "model",
         "sampler.eta", "variance.cutoff_step" — so the nesting the V2 tab
         stores falls out of the field list rather than out of a second
-        hand-written function. The LoRA rows are appended in the shape
-        that tab's own reader expects: pairs as [name, weight], triples as
+        hand-written function. The LoRA rows are appended as
         [enabled, name, weight].
 
         `test_settings_match_ui()` asserts this equals `_krea_settings`
@@ -764,24 +762,22 @@ def _tail_json(tail: Repeat | None):
     names = [p.name for p in tail.parts]
     slot = next(p for p in tail.parts if p.name == "name")
     weight = next(p for p in tail.parts if p.name == "weight")
-    enabled = next((p for p in tail.parts if p.name == "enabled"), None)
+    enabled = next(p for p in tail.parts if p.name == "enabled")
     return {
-        "shape": "triple" if enabled is not None else "pair",
+        "shape": "triple",
         "count": tail.count(),
         "title": tail.title,
         "key": tail.key,
         "choices": list(slot.options()),
         # "LoRA {n}" -> "LoRA"; the slot number is the renderer's business.
         "slotLabel": slot.label.replace(" {n}", ""),
-        # "Weight" on the pair tabs, "Strength" on the triple ones. Kept
-        # apart because they are different words in the app people use.
         "weightLabel": weight.label,
         "weightMin": weight.lo,
         "weightMax": weight.hi,
         "weightStep": weight.step,
         "weightDefault": _resolve(weight.default),
-        "enabledLabel": enabled.label if enabled else None,
-        "enabledDefault": bool(_resolve(enabled.default)) if enabled else False,
+        "enabledLabel": enabled.label,
+        "enabledDefault": bool(_resolve(enabled.default)),
         "parts": names,
         # Per-slot defaults. V2 takes its rows from the source
         # workflow's stack rather than from a blank row repeated N times,
@@ -791,9 +787,9 @@ def _tail_json(tail: Repeat | None):
 
 
 # ══════════════════════════════════════════════════════ shared pieces
-# Written once and referenced from every tab that has them. Nine of the
-# ten forms are the same handful of blocks in a different order, which is
-# a fact eleven hand-written layouts could state only by repeating it.
+# Written once and referenced from every tab that has them. The seven
+# forms are the same handful of blocks in a different order, which is
+# a fact seven hand-written layouts could state only by repeating it.
 
 def _lora_choices():
     """The Krea 2 LoRA folder, read now rather than at import.
@@ -859,13 +855,13 @@ def _krea_lora_tail():
 
 
 def _seed_fields(default=42):
-    """Seed and the random tick — byte-identical on eight tabs.
+    """Seed and the random tick — byte-identical on seven tabs.
 
     Batch count is deliberately *not* here even though it renders in the
     same row (`group="seed"`). It sits at a different place in every
     signature — last, after the model — and `fields` is submission order,
     so grouping it with its neighbours on screen would have shifted two
-    arguments on eight tabs. Which is exactly what _assert_signatures()
+    arguments on seven tabs. Which is exactly what _assert_signatures()
     caught the first time this file was written, and the reason that
     check is worth its weight.
 
@@ -1028,7 +1024,7 @@ G_VARIANCE = Group("variance", "Variance", renderer="variance",
                    collapsible=True, default_open=False)
 G_INPUTS = Group("inputs", "Images", column="right")
 # The two that used to be written out per tab, which is how one of them
-# ended up titled "Output" on three tabs and "Sampling" on two while
+# ended up titled "Output" on three tabs and "Sampling" on one while
 # holding the same kind of thing. Shared so they cannot drift again.
 G_CORE = Group("core", "Output", dense=True)
 G_REFERENCE = Group("reference", "Reference", dense=True)
@@ -1059,7 +1055,7 @@ IMAGE_KEYS = ("images", "status", "seed")
 VIDEO_KEYS = ("videos", "latest", "status", "seed")
 
 
-# ═══════════════════════════════════════════════════ the eleven tabs
+# ═══════════════════════════════════════════════════ the seven tabs
 # Order is the order they appear in the navigation, which is ui.TAB_ORDER's
 # order with the two bespoke tabs (Gallery, Prompt Library) taken out —
 # those have no form and so no schema.
@@ -1117,8 +1113,8 @@ SCHEMAS = (
         submit_label="Generate", preset_tab=presets.TAB_KREA2_V2,
         preset_note=GEN_PRESET_NOTE,
         groups=(G_PROMPT, G_CORE,
-                # In ui.py these sat in the *output* column, alone among the
-                # ten tabs. They are controls, so they go with the controls.
+                # In ui.py these sat in the *output* column, as on V2 Edit and
+                # no other tab. They are controls, so they go with the controls.
                 G_SAMPLER, G_VARIANCE,
                 Group("post", "Post-processing", dense=True, collapsible=True,
                       default_open=False),
@@ -1544,7 +1540,7 @@ def _assert_signatures() -> None:
         if len(set(names)) != len(names):
             raise RuntimeError("tabschema %s: duplicate field names" % where)
 
-        if schema.prompt_field and schema.field(schema.prompt_field) is None:
+        if schema.field(schema.prompt_field) is None:
             raise RuntimeError("tabschema %s: prompt_field %r is not a field"
                                % (where, schema.prompt_field))
 
