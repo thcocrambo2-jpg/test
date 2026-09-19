@@ -1,5 +1,5 @@
-// Remove a feature key from the database: every plan, every licence, and
-// the catalogue row itself.
+// Remove a feature key from the database: every plan, every licence, the
+// catalogue row itself, and the tab's model and LoRA lists.
 //
 //   npm run remove-feature -- --feature some_key            # dry run
 //   npm run remove-feature -- --feature some_key --apply    # write
@@ -11,13 +11,17 @@
 // What --apply does, in this order:
 //
 //   1. backs up every document it is about to change — the plans, the
-//      licences and the features row, whole — to one timestamped EJSON
-//      file, and reads that file back before touching anything. The file
-//      goes OUTSIDE the repository (default ~/krea2-db-backups), because it
-//      holds licence keys in plain text;
+//      licences, the features row and the feature_assets row, whole — to
+//      one timestamped EJSON file, and reads that file back before
+//      touching anything. The file goes OUTSIDE the repository (default
+//      ~/krea2-db-backups), because it holds licence keys in plain text;
 //   2. $pull the key from plans.features;
 //   3. $pull it from licenses.features and licenses.features_extra;
-//   4. deletes the features document whose _id is the key.
+//   4. deletes the features document whose _id is the key;
+//   5. deletes the feature_assets document whose _id is the key — the
+//      tab's model and LoRA lists. The loras and models records themselves
+//      are left alone: they are shared between tabs, and one that no
+//      remaining feature lists is simply offered nowhere.
 //
 // Stored values are matched the way the server reads them (normalizeKey):
 // case-insensitive, surrounding whitespace ignored, and "-" or a space
@@ -32,7 +36,9 @@
 //
 // It refuses to run while src/features.js still lists the key: the next
 // seed-catalog would put the row straight back. Remove it from FEATURES
-// (and from every plan in DEFAULT_PLANS) first.
+// (and from every plan in DEFAULT_PLANS) first. The same goes for the
+// `features` object in data/assets.json, which seed-assets writes into
+// feature_assets.
 //
 // Restoring is a matter of replacing each document from the backup file
 // by _id; the file is EJSON, so dates and ids survive the round trip.
@@ -101,10 +107,21 @@ for (const plan of DEFAULT_PLANS) {
     stillSeeded.push(`DEFAULT_PLANS "${plan._id}" in src/plans.js`);
   }
 }
+const assetsFile = resolve(
+  dirname(fileURLToPath(import.meta.url)), "..", "data", "assets.json",
+);
+try {
+  const seededAssets = JSON.parse(readFileSync(assetsFile, "utf8"));
+  if (Object.hasOwn(seededAssets.features || {}, feature)) {
+    stillSeeded.push("features in data/assets.json");
+  }
+} catch (err) {
+  die(`could not read ${assetsFile}: ${err.message}`);
+}
 if (stillSeeded.length) {
   die(
     `"${feature}" is still in the seed data, so the next seed-catalog run ` +
-      "would restore it:",
+      "(or seed-assets) run would restore it:",
     ...stillSeeded.map((where) => `  ${where}`),
     "Remove it there first.",
   );
@@ -134,13 +151,14 @@ const pattern = new RegExp(
   "i",
 );
 
-const { plans, licenses, features } = await collections();
+const { plans, licenses, features, feature_assets } = await collections();
 
 const planDocs = await plans.find({ features: pattern }).toArray();
 const licenseDocs = await licenses
   .find({ $or: [{ features: pattern }, { features_extra: pattern }] })
   .toArray();
 const featureDoc = await features.findOne({ _id: feature });
+const assetsDoc = await feature_assets.findOne({ _id: feature });
 
 const inFeatures = licenseDocs.filter(
   (doc) => Array.isArray(doc.features) && doc.features.some((v) => pattern.test(v)),
@@ -183,9 +201,18 @@ console.log(
       ? `    (${featureDoc.name ?? "?"}, enabled=${featureDoc.enabled})`
       : ""),
 );
+console.log(`feature_assets.deleteOne({ _id: "${feature}" })`);
+console.log(
+  `  matches ${assetsDoc ? 1 : 0}` +
+    (assetsDoc
+      ? `    (${(assetsDoc.models || []).length} model(s), ` +
+        `${(assetsDoc.loras || []).length} LoRA(s))`
+      : ""),
+);
 
 const total =
-  planDocs.length + licenseDocs.length + (featureDoc ? 1 : 0);
+  planDocs.length + licenseDocs.length + (featureDoc ? 1 : 0) +
+  (assetsDoc ? 1 : 0);
 console.log("");
 if (!total) {
   console.log(`Nothing names "${feature}". Nothing to do.`);
@@ -211,6 +238,7 @@ const backup = {
   plans: planDocs,
   licenses: licenseDocs,
   features: featureDoc ? [featureDoc] : [],
+  feature_assets: assetsDoc ? [assetsDoc] : [],
 };
 writeFileSync(
   backupPath,
@@ -223,7 +251,8 @@ const check = BSON.EJSON.parse(readFileSync(backupPath, "utf8"), { relaxed: fals
 if (
   check.plans.length !== planDocs.length ||
   check.licenses.length !== licenseDocs.length ||
-  check.features.length !== (featureDoc ? 1 : 0)
+  check.features.length !== (featureDoc ? 1 : 0) ||
+  check.feature_assets.length !== (assetsDoc ? 1 : 0)
 ) {
   die(`backup ${backupPath} did not read back intact — nothing written.`);
 }
@@ -243,6 +272,7 @@ const extraResult = await licenses.updateMany(
   { $pull: { features_extra: pattern } },
 );
 const deleteResult = await features.deleteOne({ _id: feature });
+const assetsResult = await feature_assets.deleteOne({ _id: feature });
 
 console.log(
   `plans              matched ${planResult.matchedCount}, modified ${planResult.modifiedCount}`,
@@ -254,6 +284,7 @@ console.log(
   `licenses.extra     matched ${extraResult.matchedCount}, modified ${extraResult.modifiedCount}`,
 );
 console.log(`features           deleted ${deleteResult.deletedCount}`);
+console.log(`feature_assets     deleted ${assetsResult.deletedCount}`);
 console.log(
   "\nThe running service caches plans and features for a minute; it " +
     "picks this up on its own.",

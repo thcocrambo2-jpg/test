@@ -2,10 +2,17 @@
 //
 // Three endpoints the app calls for its seat (/v1/acquire, /v1/heartbeat,
 // /v1/release), one the *start script* calls before the app exists at all
-// (/v1/build), three public reads it renders pages from (/v1/plans,
-// /v1/prompts, /v1/presets), one public write it makes silently
-// (POST /v1/prompts) and one it makes on an admin's say-so
-// (POST /v1/presets), plus health and the admin surface.
+// (/v1/build), one licensed read it builds its Krea tabs from at startup
+// (POST /v1/catalog — the model and LoRA lists), three public reads it
+// renders pages from (/v1/plans, /v1/prompts, /v1/presets), one public
+// write it makes silently (POST /v1/prompts) and one it makes on an
+// admin's say-so (POST /v1/presets), plus health and the admin surface —
+// which includes /v1/admin/assets, /v1/admin/loras, /v1/admin/models and
+// /v1/admin/feature-assets for editing that catalogue.
+//
+// Every preset and prompt write checks the settings blob's model id and
+// LoRA rows against the catalogue (src/assets.js) and answers 400 naming
+// the bad value — an id that names nothing is a preset no pod can load.
 //
 // The status code carries the contract, and the Python client branches on
 // exactly this — keep it stable:
@@ -42,6 +49,19 @@ import cors from "cors";
 import { ObjectId } from "mongodb";
 
 import { collections } from "./db.js";
+import {
+  LORA_FIELDS,
+  MODEL_FIELDS,
+  assetIds,
+  buildCatalog,
+  checkSettings,
+  featureProblem,
+  idListProblems,
+  loraProblems,
+  loraWire,
+  modelProblems,
+  modelWire,
+} from "./assets.js";
 import { allFeatures, isFeatureEnabled, sortByRegistry } from "./features.js";
 import {
   allPlans,
@@ -402,6 +422,44 @@ app.post(
         `deleted=${result.deletedCount}`,
     );
     res.json({ ok: true, released: result.deletedCount > 0 });
+  }),
+);
+
+// ── Model and LoRA catalogue ────────────────────────────────────────────
+//
+// What the Krea tabs offer: every enabled model and LoRA, and per feature
+// the ordered ids its dropdowns hold. The pod asks once, right after its
+// seat is taken and before it downloads anything, and freezes the answer
+// for the life of the process — downloads, dropdowns and the V2 slot count
+// are all derived from it (see catalog.py).
+//
+// Licensed rather than public like /v1/plans, and checked exactly the way
+// /v1/acquire checks: the answer is where every paid model and LoRA comes
+// from — source revisions and our own mirror locations included — and a
+// pod with no valid key has nothing to build with it anyway. It takes no
+// seat: /v1/acquire already did, and a catalogue read is not a second pod.
+//
+// The 403/503 split holds here too, and it matters in the same direction.
+// A 403 tells the pod its key is bad; a database failure is a 503, which
+// the pod retries and then answers from the copy it saved last time.
+app.post(
+  "/v1/catalog",
+  wrap(async (req, res) => {
+    const { license_key, instance_id } = req.body || {};
+    if (!license_key || !instance_id) {
+      return badRequest(res, "license_key and instance_id are required.");
+    }
+    const { licenses } = await collections();
+    const license = await licenses.findOne({ key: license_key });
+    const problem = licenseProblem(license);
+    if (problem) return res.status(403).json({ ok: false, ...problem });
+
+    const catalog = await buildCatalog();
+    console.log(
+      `catalog  key=${license_key} instance=${instance_id} ` +
+        `models=${catalog.models.length} loras=${catalog.loras.length}`,
+    );
+    res.json({ ok: true, ...catalog });
   }),
 );
 
@@ -907,6 +965,12 @@ app.post(
     const problem = licenseProblem(license);
     if (problem) return res.status(403).json({ ok: false, ...problem });
 
+    // A malformed body, and so a real 400 despite this route's silence:
+    // a recipe whose model or LoRA ids name nothing can never be replayed,
+    // and storing it would put a card in the library that loads nothing.
+    const bad = await checkSettings(settings);
+    if (bad) return badRequest(res, bad);
+
     const now = new Date();
 
     // An admin publishing from the app's own checkbox. Checked against the
@@ -1195,6 +1259,8 @@ app.post(
         message: "Only an admin license can save presets.",
       });
     }
+    const bad = await checkSettings(parsed.value.settings);
+    if (bad) return badRequest(res, bad);
 
     const now = new Date();
     const name = await insertUnique(presets, {
@@ -1280,6 +1346,8 @@ app.post(
   wrap(async (req, res) => {
     const parsed = presetBody(req.body || {});
     if (parsed.error) return badRequest(res, parsed.error);
+    const bad = await checkSettings(parsed.value.settings);
+    if (bad) return badRequest(res, bad);
 
     const { presets } = await collections();
     const now = new Date();
@@ -1367,6 +1435,275 @@ app.post(
     res.json({
       ok: true,
       preset: { ...presetWire(after), enabled: after.enabled === true },
+    });
+  }),
+);
+
+// ── Model and LoRA catalogue: admin ─────────────────────────────────────
+//
+// The write side of POST /v1/catalog. Every field that arrives is checked
+// by src/assets.js — the same rules seed-assets and `npm run assets` apply
+// — before anything is stored, because what is stored here becomes a file
+// name on every pod's disk and a URL every pod downloads from.
+//
+// A pod reads the catalogue once at startup and keeps it, so none of these
+// reach a running pod: an edit here is picked up on its next start.
+
+/** One stored record as the admin listing shows it: the wire shape plus
+ *  the fields only an admin needs, and what (if anything) is wrong with it. */
+function assetAdminWire(row, kind) {
+  const wire = kind === "lora" ? loraWire(row) : modelWire(row);
+  const problems = kind === "lora" ? loraProblems(row) : modelProblems(row);
+  return {
+    ...wire,
+    enabled: row.enabled !== false,
+    ...(kind === "lora" ? { sort_order: row.sort_order ?? 0 } : {}),
+    created_at: row.created_at || null,
+    updated_at: row.updated_at || null,
+    // Only a hand edit in Atlas can put a record here that fails these;
+    // POST /v1/catalog skips such a record, and this is where you see why.
+    problems,
+  };
+}
+
+// Everything, including the disabled records and the lists as stored —
+// the difference from POST /v1/catalog, which sends only what a pod may
+// use and cuts the lists down to it.
+app.get(
+  "/v1/admin/assets",
+  requireAdmin,
+  wrap(async (_req, res) => {
+    const { loras, models, feature_assets } = await collections();
+    const [loraRows, modelRows, featureRows] = await Promise.all([
+      loras.find({}).sort({ sort_order: 1, _id: 1 }).toArray(),
+      models.find({}).sort({ _id: 1 }).toArray(),
+      feature_assets.find({}).sort({ _id: 1 }).toArray(),
+    ]);
+    res.json({
+      ok: true,
+      loras: loraRows.map((row) => assetAdminWire(row, "lora")),
+      models: modelRows.map((row) => assetAdminWire(row, "model")),
+      features: Object.fromEntries(
+        featureRows.map((row) => [
+          row._id,
+          {
+            models: row.models || [],
+            loras: row.loras || [],
+            updated_at: row.updated_at || null,
+          },
+        ]),
+      ),
+    });
+  }),
+);
+
+// What a created record gets for each field it was not sent. Only `file`
+// and `source` have no sensible default — without them there is nothing
+// to download — so those are the two a create must carry.
+const LORA_DEFAULTS = {
+  mirror: null,
+  default_strength: 1.0,
+  trigger: "",
+  enabled: true,
+};
+const MODEL_DEFAULTS = {
+  mirror: null,
+  variant: "turbo",
+  steps: 10,
+  cfg: 1.0,
+  turbo_lora: null,
+  trigger: "",
+  enabled: true,
+};
+
+/**
+ * Create or update one LoRA or model, by `id`.
+ *
+ * **Only the fields sent are touched.** That is what makes a one-field
+ * edit safe — `{id, enabled: false}` switches a record off and leaves
+ * everything else as it was — and it is the call the mirror script makes
+ * once it has uploaded a file: `{id, mirror: {repo, path}}`, and nothing
+ * else about the record moves.
+ *
+ * Creating needs `file` and `source`; everything else takes the defaults
+ * above, and a new LoRA goes to the end of the list (the highest
+ * `sort_order` + 10) unless it says where.
+ */
+async function upsertAsset(req, res, kind) {
+  const body = req.body || {};
+  const fields = kind === "lora" ? LORA_FIELDS : MODEL_FIELDS;
+  const check = kind === "lora" ? loraProblems : modelProblems;
+  const { loras, models } = await collections();
+  const target = kind === "lora" ? loras : models;
+
+  // A model's turbo_lora must name a LoRA that exists; nothing else here
+  // is a cross-record reference.
+  const loraIds =
+    kind === "model" && body.turbo_lora
+      ? new Set(await loras.distinct("_id"))
+      : undefined;
+
+  // Timestamps are this route's to write, so a body that sends them is
+  // not honoured — and said so, rather than quietly dropping them.
+  for (const field of ["created_at", "updated_at", "_id"]) {
+    if (body[field] !== undefined) {
+      return badRequest(res, `${field} cannot be sent; it is set here.`);
+    }
+  }
+  const problems = check(body, { partial: true, loraIds });
+  if (problems.length) return badRequest(res, `${kind}: ${problems.join("; ")}.`);
+
+  const content = {};
+  for (const field of fields) {
+    if (body[field] !== undefined) content[field] = body[field];
+  }
+  if (!Object.keys(content).length) {
+    return badRequest(res, `send at least one of: ${fields.join(", ")}.`);
+  }
+
+  const id = body.id;
+  const existing = await target.findOne({ _id: id });
+  const now = new Date();
+  try {
+    if (existing) {
+      await target.updateOne(
+        { _id: id },
+        { $set: { ...content, updated_at: now } },
+      );
+    } else {
+      const missing = ["file", "source"].filter((f) => content[f] === undefined);
+      if (missing.length) {
+        return badRequest(
+          res,
+          `no ${kind} ${JSON.stringify(id)} exists yet — creating one needs ` +
+            `${missing.join(" and ")}.`,
+        );
+      }
+      const defaults = { ...(kind === "lora" ? LORA_DEFAULTS : MODEL_DEFAULTS) };
+      defaults.name = id;
+      if (kind === "lora") {
+        const [last] = await loras
+          .find({}, { projection: { sort_order: 1 } })
+          .sort({ sort_order: -1 })
+          .limit(1)
+          .toArray();
+        defaults.sort_order = (Number(last?.sort_order) || 0) + 10;
+      }
+      for (const field of Object.keys(content)) delete defaults[field];
+      // An upsert rather than insertOne, so that two admins creating the
+      // same id in the same second end up with one record between them
+      // rather than one of them getting a duplicate-key 503.
+      await target.updateOne(
+        { _id: id },
+        {
+          $set: { ...content, updated_at: now },
+          $setOnInsert: { ...defaults, created_at: now },
+        },
+        { upsert: true },
+      );
+    }
+  } catch (err) {
+    // The unique index on loras.file. Two LoRA records naming one file is
+    // the thing it exists to refuse, and "which record has it" is the
+    // answer the caller needs.
+    if (err?.code === 11000 && kind === "lora") {
+      const holder = await loras.findOne({ file: content.file });
+      return badRequest(
+        res,
+        `file ${JSON.stringify(content.file)} is already LoRA ` +
+          `${JSON.stringify(holder?._id ?? "?")}.`,
+      );
+    }
+    throw err;
+  }
+
+  const row = await target.findOne({ _id: id });
+  console.log(
+    `asset    ${existing ? "updated" : "created"} ${kind} ${id} ` +
+      `fields=${Object.keys(content).join(",")}`,
+  );
+  res.json({
+    ok: true,
+    created: !existing,
+    [kind]: assetAdminWire(row, kind),
+  });
+}
+
+app.post(
+  "/v1/admin/loras",
+  requireAdmin,
+  wrap((req, res) => upsertAsset(req, res, "lora")),
+);
+
+app.post(
+  "/v1/admin/models",
+  requireAdmin,
+  wrap((req, res) => upsertAsset(req, res, "model")),
+);
+
+// Replace one feature's lists. Either list may be sent alone; the one not
+// sent is left as it was. Every id must exist — disabled ones included,
+// since switching a record back on should not mean re-adding it to every
+// tab it used to be in. POST /v1/catalog drops the disabled ones from what
+// it sends.
+//
+// `models` may not be empty: its first entry is the tab's default, and a
+// tab with no model has nothing to run. Taking a feature's lists away
+// altogether is `npm run remove-feature`'s job.
+app.post(
+  "/v1/admin/feature-assets",
+  requireAdmin,
+  wrap(async (req, res) => {
+    const { feature } = req.body || {};
+    const badKey = featureProblem(feature);
+    if (badKey) return badRequest(res, `${badKey}.`);
+    const lists = {};
+    for (const field of ["models", "loras"]) {
+      if (req.body[field] !== undefined) lists[field] = req.body[field];
+    }
+    if (!Object.keys(lists).length) return badRequest(res, "send models and/or loras.");
+
+    const ids = await assetIds();
+    const problems = [];
+    if (lists.models !== undefined) {
+      problems.push(...idListProblems(lists.models, ids.models, "models"));
+      if (Array.isArray(lists.models) && !lists.models.length) {
+        problems.push("models must list at least one model (the first is the default)");
+      }
+    }
+    if (lists.loras !== undefined) {
+      problems.push(...idListProblems(lists.loras, ids.loras, "loras"));
+    }
+    if (problems.length) return badRequest(res, `${problems.join("; ")}.`);
+
+    const { feature_assets } = await collections();
+    // A feature's first write must say what it runs, or it would be
+    // created with the empty model list refused just above.
+    if (lists.models === undefined &&
+        !(await feature_assets.findOne({ _id: feature }))) {
+      return badRequest(
+        res,
+        `${feature} has no lists yet — the first write must include models.`,
+      );
+    }
+    const now = new Date();
+    const onInsert = { created_at: now };
+    if (lists.loras === undefined) onInsert.loras = [];
+    await feature_assets.updateOne(
+      { _id: feature },
+      { $set: { ...lists, updated_at: now }, $setOnInsert: onInsert },
+      { upsert: true },
+    );
+    const row = await feature_assets.findOne({ _id: feature });
+    console.log(
+      `asset    feature ${feature} models=${row.models.length} ` +
+        `loras=${row.loras.length}`,
+    );
+    res.json({
+      ok: true,
+      feature,
+      models: row.models,
+      loras: row.loras,
     });
   }),
 );
@@ -1657,6 +1994,8 @@ app.post(
     if (JSON.stringify(settings).length > MAX_SETTINGS_BYTES) {
       return badRequest(res, "settings is too large.");
     }
+    const bad = await checkSettings(settings);
+    if (bad) return badRequest(res, bad);
 
     const now = new Date();
     const { prompts } = await collections();

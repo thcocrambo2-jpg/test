@@ -102,6 +102,26 @@ export async function collections() {
     // bot has been blocked. It is not a CRM, and nothing on the licensing
     // path reads it.
     telegram_users: db.collection("telegram_users"),
+    // The model and LoRA catalogue the Krea tabs are built from — see
+    // src/assets.js for the rules every write goes through. All three are
+    // keyed by a readable string `_id` that presets and prompts store, so
+    // an id is permanent: renaming one orphans every preset that names it.
+    //
+    // `loras`: one record per LoRA file. `sort_order` is the order POST
+    // /v1/catalog lists them in; a feature's own list decides the order on
+    // screen.
+    loras: db.collection("loras"),
+    // `models`: one record per model *setting*, not per file. Two records
+    // may point at the same weights with different steps or CFG, which is
+    // why `file` is unique on `loras` and deliberately not here.
+    models: db.collection("models"),
+    // `feature_assets`: `_id` is a feature key, and the document holds the
+    // ordered model ids and LoRA ids that tab offers — the first model is
+    // its default. The same id may sit in any number of features. Kept out
+    // of the `features` collection because that one describes what the
+    // pricing page sells, and this one what a tab's dropdowns hold; they
+    // change for different reasons and at different times.
+    feature_assets: db.collection("feature_assets"),
   };
 }
 
@@ -112,8 +132,9 @@ export async function collections() {
  * that restarts reclaims its own row instead of racing itself into two.
  */
 export async function ensureIndexes() {
-  const { licenses, sessions, prompts, presets, builds, downloads, orders } =
-    await collections();
+  const {
+    licenses, sessions, prompts, presets, builds, downloads, orders, loras,
+  } = await collections();
   await licenses.createIndex({ key: 1 }, { unique: true, name: "key_unique" });
   await sessions.createIndex(
     { license_key: 1, instance_id: 1 },
@@ -252,6 +273,25 @@ export async function ensureIndexes() {
     { license_key: 1 },
     { sparse: true, name: "license_key" },
   );
+
+  // The LoRA catalogue. `file` is unique because a LoRA file is one thing
+  // on a pod's disk: two records naming it would be two dropdown entries
+  // that load the same weights under different names and default
+  // strengths, and whichever a preset named would decide what "the same
+  // LoRA" meant. The index makes that impossible rather than merely
+  // checked.
+  //
+  // `models` gets no such index on purpose — two model records sharing a
+  // file is the normal way to offer the same weights at two settings.
+  await loras.createIndex({ file: 1 }, { unique: true, name: "file_unique" });
+  // What POST /v1/catalog reads on every pod start: the enabled records, in
+  // display order.
+  await loras.createIndex(
+    { enabled: 1, sort_order: 1 },
+    { name: "enabled_order" },
+  );
+  // `models` and `feature_assets` are read whole and by `_id`; a handful of
+  // documents each, nothing to index.
 
   // `telegram_users` gets no index at all. Every read and every write of it
   // is by `_id` — the Telegram user id itself — which is indexed already.

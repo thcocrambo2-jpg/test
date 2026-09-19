@@ -37,6 +37,7 @@ import { randomUUID } from "node:crypto";
 import { ObjectId } from "mongodb";
 
 import { collections, ensureIndexes } from "../src/db.js";
+import { checkSettings } from "../src/assets.js";
 
 const PROMPT_TABS = ["krea_t2i", "krea_v2_t2i"];
 
@@ -159,6 +160,10 @@ if (opts.add) {
       Array.isArray(settings)) {
     die("--settings must contain a JSON object");
   }
+  // Models and LoRAs by catalogue id, LoRA rows as [on, id or null,
+  // weight] — the same check POST /v1/admin/prompts makes.
+  const bad = await checkSettings(settings);
+  if (bad) die(bad, "(npm run assets lists the ids)");
 
   const now = new Date();
   const doc = {

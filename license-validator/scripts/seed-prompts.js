@@ -32,20 +32,29 @@
 // row any 64 will do — it only has to not collide. Reusing one turns an
 // insert into an update of that other row.
 //
-// `settings` is stored verbatim and is never validated by the server: the
-// shape belongs to the app's tabs. Getting it wrong breaks nothing — the
-// client checks every value against what its own build offers and leaves
-// anything it does not recognise alone — but the card then loads less of
-// itself than you meant.
+// **Run `npm run seed-assets` first.** Every model and LoRA in `settings`
+// is an id from the catalogue (data/assets.json), and this script — like
+// POST /v1/prompts — refuses a blob whose `model` is not a stored model id
+// or whose LoRA rows name a LoRA that is not stored. Against an unseeded
+// catalogue every row here fails that check, and nothing is written.
+//
+// The rest of `settings` belongs to the app's tabs and is stored as given.
+// Getting it wrong breaks nothing — the client checks every value against
+// what its own build offers and leaves anything it does not recognise
+// alone — but the card then loads less of itself than you meant.
 //
 // The two shapes are NOT interchangeable:
 //
-//   krea_t2i      flat. `resolution` is a preset label. `loras` is a list
-//                 of [name, weight] PAIRS.
+//   krea_t2i      flat. `resolution` is a preset label. Eight LoRA slots.
 //   krea_v2_t2i   nested `sampler` and `variance` objects. Size is the
 //                 aspect/megapixels/multiple the sliders hold, never a
-//                 width/height. `loras` is a list of [on, name, weight]
-//                 TRIPLES, in the workflow's fixed slot order.
+//                 width/height. The tab has one LoRA row per LoRA in its
+//                 feature list; the card's rows are matched to them by id,
+//                 and a LoRA it does not mention stays off.
+//
+// Both store `loras` the same way: [on, lora id, weight] triples, with
+// `null` for an empty slot (the form shows it as "None"; that word never
+// reaches storage).
 //
 // Strings that are dropdown values must match **character for character**,
 // emoji included — "📸 Krea2 (SingleStream)" is one of them. A value this
@@ -53,6 +62,7 @@
 // it was when the card is loaded.
 
 import { collections, ensureIndexes } from "../src/db.js";
+import { assetIds, settingsProblem } from "../src/assets.js";
 
 const dryRun = process.argv.includes("--dry-run");
 
@@ -79,7 +89,7 @@ export const SEED_PROMPTS = [
       "flawed. The image is very blurred and lacks detail, with plastic " +
       "waxy skin, deformed hands and extra fingers.",
     settings: {
-      model: "Krea 2 Turbo mxfp8 (workflow default)",
+      model: "krea2-turbo-mxfp8",
       aspect: "3:4 (Portrait Standard)",
       megapixels: 1.5,
       multiple: 8,
@@ -110,21 +120,21 @@ export const SEED_PROMPTS = [
       },
       sharpen: false,
       film_grain: false,
-      // Eleven triples, in the workflow's fixed slot order. Keep all
-      // eleven even when most are off — the slots are positional, so a
-      // short list just leaves the tail at its defaults.
+      // Matched to the tab's rows by id, so order does not matter and a
+      // LoRA left out simply stays off; the off rows are listed only to
+      // keep their weights with the recipe.
       loras: [
-        [false, "krea2_turbo_lora_rank_64_bf16.safetensors", 0.6],
-        [true, "krea2filterbypass3.safetensors", 0.93],
-        [true, "krea2_Enhancer.safetensors", 0.4],
-        [true, "Krea2-realism-V2.safetensors", 0.3],
-        [false, "realism_engine_krea2_v3.1.safetensors", 0.6],
-        [true, "RealisticSnapshotKrea2.safetensors", 0.8],
-        [false, "purelens_krea2.safetensors", 0.6],
-        [false, "lenovo_krea2.safetensors", 0.5],
-        [false, "MysticXXX_KREA2_v3.safetensors", 1.0],
-        [false, "KNPV4.1_pre.safetensors", 1.0],
-        [false, "snofs_krea_v1.safetensors", 1.0],
+        [false, "krea2-turbo", 0.6],
+        [true, "filter-bypass-3", 0.93],
+        [true, "enhancer", 0.4],
+        [true, "realism-v2", 0.3],
+        [false, "realism-engine-v3-1", 0.6],
+        [true, "realistic-snapshot", 0.8],
+        [false, "purelens", 0.6],
+        [false, "lenovo", 0.5],
+        [false, "mysticxxx-v3", 1.0],
+        [false, "knp-v4-1", 1.0],
+        [false, "snofs-krea-v1", 1.0],
       ],
     },
   },
@@ -142,8 +152,8 @@ export const SEED_PROMPTS = [
       "camera under an umbrella, cinematic colour grade",
     negative: "blurry, low quality, watermark, text",
     settings: {
-      model: "Krea 2 Turbo (official)",
-      steps: 8,
+      model: "krea2-turbo-mxfp8",
+      steps: 10,
       cfg: 1.0,
       // A preset label, not "1024x1024" — see RESOLUTION_PRESETS in
       // config.py. Note the × is U+00D7, not a letter x.
@@ -152,17 +162,16 @@ export const SEED_PROMPTS = [
       seed: 42,
       randomize: true,
       batch_count: 1,
-      // Pairs here, not triples: this tab's LoRA rows have no on/off
-      // checkbox. Up to eight; "None" is a real, meaningful value.
+      // Eight slots, positional. null is an empty slot.
       loras: [
-        ["krea2filterbypass3.safetensors", 0.93],
-        ["None", 0.8],
-        ["None", 0.8],
-        ["None", 0.8],
-        ["None", 0.8],
-        ["None", 0.8],
-        ["None", 0.8],
-        ["None", 0.8],
+        [true, "filter-bypass-3", 0.93],
+        [false, null, 0.8],
+        [false, null, 0.8],
+        [false, null, 0.8],
+        [false, null, 0.8],
+        [false, null, 0.8],
+        [false, null, 0.8],
+        [false, null, 0.8],
       ],
     },
     // Which licence submitted it. Kept for moderation and never sent to
@@ -218,8 +227,24 @@ if (problems.length) {
   die(...problems, `\n${problems.length} problem(s) — nothing written.`);
 }
 
+// The model and LoRA ids, against the catalogue as stored — the check POST
+// /v1/prompts makes, and a second pass only because it needs the database.
+const ids = await assetIds();
+for (const [index, row] of SEED_PROMPTS.entries()) {
+  const bad = settingsProblem(row.settings, ids);
+  if (bad) problems.push(`SEED_PROMPTS[${index}]: ${bad}`);
+}
+if (problems.length) {
+  die(
+    ...problems,
+    `\n${problems.length} problem(s) — nothing written.`,
+    ...(ids.models.size ? [] : ["The catalogue is empty: run npm run seed-assets first."]),
+  );
+}
+
 const { prompts } = await collections();
-await ensureIndexes();
+// Not on a dry run: creating an index is a write.
+if (!dryRun) await ensureIndexes();
 
 async function upsertAll(docs) {
   let created = 0;
