@@ -12,7 +12,7 @@
 # it and fails the build when it no longer matches, which is what stops a
 # stale front end from shipping.
 SOURCE_HASH = 'sha256:f768d3c552310c12814b59c6796e2405d52e7fad7b04cb553d3b7cf9006414e5'
-BUILT_AT = '2026-09-19T14:25:35Z'
+BUILT_AT = '2026-09-19T14:51:23Z'
 
 # name -> (gzip bytes, media type, ETag). Served by webui.py, which hands
 # the gzip stream to the browser as-is whenever it will take it.
