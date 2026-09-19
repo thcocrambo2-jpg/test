@@ -23,12 +23,24 @@ Defaults matter for a quieter reason: a default is what an untouched form
 submits, so a default that drifts changes every picture made by someone
 who did not touch that control.
 
-`--choices` is off by default for the same reason
-`parity.py --structure-only` exists: the LoRA dropdowns are
-`available_lora_files()`, a listing of the disk this happens to run on, so
-a laptop and a pod disagree for reasons that are not regressions.
-Structure does not vary — slot counts come from the static V2_LORA_STACK,
-and only the enabled flag and the choice list read disk.
+The four Krea tabs' Model and LoRA dropdowns hold catalogue *ids*
+(catalog.py) — the feature's lists as the licence server answers them.
+Unless KREA2_CATALOG_FILE is already set, this points it at the seed
+document, license-validator/data/assets.json, which is what the Krea
+entries in the baseline were written from: the Model default is the
+feature's first model id, Steps and CFG are that record's, and the V2 tabs
+have one LoRA row per LoRA in the feature's list, off, at its default
+strength. Point it at another catalogue and those entries differ for
+reasons that are not regressions.
+
+`--choices` is still off by default, for the reason `parity.py
+--structure-only` existed: choice lists are the part most likely to move
+for a reason that is not a regression — here, a LoRA added to the DB and
+the seed document. Nothing about them reads this machine's disk any more
+(files the catalogue does not list are never offered), so with the seed
+catalogue a `--choices` run is as deterministic as a structural one. The
+baseline stores each choice as Gradio's [label, value] pair, and only the
+value — the id — is compared; the labels are the records' names.
 
 Not a Gradio importer: it reads the committed baseline JSON and
 tabschema.py, so it runs with no GPU, no ComfyUI and (unlike parity.py)
@@ -44,6 +56,10 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(ROOT))
 os.environ.setdefault("KREA2_BASE_DIR", str(ROOT / ".dryrun"))
+# The catalogue the baseline's Krea entries were written from. See the
+# docstring.
+os.environ.setdefault("KREA2_CATALOG_FILE",
+                      str(ROOT / "license-validator" / "data" / "assets.json"))
 
 BASELINE = Path(__file__).resolve().parent / "parity_baseline.json"
 
@@ -192,8 +208,9 @@ def compare(baseline, schema, compare_choices, notes):
                                 us["choices"] is not None))
             elif them.get("choices") is not None:
                 # Gradio 6 normalises choices to [label, value] pairs; the
-                # schema keeps one string because label and value have
-                # never differed in this app.
+                # schema's `choices` are the values alone (id-valued
+                # fields carry their labels separately, as choiceLabels),
+                # so the values are what is compared.
                 mine = us["choices"]
                 theirs_value = [c[1] if isinstance(c, list) else c
                                 for c in them["choices"]]
@@ -209,9 +226,9 @@ def main() -> None:
     )
     parser.add_argument(
         "--choices", action="store_true",
-        help="compare the choice lists too. Off by default: the LoRA "
-             "dropdowns are read off this machine's disk, so a laptop and "
-             "a pod differ for reasons that are not regressions.",
+        help="compare the choice lists too. Off by default: the Model and "
+             "LoRA lists are the catalogue's, which moves whenever a model "
+             "or LoRA is added to the DB.",
     )
     parser.add_argument("--baseline", type=Path, default=BASELINE)
     args = parser.parse_args()
