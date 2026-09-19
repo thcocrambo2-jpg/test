@@ -63,13 +63,12 @@ webui/** text eol=lf
 
 # The exceptions to the rule above, and the reason it needs them: `text`
 # set explicitly turns OFF git's binary detection, so without these a
-# font, an icon or a mask fixture would have its CRLF bytes rewritten on
+# font or an icon would have its CRLF bytes rewritten on
 # checkout and arrive corrupt. There are none tracked under webui/ today;
 # these lines are here so that adding the first one is not a bug.
 webui/**/*.ico binary
 webui/**/*.jpg binary
 webui/**/*.png binary
-webui/**/*.raw binary
 webui/**/*.ttf binary
 webui/**/*.webp binary
 webui/**/*.woff binary

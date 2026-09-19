@@ -11,7 +11,7 @@ fastapi>=0.115
 uvicorn>=0.30
 # Multipart form parsing, which FastAPI needs to accept an upload and
 # does not vendor. Every image that reaches /api/v1/uploads arrives
-# through it, so it is a hard dependency of the Inpaint and Edit tabs
+# through it, so it is a hard dependency of the Edit tabs
 # rather than an optional extra.
 python-multipart
 websocket-client>=1.6

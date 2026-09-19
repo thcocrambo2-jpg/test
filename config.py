@@ -6,7 +6,7 @@ LoRA lists and (optional) access tokens. In section order:
     Build mode          FROZEN
     Disk layout         BASE_DIR and everything under it, ComfyUI's port
     Model selection     Krea 2 base models, encoder, LoRAs — the
-                        Single / Edit / Inpaint tabs
+                        Single / Edit tabs
     Krea 2 V2           the Krea2 advanced pipeline, self-contained
     Wan 2.2             image-to-video (+ the parallel-instance knobs)
     MiniMax H3          video with sound — image-to-video and text-to-video
@@ -129,7 +129,7 @@ VAE_FILE = "qwen_image_vae.safetensors"                      # ~0.25 GB
 # Registry of selectable Krea 2 diffusion models (UNets) — same spirit as
 # the LoRA lists further down: add an entry, restart (downloads are
 # idempotent and a failed one never aborts setup), and it appears in the
-# Model dropdown of the generate / edit / inpaint tabs and as "model" in
+# Model dropdown of the generate / edit tabs and as "model" in
 # JSON batch jobs. The FIRST entry is the default. Fields:
 #   name            — unique label shown in the UI dropdown
 #   file            — filename saved under models/diffusion_models/
@@ -143,7 +143,7 @@ VAE_FILE = "qwen_image_vae.safetensors"                      # ~0.25 GB
 #                     urn:air:krea2:unet:civitai:2762538@3118978
 #                     (most downloads need CIVITAI_TOKEN)
 #   trigger         — optional trigger words, auto-prepended to the prompt
-#                     whenever this model is used (generate/inpaint/JSON;
+#                     whenever this model is used (generate/JSON;
 #                     not in Edit instructions)
 KREA2_MODELS = [
     {
@@ -710,7 +710,7 @@ CIVITAI_LORAS = [
     (3265522, "Halide-v1.safetensors"),
 ]
 
-# LoRAs pre-selected in the UI's three slots (generate / edit / inpaint tabs).
+# LoRAs pre-selected in the UI's three slots (generate / edit tabs).
 # Entries are (filename, default weight); a file that failed to download is
 # silently skipped and the slot falls back to "None".
 DEFAULT_LORAS = [

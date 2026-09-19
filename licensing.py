@@ -184,8 +184,8 @@ def _clean_feature_info(value) -> dict[str, str]:
     key drops just that key for the same reason.
 
     `tab_label` before `name`: the catalogue carries both because the tab
-    strip wants something short ("Inpaint / Img2Img") where the pricing
-    page wants prose ("Krea Inpaint — Img2Img"). Taking `name` when
+    strip wants something short ("MiniMax T2V") where the pricing
+    page wants prose ("MiniMax Text to Video"). Taking `name` when
     `tab_label` is unset is what lets a new feature row be described once
     and still title its tab sensibly.
     """

@@ -175,8 +175,8 @@ class ComfyClient:
     def upload_image(self, data: bytes, name: str) -> str:
         """Upload PNG bytes to ComfyUI's input folder.
 
-        Returns the name (with subfolder, if any) that LoadImage /
-        LoadImageMask nodes must use to reference the file.
+        Returns the name (with subfolder, if any) that LoadImage
+        nodes must use to reference the file.
         """
         resp = requests.post(
             self.base + "/upload/image",

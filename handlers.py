@@ -31,7 +31,7 @@ import uuid
 import zipfile
 from pathlib import Path
 
-from PIL import Image, ImageChops, ImageFilter
+from PIL import Image
 
 import gallery_index
 import jobqueue
@@ -62,7 +62,6 @@ from config import (
 )
 from workflow import (
     build_edit_workflow,
-    build_inpaint_workflow,
     build_workflow,
     edit_lora_available,
     list_lora_files,
@@ -107,7 +106,7 @@ from workflow_wan import (
     wan_models_available,
 )
 
-# Number of LoRA slots every stacking tab renders (Single, Edit, Inpaint,
+# Number of LoRA slots every stacking tab renders (Single, Edit,
 # Flux). The UI rows, the handlers and the workflow chain are all driven
 # from this, so changing it here is the whole change.
 MAX_LORA_SLOTS = 8
@@ -513,99 +512,17 @@ def generate_v2(prompt, negative, seed, randomize, model, aspect, megapixels,
                                     prefix="Krea2V2"):
         yield images, notice + status, base_seed
 
-def _prepare_inpaint_inputs(editor_value, grow_px: int, blur_px: int):
-    """ImageEditor value → (RGB image, L-mode mask or None), sized for the VAE.
-
-    The mask is the union of the painted layers' alpha channels, optionally
-    dilated (grow) and gaussian-blurred for a soft transition; None when
-    nothing is painted (full-image img2img). Both images are downscaled so
-    the long side is ≤ 2048 (never upscaled) and snapped to multiples of
-    16, which Krea 2's VAE requires.
-    """
-    if not isinstance(editor_value, dict) or editor_value.get("background") is None:
-        raise ValueError("Upload an image first.")
-    background = editor_value["background"].convert("RGB")
-    mask = None
-    for layer in editor_value.get("layers") or []:
-        if "A" not in layer.getbands():
-            continue
-        alpha = layer.getchannel("A")
-        if alpha.size != background.size:
-            alpha = alpha.resize(background.size)
-        mask = alpha if mask is None else ImageChops.lighter(mask, alpha)
-    if mask is not None and mask.getbbox() is None:
-        mask = None
-    if mask is not None:
-        if grow_px:
-            mask = mask.filter(ImageFilter.MaxFilter(grow_px * 2 + 1))
-        if blur_px:
-            mask = mask.filter(ImageFilter.GaussianBlur(blur_px))
-    w, h = background.size
-    scale = min(1.0, 2048 / max(w, h))
-    w2 = max(64, int(w * scale) // 16 * 16)
-    h2 = max(64, int(h * scale) // 16 * 16)
-    if (w2, h2) != (w, h):
-        background = background.resize((w2, h2), Image.LANCZOS)
-        if mask is not None:
-            mask = mask.resize((w2, h2), Image.LANCZOS)
-    return background, mask
-
-
 def _png_bytes(image) -> bytes:
     buf = io.BytesIO()
     image.save(buf, format="PNG")
     return buf.getvalue()
 
 
-def generate_inpaint(editor_value, prompt, negative, seed, randomize, steps,
-                     cfg, denoise, sampler, grow, blur, model, batch_count,
-                     *lora_slots):
-    """Inpaint tab: repaint the painted region — or, with nothing painted,
-    run the whole image through img2img at the chosen denoise."""
-    entry, error = _check_model(model)
-    if error:
-        yield [], error, 0
-        return
-    try:
-        image, mask = _prepare_inpaint_inputs(editor_value, int(grow), int(blur))
-    except ValueError as exc:
-        yield [], f"❌ {exc}", 0
-        return
-    if mask is None and float(denoise) >= 1.0:
-        yield [], (
-            "❌ Nothing is painted, so this would run as full-image img2img — "
-            "but Denoise 1.0 would ignore the source image entirely. Lower "
-            "Denoise (e.g. 0.5–0.8) or paint the region to replace."
-        ), 0
-        return
-    base_seed = random.randint(0, 2**32 - 1) if randomize else int(seed)
-    tag = uuid.uuid4().hex[:8]
-    try:
-        image_name = client.upload_image(_png_bytes(image), f"inpaint_{tag}.png")
-        mask_name = (client.upload_image(_png_bytes(mask),
-                                         f"inpaint_{tag}_mask.png")
-                     if mask is not None else None)
-    except Exception as exc:
-        yield [], f"❌ Uploading the image to ComfyUI failed: {exc}", base_seed
-        return
-    jobs = [{
-        "prompt": prompt, "negative": negative or "", "seed": base_seed + i,
-        "steps": int(steps), "cfg": float(cfg), "denoise": float(denoise),
-        "sampler": sampler, "image_name": image_name, "mask_name": mask_name,
-        "loras": _resolve_lora_slots(*lora_slots),
-        "unet_file": entry["file"],
-    } for i in range(int(batch_count))]
-    prefix = "Krea2Inpaint" if mask is not None else "Krea2Img2Img"
-    for images, status in _run_jobs(jobs, builder=build_inpaint_workflow,
-                                    prefix=prefix):
-        yield images, status, base_seed
-
-
 def _fit_edit_size(w: int, h: int, max_pixels: int = 2_000_000) -> tuple:
     """Edit-target size: keep aspect, cap at max_pixels, never upscale, /16.
 
     The Identity Edit LoRA bleeds/duplicates content above ~2 MP, so the
-    cap is by area rather than the inpaint tab's 2048-px long side.
+    cap is by area rather than by the long side.
 
     The v1.2 nodes' FIT geometry means the *aspect ratio* no longer has to
     match — a 3:2 source rendered at 1:1 is fitted rather than stretched.

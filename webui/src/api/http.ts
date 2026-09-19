@@ -27,8 +27,7 @@ import type {
  * mock could not have taught us.
  *
  *   * **Uploads are their own round trip.** An image goes up once, to
- *     `POST /uploads`, and the submission references it by id. The mask
- *     editor sends a background and one PNG per painted layer, and a batch of
+ *     `POST /uploads`, and the submission references it by id. A batch of
  *     four runs against the same source should not re-send it four times.
  *
  *   * **Progress is one stream for the whole app, not one per job.** The
@@ -119,17 +118,7 @@ async function upload(blob: Blob, name: string): Promise<string> {
 /** Replace every blob in a submission with the id of its upload.
  *
  *  Driven off the schema rather than off the shape of each value: `field.type`
- *  already says which of the two kinds a control is, and guessing from the
- *  value would mean deciding what a `{background, layers}` object is by
- *  looking at it.
- *
- *  The mask contract is the one to be careful with. `{background, layers}` is
- *  the same pair `gr.ImageEditor` produced, and `_prepare_inpaint_inputs`
- *  (ui.py:926, now handlers.py) is unchanged on the other side: it still
- *  takes the union of the layers' alpha channels, dilates, blurs, caps the
- *  long side at 2048 and snaps both images to multiples of 16 for the VAE.
- *  `prepare.ts` in the mask editor is for the preview and the size readout
- *  only. */
+ *  already says which controls are images. */
 async function resolveUploads(
   schema: TabSchema,
   values: SubmitValues,
@@ -139,23 +128,9 @@ async function resolveUploads(
     const value = values[field.name]
     if (field.type === 'image') {
       out[field.name] = value instanceof Blob ? await upload(value, field.name) : null
-    } else if (field.type === 'mask') {
-      out[field.name] = await uploadMask(value)
     }
   }
   return out
-}
-
-async function uploadMask(value: unknown): Promise<unknown> {
-  if (!value || typeof value !== 'object') return null
-  const editor = value as { background?: Blob; layers?: Blob[] }
-  if (!(editor.background instanceof Blob)) return null
-  const background = await upload(editor.background, 'background.png')
-  const layers: string[] = []
-  for (const [index, layer] of (editor.layers ?? []).entries()) {
-    if (layer instanceof Blob) layers.push(await upload(layer, `layer-${index}.png`))
-  }
-  return { background, layers }
 }
 
 export const httpClient: ApiClient = {

@@ -274,7 +274,7 @@ class Field:
         or an attack and neither is improved by guessing.
         """
         kind = self.kind
-        if kind in ("image", "mask"):
+        if kind == "image":
             return value                     # resolved by api.py's uploads
         if kind == "bool":
             if isinstance(value, str):
@@ -321,7 +321,7 @@ class Field:
             can express it.
         """
         kind = self.kind
-        if kind in ("image", "mask"):
+        if kind == "image":
             return False, None               # never stored — see _UNRECORDED
         if kind == "bool":
             return True, bool(value)
@@ -848,7 +848,7 @@ def _triple_tail(choices, slots, title):
 
 
 def _krea_lora_tail():
-    """The Krea 2 folder's stack — Krea2, Edit and Inpaint share it.
+    """The Krea 2 folder's stack — Krea2 and Edit share it.
 
     Model-only (`LoraLoaderModelOnly`, workflow.py), where the V2 stack is
     model *and* CLIP, so the title stays plain rather than borrowing V2's.
@@ -1157,59 +1157,6 @@ SCHEMAS = (
                       _lora_choices,
                       _stack_slots(handlers.v2_default_lora_slots),
                       "LoRA stack — model + CLIP")),
-        ),
-    ),
-
-    TabSchema(
-        model_registry='krea2',
-        key=Key.KREA_INPAINT, handler=handlers.generate_inpaint,
-        lane=handlers.COMFY_LANE, prompt_field="prompt",
-        result_keys=IMAGE_KEYS, tab_id="inpaint",
-        icon="🖌️", blurb="Paint over what should change. Leave the rest "
-                        "alone.",
-        category="edit", route="/edit/inpaint", submit_label="Inpaint",
-        groups=(Group("canvas", column="right"), G_PROMPT, G_CORE,
-                G_SAMPLER, Group("mask", "Mask shaping", dense=True),
-                G_SEED),
-        fields=(
-            # The canvas is the work surface, not a sidebar control, so it
-            # takes the wide column and the results stack under it. Being
-            # able to say that in the schema rather than in the layout code
-            # is what `column` is for: Gradio put a 440x280 editor in the
-            # left sidebar while the right half of the screen sat empty.
-            Field("editor_value",
-                  "Image — paint the region to replace (paste with Ctrl+V)",
-                  "mask", None, group="canvas", column="right"),
-            Field("prompt", "Prompt (describes the masked region)",
-                  "textarea", "", lines=5, group="prompt"),
-            Field("negative", "Negative prompt", "textarea", "", lines=3,
-                  group="prompt", collapsed=True, hint=_CFG_NOTE),
-            *_seed_fields(),
-            Field("steps", "Steps", "slider",
-                  lambda: handlers.DEFAULTS["steps"], lo=1, hi=60, step=1,
-                  group="sampler"),
-            Field("cfg", "CFG", "slider", lambda: handlers.DEFAULTS["cfg"],
-                  lo=0.5, hi=8.0, step=0.1, group="sampler", hint=_CFG_NOTE),
-            Field("denoise", "Denoise (1 = replace fully)", "slider", 1.0,
-                  lo=0.1, hi=1.0, step=0.05, group="sampler", wide=True,
-                  hint="With nothing painted this runs as whole-image "
-                       "img2img, where 1.0 ignores the source entirely — "
-                       "0.5–0.8 is the useful range."),
-            Field("sampler", "Sampler", "select", SAMPLERS[0],
-                  choices=SAMPLERS, group="sampler", wide=True),
-            Field("grow", "Grow mask (px)", "slider", 8, lo=0, hi=32, step=1,
-                  group="mask",
-                  hint="Dilates the painted region before blurring."),
-            Field("blur", "Blur mask edge (px)", "slider", 8, lo=0, hi=32,
-                  step=1, group="mask",
-                  hint="Softens the edge so the seam disappears."),
-            Field("model", "Model", "select",
-                  lambda: handlers.MODEL_CHOICES[0],
-                  choices=lambda: handlers.MODEL_CHOICES, group="core",
-                  wide=True),
-            _batch_field(),
-            Field("lora_slots", "LoRA stack", "repeat",
-                  repeat=_krea_lora_tail()),
         ),
     ),
 

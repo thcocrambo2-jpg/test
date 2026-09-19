@@ -197,39 +197,6 @@
       ]
     },
 
-    "krea_inpaint": {
-      "headline": "Paint over what you want gone.",
-      "body": [
-        "For the fixes that are easier to point at than to describe. Brush over the scooter parked in front of the shop, the logo on the shirt, the ex in the holiday photo — say what should be there instead, and it fills it in as though it always was.",
-        "Only what you painted changes. Everything outside the stroke comes back exactly as it was, so you can use it on finished work without risking the ninety per cent that was already right. Rough strokes are fine — the edges blend themselves."
-      ],
-      "highlights": [
-        "Brush right on the picture",
-        "Only the painted part changes",
-        "Edges blend themselves",
-        "Remove almost anything"
-      ],
-      "blocks": [
-        {
-          "type": "split",
-          "reverse": true,
-          "title": "Paint it, describe it, done",
-          "body": "The middle frame is the brush stroke, exactly as it was drawn — no precision required. The right one is what came back.",
-          "block": {
-            "type": "row",
-            "dir": "demo",
-            "ratio": "1/1",
-            "caption": "“remove the parked scooter, continue the wall behind it”",
-            "items": [
-              { "file": "source.webp", "label": "Before" },
-              { "file": "mask.webp", "label": "Painted" },
-              { "file": "result.webp", "label": "After", "accent": true }
-            ]
-          }
-        }
-      ]
-    },
-
     "wan_i2v": {
       "headline": "Give a still picture a few seconds of life.",
       "body": [

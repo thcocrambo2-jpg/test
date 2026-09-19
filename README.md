@@ -552,7 +552,6 @@ npm run issue-key -- --name "Acme Corp" --plan creator --seats 2
 | `gallery`      | Gallery                 | none           |
 | `krea_edit`    | ✨ Edit (Instruction)   | ~1.9 GB + base |
 | `krea_v2_edit` | 🔷 Krea 2 V2 Edit       | ~1.9 GB + V2   |
-| `krea_inpaint` | Inpaint / Img2Img       | base only      |
 | `wan_i2v`      | 🎬 Video (Wan 2.2)      | ~49 GB         |
 | `minimax_i2v`  | 🎥 MiniMax I2V (video with sound) | ~56 GB (shared with `minimax_t2v`) |
 | `minimax_t2v`  | 🎞️ MiniMax T2V (video with sound) | shared with `minimax_i2v` |
@@ -566,9 +565,9 @@ plan since 2026-09-07 and are hidden from the pricing page — the code is
 still here, and the internal `admin` plan still grants them.
 `license-validator/README.md` has the full table and how to change it.
 
-Shared weights are handled for you — `krea_edit` and `krea_inpaint` both
-run the Krea 2 base models, so granting either one fetches them, and
-granting all three fetches them once. `krea_v2_edit` is the same trick one
+Shared weights are handled for you — `krea_edit` runs the same Krea 2
+base models as `krea_t2i`, so granting either one fetches them, and
+granting both fetches them once. `krea_v2_edit` is the same trick one
 level over: it shares the Identity Edit LoRA with `krea_edit` and the ~17 GB
 of weights with `krea_v2_t2i`, so its own cost is only whichever of those
 two is not already granted.
@@ -1107,7 +1106,7 @@ recorded cannot drift from what is submitted.
 
 Three things are deliberately left out:
 
-- **Uploaded files** — a source image, an inpaint mask, a JSON batch file.
+- **Uploaded files** — a source image, a JSON batch file.
   Storing those would turn a few hundred bytes a picture into a second
   copy of the input; the panel says how many a recipe needed so you know
   to pick them again.
@@ -1275,7 +1274,7 @@ error in the log points at a custom node instead.
 - `bootstrap.py` — clone ComfyUI + install requirements
 - `downloads.py` — HF / CivitAI model + LoRA downloads (resume + retries)
 - `comfy.py` — GPU detection + ComfyUI server start/wait (1–2 instances)
-- `workflow.py` — Krea 2 workflow builders, text-to-image + inpainting + instruction edit (ComfyUI API format)
+- `workflow.py` — Krea 2 workflow builders, text-to-image + instruction edit (ComfyUI API format)
 - `workflow_krea2_v2.py` — Krea 2 V2 builder (the Krea2 advanced turbo/raw graph)
 - `workflow_krea2_v2_edit.py` — Krea 2 V2 Edit builder (that graph's instruction-edit variant)
 - `workflow_wan.py` — Wan 2.2 image-to-video workflow builder (two-expert A14B)
@@ -1298,7 +1297,7 @@ carries its own `category` and `route`:
 
 ```python
 TabSchema(key="krea_t2i", ..., category="generate", route="/generate/krea2")
-TabSchema(key="krea_inpaint", ..., category="edit", route="/edit/inpaint")
+TabSchema(key="krea_edit", ..., category="edit", route="/edit/krea2-edit")
 TabSchema(key="wan_i2v", ..., category="video", route="/video/wan")
 ```
 
@@ -1310,7 +1309,7 @@ was eleven flat emoji tabs with generate and edit modes interleaved, in an
 order that told you nothing about which of them made a picture from nothing
 and which changed one you already had.
 
-**Every tab has a URL.** `/generate/krea2`, `/edit/inpaint`,
+**Every tab has a URL.** `/generate/krea2`, `/edit/krea2-edit`,
 `/library/gallery`. They are bookmarkable, linkable and survive a reload;
 the browser Back button walks them. The Gradio app had one URL for all
 eleven tabs.
@@ -1337,9 +1336,7 @@ The palette is CSS custom properties in `webui/src/theme/tokens.css`,
 defined once on `:root` and redefined under `[data-theme="dark"]`. Light and
 dark therefore come from one list and cannot drift apart — the same
 discipline the old Gradio theme kept with its `*_dark` token pairs. No
-component carries a colour literal; the one exception is documented in place
-(`PAINT` in the mask editor, which is canvas alpha data rather than a UI
-colour).
+component carries a colour literal.
 
 The theme follows the viewer: a `data-theme` attribute set before first
 paint from `localStorage`, falling back to `prefers-color-scheme`. There is
@@ -2045,7 +2042,7 @@ a revision you did not expect.
 
 The **✨ Edit (Instruction)** tab does nano-banana-style editing: upload an
 image and describe the change ("make the jacket red", "this person walking
-a dog on a beach") — no mask painting. It uses the community
+a dog on a beach"). It uses the community
 [Krea 2 Identity Edit LoRA](https://huggingface.co/conradlocke/krea2-identity-edit)
 (~1.9 GB, auto-downloaded) together with the
 [ComfyUI-Krea2Edit](https://github.com/lbouaraba/comfyui-krea2edit) node
@@ -2121,47 +2118,9 @@ This tab needs **both** sets of node packs: the three V2 ones above plus
 `bootstrap.install_v2_nodes` each run when *either* of the features that
 wants them is on, and `app.py` verifies all four classes registered.
 
-## Inpainting
-
-The **Inpaint** tab accepts an uploaded image; paint a mask over the region
-to replace and describe the replacement in the prompt. Only stock ComfyUI
-nodes are used (`SetLatentNoiseMask` + `ImageCompositeMasked`), so it works
-with the same Turbo model — no extra downloads. The denoise slider controls
-how much of the original survives in the masked region (1.0 = full
-replacement); grow/blur expand and soften the mask edge for seamless blends.
-Images are snapped to multiples of 16 before encoding.
-
-**The mask editor** is a canvas brush tool: layers with real alpha,
-brush and eraser, brush sizing, undo/redo (Ctrl+Z / Ctrl+Shift+Z),
-add/delete layer, and loading by drop, click or paste. It shows a live
-preview of the **dilated and blurred** mask as you paint — what the model
-will actually be given, which the Gradio editor could not display at all.
-
-Its output contract is the same `{background, layers}` pair `gr.ImageEditor`
-produced, uploaded as PNGs, and `_prepare_inpaint_inputs` (now in
-`handlers.py`) still takes the union of the painted layers' alpha channels
-and does the grow, blur, downscale and snap-to-16 server-side. The client
-transform is for the preview and the size readout only.
-
-Two things about the old editor are worth recording, because they are the
-kind of problem that comes back. It ran with `fixed_canvas=True` and a
-1536 px canvas — not cosmetic: with Gradio's default `fixed_canvas=False`
-the canvas grew to the uploaded image's dimensions, so a 12 MP phone photo
-allocated a 4032×3024 RGBA canvas *plus* a paint layer in the browser, the
-tab ran out of memory and **the page reloaded on upload**
-([gradio#8556](https://github.com/gradio-app/gradio/issues/8556)). And
-`format="png"` was needed to override Gradio's lossy webp default, since
-unmasked pixels are composited back from that image. Neither applies now:
-the canvas is sized by the component and the upload is a PNG because the
-code writes one.
-
-**Still missing from the canvas:** zoom and pan. `gr.ImageEditor` had them
-and this does not, which is a real gap for detailed work on a large image.
-It is not a parity break for the mask *output*.
-
 ## Krea 2 model switching
 
-The generate / edit / inpaint tabs each have a **Model** dropdown fed by
+The generate / edit tabs each have a **Model** dropdown fed by
 the `KREA2_MODELS` registry in `config.py` — the same add-an-entry-and-
 restart workflow as the LoRA lists. Each entry names its file, a
 `variant` flag (`turbo` or `raw`) that supplies the step/CFG defaults
@@ -2173,7 +2132,7 @@ the prompt box — visible and editable, never appended silently; delete
 them if you don't want them. A model whose download failed shows a warning
 under the dropdown and refuses to run, without affecting the others.
 
-The generate / edit / inpaint / Flux tabs each stack **`MAX_LORA_SLOTS`
+The generate / edit / Flux tabs each stack **`MAX_LORA_SLOTS`
 LoRA slots** (`tabschema.py`, currently 8). That one constant drives the rows,
 the handlers and the `LoraLoaderModelOnly` chain, so changing it is the
 whole change — the handlers take their slots as a variadic tail and the
@@ -2242,7 +2201,7 @@ component owns its own textarea.
 
 ## Image input shortcuts
 
-All image inputs (Edit, Inpaint, Video) accept **clipboard paste** — press
+All image inputs (Edit, Video) accept **clipboard paste** — press
 Ctrl+V with the component focused or use its paste source button. The Edit
 and Video tabs additionally have a collapsed
 **"Use a previous generation"** picker showing the last 20 generated

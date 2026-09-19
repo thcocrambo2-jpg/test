@@ -19,7 +19,6 @@ export type FieldType =
   | 'radio'
   | 'bool'
   | 'image'
-  | 'mask'
 
 /** Which column a field lands in.
  *
@@ -306,7 +305,7 @@ export interface SubmitResult {
   jobId: string
 }
 
-/** What the form hands the client. Blobs are the image/mask payloads. */
+/** What the form hands the client. Blobs are the image payloads. */
 export type SubmitValues = Record<string, unknown>
 
 // --------------------------------------------------------------- pricing
