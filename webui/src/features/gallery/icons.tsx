@@ -64,3 +64,65 @@ export function PlayIcon() {
     </svg>
   )
 }
+
+/* The view tools. All of these are the whole button, so none carries the
+ * labelled icons' trailing margin. */
+
+/** Two sliders, for "show the view tools". */
+export function ToolsIcon() {
+  return (
+    <svg className={cx(s.btnIcon, s.btnIconAlone)} viewBox="0 0 24 24" aria-hidden="true">
+      <path d="M4 7h10M18 7h2M4 17h4M12 17h8" />
+      <circle cx="16" cy="7" r="2" />
+      <circle cx="10" cy="17" r="2" />
+    </svg>
+  )
+}
+
+export function ZoomInIcon() {
+  return (
+    <svg className={cx(s.btnIcon, s.btnIconAlone)} viewBox="0 0 24 24" aria-hidden="true">
+      <circle cx="11" cy="11" r="7" />
+      <path d="M8 11h6M11 8v6M20 20l-4-4" />
+    </svg>
+  )
+}
+
+export function ZoomOutIcon() {
+  return (
+    <svg className={cx(s.btnIcon, s.btnIconAlone)} viewBox="0 0 24 24" aria-hidden="true">
+      <circle cx="11" cy="11" r="7" />
+      <path d="M8 11h6M20 20l-4-4" />
+    </svg>
+  )
+}
+
+/** A clockwise arc. */
+export function RotateIcon() {
+  return (
+    <svg className={cx(s.btnIcon, s.btnIconAlone)} viewBox="0 0 24 24" aria-hidden="true">
+      <path d="M20 12a8 8 0 1 1-2.3-5.7L20 8.6" />
+      <path d="M20 3v5.6h-5.6" />
+    </svg>
+  )
+}
+
+/** Two arrowheads either side of a vertical mirror line. */
+export function FlipHIcon() {
+  return (
+    <svg className={cx(s.btnIcon, s.btnIconAlone)} viewBox="0 0 24 24" aria-hidden="true">
+      <path d="M12 3v18" />
+      <path d="M8 7 3 12l5 5V7zM16 7l5 5-5 5V7z" />
+    </svg>
+  )
+}
+
+/** The same, about a horizontal line. */
+export function FlipVIcon() {
+  return (
+    <svg className={cx(s.btnIcon, s.btnIconAlone)} viewBox="0 0 24 24" aria-hidden="true">
+      <path d="M3 12h18" />
+      <path d="M7 8l5-5 5 5H7zM7 16l5 5 5-5H7z" />
+    </svg>
+  )
+}

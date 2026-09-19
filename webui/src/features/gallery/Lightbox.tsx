@@ -7,7 +7,19 @@ import type { MediaItem } from '@/api/types'
 import { Button, Pill, useToast } from '@/components/ui'
 import { useHandoff } from '@/store/handoff'
 import { cx, fileName, relativeTime, saveFile, useCopy } from '@/lib/util'
-import { CheckIcon, CopyIcon, DownloadIcon, TrashIcon } from './icons'
+import {
+  CheckIcon,
+  CopyIcon,
+  DownloadIcon,
+  FlipHIcon,
+  FlipVIcon,
+  RotateIcon,
+  ToolsIcon,
+  TrashIcon,
+  ZoomInIcon,
+  ZoomOutIcon,
+} from './icons'
+import { useImageView } from './useImageView'
 import s from './gallery.module.css'
 
 /*
@@ -78,6 +90,12 @@ export function Lightbox({
   const toast = useToast()
   const reuse = useReuse(item)
   const [saving, setSaving] = useState(false)
+  const still = item !== undefined && item.kind !== 'video'
+  const view = useImageView(item?.url ?? '', item?.width ?? 0, item?.height ?? 0)
+  /* The zoom / rotate / flip toolbar, off until asked for. Kept for as long
+   * as the dialog is open, so paging on does not put it away again — but not
+   * past closing it: the next picture opened starts as just a picture. */
+  const [tools, setTools] = useState(false)
 
   /** Save the file on screen. The button exists because the alternative is
    *  right-click → Save image as…, which is not a gesture a phone has. */
@@ -102,8 +120,22 @@ export function Lightbox({
   const [loaded, setLoaded] = useState<string | null>(null)
   const ready = item?.kind === 'video' || loaded === item?.url
 
+  /* The view's shortcuts, read through a ref so the handler below is not
+   * rebound — and the body's scroll lock not dropped and retaken — on every
+   * zoom step. */
+  const viewKeys = useRef<(event: KeyboardEvent) => boolean>(() => false)
+  viewKeys.current = (event) => {
+    if (!still) return false
+    if (!event.ctrlKey && !event.metaKey && !event.altKey && (event.key === 't' || event.key === 'T')) {
+      setTools((on) => !on)
+      return true
+    }
+    return view.onKey(event)
+  }
+
   useEffect(() => {
     function onKeyDown(event: KeyboardEvent) {
+      if (viewKeys.current(event)) return
       if (event.key === 'Escape') onClose()
       if (event.key === 'ArrowLeft') onIndex(Math.max(0, index - 1))
       if (event.key === 'ArrowRight') onIndex(Math.min(items.length - 1, index + 1))
@@ -168,6 +200,20 @@ export function Lightbox({
           <Pill>
             {index + 1} / {items.length}
           </Pill>
+          {still && (
+            <Button
+              size="sm"
+              variant="ghost"
+              iconOnly
+              className={cx(tools && s.toolsOn)}
+              onClick={() => setTools((on) => !on)}
+              aria-pressed={tools}
+              aria-label="Zoom, rotate and flip"
+              title="Zoom, rotate and flip (T)"
+            >
+              <ToolsIcon />
+            </Button>
+          )}
           {reuse.can && (
             <Button
               size="sm"
@@ -241,7 +287,7 @@ export function Lightbox({
          * Absent at the ends of the strip rather than present and inert: a
          * pointer cursor over a button that does nothing is a worse answer
          * than the backdrop underneath, which at least closes. */}
-        {item.kind !== 'video' && index > 0 && (
+        {item.kind !== 'video' && !view.zoomed && index > 0 && (
           <button
             type="button"
             className={cx(s.edge, s.edgeLeft)}
@@ -253,7 +299,7 @@ export function Lightbox({
             }}
           />
         )}
-        {item.kind !== 'video' && index < items.length - 1 && (
+        {item.kind !== 'video' && !view.zoomed && index < items.length - 1 && (
           <button
             type="button"
             className={cx(s.edge, s.edgeRight)}
@@ -291,7 +337,25 @@ export function Lightbox({
            * by its own dimensions against the same box, so the two agree on
            * where the picture goes to within a fraction of a pixel — it is a
            * sharpen, not a reflow. */
-          <div className={s.stageFrame} onClick={(event) => event.stopPropagation()}>
+          <div
+            /* A new frame per picture, so the next one arrives at Fit rather
+             * than easing out of the last one's zoom and turn. */
+            key={item.url}
+            ref={view.ref}
+            className={cx(
+              s.stageFrame,
+              view.zoomed && s.stageZoomed,
+              view.moving && s.stageMoving,
+            )}
+            style={view.style}
+            onClick={(event) => event.stopPropagation()}
+            /* Zoomed in, a drag is a pan, and the browser's own drag of the
+             * <img> would take the gesture instead. */
+            onDragStart={(event) => {
+              if (view.zoomed) event.preventDefault()
+            }}
+            {...view.handlers}
+          >
             {item.thumbUrl && (
               <img className={s.stageThumb} src={item.thumbUrl} alt="" aria-hidden="true" />
             )}
@@ -303,6 +367,87 @@ export function Lightbox({
               onLoad={() => setLoaded(item.url)}
               onError={() => setLoaded(item.url)}
             />
+          </div>
+        )}
+        {still && tools && (
+          <div
+            className={s.viewTools}
+            role="toolbar"
+            aria-label="Zoom, rotate and flip"
+            onClick={(event) => event.stopPropagation()}
+          >
+            <button
+              type="button"
+              className={s.viewTool}
+              onClick={view.zoomOut}
+              disabled={view.atMin}
+              aria-label="Zoom out"
+              title="Zoom out (−)"
+            >
+              <ZoomOutIcon />
+            </button>
+            <button
+              type="button"
+              className={cx(s.viewTool, s.viewZoom)}
+              onClick={view.fitView}
+              aria-label="Fit to screen"
+              title="Fit to screen"
+            >
+              {view.label}
+            </button>
+            <button
+              type="button"
+              className={s.viewTool}
+              onClick={view.zoomIn}
+              disabled={view.atMax}
+              aria-label="Zoom in"
+              title="Zoom in (+)"
+            >
+              <ZoomInIcon />
+            </button>
+            <span className={s.viewSep} aria-hidden="true" />
+            <button
+              type="button"
+              className={s.viewTool}
+              onClick={(event) => view.rotate(event.shiftKey ? -1 : 1)}
+              aria-label="Rotate right"
+              title="Rotate right (R) · Shift rotates left"
+            >
+              <RotateIcon />
+            </button>
+            <button
+              type="button"
+              className={cx(s.viewTool, view.flippedH && s.viewToolOn)}
+              onClick={view.flipH}
+              aria-pressed={view.flippedH}
+              aria-label="Flip horizontally"
+              title="Flip horizontally (H)"
+            >
+              <FlipHIcon />
+            </button>
+            <button
+              type="button"
+              className={cx(s.viewTool, view.flippedV && s.viewToolOn)}
+              onClick={view.flipV}
+              aria-pressed={view.flippedV}
+              aria-label="Flip vertically"
+              title="Flip vertically (V)"
+            >
+              <FlipVIcon />
+            </button>
+            {view.changed && (
+              <>
+                <span className={s.viewSep} aria-hidden="true" />
+                <button
+                  type="button"
+                  className={cx(s.viewTool, s.viewReset)}
+                  onClick={view.reset}
+                  title="Back to how it was (0)"
+                >
+                  Reset
+                </button>
+              </>
+            )}
           </div>
         )}
       </div>

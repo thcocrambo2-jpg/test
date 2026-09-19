@@ -374,6 +374,116 @@
   height: 100%;
   min-width: 0;
   min-height: 0;
+  /* The view tools' transform (useImageView). Eased for the buttons, and
+     switched off while a finger or the wheel is driving it, where easing is
+     lag. `touch-action: none` hands pinch and drag to the page rather than
+     to the browser's own page zoom. */
+  transition: transform var(--d-base) var(--e-out);
+  touch-action: none;
+}
+
+.stageZoomed {
+  cursor: grab;
+}
+
+.stageMoving {
+  transition: none;
+  cursor: grabbing;
+}
+
+/* The header's tools switch, while the tools are out. */
+.toolsOn,
+.toolsOn:hover {
+  color: var(--c-accent);
+}
+
+/* ------------------------------------------------------------ view tools
+
+   One pill over the foot of the picture, and only when asked for. Floated,
+   not laid out: opening it must not shrink or move the picture it is for.
+   On the media scrim like `.pick` and `.playBadge`, because it sits over a
+   picture of any colour, in either theme. */
+.viewTools {
+  position: absolute;
+  left: 50%;
+  bottom: var(--s-4);
+  z-index: 3;
+  transform: translateX(-50%);
+  display: flex;
+  align-items: center;
+  gap: 2px;
+  max-width: calc(100% - var(--s-4));
+  padding: 4px;
+  border-radius: var(--r-full);
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  background: var(--c-media-scrim);
+  backdrop-filter: blur(10px);
+  box-shadow: var(--sh-lg);
+  color: #fff;
+  line-height: 0;
+  animation: rise var(--d-fast) var(--e-out);
+}
+
+@keyframes rise {
+  from {
+    opacity: 0;
+    transform: translate(-50%, 6px);
+  }
+}
+
+.viewTool {
+  display: grid;
+  place-items: center;
+  width: 32px;
+  height: 32px;
+  padding: 0;
+  border: 0;
+  border-radius: var(--r-full);
+  background: none;
+  color: inherit;
+  cursor: pointer;
+  transition: background var(--d-fast) var(--e-out);
+}
+
+.viewTool:hover:not(:disabled) {
+  background: rgba(255, 255, 255, 0.12);
+}
+
+.viewTool:disabled {
+  opacity: 0.35;
+  cursor: default;
+}
+
+.viewToolOn {
+  color: var(--c-accent);
+}
+
+/* The zoom readout, which is also "back to Fit". Mono so the pill does not
+   twitch as the number changes width. */
+.viewZoom {
+  width: auto;
+  min-width: 54px;
+  padding: 0 var(--s-2);
+  font-family: var(--font-mono);
+  font-size: var(--t-xs);
+  line-height: 1;
+  color: var(--c-on-media-soft);
+}
+
+.viewReset {
+  width: auto;
+  padding: 0 var(--s-3);
+  font-size: var(--t-xs);
+  font-weight: 600;
+  line-height: 1;
+  color: var(--c-accent);
+}
+
+.viewSep {
+  width: 1px;
+  height: 18px;
+  margin: 0 4px;
+  background: rgba(255, 255, 255, 0.16);
 }
 
 /* The thumbnail, as a picture rather than as a background.
@@ -424,8 +534,13 @@
 /* Someone who has asked not to be shown motion is not asking to be shown a
    thumbnail for longer. No crossfade; the original simply appears. */
 @media (prefers-reduced-motion: reduce) {
-  .stageFull {
+  .stageFull,
+  .stageFrame {
     transition: none;
+  }
+
+  .viewTools {
+    animation: none;
   }
 }
 
@@ -601,6 +716,26 @@
 
   .strip {
     padding: var(--s-2) var(--s-3);
+  }
+
+  /* A thumb, not a cursor. Seven of these and the separators come to about
+     300px, which still clears a 360px screen. */
+  .viewTools {
+    bottom: var(--s-2);
+  }
+
+  .viewTool {
+    width: 40px;
+    height: 40px;
+  }
+
+  .viewZoom {
+    width: auto;
+    min-width: 52px;
+  }
+
+  .viewReset {
+    width: auto;
   }
 }
 
