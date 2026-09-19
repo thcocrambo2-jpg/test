@@ -123,24 +123,32 @@ class Feature:
 
 
 # Asset groups rather than a per-feature file list, because several
-# features share one set of weights: Single and Edit both run the
-# same Krea 2 base models, and V2 shares only the text encoder with them.
-# downloads.py works from the union of the groups the enabled features
-# asked for, so enabling Edit on its own still fetches the base models it
-# cannot run without, and enabling both Single and Edit fetches them once.
+# features share one set of weights: Single and Edit both decode with the
+# same Qwen image VAE ("krea2"), the two V2 tabs with the Wan 2.1 VAE
+# ("v2"), and all four share the text encoder. downloads.py works from the
+# union of the groups the enabled features asked for, so enabling Edit on
+# its own still fetches the pieces it cannot run without, and enabling both
+# Single and Edit fetches them once.
+#
+# "catalog" is the one group whose contents are not fixed here or in
+# config.py: it is every model and LoRA the catalogue (catalog.py, from the
+# licence server) lists for the enabled features that name it. Each Krea
+# tab names it, and downloads.download_catalog reads the lists of exactly
+# those that are on — so a feature's own models are what it pulls in, not
+# a group-wide set, and a file two tabs share is fetched once.
 FEATURES = (
     Feature(Key.KREA_T2I, "🎨 Krea2", default=True,
-            needs=("text_encoder", "krea2")),
+            needs=("text_encoder", "krea2", "catalog")),
     Feature(Key.KREA_V2_T2I, "🔶 Krea2 V2", default=True,
-            needs=("text_encoder", "v2")),
+            needs=("text_encoder", "v2", "catalog")),
     Feature(Key.GALLERY, "🖼️ Gallery", default=True),
     Feature(Key.KREA_EDIT, "✨ Krea2 Edit",
-            needs=("text_encoder", "krea2", "edit_lora")),
+            needs=("text_encoder", "krea2", "edit_lora", "catalog")),
     # The same instruction-edit recipe on the V2 pipeline, so it needs the
-    # "v2" weights rather than "krea2" — and the edit LoRA, which is the
-    # one thing the two edit tabs do share.
+    # "v2" VAE rather than "krea2" — and the edit LoRA, which is the one
+    # pipeline file the two edit tabs do share.
     Feature(Key.KREA_V2_EDIT, "🔷 Krea2 V2 Edit",
-            needs=("text_encoder", "v2", "edit_lora")),
+            needs=("text_encoder", "v2", "edit_lora", "catalog")),
     Feature(Key.WAN_I2V, "🎬 Wan Video", needs=("wan",)),
     # Two tabs, one graph, one download. The core MiniMax node takes an
     # optional first frame, so text-to-video is image-to-video without the
@@ -324,6 +332,18 @@ def assets() -> frozenset[str]:
 def needs(group: str) -> bool:
     """True if any enabled feature needs this asset group."""
     return group in assets()
+
+
+def enabled_needing(group: str) -> tuple[Key, ...]:
+    """Enabled feature keys whose `needs` include this group, in registry order.
+
+    For a group whose contents depend on *which* features asked for it
+    rather than only on whether any did — "catalog", where each feature
+    brings its own model and LoRA lists.
+    """
+    state = _state()
+    return tuple(f.key for f in FEATURES
+                 if state.get(f.key) and group in f.needs)
 
 
 def enabled_keys() -> tuple[Key, ...]:

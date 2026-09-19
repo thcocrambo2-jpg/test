@@ -41,6 +41,7 @@ if not os.environ.get("KREA2_BASE_DIR"):
              "(e.g. KREA2_BASE_DIR=tmp2).")
 
 import downloads  # noqa: E402
+import features  # noqa: E402
 from config import (  # noqa: E402
     ABLITERATED_ENCODER_FILE,
     BASE_DIR,
@@ -168,6 +169,10 @@ def prune_empty_dirs(before_dirs):
 
 
 def run_groups():
+    # "Whatever the licence says" means every feature on: the catalog group
+    # reads the enabled features' lists to know what to fetch, so with none
+    # resolved it would have nothing to answer from.
+    features.resolve([f.key for f in features.FEATURES])
     for name, fetch in downloads.ASSET_GROUPS.items():
         print(f"── {name}")
         try:

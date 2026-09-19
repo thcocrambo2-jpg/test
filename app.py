@@ -3,11 +3,14 @@
 Startup flow:
   1. Read configuration (config.py, imported below — also sets up logging).
   2. Take a license seat, or stop; resolve which tabs the key grants
-     (features.py) from the entitlements it returned.
+     (features.py) from the entitlements it returned; load the model and
+     LoRA catalogue (catalog.py) — what each Krea tab offers — from the
+     licence server.
   3. Clone ComfyUI if it is missing.
   4. Install Python requirements (ComfyUI's + this app's, one resolver pass).
   5. Download the Hugging Face and CivitAI models the enabled features
-     need — a feature that is off costs no disk and no download time.
+     need, including every model and LoRA in their catalogue lists — a
+     feature that is off costs no disk and no download time.
   6. Start the ComfyUI server and wait until its API answers.
   7. Serve the React UI over uvicorn, open a Cloudflare tunnel for the
      public URL, and keep running until interrupted.
@@ -22,6 +25,7 @@ import shutil
 import sys
 
 import bootstrap
+import catalog
 import features
 import licensing
 from config import (
@@ -29,6 +33,7 @@ from config import (
     KREA_RESERVE_VRAM_GB,
     MINIMAX_COMFYUI_MIN,
     MINIMAX_NODE,
+    MODELS_DIR,
     TEMP_DIR,
     V2_NODE_REPOS,
     WAN_COMFY_LOG,
@@ -53,6 +58,15 @@ def main() -> None:
     # now reach modules that were imported before it.
     features.resolve(licensing.entitlements(), licensing.feature_labels())
     log.info("Features — %s", features.summary())
+
+    # The catalogue: which models and LoRAs each Krea tab offers. It is the
+    # download list as much as the dropdown list, so it has to be known
+    # before step 5 — and it is frozen from here on, so the files fetched,
+    # the choices offered and the V2 slot count can never disagree. Like
+    # licensing it is stdlib-only, so it runs ahead of the pip install. A
+    # server that does not answer degrades to the last saved copy, then to
+    # an empty catalogue that only the Krea tabs notice.
+    catalog.load(licensing.instance_id())
 
     # Where weights will come from. Worth saying out loud: when the mirror
     # cannot be reached every download quietly falls through to upstream,
@@ -163,11 +177,19 @@ def main() -> None:
     # fails the build if any of them would answer a licence that grants
     # nothing. See context.md §4.5.
     import serve
-    import workflow
 
+    # Counted from the catalogue rather than the loras/ folder: a file the
+    # catalogue does not list is never offered, so the folder would count
+    # things no tab can use. Each file once, however many tabs list it.
+    lora_files = {
+        lora.file
+        for key in features.enabled_needing("catalog")
+        for lora in catalog.feature_loras(key)
+    }
     log.info(
-        "Workflow builder ready — %d LoRA file(s) available",
-        len(workflow.list_lora_files()),
+        "Workflow builder ready — %d of %d catalogue LoRA file(s) on disk",
+        sum((MODELS_DIR / "loras" / name).exists() for name in lora_files),
+        len(lora_files),
     )
     if not os.environ.get("KREA2_SKIP_LAUNCH"):
         serve.serve()
