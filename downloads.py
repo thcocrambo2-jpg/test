@@ -390,7 +390,7 @@ def download_text_encoder() -> None:
 def download_krea2_models() -> None:
     """Fetch the Krea 2 base models, VAE and LoRAs (~26 GB).
 
-    Shared by the Single, Edit and Inpaint tabs — whichever of them is on
+    Shared by the Single and Edit tabs — whichever of them is on
     pulls this group in, and it is fetched once however many of them are.
     """
     for relpath in HF_MODEL_FILES + HF_LORA_FILES:

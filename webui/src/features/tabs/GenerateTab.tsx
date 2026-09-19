@@ -5,7 +5,6 @@ import { TwoColumn } from '@/components/TwoColumn'
 import { SchemaForm } from '@/components/SchemaForm'
 import { PresetBar } from '@/components/PresetBar'
 import { Button, Inline } from '@/components/ui'
-import { serializeEditor, type InpaintEditorValue } from '@/components/fields/MaskEditor'
 import { defaultsFor } from '@/lib/schema'
 import { useActiveJob, useJobsForTab, useQueue, isLive } from '@/store/queue'
 import { useHandoff } from '@/store/handoff'
@@ -17,10 +16,9 @@ import s from '@/components/SchemaForm/form.module.css'
 /*
  * Nine of the eleven tabs. All of them.
  *
- * There is no per-tab code anywhere in this app any more. Krea2 and Inpaint
- * were built first on purpose — they exercise the schema form, uploads, the
- * mask editor's output contract, SSE, the queue panel and the gallery
- * plumbing between them — and once those worked end to end against the real
+ * There is no per-tab code anywhere in this app any more. Krea2 was built
+ * first on purpose — it exercises the schema form, SSE, the queue panel and
+ * the gallery plumbing — and once those worked end to end against the real
  * API the remaining eight arrived as data. Labels, types, defaults, ranges,
  * choices, grouping, column, conditional visibility and submission order all
  * come from `tabschema.py`, which is checked against the handler signatures
@@ -82,7 +80,7 @@ export function GenerateTab({ schema }: { schema: TabSchema }) {
    * second click is refusing to let anything queue behind the first.
    *
    * What remains is the round trip itself: uploads go up before the job is
-   * recorded, so on the mask editor this is a real wait and a double click
+   * recorded, so on an image tab this is a real wait and a double click
    * would submit twice. */
   const [submitting, setSubmitting] = useState(false)
   const waiting = runs.filter(isLive).length
@@ -217,11 +215,10 @@ export function GenerateTab({ schema }: { schema: TabSchema }) {
   const submit = useCallback(async () => {
     setSubmitting(true)
     try {
-      const payload = await buildPayload(schema, values)
       await submitJob({
         schema,
         prompt: String(schema.promptField ? (values[schema.promptField] ?? '') : ''),
-        values: payload,
+        values,
       })
     } finally {
       // `submitJob` reports a rejected submission as a job carrying the
@@ -297,33 +294,6 @@ export function GenerateTab({ schema }: { schema: TabSchema }) {
       }
     />
   )
-}
-
-/** Form values → the submit payload.
- *
- *  Almost everything passes through untouched; the exception is the mask
- *  editor, whose value is a background File plus a stack of canvases. Those
- *  become PNG blobs here, as the `{background, layers}` pair `gr.ImageEditor`
- *  produced, and `http.ts` uploads each one and swaps in its id.
- *
- *  The contract on the far side is unchanged, deliberately:
- *  `_prepare_inpaint_inputs` still takes the union of the painted layers'
- *  alpha channels, dilates by `grow`, blurs by `blur`, caps the long side at
- *  2048 and snaps both images to multiples of 16 because Krea 2's VAE
- *  requires it. `prepare.ts` in the editor reproduces that for the preview
- *  and the size readout only — the mask that is actually used is still built
- *  in Python, from these two PNGs. */
-async function buildPayload(
-  schema: TabSchema,
-  values: Record<string, unknown>,
-): Promise<Record<string, unknown>> {
-  const payload: Record<string, unknown> = { ...values }
-  for (const field of schema.fields) {
-    if (field.type !== 'mask') continue
-    const editor = values[field.name] as InpaintEditorValue | undefined
-    payload[field.name] = editor ? await serializeEditor(editor) : null
-  }
-  return payload
 }
 
 /** The selected model's trigger words, swapped into the prompt.

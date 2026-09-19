@@ -10,7 +10,7 @@ import s from './recent.module.css'
  *
  * The lightbox has a filmstrip of everything in the gallery; this is that
  * shape put where the work actually chains. Half of what these tabs are for
- * is feeding one tab's output into the next — a Krea 2 still into Inpaint,
+ * is feeding one tab's output into the next — a Krea 2 still into Edit,
  * an edited frame into Wan or MiniMax — and until now that meant: go to the
  * gallery, download the file, come back, find it in a file picker. Three of
  * those four steps exist only because the picture was on the far side of a
@@ -106,7 +106,7 @@ export function RecentStrip({
  *  the server already has it under. That is a real cost — several megabytes
  *  down and straight back up, over a tunnel — and it buys an invariant worth
  *  more than the bytes: an image field holds a File and nothing else. The
- *  preview, the size probe, the mask editor's canvas and `resolveUploads` all
+ *  preview, the size probe and `resolveUploads` all
  *  read the value the same way whether it was dropped, pasted or picked here,
  *  and none of them grows a second case. `/media` is served with
  *  `Cache-Control: private, max-age=86400`, so picking the same picture twice

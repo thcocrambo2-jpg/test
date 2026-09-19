@@ -13,13 +13,13 @@ npm run typecheck
 
 ## Stage
 
-Stage A is done: the spine plus **Krea2 t2i** and **Inpaint**, the pricing and
+Stage A is done: the spine plus **Krea2 t2i**, the pricing and
 showcase page, the header/footer, the queue panel, the gallery and the theme
 toggle. The other eight schema-driven tabs have their schemas derived already
 but render a "Stage B" page instead of a form — deliberately, because a mock
-cannot validate an image upload, SSE through a proxy, video playback or the
-mask contract, and finding out an assumption was wrong ten tabs later is
-expensive. Section 2 wires these two to the real API first.
+cannot validate an image upload, SSE through a proxy or video playback, and
+finding out an assumption was wrong ten tabs later is
+expensive. Section 2 wires it to the real API first.
 
 ## Where things are
 
@@ -32,7 +32,7 @@ src/
   mock/                     built to be deleted; see below
   lib/schema.ts             defaults + the positional-argument builder
   components/               TwoColumn, SeedRow, LoraStack, SamplerPanel,
-                            VariancePanel, SchemaForm, fields/, fields/MaskEditor/
+                            VariancePanel, SchemaForm, fields/
   features/                 shell/, queue/, gallery/, pricing/, tabs/
 ```
 
@@ -57,7 +57,7 @@ conditional visibility. It deliberately contains **no label overrides**, so a
 reworded label in the Python app can never be masked here. In Section 2 it
 becomes `tabschema.py`.
 
-## Two things that are load-bearing
+## One thing that is load-bearing
 
 **Submission order.** `schema.fields` is baseline order is the Python
 handler's positional order. `toSubmission()` (`lib/schema.ts`) walks that list;
@@ -66,18 +66,10 @@ The LoRA tail is appended flat, as pairs *or* triples per `schema.lora.shape`
 — both shapes exist and confusing them shifts every argument after the stack
 (context.md §4.3).
 
-**The mask contract.** `fields/MaskEditor` emits `{ background, layers }` —
-the same pair `gr.ImageEditor` produced — and `_prepare_inpaint_inputs`
-(`ui.py:926`) is unchanged. `MaskEditor/prepare.ts` is a port of that
-transform used for the live preview and the output-size readout, and
-`test/mask-parity/` checks it against Pillow rather than asserting it.
-
 ## Colours
 
 Every colour is a custom property on `:root` in `theme/tokens.css`, redefined
-under `[data-theme="dark"]`. Nothing else in `src/` contains a colour literal;
-the one exception is `PAINT` in the mask editor, which is alpha data written
-into a canvas, not a UI colour, and is commented as such.
+under `[data-theme="dark"]`. Nothing else in `src/` contains a colour literal.
 
 To check:
 

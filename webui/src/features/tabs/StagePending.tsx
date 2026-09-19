@@ -6,10 +6,10 @@ import s from './tabs.module.css'
 /*
  * A tab whose schema is derived but which has not been wired yet.
  *
- * Stage A ships two tabs on purpose. Mocks cannot validate an image upload,
- * SSE through a proxy, video playback or the mask contract, and finding out
+ * Stage A ships one tab on purpose. Mocks cannot validate an image upload,
+ * SSE through a proxy or video playback, and finding out
  * that an assumption was wrong eleven tabs deep is the one way this project
- * goes badly wrong. So Krea2 and Inpaint go end to end against the real API
+ * goes badly wrong. So Krea2 goes end to end against the real API
  * in Section 2 first, and the rest follow.
  *
  * The page is not a stub, though: it renders what the derivation already
@@ -22,7 +22,7 @@ export function StagePending({ schema }: { schema: TabSchema }) {
     <div className={s.pending}>
       <Alert tone="info" title="Not wired up yet — Stage B">
         The form for this tab is already derived from the parity baseline; what is
-        missing is the run against the real API. Krea2 and Inpaint are proving the
+        missing is the run against the real API. Krea2 is proving the
         contract first.
       </Alert>
 

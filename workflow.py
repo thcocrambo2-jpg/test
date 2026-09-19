@@ -1,14 +1,12 @@
-"""Krea 2 workflow builders (text-to-image, inpainting, instruction edit).
+"""Krea 2 workflow builders (text-to-image, instruction edit).
 
-The t2i and inpaint workflows use only nodes that ship with current
+The t2i workflow uses only nodes that ship with current
 ComfyUI: UNETLoader / CLIPLoader(type="krea2") / VAELoader,
 LoraLoaderModelOnly, ConditioningZeroOut and KSampler — plus the native
 multi-GPU placement nodes SelectCLIPDevice / SelectVAEDevice when a
 second GPU is present (these pass through unchanged on machines where
 gpu:1 does not exist, so the same workflow can never fail for lack of a
-GPU). Inpainting adds LoadImage / LoadImageMask / VAEEncode /
-SetLatentNoiseMask and a final ImageCompositeMasked — all core nodes as
-well. The instruction-edit workflow additionally needs the
+GPU). The instruction-edit workflow additionally needs the
 ComfyUI-Krea2Edit custom nodes and the Identity Edit LoRA (both fetched
 during bootstrap/downloads).
 """
@@ -242,88 +240,6 @@ def build_workflow(
     wf["save"] = {
         "class_type": "SaveImage",
         "inputs": {"filename_prefix": filename_prefix, "images": ["decode", 0]},
-    }
-    return wf
-
-
-def build_inpaint_workflow(
-    *,
-    prompt: str,
-    negative: str = "",
-    seed: int = 0,
-    steps: int = 8,
-    cfg: float = 1.0,
-    sampler: str = "er_sde",
-    denoise: float = 1.0,
-    image_name: str,
-    mask_name: str | None = None,
-    loras=(),
-    unet_file: str | None = None,
-    filename_prefix: str = "Krea2Inpaint",
-) -> dict:
-    """Build a Krea 2 inpainting / img2img workflow in ComfyUI API format.
-
-    `image_name` and `mask_name` reference files already uploaded to
-    ComfyUI's input folder (client.upload_image). With a mask,
-    SetLatentNoiseMask re-noises only the masked latent region, so the
-    sampler sees the whole image as context but only repaints the mask;
-    the decoded result is then composited back over the source so unmasked
-    pixels also survive the VAE round-trip untouched. denoise 1.0 replaces
-    the masked region completely; lower values keep more of its structure.
-
-    With mask_name=None the whole image is re-noised (classic img2img) —
-    denoise then controls how far the result may drift from the source,
-    and no compositing happens. Output size is the source image size
-    (the UI snaps it to /16).
-    """
-    wf, model_ref, clip_ref, vae_ref = _model_nodes(loras, unet_file)
-    _conditioning_nodes(wf, prompt, negative, clip_ref)
-
-    wf["source"] = {
-        "class_type": "LoadImage",
-        "inputs": {"image": image_name},
-    }
-    wf["encode"] = {
-        "class_type": "VAEEncode",
-        "inputs": {"pixels": ["source", 0], "vae": vae_ref},
-    }
-    latent_ref = ["encode", 0]
-    if mask_name:
-        wf["mask"] = {
-            "class_type": "LoadImageMask",
-            "inputs": {"image": mask_name, "channel": "red"},
-        }
-        wf["masked_latent"] = {
-            "class_type": "SetLatentNoiseMask",
-            "inputs": {"samples": ["encode", 0], "mask": ["mask", 0]},
-        }
-        latent_ref = ["masked_latent", 0]
-    wf["sampler"] = {
-        "class_type": "KSampler",
-        "inputs": {
-            "seed": int(seed), "steps": int(steps), "cfg": float(cfg),
-            "sampler_name": sampler, "scheduler": "simple",
-            "denoise": float(denoise),
-            "model": model_ref, "positive": ["positive", 0],
-            "negative": ["negative", 0], "latent_image": latent_ref,
-        },
-    }
-    wf["decode"] = {
-        "class_type": "VAEDecode",
-        "inputs": {"samples": ["sampler", 0], "vae": vae_ref},
-    }
-    save_ref = ["decode", 0]
-    if mask_name:
-        wf["composite"] = {
-            "class_type": "ImageCompositeMasked",
-            "inputs": {"destination": ["source", 0], "source": ["decode", 0],
-                       "x": 0, "y": 0, "resize_source": False,
-                       "mask": ["mask", 0]},
-        }
-        save_ref = ["composite", 0]
-    wf["save"] = {
-        "class_type": "SaveImage",
-        "inputs": {"filename_prefix": filename_prefix, "images": save_ref},
     }
     return wf
 

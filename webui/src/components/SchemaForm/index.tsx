@@ -11,7 +11,6 @@ import {
   TextAreaField,
   TextField,
 } from '@/components/fields'
-import { MaskEditor, type InpaintEditorValue } from '@/components/fields/MaskEditor'
 import { SeedRow } from '@/components/SeedRow'
 import { LoraStack } from '@/components/LoraStack'
 import { SamplerPanel, VariancePanel } from '@/components/SamplerPanel'
@@ -23,7 +22,7 @@ import s from './form.module.css'
  *
  * The schema says what the fields are, in what order they submit, which column
  * they belong to and how they group. This renders that. There is no per-tab
- * form code anywhere: Krea2 and Inpaint are the same component with different
+ * form code anywhere: Krea2 and Krea2 Edit are the same component with different
  * schemas, and so will the other seven be.
  *
  * The important invariant is that rendering never touches submission order.
@@ -149,8 +148,8 @@ function FieldGroup({
       )
   }
 
-  // A group with no title is a bare container — the inpaint canvas, which
-  // wants no chrome around it at all.
+  // A group with no title is a bare container, with no chrome around it at
+  // all.
   if (!group.title) return <>{body}</>
 
   return (
@@ -289,15 +288,6 @@ function FieldRenderer({
           accept={field.accept}
           value={(value as File | null) ?? null}
           onChange={set}
-        />
-      )
-    case 'mask':
-      return (
-        <MaskEditor
-          value={(value as InpaintEditorValue) ?? { background: null, layers: [], revision: 0 }}
-          onChange={set}
-          grow={Number(values.grow ?? 0)}
-          blur={Number(values.blur ?? 0)}
         />
       )
     default:

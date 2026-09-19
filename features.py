@@ -70,7 +70,6 @@ class Key(str, Enum):
     GALLERY = "gallery"
     KREA_EDIT = "krea_edit"
     KREA_V2_EDIT = "krea_v2_edit"
-    KREA_INPAINT = "krea_inpaint"
     FLUX_T2I = "flux_t2i"
     KLEIN_I2I = "klein_i2i"
     WAN_I2V = "wan_i2v"
@@ -127,7 +126,7 @@ class Feature:
 
 
 # Asset groups rather than a per-feature file list, because several
-# features share one set of weights: Single, Edit and Inpaint all run the
+# features share one set of weights: Single and Edit both run the
 # same Krea 2 base models, and V2 shares only the text encoder with them.
 # downloads.py works from the union of the groups the enabled features
 # asked for, so enabling Edit on its own still fetches the base models it
@@ -145,8 +144,6 @@ FEATURES = (
     # one thing the two edit tabs do share.
     Feature(Key.KREA_V2_EDIT, "🔷 Krea2 V2 Edit",
             needs=("text_encoder", "v2", "edit_lora")),
-    Feature(Key.KREA_INPAINT, "🖌️ Krea2 Inpaint",
-            needs=("text_encoder", "krea2")),
     Feature(Key.FLUX_T2I, "🌊 Flux2D", needs=("flux",)),
     Feature(Key.KLEIN_I2I, "🧩 Klein Edit", needs=("klein",)),
     Feature(Key.WAN_I2V, "🎬 Wan Video", needs=("wan",)),

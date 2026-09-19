@@ -82,8 +82,7 @@ OUTPUT = ROOT / "webui_bundle.py"
 # versions, package-lock.json because it decides them.
 #
 # Deliberately absent: tsconfig.json (type-checking only — it cannot change
-# a byte of the emitted bundle) and webui/test/ (a fixture harness that
-# never ships).
+# a byte of the emitted bundle).
 SOURCE_DIRS = ("src",)
 SOURCE_FILES = ("index.html", "package.json", "package-lock.json",
                 "vite.config.ts")

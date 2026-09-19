@@ -226,7 +226,7 @@ def mount(app) -> None:
     Registered last, after every API route, because the catch-all below
     would otherwise swallow them: a single-page app has to answer *any*
     unmatched path with index.html so that a deep link like
-    /edit/inpaint survives a reload. FastAPI matches in registration
+    /edit/krea2-edit survives a reload. FastAPI matches in registration
     order, so a path that reaches here is one the API did not claim.
     """
     index = _read("index.html") if available() else None

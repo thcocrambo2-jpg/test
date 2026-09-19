@@ -22,7 +22,7 @@ import { create } from 'zustand'
  * on top of that — which is what keeps Krea2 and Krea2 V2 apart even though
  * their fields are named identically. Session only: nothing here is written to
  * storage, so a reload starts clean, and values that cannot be serialized at
- * all (an uploaded `File`, the mask editor's painted layers) are kept as
+ * all (an uploaded `File`) are kept as
  * happily as a number is.
  *
  * Three things to know before using it:

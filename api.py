@@ -262,14 +262,9 @@ def _resolve_uploads(schema, raw: dict) -> dict:
     in the line. Gradio decoded the upload on the click for the same
     reason.
 
-    Three kinds need it, and they want three different Python objects:
+    Two kinds need it, and they want two different Python objects:
 
       image  a PIL image
-      mask   the `{background, layers}` pair gr.ImageEditor produced, which
-             _prepare_inpaint_inputs takes apart. The contract did not
-             change in the rewrite — the React canvas uploads a background
-             and one PNG per painted layer, and the union / dilate / blur /
-             snap-to-16 all still happen in handlers.py, byte for byte
       file   a path on disk, because generate_from_json reads it with
              Path(...).read_text()
     """
@@ -280,27 +275,7 @@ def _resolve_uploads(schema, raw: dict) -> dict:
             values[field.name] = _pil(value) if value else None
         elif field.kind == "file":
             values[field.name] = str(_upload_path(value)) if value else None
-        elif field.kind == "mask":
-            values[field.name] = _mask_value(value)
     return values
-
-
-def _mask_value(value):
-    """`{background, layers}` of upload ids -> the same, as PIL images.
-
-    None when there is no background, which is the shape
-    _prepare_inpaint_inputs already refuses with "Upload an image first."
-    — so the error stays one sentence written in one place.
-    """
-    if not isinstance(value, dict) or not value.get("background"):
-        return None
-    layers = value.get("layers") or []
-    if not isinstance(layers, list):
-        raise HTTPException(400, "The mask layers are not a list.")
-    return {
-        "background": _pil(value["background"]),
-        "layers": [_pil(layer) for layer in layers],
-    }
 
 
 # ─────────────────────────────────────────────────────────── media
@@ -545,8 +520,7 @@ def create_app() -> FastAPI:
     async def upload(file: UploadFile):
         """Take one file and hand back an id to reference it by.
 
-        Separate from the generate route on purpose. The mask editor
-        uploads a background and one PNG per painted layer, and a batch of
+        Separate from the generate route on purpose. A batch of
         four submissions against the same source image should not re-send
         it four times; an id costs nothing to repeat.
         """
