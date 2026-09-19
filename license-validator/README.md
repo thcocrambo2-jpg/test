@@ -60,8 +60,9 @@ npm run issue-key -- --key KREA2-XXXX-XXXX-XXXX --features-extra "wan_i2v" --upd
 | `admin` | 0 | everything; `is_public: false` |
 
 Three public tiers since 2026-09-07. `pro` was deleted that day (no
-license was on it). `krea_t2i` is turbo-only by configuration (the Raw model is not in
-`KREA2_MODELS`), which is why V2 — turbo and raw — starts at Creator.
+license was on it). `krea_t2i` is turbo-only by its model list (the Raw model is
+not in `feature_assets.krea_t2i` — see [Models and LoRAs](#models-and-loras)),
+which is why V2 — turbo and raw — starts at Creator.
 
 Prices are **documentation, not enforcement.** Nothing here charges anyone;
 `expires_at` is the only lever that actually stops a key working.
@@ -167,6 +168,7 @@ touches a download.
 | `POST` | `/v1/heartbeat` | Keep it. Re-checks the license every call |
 | `POST` | `/v1/release` | Give it back. Idempotent |
 | `POST` | `/v1/build` | Which build this license gets + a signed R2 URL. `{license_key, instance_id, current_sha}`. Takes no seat |
+| `POST` | `/v1/catalog` | The model and LoRA catalogue the Krea tabs are built from. `{license_key, instance_id}`, licence checked like acquire. Takes no seat |
 | `GET` | `/v1/start.sh` | 302 to a signed URL for the start script. Unauthenticated — the RunPod template fetches it |
 | `GET` | `/v1/plans` | Public catalogue — `is_public` plans, enabled features, enabled billing cycles |
 | `POST` | `/v1/prompts` | A pod submitting one prompt + its settings. Private on arrival, unless `publish` and the license is `is_admin` |
@@ -181,6 +183,10 @@ touches a download.
 | `POST` | `/v1/admin/builds/promote` | Point a channel at a build. `{sha256, channel}` |
 | `POST` | `/v1/admin/prompts/review` | `{id, approve}` — publish or reject one prompt |
 | `POST` | `/v1/admin/prompts` | Author an ⭐ official prompt. Public immediately |
+| `GET` | `/v1/admin/assets` | Every LoRA and model, disabled ones included, each with any validation `problems`, and every feature's lists as stored |
+| `POST` | `/v1/admin/loras` | Create or update one LoRA by `id`. Only the fields sent are changed; creating needs `file` and `source` |
+| `POST` | `/v1/admin/models` | The same, for a model |
+| `POST` | `/v1/admin/feature-assets` | `{feature, models?, loras?}` — replace a feature's ordered lists. Every id must exist |
 | `POST` | `/tg/webhook/:path` | Telegram updates. The path is derived from `TELEGRAM_WEBHOOK_SECRET`, and the `X-Telegram-Bot-Api-Secret-Token` header must match it too. Always answers 200 |
 | `GET` `POST` | `/internal/cron/sweep` | Retry stuck provisioning and delivery. Needs `CRON_SECRET` — **not** `ADMIN_TOKEN` |
 
@@ -215,6 +221,13 @@ way. A published row also gets a freshly generated fingerprint rather than
 the one the pod sent, because deduplicating it against an existing
 community row would silently turn "publish this" into a counter bump.
 
+Every write that stores a settings blob — `POST /v1/prompts`,
+`POST /v1/presets`, `POST /v1/admin/presets` and `POST /v1/admin/prompts` —
+checks its model and LoRA ids against the catalogue and answers `400`
+naming the bad value (see [Settings blobs](#settings-blobs)). That includes
+the silent pod write: a recipe whose ids name nothing is a malformed body,
+not something the pod could not have known.
+
 `npm run seed-prompts` writes one starter prompt of each kind — an ⭐
 official one that is live immediately, and a 👥 community one sitting in
 the review queue so there is something there the first time you look.
@@ -223,6 +236,112 @@ the review queue so there is something there the first time you look.
 `fingerprint`) and **never un-approves**: content is `$set`, moderation
 state is `$setOnInsert`, so a prompt you have already ruled on keeps that
 ruling across seed runs.
+
+## Models and LoRAs
+
+Which models and LoRAs the Krea tabs offer lives here, not in the app.
+Three collections, all keyed by a readable string id:
+
+- `loras` — one record per LoRA file: its name, `file`, where it downloads
+  from (`source`), our own copy (`mirror`), its `default_strength`, and
+  `enabled` / `sort_order`.
+- `models` — one record per model *setting*: `file`, `source`, `mirror`,
+  `variant`, `steps`, `cfg` and the `turbo_lora` its recipe switches on.
+  Two records may share a file.
+- `feature_assets` — per feature key, the ordered model ids and LoRA ids that
+  tab's dropdowns hold. The first model is the tab's default. An id may sit in
+  any number of features.
+
+**Ids are permanent.** Presets and prompts store them, so renaming one
+orphans every preset that names it. Fix a label with `name`, never with
+the id. To retire a record, switch it off.
+
+`POST /v1/catalog` is what a pod reads, once, at startup — after its seat is
+taken and before it downloads anything. It answers in exactly the shape of
+[`data/assets.json`](data/assets.json):
+
+```js
+{ ok: true,
+  loras:  [{ id, name, file, source, mirror, default_strength, trigger }],
+  models: [{ id, name, file, source, mirror, variant, steps, cfg, turbo_lora, trigger }],
+  features: { krea_t2i: { models: ["krea2-turbo-mxfp8"], loras: ["krea2-turbo", ...] }, ... } }
+```
+
+Enabled records only, LoRAs in `sort_order`, and each feature's lists cut
+down to the ids in the same answer, order kept. A stored record that fails
+validation (only a hand edit in Atlas can make one) is skipped and logged,
+never sent — `GET /v1/admin/assets` shows it with its `problems`. It needs a
+valid licence, checked exactly like `/v1/acquire` (`403` on a bad key,
+`503` on a database failure — the pod then falls back to the copy it saved
+last time). Nothing reaches a running pod: an edit is picked up on its next
+start.
+
+The rules every write goes through (`src/assets.js`; the pod applies the
+same ones again on read, in `catalog.py`):
+
+| Field | Rule |
+| --- | --- |
+| id | `^[a-z0-9][a-z0-9-]{0,62}$` |
+| `file` | `^[A-Za-z0-9][A-Za-z0-9._-]{0,199}\.safetensors$` — a bare file name, no directories |
+| `source` | `{kind: "civitai", version: <positive int>}` or `{kind: "hf", repo: "owner/name", path}` |
+| `mirror` | `{repo: "owner/name", path}` or `null` |
+| paths | non-empty, no leading `/`, no `..` segment |
+
+A field outside a record's known set is refused rather than stored, so a
+typo cannot become a setting that silently does nothing. `loras.file` is
+unique.
+
+```bash
+npm run seed-assets                          # data/assets.json → the three collections
+npm run seed-assets -- --dry-run
+npm run assets                               # list everything (--loras | --models | --features)
+npm run assets -- --disable-lora realism-v2  # --enable-lora, --enable-model, --disable-model
+npm run assets -- --feature krea_t2i --add-lora pawg --at 3
+npm run assets -- --feature krea_t2i --remove-lora pawg
+npm run assets -- --feature krea_v2_t2i --add-model krea2-raw-fp8 --at 1   # position 1 = default
+npm run assets -- --mirror realism-v2 --repo owner/name --path loras/x.safetensors
+```
+
+`seed-assets` validates the whole file before writing anything, and is
+idempotent. What a record *is* is `$set`, so editing it in the file and
+re-running updates it; `enabled` and `sort_order` are `$setOnInsert`, so a
+record you switched off stays off. A `mirror: null` in the file leaves a
+stored mirror alone. Feature lists are replaced whole from the file. It
+never deletes.
+
+The mirror script records where it uploaded a LoRA with
+`POST /v1/admin/loras` `{id, mirror: {repo, path}}` — a partial update that
+changes nothing else about the record. Put the same value in
+`data/assets.json`, or the next `seed-assets` run will overwrite it with the
+file's.
+
+### Settings blobs
+
+Presets and prompts store a tab's settings, and every model and LoRA in
+them is **an id**, never a file name or a label:
+
+```js
+// krea_t2i — eight positional slots
+{ model: "krea2-turbo-mxfp8", steps: 10, cfg: 1.0, resolution: "...", sampler: "er_sde",
+  seed: 42, randomize: true, batch_count: 1,
+  loras: [[true, "hmbody-d-e10", 0.8], [false, null, 0.8], ...] }
+
+// krea_v2_t2i — one row per LoRA it sets, matched to the tab's rows by id
+{ model: "krea2-turbo-mxfp8", aspect: "...", megapixels: 1.5, multiple: 8, ...,
+  sampler: { ... }, variance: { ... }, sharpen: false, film_grain: false,
+  loras: [[false, "krea2-turbo", 0.6], [true, "filter-bypass-3", 0.93], ...] }
+```
+
+Every LoRA row is a triple `[on, lora id | null, weight]`. An empty slot is
+`null`; the form calls it "None", but that word never reaches storage. The
+server refuses (`400`) a blob whose `model` is not an existing model id or
+whose `loras` holds anything else. Disabled records still count as
+existing — a preset naming one is not wrong, the tab just leaves that slot
+empty while it is off. The rest of the blob belongs to the tabs and is only
+bounded in size.
+
+`seed-presets` and `seed-prompts` apply the same check, so **run
+`seed-assets` first** — against an empty catalogue they refuse every row.
 
 ### Status codes are the contract
 
@@ -315,14 +434,15 @@ npm install
 cp .env.example .env          # fill in MONGODB_URI
 npm run init-db               # creates indexes — run once per cluster
 npm run seed-catalog          # writes the plans + features collections
-npm run seed-prompts          # writes the starter prompt library (optional)
+npm run seed-assets           # writes the models, LoRAs and per-tab lists
+npm run seed-presets          # writes each tab's Default preset (needs seed-assets)
+npm run seed-prompts          # writes the starter prompt library (optional; needs seed-assets)
 npm run issue-key -- --name "Acme Corp" --plan creator --seats 2
 npm start
 ```
 
-All three seed steps are idempotent, so re-running one is safe. Add
-`--dry-run` to `seed-catalog` or `seed-prompts` to see what a run would
-change before it changes it.
+Every seed step is idempotent, so re-running one is safe. Add `--dry-run`
+to any of them to see what a run would change before it changes it.
 
 `issue-key` prints the `KREA2_LICENSE_KEY=...` line to hand the customer,
 and the resolved feature list underneath it so you can see what they will
@@ -613,7 +733,7 @@ small query, warm invocations pay nothing.
   reviewed_at: null,                 // null = still in the queue
   title: null,                       // admin prompts only
   prompt: "...", negative: "...",
-  settings: { ... },                 // the whole replay blob, stored verbatim
+  settings: { ... },                 // the whole replay blob; models and LoRAs by id
   license_key: "KREA2-...",          // never projected to any client
   seen_count: 3,                     // how many pods sent this same recipe
   created_at: ISODate, updated_at: ISODate }
@@ -625,11 +745,50 @@ README for why. It is the one client-chosen unique key in this database,
 which is why the write validates it is really 64 hex characters: anything
 else would be a row that can never be deduplicated against.
 
-`settings` is stored **verbatim and never interpreted here.** The shape
+`settings` is interpreted here in exactly one respect: its `model` and its
+`loras` rows are catalogue ids, and a write whose ids name nothing is
+refused — see [Settings blobs](#settings-blobs). The rest of the shape
 belongs to the app's tabs and changes with them, so validating it would
 couple this service to a UI it should know nothing about. It is bounded
 (8 KB) rather than checked, and the client guards every value against what
 its own build offers before applying any of it.
+
+`loras` — `_id` is the LoRA id
+
+```js
+{ _id: "realism-engine-v3-1", name: "Realism Engine v3.1",
+  file: "realism_engine_krea2_v3.1.safetensors",       // unique
+  source: { kind: "civitai", version: 3109006 },        // or { kind: "hf", repo, path }
+  mirror: { repo: "owner/name", path: "loras/..." } | null,
+  default_strength: 0.6, trigger: "",
+  enabled: true, sort_order: 50,
+  created_at: ISODate, updated_at: ISODate }
+```
+
+`models` — `_id` is the model id
+
+```js
+{ _id: "krea2-raw-fp8", name: "Krea 2 Raw fp8",
+  file: "krea2_raw_fp8_scaled.safetensors",             // NOT unique
+  source: { kind: "hf", repo: "Comfy-Org/Krea-2", path: "diffusion_models/..." },
+  mirror: null, variant: "turbo" | "raw", steps: 20, cfg: 2.5,
+  turbo_lora: { lora: "krea2-turbo", strength: 0.6 } | null,
+  trigger: "", enabled: true,
+  created_at: ISODate, updated_at: ISODate }
+```
+
+`feature_assets` — `_id` is the feature key
+
+```js
+{ _id: "krea_v2_t2i",
+  models: ["krea2-turbo-mxfp8", "krea2-raw-fp8"],       // first = the tab's default
+  loras: ["krea2-turbo", "filter-bypass-3", ...],       // dropdown order
+  created_at: ISODate, updated_at: ISODate }
+```
+
+`npm run remove-feature` deletes a feature's `feature_assets` document along
+with its catalogue row; the `loras` and `models` records are shared and
+stay.
 
 `orders` — one document per purchase attempt, and the only reason a payment
 webhook can be received twice without selling anything twice.
@@ -678,9 +837,11 @@ Indexes: unique `key`; `plan_id`; unique `(license_key, instance_id)`;
 `(license_key, reviewed_at)`; sparse `telegram_user_id` on `licenses`;
 and on `orders` a **unique sparse** `telegram_payment_charge_id` (two
 orders cannot record one charge), `(telegram_user_id, created_at)`,
-`(status, updated_at)` for the sweep and a sparse `license_key`.
-`plans`, `features` and `telegram_users` are keyed by their `_id` and
-need nothing beyond it.
+`(status, updated_at)` for the sweep and a sparse `license_key`; on
+`loras` a **unique** `file` and `(enabled, sort_order)`. `plans`,
+`features`, `telegram_users`, `models` and `feature_assets` are keyed by
+their `_id` and need nothing beyond it — `models.file` is deliberately not
+unique.
 
 `created_at` on a session row is never overwritten, so the gap between it
 and `last_seen` is how long that instance has been up.

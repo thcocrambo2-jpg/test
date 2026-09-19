@@ -41,6 +41,7 @@ import { readFileSync } from "node:fs";
 import { ObjectId } from "mongodb";
 
 import { collections, ensureIndexes } from "../src/db.js";
+import { checkSettings } from "../src/assets.js";
 
 const PRESET_TABS = ["krea_t2i", "krea_v2_t2i"];
 
@@ -151,6 +152,10 @@ if (opts.add) {
       Array.isArray(settings)) {
     die("--settings must hold a JSON object");
   }
+  // Models and LoRAs by catalogue id, LoRA rows as [on, id or null,
+  // weight] — the same check POST /v1/admin/presets makes.
+  const bad = await checkSettings(settings);
+  if (bad) die(bad, "(npm run assets lists the ids)");
 
   const now = new Date();
   const result = await presets.updateOne(
