@@ -35,7 +35,7 @@ export function OutputPanel({
   const dismissError = useQueue((state) => state.dismissError)
   const select = useQueue((state) => state.select)
   const cancel = useQueue((state) => state.cancel)
-  const eta = useEta(job?.status === 'running' ? job.etaAt : null)
+  const eta = useEta(job?.status === 'running', job?.etaAt)
 
   const images = job?.images ?? []
   const running = job ? isLive(job) : false

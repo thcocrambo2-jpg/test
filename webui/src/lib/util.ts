@@ -243,18 +243,24 @@ export function formatEta(seconds: number): string {
   return secs > 0 ? `~${minutes}m ${secs}s left` : `~${minutes}m left`
 }
 
-/** A running job's ETA, counted down once a second between the server's
- *  updates. `etaAt` is a deadline on this browser's clock — the store turns
- *  the server's "seconds left" into one on arrival, so the two clocks never
- *  have to agree. Null when there is no estimate yet. */
-export function useEta(etaAt: number | null | undefined): string | null {
+/** A job's ETA, counted down once a second between the server's updates.
+ *  `etaAt` is a deadline on this browser's clock — the store turns the
+ *  server's "seconds left" into one on arrival, so the two clocks never
+ *  have to agree.
+ *
+ *  Only a running job has one. A running job without one says so as
+ *  "estimating…": the server has nothing to go on until the sampler has
+ *  timed a step — the very first run of a model on this machine — and a
+ *  bar with no word at all read as the feature not being there. */
+export function useEta(running: boolean, etaAt: number | null | undefined): string | null {
   const [now, setNow] = useState(() => Date.now())
-  const active = typeof etaAt === 'number'
+  const active = running && typeof etaAt === 'number'
   useEffect(() => {
     if (!active) return
     const timer = setInterval(() => setNow(Date.now()), 1000)
     return () => clearInterval(timer)
   }, [active])
-  if (!active) return null
+  if (!running) return null
+  if (!active) return 'estimating…'
   return formatEta(Math.max(0, (etaAt - now) / 1000))
 }

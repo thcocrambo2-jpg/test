@@ -83,7 +83,7 @@ function JobRow({ job, onNavigate }: { job: Job; onNavigate: () => void }) {
   const { data: schemas } = useSchemas()
   const select = useQueue((state) => state.select)
   const cancel = useQueue((state) => state.cancel)
-  const eta = useEta(job.status === 'running' ? job.etaAt : null)
+  const eta = useEta(job.status === 'running', job.etaAt)
 
   const route = schemas?.find((schema) => schema.key === job.tabKey)?.route
 

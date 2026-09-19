@@ -65,7 +65,10 @@ MAX_KEYS = 200
 # history. The first frame arrives *after* step one, whose time includes
 # the sampler's warm-up, so rates are measured from it rather than from
 # the segment's start — two frames is one clean interval, three is two.
+# With no history to fall back on, one clean interval is enough: a rough
+# number at step 2 beats none until step 3 on a card doing 10s a step.
 MIN_FRAMES = 3
+MIN_FRAMES_BLIND = 2
 
 # How hard a fresh estimate is pulled toward the previous one while the
 # same segment is being timed. Rates wobble step to step; a countdown that
@@ -76,10 +79,15 @@ SMOOTHING = 0.35
 # on purpose — prompts, filenames and uploaded image names change on every
 # click and cost nothing — except the weights, which model_signature
 # already covers. Seeds are numbers but cost nothing either.
+#
+# Step counts are deliberately NOT here. Sampling time is proportional to
+# them and nothing else is, so they are recorded with each sample and the
+# history is rescaled to the run at hand (see _profile). Keying on them
+# meant moving the steps slider threw every past timing away — including
+# the model load, which does not care how many steps follow it.
 _SHAPE_INPUTS = frozenset({
-    "width", "height", "length", "steps", "batch_size", "num_frames",
-    "frames", "megapixels", "start_at_step", "end_at_step", "fps",
-    "duration", "upscale_by", "scale_by",
+    "width", "height", "length", "batch_size", "num_frames",
+    "frames", "megapixels", "fps", "duration", "upscale_by", "scale_by",
 })
 
 _LOCK = threading.Lock()
@@ -118,13 +126,18 @@ def _save(history: dict) -> None:
         log.warning("Could not save ETA history: %s", exc)
 
 
-def shape_key(prefix: str, workflow: dict, signature: tuple) -> str:
+def shape_key(prefix: str, workflow: dict, signature: tuple,
+              sizes_count: bool = True) -> str:
     """Which runs count as 'the same kind' for timing purposes.
 
     Derived from the graph rather than from the tab's own arguments, for
     the reason model_signature is: every tab gets it for free and none can
     forget to declare a field. The node types are in it so an edit graph
     and a text-to-image graph over the same weights stay apart.
+
+    With `sizes_count=False` it is the coarse key: same graph and weights,
+    any size. What a first click at a new resolution falls back on, with
+    the timings rescaled by pixel count (see _profile).
     """
     types, sizes = set(), []
     for node_id, node in sorted(workflow.items(), key=lambda kv: str(kv[0])):
@@ -135,8 +148,54 @@ def shape_key(prefix: str, workflow: dict, signature: tuple) -> str:
             if name in _SHAPE_INPUTS and isinstance(value, (int, float)) \
                     and not isinstance(value, bool):
                 sizes.append(f"{name}={value}")
-    raw = repr((sorted(types), sizes, signature))
+    raw = repr((sorted(types), sizes if sizes_count else [], signature))
+    if not sizes_count:
+        prefix += "~any"
     return f"{prefix}:{hashlib.sha1(raw.encode()).hexdigest()[:16]}"
+
+
+def workflow_steps(workflow: dict) -> int:
+    """How many sampler steps the graph asks for, as one number to scale
+    history by. A two-stage graph (KSamplerAdvanced twice, each told the
+    whole schedule and a start/end) counts the span each stage runs; a
+    plain sampler counts its steps."""
+    total = 0
+    for node in workflow.values():
+        if not isinstance(node, dict):
+            continue
+        inputs = node.get("inputs") or {}
+        steps = inputs.get("steps")
+        if not isinstance(steps, int) or isinstance(steps, bool):
+            continue
+        start, end = inputs.get("start_at_step"), inputs.get("end_at_step")
+        if isinstance(start, int) and isinstance(end, int):
+            total += max(0, min(end, steps) - max(0, start))
+        else:
+            total += steps
+    return total
+
+
+def workflow_area(workflow: dict) -> float:
+    """Pixels the graph renders — times frames, for video — as one number
+    to rescale history by when only the coarse key has any. 0 when the
+    graph does not say (an edit graph sized from its upload), which turns
+    the rescaling off rather than guessing."""
+    width = height = frames = 0
+    megapixels = 0.0
+    for node in workflow.values():
+        if not isinstance(node, dict):
+            continue
+        inputs = node.get("inputs") or {}
+
+        def num(name):
+            value = inputs.get(name)
+            ok = isinstance(value, (int, float)) and not isinstance(value, bool)
+            return value if ok else 0
+        width, height = max(width, num("width")), max(height, num("height"))
+        megapixels = max(megapixels, num("megapixels"))
+        frames = max(frames, num("length"), num("num_frames"), num("frames"))
+    pixels = width * height if width and height else megapixels * 1e6
+    return float(pixels * (frames or 1))
 
 
 def _record(key: str, sample: dict) -> None:
@@ -152,7 +211,8 @@ def _record(key: str, sample: dict) -> None:
         _save(history)
 
 
-def _profile(key: str, cold: bool) -> dict | None:
+def _profile(key: str, cold: bool, steps: int = 0,
+             area: float = 0.0) -> dict | None:
     """What one picture of this kind is expected to cost, phase by phase.
 
     Medians over the remembered samples. Segments are only combined across
@@ -161,6 +221,14 @@ def _profile(key: str, cold: bool) -> dict | None:
     counts. The silent stretch before the first step is taken from runs
     that were as cold as this one where there are any: a swap can make it
     ten times longer, and averaging the two would be wrong both ways.
+
+    Segment times are rescaled from the step count each sample ran to
+    `steps`, the count this run asks for, so a 4-step run's timings predict
+    an 11-step one. Only the segments scale; loading and decoding do not
+    depend on steps. Likewise by pixel count (`area`), which only ever
+    differs under the coarse key: segments and decoding scale with it,
+    loading does not. Linear in pixels is an approximation — attention is
+    worse than linear — and the live rate corrects it within two steps.
     """
     with _LOCK:
         entry = _load().get(key)
@@ -170,15 +238,27 @@ def _profile(key: str, cold: bool) -> dict | None:
     segments = len(samples[-1].get("segs") or [])
     same = [s for s in samples if len(s.get("segs") or []) == segments]
     alike = [s for s in same if bool(s.get("cold")) == cold] or same
+
+    def by_area(sample) -> float:
+        was = float(sample.get("area") or 0)
+        return area / was if area > 0 and was > 0 else 1.0
+
+    def scale(sample) -> float:
+        ran = int(sample.get("steps") or 0)
+        return (steps / ran if steps > 0 and ran > 0 else 1.0) * by_area(sample)
+
     try:
         return {
             "pre": statistics.median(float(s["pre"]) for s in alike),
             "segs": [
-                [statistics.median(int(s["segs"][i][0]) for s in same),
-                 statistics.median(float(s["segs"][i][1]) for s in same)]
+                [statistics.median(round(int(s["segs"][i][0]) * scale(s))
+                                   for s in same),
+                 statistics.median(float(s["segs"][i][1]) * scale(s)
+                                   for s in same)]
                 for i in range(segments)
             ],
-            "post": statistics.median(float(s["post"]) for s in same),
+            "post": statistics.median(float(s["post"]) * by_area(s)
+                                      for s in same),
         }
     except Exception:                          # noqa: BLE001 - a bad file
         return None
@@ -235,6 +315,9 @@ class Tracker:
         self.profile = None                 # history for this picture
         self.warm_profile = None            # ...and for the ones after it
         self.cold = False
+        self.steps = 0
+        self.area = 0.0
+        self.coarse_key = None
         self._reset_picture()
 
     def _reset_picture(self) -> None:
@@ -257,8 +340,17 @@ class Tracker:
             self._reset_picture()
             self.cold = cold
             self.key = shape_key(self.prefix, workflow, signature)
-            self.profile = _profile(self.key, cold)
-            self.warm_profile = _profile(self.key, False)
+            self.coarse_key = shape_key(self.prefix, workflow, signature,
+                                        sizes_count=False)
+            self.steps = workflow_steps(workflow)
+            self.area = workflow_area(workflow)
+
+            def profile(cold_run):
+                return (_profile(self.key, cold_run, self.steps, self.area)
+                        or _profile(self.coarse_key, cold_run, self.steps,
+                                    self.area))
+            self.profile = profile(cold)
+            self.warm_profile = profile(False)
             self._publish()
         except Exception as exc:              # noqa: BLE001
             log.debug("ETA start failed: %s", exc)
@@ -319,10 +411,13 @@ class Tracker:
             # A graph that never reported a step: all of it is one silence.
             pre, post = wall, 0.0
         if self.key:
-            _record(self.key, {"pre": round(pre, 2),
-                               "segs": [[m, round(d, 2)] for m, d in self.segs],
-                               "post": round(post, 2),
-                               "cold": self.cold, "at": round(now)})
+            sample = {"pre": round(pre, 2),
+                      "segs": [[m, round(d, 2)] for m, d in self.segs],
+                      "post": round(post, 2), "steps": self.steps,
+                      "area": self.area, "cold": self.cold, "at": round(now)}
+            _record(self.key, sample)
+            if self.coarse_key:
+                _record(self.coarse_key, sample)
         self.key = None                     # this picture is accounted for
         self.seg_frames = []
         self.finish_at = None
@@ -349,7 +444,8 @@ class Tracker:
         index = len(self.segs)               # the segment being run
         hist = segs_hist[index] if index < len(segs_hist) else None
         left_here = None
-        if len(self.seg_frames) >= MIN_FRAMES and self.seg_value > self.seg_frames[0][1]:
+        needed = MIN_FRAMES if hist is not None else MIN_FRAMES_BLIND
+        if len(self.seg_frames) >= needed and self.seg_value > self.seg_frames[0][1]:
             t0, v0 = self.seg_frames[0]
             rate = (self.t_last - t0) / (self.seg_value - v0)
             left_here = (self.seg_max - self.seg_value) * rate \
@@ -402,7 +498,7 @@ class Tracker:
         # Smoothed only while one segment's rate is being measured; a new
         # segment or picture resets finish_at, and a phase change is a
         # real change the number should show at once.
-        if self.finish_at is not None and len(self.seg_frames) >= MIN_FRAMES:
+        if self.finish_at is not None and len(self.seg_frames) > MIN_FRAMES_BLIND:
             target = self.finish_at + SMOOTHING * (target - self.finish_at)
         self.finish_at = target
         self.report(target)
