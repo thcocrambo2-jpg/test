@@ -148,7 +148,6 @@ keep a plain name.
 | `krea_edit` | Krea Edit — Instruction | editing |
 | `krea_v2_edit` | Krea2 V2 Edit | editing |
 | `krea_inpaint` | Krea Inpaint — Img2Img | editing |
-| `klein_i2i` | Klein Edit — Image to Image | editing |
 | `wan_i2v` | Wan 2.2 Video | video |
 | `minimax_i2v` | MiniMax H3 Video (image-to-video, with sound) | video |
 | `minimax_t2v` | MiniMax H3 Text to Video (with sound) | video |
@@ -582,8 +581,8 @@ reading alongside the plans in Atlas; `src/features.js` stays the source of
 truth and is what `/v1/plans` serves.
 
 ```js
-{ _id: "klein_i2i", name: "Klein Edit — Image to Image",
-  description: "...", category: "editing", sort_order: 80,
+{ _id: "wan_i2v", name: "Wan 2.2 Video",
+  description: "...", category: "video", sort_order: 90,
   enabled: true }
 ```
 

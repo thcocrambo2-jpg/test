@@ -152,15 +152,6 @@ export const FEATURES = [
     enabled: false,
   },
   {
-    key: "klein_i2i",
-    name: "Klein Edit",
-    tab_label: "🧩 Klein Edit",
-    description: "Edit images or combine two images together",
-    category: "editing",
-    sort_order: 80,
-    enabled: false,
-  },
-  {
     key: "wan_i2v",
     name: "Wan Video",
     tab_label: "🎬 Wan Video",
