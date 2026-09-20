@@ -171,13 +171,11 @@ who did not touch that control.
 The four Krea tabs' Model and LoRA dropdowns hold catalogue **ids** — the
 feature's lists as the licence server answers them. Unless
 `KREA2_CATALOG_FILE` is already set, the check points it at the seed
-document, `license-validator/data/assets.json`, which is what the Krea
-entries in the baseline were written from. Point it at another catalogue
-and those entries differ for reasons that are not regressions.
-
-`--choices` is off by default for the same reason: choice lists are the
-part most likely to move for a reason that is not a regression — a LoRA
-added to the database and the seed document.
+document, `license-validator/data/assets.json`, which is what those
+baseline entries were written from; point it at another catalogue and
+they differ for reasons that are not regressions. That is also why
+`--choices` is off by default: a LoRA added to the database moves a
+choice list without anything being wrong.
 
 ```bash
 $PY scripts/check_schema.py             # structure only
@@ -204,9 +202,9 @@ number moved at. Snapshots live in `scripts/golden/`, one per handler.
 
 It is an operator tool, not part of the shipped app, and it borrows the
 weightless boot so it runs on a laptop with no GPU, no ComfyUI and no
-models. Several things are stubbed, each because without it the check
-would pass while proving nothing — the aliveness probe, the "is this
-downloaded yet" guards, `client.run` and `client.upload_image`.
+models. The aliveness probe, the "is this downloaded yet" guards,
+`client.run` and `client.upload_image` are all stubbed — each because
+without it the check would pass while proving nothing.
 
 ```bash
 $PY scripts/golden.py            # write the snapshots
@@ -232,12 +230,10 @@ at once — that last one being how a "shared" constant becomes two
 constants that drift apart later. New names are fine and are only listed.
 
 Half of `ember/settings.py` is derived from the environment, so the
-values are collected in a **subprocess** with a built environment: every
-`KREA2_*`, `HF_TOKEN`, `CIVITAI_TOKEN` and `RUNPOD_*` variable is
-dropped and a few are set to fixed values, so the result is the same on
-any machine. The two directories that still differ are written back out
-as `<BASE_DIR>` and `<ROOT>`, and `WindowsPath(…)` and `PosixPath(…)`
-both record as `Path(…)`.
+values are collected in a **subprocess** with a built environment — every
+`KREA2_*`, `HF_TOKEN`, `CIVITAI_TOKEN` and `RUNPOD_*` variable dropped, a
+few set to fixed values, the two paths that still differ written back out
+as `<BASE_DIR>` and `<ROOT>` — so the answer is the same on any machine.
 
 ```bash
 $PY scripts/check_config.py
