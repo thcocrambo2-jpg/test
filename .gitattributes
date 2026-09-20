@@ -51,7 +51,7 @@ Dockerfile* text eol=lf
 #                       side, run `make webui`, commit that. Merging two
 #                       halves of a compressed stream produces a file that
 #                       still parses as Python and serves a corrupt asset.
-webui_bundle.py linguist-generated=true -diff -merge
+ember/web/webui_bundle.py linguist-generated=true -diff -merge
 
 # LF for the generated module and for everything it is generated from.
 # SOURCE_HASH is a hash of those files, so a checkout that turned them
@@ -59,7 +59,7 @@ webui_bundle.py linguist-generated=true -diff -merge
 # and fail check_webui.py with nothing wrong. (The generator normalises
 # CRLF as well — belt and braces, because this rule only takes effect on
 # the next checkout of a tree that already has CRLF in it.)
-webui_bundle.py text eol=lf
+ember/web/webui_bundle.py text eol=lf
 webui/** text eol=lf
 
 # The exceptions to the rule above, and the reason it needs them: `text`
