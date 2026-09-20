@@ -10,8 +10,7 @@ PowerShell script and a bash script can both understand.
 Why mirror it at all
 --------------------
 serve.py downloads cloudflared from the GitHub "latest" release on first
-launch, and since Gradio's share=True was removed the tunnel is the only
-source of a public URL. That makes one GitHub endpoint a hard dependency
+launch, and the tunnel is the only source of a public URL. That makes one GitHub endpoint a hard dependency
 of every first start, and the failure mode is a customer with no link.
 
 This applies the doctrine mirror.py already states for weights: mirror

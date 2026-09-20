@@ -255,9 +255,9 @@ class Field:
     collapsed: bool = False
     # RES4LYF builds its sampler and scheduler lists at load time, so a
     # name this build does not list is still a name the node may accept.
-    # The two V2 dropdowns are gr.Dropdown(allow_custom_value=True); this
-    # is that flag, and without it a preset from a pod with a newer
-    # RES4LYF would 422 on submit.
+    # So the two V2 dropdowns accept a value that is not in their own
+    # list; without this flag a preset from a pod with a newer RES4LYF
+    # would 422 on submit.
     allow_custom: bool = False
     # {value: label}, or a callable returning one, for a choice field
     # whose values are catalogue ids: the Model dropdowns and the LoRA

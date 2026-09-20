@@ -13,9 +13,8 @@ Why this exists
 scripts/parity.py freezes the *forms*. This freezes what the handlers do
 with them, and the two catch different things.
 
-`generate_v2` takes **31 positional arguments**. The adapter that replaces
-Gradio's `click(inputs=[...])` has to hand them over in exactly the right
-order, and the failure mode of getting it wrong is not an exception: swap
+`generate_v2` takes **31 positional arguments**. The adapter that calls it
+has to hand them over in exactly the right order, and the failure mode of getting it wrong is not an exception: swap
 `cutoff_step` and `total_steps` and you have swapped two ints, every
 handler still runs, every picture still arrives, and they are quietly
 worse. Nothing in the app notices, and no human reading a 5,000-line diff

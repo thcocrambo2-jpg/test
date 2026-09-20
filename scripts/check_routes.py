@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Assert the licence gate still holds after Gradio stopped enforcing it.
+"""Assert the licence gate is enforced by the API, not just the render.
 
     python scripts/check_routes.py
 

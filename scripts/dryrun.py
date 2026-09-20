@@ -129,7 +129,7 @@ def main() -> None:
     parser.add_argument(
         "--tunnel", action="store_true",
         help="open a Cloudflare quick tunnel for a public URL (default: "
-             "localhost only). Replaces --share, which was Gradio's link.",
+             "localhost only).",
     )
     parser.add_argument(
         "--api-only", action="store_true",

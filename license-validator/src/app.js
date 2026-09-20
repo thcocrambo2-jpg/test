@@ -121,8 +121,8 @@ app.use(express.json({ limit: "16kb" }));
 // Wide open on purpose. The real traffic is server-side: the pod calls
 // this from Python, so no Origin header is sent and CORS never applies to
 // it. The permissiveness is for anything browser-side you add later —
-// there is no origin worth pinning anyway, since the Gradio share URL is
-// freshly generated on every run.
+// there is no origin worth pinning anyway, since the tunnel URL a pod
+// serves its web UI from is freshly generated on every run.
 app.use(cors({ origin: true }));
 app.options("*", cors({ origin: true }));
 

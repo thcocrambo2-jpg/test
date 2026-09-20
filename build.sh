@@ -668,9 +668,9 @@ echo ">>> Compiling (the first build is slow — every package below is compiled
     `# It is a compiled extension, so it must be bundled — a pip install on` \
     `# the pod is invisible to the huggingface_hub inside this bundle.` \
     `#` \
-    `# The metadata flag is the one that actually switches Xet on, for the` \
-    `# same reason it is needed for gradio below: huggingface_hub does not` \
-    `# probe with an import, it calls importlib.metadata.version("hf_xet")` \
+    `# The metadata flag is the one that actually switches Xet on:` \
+    `# huggingface_hub does not probe with an import, it calls` \
+    `# importlib.metadata.version("hf_xet")` \
     `# in utils/_runtime.py. Without the .dist-info that raises` \
     `# PackageNotFoundError, so the package is compiled in and reported` \
     `# missing — the exact warning the pod logs on every download.` \
