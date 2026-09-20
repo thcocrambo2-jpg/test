@@ -1,5 +1,31 @@
 """The MiniMax H3 tabs: 🎥 MiniMax I2V and 🎞️ MiniMax T2V."""
 
+from ember import features
+from ember.generation import handlers
+from ember.pipelines.krea2.constants import SAMPLERS
+from ember.pipelines.minimax.constants import (
+    MINIMAX_ASPECT_RATIOS,
+    MINIMAX_DEFAULT_ASPECT,
+    MINIMAX_DEFAULT_RESOLUTION,
+    MINIMAX_DEFAULT_SECONDS,
+    MINIMAX_DEFAULTS,
+    MINIMAX_MAX_SECONDS,
+    MINIMAX_MIN_SECONDS,
+    MINIMAX_RESOLUTIONS,
+    MINIMAX_T2V_RESOLUTIONS,
+)
+from ember.web.schema.fields import (
+    G_PROMPT,
+    G_SEED,
+    VIDEO_KEYS,
+    _batch_field,
+    _blank_lora_tail,
+    _seed_fields,
+)
+from ember.web.schema.model import Field, Group, TabSchema
+
+Key = features.Key
+
 
 # The two MiniMax tabs. One model, one graph, one download; the core
 # node takes an optional first frame, so the text tab is the image tab

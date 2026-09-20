@@ -1,5 +1,14 @@
 """One declarative schema per tab — what a form is, in one place.
 
+Where the pieces are
+--------------------
+This module is the assembly: `SCHEMAS` in navigation order, `BY_KEY`,
+`get()`, `entitled()`, the formless `BESPOKE` tabs, the `catalog()` the
+forms are drawn from, and the assertions that hold the invariant below.
+The pieces it assembles are in `ember.web.schema`: `model` has the types
+(`Invalid`, `Field`, `Group`, `Repeat`, `TabSchema`), `fields` has the
+control clusters the tabs share, and `tabs.<pipeline>` has one tab each.
+
 The keystone of the web layer. "What is on this tab" has five separate
 consumers, and the React form that draws it is in another language, in
 another directory, built by another toolchain — so nothing keeps those
@@ -72,62 +81,37 @@ numbers.
 """
 
 import inspect
-from dataclasses import dataclass, field as dc_field, replace
-from typing import Any, Callable
 
 # As `assets`: this module has a catalog() of its own — the /catalog answer.
 from ember.licensing import catalog as assets
 from ember import features
-from ember.licensing import presets
 from ember.generation import handlers
 from ember.logs import log
 from ember.pipelines.krea2.constants import (
-    DEFAULT_RESOLUTION,
     RESOLUTION_PRESETS,
     SAMPLERS,
 )
-from ember.pipelines.krea2_v2.constants import (
-    V2_ASPECT_RATIOS,
-    V2_DEFAULT_ASPECT,
-    V2_DEFAULT_MEGAPIXELS,
-    V2_DEFAULT_MULTIPLE,
-    V2_DEFAULT_NEGATIVE,
-    V2_SAMPLER_DEFAULTS,
-    V2_SAMPLER_MODES,
-    V2_SAMPLER_NAMES,
-    V2_SCHEDULERS,
-    V2_VARIANCE_DEFAULTS,
-    V2_VARIANCE_MODEL_TYPES,
-    V2_VARIANCE_PRESETS,
-    V2_VARIANCE_SCHEDULES,
-)
-from ember.pipelines.krea2_v2_edit.constants import (
-    V2_EDIT_DEFAULT_GROUNDING,
-    V2_EDIT_DEFAULT_REF_BOOST,
-    V2_EDIT_FIT_MODES,
-)
-from ember.pipelines.minimax.constants import (
-    MINIMAX_ASPECT_RATIOS,
-    MINIMAX_DEFAULT_ASPECT,
-    MINIMAX_DEFAULT_RESOLUTION,
-    MINIMAX_DEFAULT_SECONDS,
-    MINIMAX_DEFAULTS,
-    MINIMAX_MAX_SECONDS,
-    MINIMAX_MIN_SECONDS,
-    MINIMAX_RESOLUTIONS,
-    MINIMAX_T2V_RESOLUTIONS,
-)
+from ember.pipelines.krea2_v2.constants import V2_ASPECT_RATIOS
 from ember.pipelines.wan.constants import (
     WAN_5B_DEFAULTS,
     WAN_5B_FPS,
-    WAN_DEFAULT_NEGATIVE,
-    WAN_DEFAULT_RESOLUTION,
     WAN_FPS,
     WAN_MAX_SECONDS,
     WAN_MODE_DEFAULTS,
     WAN_RESOLUTIONS,
-    WAN_VARIANT,
 )
+# `Invalid` is named here because this is where the API meets the schema:
+# api.py answers 422 on `tabschema.Invalid`, and the submit path it wraps
+# is TabSchema.submit.
+from ember.web.schema.model import Invalid, TabSchema
+from ember.web.schema.tabs.krea2 import KREA2_EDIT_SCHEMA, KREA2_SCHEMA
+from ember.web.schema.tabs.krea2_v2 import KREA2_V2_SCHEMA
+from ember.web.schema.tabs.krea2_v2_edit import KREA2_V2_EDIT_SCHEMA
+from ember.web.schema.tabs.minimax import (
+    MINIMAX_I2V_SCHEMA,
+    MINIMAX_T2V_SCHEMA,
+)
+from ember.web.schema.tabs.wan import WAN_MODEL_CHOICES, WAN_SCHEMA
 
 Key = features.Key
 

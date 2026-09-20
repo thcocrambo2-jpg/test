@@ -6,6 +6,15 @@ invariant that `Field.name` *is* the handler's parameter name, are
 described in `ember.web.tabschema`, which assembles the tabs out of them.
 """
 
+from dataclasses import dataclass, field as dc_field, replace
+from typing import Any, Callable
+
+from ember.licensing import catalog as assets
+from ember import features
+from ember.generation import handlers
+
+Key = features.Key
+
 
 class Invalid(ValueError):
     """A submitted value the schema will not accept. api.py answers 422.
@@ -90,7 +99,7 @@ class Repeat:
 class Field:
     """One control, in submission order.
 
-    The first ten attributes are the contract the module docstring names.
+    The first ten attributes are the contract ember.web.tabschema names.
     The rest are presentation — where the control sits and when it is
     shown — which lives here rather than in the React layout so that
     moving a control is a one-word edit in one language.

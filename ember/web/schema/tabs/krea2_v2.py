@@ -1,5 +1,38 @@
 """The 🔶 Krea2 V2 tab."""
 
+from ember import features
+from ember.generation import handlers
+from ember.licensing import presets
+from ember.pipelines.krea2_v2.constants import (
+    V2_ASPECT_RATIOS,
+    V2_DEFAULT_ASPECT,
+    V2_DEFAULT_MEGAPIXELS,
+    V2_DEFAULT_MULTIPLE,
+    V2_DEFAULT_NEGATIVE,
+)
+from ember.web.schema.fields import (
+    GEN_PRESET_NOTE,
+    G_CORE,
+    G_PROMPT,
+    G_SAMPLER,
+    G_SAVE,
+    G_SEED,
+    G_VARIANCE,
+    IMAGE_KEYS,
+    _CFG_NOTE,
+    _batch_field,
+    _model_field,
+    _save_fields,
+    _seed_fields,
+    _stack_slots,
+    _triple_tail,
+    _v2_sampler_fields,
+    _v2_variance_fields,
+)
+from ember.web.schema.model import Field, Group, TabSchema
+
+Key = features.Key
+
 
 KREA2_V2_SCHEMA = TabSchema(
     model_registry=handlers.KREA_V2_T2I,

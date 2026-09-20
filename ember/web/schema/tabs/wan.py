@@ -1,5 +1,27 @@
 """The Wan 2.2 image-to-video tab."""
 
+from ember import features
+from ember.generation import handlers
+from ember.pipelines.krea2.constants import SAMPLERS
+from ember.pipelines.wan.constants import (
+    WAN_DEFAULT_NEGATIVE,
+    WAN_DEFAULT_RESOLUTION,
+    WAN_MAX_SECONDS,
+    WAN_MODE_DEFAULTS,
+    WAN_RESOLUTIONS,
+    WAN_VARIANT,
+)
+from ember.web.schema.fields import (
+    G_PROMPT,
+    G_SEED,
+    VIDEO_KEYS,
+    _batch_field,
+    _seed_fields,
+)
+from ember.web.schema.model import Field, Group, TabSchema
+
+Key = features.Key
+
 
 # The Wan tab's two radio lists. They name model families rather than
 # files, and the strings are what generate_wan_video branches on (`_is_wan_5b`, `mode.startswith("turbo")`) — so they

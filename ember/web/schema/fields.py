@@ -5,6 +5,24 @@ Each builder returns Fields (or a `Repeat` tail) ready to drop into a
 `TabSchema.fields` tuple, in submission order.
 """
 
+from ember.licensing import catalog as assets
+from ember.generation import handlers
+from ember.pipelines.krea2_v2.constants import (
+    V2_SAMPLER_DEFAULTS,
+    V2_SAMPLER_MODES,
+    V2_SAMPLER_NAMES,
+    V2_SCHEDULERS,
+    V2_VARIANCE_DEFAULTS,
+    V2_VARIANCE_MODEL_TYPES,
+    V2_VARIANCE_PRESETS,
+    V2_VARIANCE_SCHEDULES,
+)
+from ember.pipelines.krea2_v2_edit.constants import (
+    V2_EDIT_DEFAULT_GROUNDING,
+    V2_EDIT_DEFAULT_REF_BOOST,
+)
+from ember.web.schema.model import Field, Group, Repeat
+
 
 # ══════════════════════════════════════════════════════ shared pieces
 # Written once and referenced from every tab that has them. The seven
@@ -251,7 +269,7 @@ def _two_image_fields(label1, toggle, label2):
     """Source image, the second-reference toggle and the second image.
 
     The two Edit tabs share it. The labels are arguments, transcribed
-    verbatim; see the module docstring on why that matters.
+    verbatim; see ember.web.tabschema on why that matters.
     """
     return (
         Field("image", label1, "image", None, group="inputs", column="right"),
