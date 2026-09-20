@@ -50,10 +50,10 @@ services:
     # larger than VRAM loadable at all.
     shm_size: 2gb
 
-    # licensing.py releases the seat from a SIGTERM handler. Compose's
-    # default is 10 seconds and then SIGKILL, which would skip that and
-    # leave the seat held until it expires — a licensing bug that is not
-    # one. The app also has ComfyUI subprocesses to bring down.
+    # ember/licensing/seat.py releases the seat from a SIGTERM handler.
+    # Compose's default is 10 seconds and then SIGKILL, which would skip
+    # that and leave the seat held until it expires — a licensing bug that
+    # is not one. The app also has ComfyUI subprocesses to bring down.
     stop_grace_period: 60s
 
     deploy:

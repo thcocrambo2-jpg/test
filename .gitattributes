@@ -40,7 +40,8 @@ Dockerfile* text eol=lf
 
 # The generated React bundle. webui_bundle.py is machine-written by
 # scripts/gen_webui_bundle.py and committed because neither build host has
-# Node — see context.md constraint 5.
+# Node — see docs/architecture/web-ui.md, "Why the React bundle is
+# committed".
 #
 #   linguist-generated  keeps it out of language statistics and collapses
 #                       it in a diff view, where a few hundred KB of

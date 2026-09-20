@@ -7,8 +7,9 @@ places:
 * **the pictures** — a public Cloudflare R2 bucket, fetched by the
   customer's browser
 
-`showcase.py` reads the JSON and builds the URLs; `theme.showcase_html`
-renders it. The app never downloads an image itself.
+`ember/web/showcase.py` reads the JSON and builds the URLs; the pricing
+page's React components render them. The app never downloads an image
+itself.
 
 ## Pointing it at the bucket
 
@@ -34,9 +35,9 @@ either
 * **Custom domain**, for anything real. Any domain already on your
   Cloudflare account, e.g. `https://assets.example.com`.
 
-Either way, paste the origin only — no path, no trailing slash. `config.py`
-strips a trailing `/`, a query and a fragment, and refuses anything that is
-not `https://`.
+Either way, paste the origin only — no path, no trailing slash.
+`ember/settings.py` strips a trailing `/`, a query and a fragment, and
+refuses anything that is not `https://`.
 
 This is a **public URL, not a credential.** It belongs in the RunPod
 template alongside the other non-secret settings, so every pod cloned from

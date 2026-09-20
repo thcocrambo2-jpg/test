@@ -215,8 +215,9 @@ builds:
 # machine with Node >= 20 (the same one that runs license-validator/), then
 # COMMIT webui_bundle.py.
 #
-# Committing a generated file is the whole answer to constraint 5 in
-# context.md: neither build host has Node, and neither ever will. The
+# Committing a generated file is the whole answer to the constraint set
+# out in docs/architecture/web-ui.md, "Why the React bundle is committed":
+# neither build host has Node, and neither ever will. The
 # alternative is a toolchain on a RunPod pod and on a Windows box, kept in
 # step with this one, to turn TSX into JavaScript that is identical either
 # way. It also means a fresh clone runs scripts/dryrun.py immediately,
@@ -248,7 +249,10 @@ webui-dev:
 #   check_webui       webui_bundle.py is committed, so an edit to
 #                     webui/src that nobody rebuilt would ship the
 #                     previous front end without a word.
-#   check_routes      the API's routes against what the front end calls.
+#   check_routes      the licence gate: with a licence granting nothing,
+#                     every per-tab route must answer 403 and not 404,
+#                     and granting one feature must open exactly one
+#                     tab. See docs/development/checks.md.
 #   check_config      every configuration value against its recorded
 #                     value, wherever the module holding it now lives, so
 #                     a constant cannot quietly change while being moved.

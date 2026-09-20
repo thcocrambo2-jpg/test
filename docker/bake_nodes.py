@@ -3,9 +3,10 @@
 Runs inside the Dockerfile's first stage, never on a pod. It exists so the
 image and the app cannot disagree about which revision of anything is
 correct: rather than repeating ComfyUI's SHA and the node pack list in
-shell, it calls bootstrap.py's own helpers against scripts/PINS.json and
-scripts/mirror_manifest.json — the same two files mirror.py reads at
-runtime. Bump a pin and the next image build follows it with no edit here.
+shell, it calls ember.comfy.setup's own helpers against scripts/PINS.json
+and scripts/mirror_manifest.json — the same two files ember.weights.mirror
+reads at runtime. Bump a pin and the next image build follows it with no
+edit here.
 
 What this does NOT do is install anything with pip. The clones land in a
 build stage that is thrown away; only /opt/krea2 is copied forward, and the
