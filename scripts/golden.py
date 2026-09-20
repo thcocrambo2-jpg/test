@@ -145,10 +145,9 @@ def stub_comfy() -> None:
 def handler_module():
     """Where the generate_* functions live.
 
-    `handlers` after Section 2 step 1 lifts them out of `ui`, and `ui`
-    before it. Asking for the former first is what lets the same snapshots
-    verify the move: the point of a pure move is that this file does not
-    have to change, and that the JSON does not either.
+    Resolved in one place so that moving the handlers between modules
+    leaves this file and the JSON snapshots untouched, which is the whole
+    point of a pure move.
     """
     from ember.generation import handlers
     return handlers

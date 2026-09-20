@@ -4,17 +4,12 @@ import { controlCount } from '@/lib/schema'
 import s from './tabs.module.css'
 
 /*
- * A tab whose schema is derived but which has not been wired yet.
+ * A tab whose schema is derived but which is not marked ready to submit.
  *
- * Stage A ships one tab on purpose. Mocks cannot validate an image upload,
- * SSE through a proxy or video playback, and finding out
- * that an assumption was wrong seven tabs deep is the one way this project
- * goes badly wrong. So Krea2 goes end to end against the real API
- * in Section 2 first, and the rest follow.
- *
- * The page is not a stub, though: it renders what the derivation already
- * knows about this tab, straight from `parity_baseline.json`. If the field
- * count and the argument count below are right, Stage B is mostly a flag.
+ * Not a stub: it renders what the derivation already knows about the tab,
+ * straight from `parity_baseline.json`. Seeing the real groups, field count
+ * and argument count is what tells you whether the derivation is right
+ * before anything is wired to it.
  */
 export function StagePending({ schema }: { schema: TabSchema }) {
   const groups = schema.groups ?? []

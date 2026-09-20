@@ -20,11 +20,8 @@ import type {
 /*
  * The real client. This is the whole of what the app knows about the server.
  *
- * Section 1 wrote this file against a mock so that switching over would be a
- * deletion rather than an excavation, and that is what it turned out to be:
- * `src/mock/` is gone, the ternary in `client.ts` is gone, and no component
- * changed. What did change is here — the endpoint names, and three things the
- * mock could not have taught us.
+ * Everything below is the endpoint names, plus three things about talking to
+ * this server that are worth knowing before changing any of it.
  *
  *   * **Uploads are their own round trip.** An image goes up once, to
  *     `POST /uploads`, and the submission references it by id. A batch of

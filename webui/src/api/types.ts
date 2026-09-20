@@ -2,10 +2,8 @@
  * The wire contract.
  *
  * Everything the UI knows about the server is in this file. `api/client.ts`
- * `api/client.ts` re-exports the one implementation of `ApiClient`, and no
- * component knows anything about the server beyond this file. Section 1 wrote
- * these types against a mock; Section 2 deleted the mock and left them
- * standing, which is what they were for.
+ * re-exports the one implementation of `ApiClient`, and no component knows
+ * anything about the server beyond these types.
  */
 
 // --------------------------------------------------------------- schema
@@ -125,7 +123,7 @@ export type TabCategory = 'generate' | 'edit' | 'video' | 'library'
  *
  *  Part of the schema, not of the layout code: `SchemaForm` renders what it is
  *  given, and moving a control between groups (or columns) is a schema edit.
- *  Section 2 serves these from `tabschema.py`. */
+ *  `ember/web/tabschema.py` serves them. */
 export interface GroupSpec {
   id: string
   title: string
