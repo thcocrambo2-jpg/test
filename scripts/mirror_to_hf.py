@@ -103,11 +103,21 @@ os.environ["KREA2_NO_MIRROR"] = "1"
 from huggingface_hub import HfApi  # noqa: E402
 from huggingface_hub.utils import HfHubHTTPError  # noqa: E402
 
+from ember import logs, settings  # noqa: E402
+from ember.logs import log  # noqa: E402
+
+# Importing a module configures nothing and creates nothing any more, so
+# this entry point does it, before the imports below log as they are
+# read: the logger, the tree under KREA2_BASE_DIR, and the line saying
+# where weights and images go.
+logs.setup()
+settings.ensure_dirs()
+settings.log_startup()
+
 from ember.licensing import catalog  # noqa: E402
-from ember import config  # noqa: E402
 from ember.weights import downloads  # noqa: E402
 from ember.weights import mirror  # noqa: E402
-from ember.config import COMFY_DIR, MODELS_DIR, log  # noqa: E402
+from ember.settings import COMFY_DIR, MODELS_DIR  # noqa: E402
 
 # ── Credentials ───────────────────────────────────────────────────────────────
 # A *write*-scoped token. Prefer the environment variable — this file is in
@@ -335,7 +345,7 @@ def load_catalogue(path: Path | None) -> catalog.Catalogue:
             raise SystemExit(f"Could not read the catalogue file {path}: {exc}")
         origin = f"file {path}"
     else:
-        if not config.LICENSE_API_URL or not config.LICENSE_KEY:
+        if not settings.LICENSE_API_URL or not settings.LICENSE_KEY:
             raise SystemExit(
                 "No catalogue to read. Set KREA2_LICENSE_KEY and "
                 "KREA2_NODE_TAG as on a pod, or pass --catalog FILE "
@@ -343,10 +353,10 @@ def load_catalogue(path: Path | None) -> catalog.Catalogue:
         document = catalog._fetch(CATALOG_INSTANCE_ID)
         if document is None:
             raise SystemExit(
-                f"The licence server at {config.LICENSE_API_URL} did not "
+                f"The licence server at {settings.LICENSE_API_URL} did not "
                 f"answer the catalogue request (see the log above). Nothing "
                 f"was mirrored.")
-        origin = f"server {config.LICENSE_API_URL}"
+        origin = f"server {settings.LICENSE_API_URL}"
     result = catalog.parse(document, origin)
     log.info("Catalogue — %d LoRA(s), %d model(s) from %s",
              len(result.loras), len(result.models), origin)
@@ -436,7 +446,7 @@ class AuditRow:
 def audit(manifest: dict, cat: catalog.Catalogue) -> list[AuditRow]:
     """Every catalogue record, and where the mirror holds its file.
 
-    The drift check this used to run against config.py's lists now runs
+    The drift check this used to run against a list in the source now runs
     against the records the pods actually download. The dangerous
     direction is unchanged: a LoRA added to the DB and never mirrored,
     because the newest one is the one least likely to still be on CivitAI
@@ -512,7 +522,7 @@ def record_mirror(lora_id: str, repo: str, path: str) -> bool:
     body = json.dumps({"id": lora_id,
                        "mirror": {"repo": repo, "path": path}}).encode()
     request = urllib.request.Request(
-        f"{config.LICENSE_API_URL}/v1/admin/loras", data=body, method="POST",
+        f"{settings.LICENSE_API_URL}/v1/admin/loras", data=body, method="POST",
         headers={"Content-Type": "application/json",
                  # Exactly what requireAdmin compares against.
                  "Authorization": f"Bearer {ADMIN_TOKEN}"})
@@ -547,7 +557,7 @@ def write_records(pending: list[tuple[str, str, str]], dry_run: bool) -> list:
         return []
     if not ADMIN_TOKEN:
         why = "KREA2_ADMIN_TOKEN is not set"
-    elif not config.LICENSE_API_URL:
+    elif not settings.LICENSE_API_URL:
         why = "KREA2_NODE_TAG is not set, so there is no server to call"
     else:
         why = ""
@@ -561,7 +571,7 @@ def write_records(pending: list[tuple[str, str, str]], dry_run: bool) -> list:
         return pending
     if dry_run:
         print(f"\n  Would record {len(pending)} mirror location(s) with "
-              f"POST {config.LICENSE_API_URL}/v1/admin/loras:")
+              f"POST {settings.LICENSE_API_URL}/v1/admin/loras:")
         for lora_id, repo, path in pending:
             print(f"    {lora_id:<24} → {repo}:{path}")
         return pending
@@ -941,7 +951,7 @@ def parse_args():
     ap.add_argument("--only", metavar="KEY", action="append",
                     help="limit to one manifest repo key; repeatable")
     ap.add_argument("--staging", type=Path,
-                    default=Path(config.BASE_DIR) / "mirror_staging",
+                    default=Path(settings.BASE_DIR) / "mirror_staging",
                     help="where node tarballs are built")
     return ap.parse_args()
 

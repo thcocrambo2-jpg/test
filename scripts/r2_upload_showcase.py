@@ -72,8 +72,19 @@ from pathlib import Path
 # so build.sh / Nuitka never sweep it into the shipped binary.
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
+from ember import logs, settings                             # noqa: E402
+from ember.logs import log                                   # noqa: E402
+
+# Importing a module configures nothing and creates nothing any more, so
+# this entry point does it, before the imports below log as they are
+# read: the logger, the tree under KREA2_BASE_DIR, and the line saying
+# where weights and images go.
+logs.setup()
+settings.ensure_dirs()
+settings.log_startup()
+
 from ember.web import showcase                               # noqa: E402
-from ember.config import BASE_DIR, SHOWCASE_BASE_URL, log    # noqa: E402
+from ember.settings import BASE_DIR, SHOWCASE_BASE_URL       # noqa: E402
 from r2_presign import presign                               # noqa: E402
 
 # Where the pictures are staged before upload. Deliberately BASE_DIR/input

@@ -46,7 +46,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
 from PIL import Image, ExifTags, IptcImagePlugin, PngImagePlugin  # noqa: E402
 
-from ember.config import COMFY_DIR  # noqa: E402
+from ember.settings import COMFY_DIR  # noqa: E402
 
 # A ComfyUI workflow graph is routinely several hundred KB of JSON in a
 # single tEXt chunk. Pillow's default ceiling silently drops anything

@@ -54,15 +54,23 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(ROOT))
 
-# Somewhere local to put the (empty) models/output/temp tree, before
-# config is imported — it creates those directories at import time and the
-# shipped default is a pod path, /workspace/krea2.
+# Somewhere local to put the (empty) models/output/temp tree that
+# ensure_dirs() below makes — the shipped default is a pod path,
+# /workspace/krea2.
 os.environ.setdefault("KREA2_BASE_DIR", str(ROOT / ".dryrun"))
 
 # The seed catalogue, for the offline form (--features). See main().
 SEED_CATALOG = ROOT / "license-validator" / "data" / "assets.json"
 
-from ember.config import log  # noqa: E402
+from ember import logs, settings  # noqa: E402
+from ember.logs import log  # noqa: E402
+
+# Importing a module configures nothing and creates nothing any more, so
+# this entry point does it: the logger, the tree under KREA2_BASE_DIR,
+# and the line saying where weights and images go.
+logs.setup()
+settings.ensure_dirs()
+settings.log_startup()
 
 
 def stub_comfy() -> None:

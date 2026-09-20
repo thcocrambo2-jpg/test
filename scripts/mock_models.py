@@ -22,7 +22,7 @@ replaced are the mirror lookup, huggingface_hub's two download calls,
 `requests.get` (CivitAI), and the abliterated-encoder merge, which cannot
 run on empty shards.
 
-The Krea models and LoRAs are not in config.py: they are the catalogue
+The Krea models and LoRAs are not in the source: they are the catalogue
 (catalog.py), and the `catalog` asset group fetches whatever its
 features list. Unless KREA2_CATALOG_FILE is already set, this points it
 at the seed document, license-validator/data/assets.json — the same ids
@@ -51,10 +51,22 @@ if not os.environ.get("KREA2_BASE_DIR"):
 os.environ.setdefault("KREA2_CATALOG_FILE",
                       str(ROOT / "license-validator" / "data" / "assets.json"))
 
+from ember import logs, settings  # noqa: E402
+
+# Importing a module configures nothing and creates nothing any more, so
+# this entry point does it, before the imports below log as they are
+# read: the logger, the tree under KREA2_BASE_DIR, and the line saying
+# where weights and images go.
+logs.setup()
+settings.ensure_dirs()
+settings.log_startup()
+
 from ember.weights import downloads  # noqa: E402
 from ember import features  # noqa: E402
-from ember.config import (  # noqa: E402
+from ember.pipelines.krea2.constants import (  # noqa: E402
     ABLITERATED_ENCODER_FILE,
+)
+from ember.settings import (  # noqa: E402
     BASE_DIR,
     MODELS_DIR,
 )

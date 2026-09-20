@@ -92,8 +92,8 @@ SOURCE_FILES = ("index.html", "package.json", "package-lock.json",
 # depends on what other software the dev box happens to have installed.
 #
 # webui.py carries the same table for the `webui/dist/` path it serves in
-# development. Kept separate on purpose — importing it here would import
-# fastapi and config, and config creates directories at import time.
+# development. Kept separate on purpose — importing it here would pull in
+# fastapi and the whole app package for the sake of one dict.
 MEDIA_TYPES = {
     ".css": "text/css; charset=utf-8",
     ".html": "text/html; charset=utf-8",
