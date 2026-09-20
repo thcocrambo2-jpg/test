@@ -169,9 +169,10 @@ def child_env() -> dict:
     Every KREA2_* and RUNPOD_* variable is dropped and the ones that decide
     where files land are set explicitly, so that this check answers the
     same on a pod, in CI and on the machine that wrote it. KREA2_BASE_DIR
-    points at a throwaway directory because config.py makes its tree when
-    it is imported and the shipped default is the pod path /workspace/krea2
-    (config.py, the mkdir loop).
+    points at a throwaway directory so that a child which does make the
+    tree — by calling settings.ensure_dirs(), or by importing something
+    that still does — cannot write to the shipped default, the pod path
+    /workspace/krea2.
     """
     env = {k: v for k, v in os.environ.items()
            if not k.startswith(CLEARED_PREFIXES) and k not in CLEARED_NAMES}
@@ -433,7 +434,7 @@ def main() -> int:
                 failures.append("%s does not import on its own:\n%s"
                                 % (name, _indent(traceback)))
     finally:
-        # config.py made its tree inside this on every child's import.
+        # Gone whether or not a child made the tree inside it.
         shutil.rmtree(env["KREA2_BASE_DIR"], ignore_errors=True)
 
     rules = ["%d module(s) import alone" % len(names)]

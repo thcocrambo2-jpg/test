@@ -84,9 +84,9 @@ DEFAULT_ENV = ROOT / "license-validator" / ".env"
 DEFAULT_ASSETS = ROOT / "license-validator" / "data" / "assets.json"
 COLLECTIONS = ("presets", "prompts")
 
-# prompts.py imports config, and config creates BASE_DIR and everything
-# under it at import time — a pod path (/workspace/krea2) by default.
-# Somewhere disposable instead, set before the import below.
+# prompts.py pulls in settings, which derives BASE_DIR from the
+# environment — a pod path (/workspace/krea2) by default. Somewhere
+# disposable instead, set before the import below.
 os.environ.setdefault("KREA2_BASE_DIR",
                       tempfile.mkdtemp(prefix="krea2-migrate-"))
 sys.path.insert(0, str(ROOT))

@@ -56,7 +56,15 @@ os.environ.setdefault("KREA2_CATALOG_FILE",
 # the feature check would make every assertion below pass for the wrong
 # reason, so KREA2_UI_REQUIRE_TOKEN must stay unset.
 
-from ember.config import log  # noqa: E402
+from ember import logs, settings  # noqa: E402
+from ember.logs import log  # noqa: E402
+
+# Importing a module configures nothing and creates nothing any more, so
+# this entry point does it: the logger, the tree under KREA2_BASE_DIR,
+# and the line saying where weights and images go.
+logs.setup()
+settings.ensure_dirs()
+settings.log_startup()
 
 # Named in the source, not derived. See the module docstring: this is
 # the feature with no weights behind it, so it is the one the

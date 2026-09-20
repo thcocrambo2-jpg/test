@@ -233,6 +233,15 @@ def main() -> None:
     parser.add_argument("--baseline", type=Path, default=BASELINE)
     args = parser.parse_args()
 
+    # Importing a module configures nothing and creates nothing any more,
+    # so do it here, where the first app import below used to do it as a
+    # side effect: the logger, the tree under KREA2_BASE_DIR, and the line
+    # saying where weights and images go.
+    from ember import logs, settings
+    logs.setup()
+    settings.ensure_dirs()
+    settings.log_startup()
+
     from ember import features
     features.resolve([f.key for f in features.FEATURES])
 
