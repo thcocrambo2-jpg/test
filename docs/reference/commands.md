@@ -222,10 +222,16 @@ bundle is committed.
 
 ## 8. The licence server
 
-→ [`license-validator/README.md`](../../license-validator/README.md) and
-the pages beside it: running it locally, deploying, licence keys, the
-catalogue, prompt moderation, settings presets, and one-off queries
-against the database.
+→ [`license-validator/README.md`](../../license-validator/README.md) for
+running it locally, deploying it and the CORS rules, and the pages
+beside it for the rest:
+
+- [Plans and entitlements](../../license-validator/docs/plans-and-entitlements.md) — plans, resolution order, feature keys
+- [Endpoints](../../license-validator/docs/endpoints.md) — every route and the status-code contract
+- [Catalogue data](../../license-validator/docs/catalogue-data.md) — models, LoRAs and settings blobs
+- [Build distribution](../../license-validator/docs/build-distribution.md) — R2, channels and the download cap
+- [Telegram bot](../../license-validator/docs/telegram-bot.md) — setup, commands and the sweep
+- [Data](../../license-validator/docs/data.md) — every collection, field by field
 
 ---
 
@@ -250,6 +256,9 @@ against the database.
 → [the mirror and the pins](../releasing/mirror-and-pins.md).
 
 ### 11.2 Showcase images for the pricing page
+
+What the showcase is and how the page decides what to render is in
+[Pricing page](../features/pricing-page.md); these are the commands.
 
 **PS**, needs `KREA2_BASE_DIR`. The upload also needs `R2_ACCOUNT_ID`,
 `R2_ACCESS_KEY_ID`, `R2_SECRET_ACCESS_KEY` and `R2_SHOWCASE_BUCKET` (the
