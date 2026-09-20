@@ -3,17 +3,14 @@ import type { TabCategory } from '@/api/types'
 /*
  * The navigation, grouped.
  *
- * The Gradio app had seven flat emoji tabs in one row — Krea2, Krea2 V2,
- * Krea2 Edit, V2 Edit, Wan Video, Prompt Library, Gallery. Nothing about a
- * flat row tells you that two of them make pictures from nothing and two of
- * them change a picture you already have.
+ * Four groups, because nothing about a flat row of tabs tells you which of
+ * them make a picture from nothing and which change one you already have.
  *
- * The categories are not invented here: the licence server already stores
- * `category` per feature (generation / editing / video / tools) in the
- * features collection, and it already crosses the wire on the acquire
- * response. `_clean_feature_info` (licensing.py:200) currently throws it away.
- * Carrying it through is the four-line change in Section 2 — see
- * context.md §4.9. Until then the mapping lives on each tab's schema.
+ * The grouping is a constant on each tab's schema, not data from the licence
+ * server. The server does store a `category` per feature (generation /
+ * editing / video / tools) and sends it on the acquire response, but the pod
+ * discards it: `seat._clean_feature_info` keeps only the tab labels. See "Tab
+ * order and routing" in `docs/architecture/web-ui.md`.
  */
 
 export const CATEGORY_LABEL: Record<TabCategory, string> = {
@@ -26,7 +23,7 @@ export const CATEGORY_LABEL: Record<TabCategory, string> = {
 export const CATEGORY_ORDER: TabCategory[] = ['generate', 'edit', 'video', 'library']
 
 /** Tabs with no schema-driven form — bespoke pages. Gallery and Prompt Library
- *  are the only two of the nine that are genuinely their own thing. */
+ *  are the only two that are genuinely their own thing. */
 export interface BespokeNavItem {
   key: string
   label: string

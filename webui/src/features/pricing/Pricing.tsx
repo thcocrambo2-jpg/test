@@ -10,21 +10,14 @@ import s from './pricing.module.css'
 /*
  * The pricing page.
  *
- * Roughly 780 lines of hand-written HTML generation in theme.py today —
- * `pricing_html` (:3493), `showcase_html` (:3827), `_lightbox` (:3616),
- * `_cycle_style` (:3250), `_cycle_tabs` (:3291), `_cycle_price` (:3334) —
- * and it is not a decorative panel: it is how a customer upgrades.
+ * Not a decorative panel: it is how a customer upgrades. The monthly/annual
+ * toggle is `useState`, so the markup for one cycle is the markup for all of
+ * them, and the modals and the lightbox are components with real Escape
+ * handlers.
  *
- * Three of those functions exist only to work around one Gradio limitation.
- * `gr.HTML` strips `<script>` (theme.py:1724, :1801), so the monthly/annual
- * toggle is a CSS-only radio hack whose every price has to be emitted for
- * every cycle up front, the modals are `:target` links, and the lightbox is
- * the same trick again. In React the toggle is `useState` and the markup for
- * one cycle is the markup for all of them.
- *
- * What does *not* change: every figure is rendered, never derived. The server
- * computes each cycle's total, per-month and saving from the plan's monthly
- * rate (plans.js `cyclePrice`), and plans.py:69 spells out why a second
+ * Every figure is rendered, never derived. The server computes each cycle's
+ * total, per-month and saving from the plan's monthly rate (plans.js
+ * `cyclePrice`), and `plans.CyclePrice` spells out why a second
  * implementation of that arithmetic is a second chance to quote a price the
  * invoice does not match.
  */

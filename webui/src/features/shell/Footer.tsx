@@ -8,15 +8,14 @@ import s from './shell.module.css'
 /*
  * The line under everything: the keyboard hint and the ambient facts.
  *
- * Carried over from `footer_html` (theme.py:3159): the counts are reference
- * material rather than something read on every glance.
+ * The counts belong here rather than in the header because they are
+ * reference material rather than something read on every glance.
  *
- * The output directory used to sit here too, as a click-to-copy pill. It is
- * gone, and the server no longer sends it (api.session) — it is an absolute
- * path, so on a machine someone runs locally and shares with others it spells
- * out the host account's name to every visitor. The path ids the gallery and
- * the output tiles copy are OUTPUT_DIR-*relative*, which is the part anyone
- * needed anyway.
+ * The output directory is deliberately absent, and the server does not send
+ * it (`api.session`): it is an absolute path, so on a machine someone runs
+ * locally and shares with others it would spell out the host account's name
+ * to every visitor. The path ids the gallery and the output tiles copy are
+ * OUTPUT_DIR-*relative*, which is the part anyone needs anyway.
  */
 export function Footer() {
   const { data: session } = useSession()

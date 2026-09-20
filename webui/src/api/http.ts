@@ -226,7 +226,8 @@ export const httpClient: ApiClient = {
   /* One EventSource for the whole application.
    *
    * SSE and not websockets, and the reason is the server rather than taste:
-   * `jobqueue` is thread-based and pull-oriented with a `revision()` counter,
+   * the server queue is thread-based and pull-oriented with a `revision()`
+   * counter,
    * so something polls it either way and a socket would be a second protocol
    * around the same loop. What EventSource brings is reconnection, which is
    * the part a hand-written client always gets wrong, on a tunnel that drops

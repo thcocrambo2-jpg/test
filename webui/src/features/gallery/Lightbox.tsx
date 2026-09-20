@@ -26,10 +26,8 @@ import s from './gallery.module.css'
 /*
  * One picture, a filmstrip, and nothing in the way.
  *
- * The pricing page's lightbox is CSS-only — a `:target` hack — because Gradio
- * strips `<script>` out of `gr.HTML` (theme.py:1724). That constraint is gone
- * here, so this one has arrow keys, Escape, a filmstrip that scrolls the
- * active thumb into view, and a delete that asks first.
+ * Arrow keys, Escape, a filmstrip that scrolls the active thumb into view,
+ * and a delete that asks first.
  */
 /** How far either side of the current picture to warm the cache.
  *

@@ -8,14 +8,13 @@ import s from './shell.module.css'
 /*
  * The application bar.
  *
- * Same editorial decision `header_html` (theme.py:3122) already made and
- * documented: the brand, plus the two things a customer cannot read off the
- * page itself — which plan they are on and when it runs out. The engine chips
- * are gone for good, and the model/GPU counts and the output path live in the
- * footer. Both licence facts are routinely null (a key can name no plan and
- * have no expiry), so neither renders a placeholder.
+ * The brand, plus the two things a customer cannot read off the page itself
+ * — which plan they are on and when it runs out. The model and GPU counts
+ * live in the footer, since they are looked up rather than watched. Both
+ * licence facts are routinely null (a key can name no plan and have no
+ * expiry), so neither renders a placeholder.
  *
- * The theme toggle is new. The old app had both modes and no way to pick one.
+ * The theme toggle sits here because it applies to the whole application.
  */
 export function Header() {
   const { data: session, isLoading } = useSession()

@@ -3,9 +3,8 @@ import s from '@/components/SchemaForm/form.module.css'
 
 /** Controls left, output right.
  *
- *  This shell is retyped ten times in ui.py — `with gr.Row(): with
- *  gr.Column(scale=…)` — and every copy drifted slightly. One component, so a
- *  layout change is a layout change and not ten of them. */
+ *  Every tab's page is this one shell, so a layout change is a layout change
+ *  and not one per tab, and no two tabs can drift apart. */
 export function TwoColumn({ left, right }: { left: ReactNode; right: ReactNode }) {
   return (
     <div className={s.twoColumn}>

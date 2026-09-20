@@ -36,9 +36,8 @@ const NO_STACK: string[] = []
 
 /** Everything that has been made, browsable.
  *
- *  The Gradio gallery is `gr.Gallery(height=600)` — a fixed pixel height no
- *  media query can reach, on a page that is otherwise fluid. This is a
- *  masonry of `aspect-ratio` tiles that reflows, plus a density control,
+ *  A masonry of `aspect-ratio` tiles that reflows with the page rather than
+ *  a fixed pixel height no media query can reach, plus a density control,
  *  because "how many at once" is a preference and not a constant. */
 export function Gallery() {
   /* Where you were, and how you had it looking.

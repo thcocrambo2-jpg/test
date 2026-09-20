@@ -1,5 +1,6 @@
-/* The two-column shell, the field groups, and the repeated blocks.
-   Retyped ten times in ui.py; typed once here. */
+/* The two-column shell, the field groups, and the repeated blocks. Every
+   tab's form is laid out from these, so a layout change is one edit and no
+   tab can drift from the others. */
 
 /* --------------------------------------------------------------- TwoColumn */
 

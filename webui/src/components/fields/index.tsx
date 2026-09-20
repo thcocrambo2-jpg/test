@@ -18,9 +18,9 @@ interface Common {
   id?: string
   label: string
   /* ReactNode rather than string: the Model dropdown's hint is the info line
-   * the Gradio app printed under it — "Turbo · defaults: 8 steps, CFG 1 ·
-   * not downloaded yet" — which carries emphasis and is built from the
-   * registry rather than from the schema. */
+   * under it — "Turbo · defaults: 8 steps, CFG 1 · not downloaded yet" —
+   * which carries emphasis and is built from the registry rather than from
+   * the schema. */
   hint?: ReactNode
   wide?: boolean
   children?: ReactNode
@@ -100,9 +100,9 @@ export function TextAreaField({
 }) {
   const id = useId()
   const [expanded, setExpanded] = useState(false)
-  // Gradio's `lines` is a minimum, not a cap. Long negative prompts (the V2
-  // default is 1,300 characters) get a collapse toggle rather than a box that
-  // eats the sidebar.
+  // `lines` sizes the box, it does not cap what goes in it. Long negative
+  // prompts (the V2 default is 1,300 characters) get a collapse toggle rather
+  // than a box that eats the sidebar.
   const long = (value ?? '').length > 320
   // Two different collapses, and the difference is the point. A merely long
   // box keeps its rows and grows when expanded. One the schema marks
@@ -236,11 +236,11 @@ export function NumberField({
 
 /** Slider plus a number box.
  *
- *  The number box is the addition. Gradio's slider shows its value but will
- *  not let you type one, so setting Steps to exactly 23 is a drag-and-squint
- *  exercise on a control whose whole range is 1-60. It sits in the label row
- *  rather than beside the track, so a slider is one full-width row and two of
- *  them fit side by side in a dense group. */
+ *  The number box earns its place: a track alone makes setting Steps to
+ *  exactly 23 a drag-and-squint exercise on a control whose whole range is
+ *  1-60. It sits in the label row rather than beside the track, so a slider
+ *  is one full-width row and two of them fit side by side in a dense
+ *  group. */
 export function SliderField({
   label,
   hint,
@@ -421,10 +421,10 @@ export function BoolField({
 
 /** An image input: click, drop, or paste.
  *
- *  Paste matters — six of the baseline's Image labels literally say "paste
- *  with Ctrl+V", because that is how people get a screenshot in. Gradio
- *  bound it globally; here it is bound to the drop zone while it holds focus
- *  or the pointer, so two image inputs on one tab cannot both claim a paste. */
+ *  Paste matters — six of the schema's Image labels literally say "paste
+ *  with Ctrl+V", because that is how people get a screenshot in. It is bound
+ *  to the drop zone while that zone holds focus or the pointer, rather than
+ *  globally, so two image inputs on one tab cannot both claim a paste. */
 export function ImageDropField({
   label,
   hint,

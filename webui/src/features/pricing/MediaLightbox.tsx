@@ -4,11 +4,8 @@ import type { ShowcaseMedia } from '@/api/types'
 import { Button } from '@/components/ui'
 import g from '@/features/gallery/gallery.module.css'
 
-/** A single showcase picture, full size.
- *
- *  The Gradio version is `_lightbox` (theme.py:3616) — a CSS-only `:target`
- *  trick, chosen because `gr.HTML` strips `<script>`. Escape closes this one,
- *  which the CSS version could not do. */
+/** A single showcase picture, full size. Escape closes it, which is the
+ *  first thing anybody tries on a full-screen image. */
 export function MediaLightbox({
   media,
   onClose,

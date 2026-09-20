@@ -1,15 +1,16 @@
 /*
  * The palette. Every colour in this application is defined here and nowhere
- * else — the same discipline theme.py:15-19 states for the Gradio theme, for
- * the same reason: one palette drives both modes, so neither can drift.
+ * else, for one reason: one list drives both modes, so light and dark cannot
+ * drift apart.
  *
  * Light is the base definition on :root; dark is the *primary* mode and is
  * what index.html stamps by default, but it is still expressed as an override
  * so that a single missing token degrades to a readable colour instead of to
- * transparent. Values are from context.md §5.
+ * transparent.
  *
  * If you are about to write a hex digit inside a component stylesheet: stop,
- * and add a token here instead.
+ * and add a token here instead. "The theme" in
+ * `docs/architecture/web-ui.md` has the grep that catches one.
  */
 
 :root {

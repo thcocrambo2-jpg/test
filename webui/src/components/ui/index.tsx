@@ -140,11 +140,9 @@ export function Pill({
 
 /** A persistent, dismissible message.
  *
- *  The Gradio app had no such thing: every error was a `❌ …` string written
- *  into the status textbox, which the next one-second poll overwrote. So an
- *  error you were not looking at when it happened did not exist. This stays
- *  until it is dismissed, and it is keyed to a job so two failures do not
- *  collapse into one line. */
+ *  A failure nobody was looking at when it happened still has to be there
+ *  afterwards, so this stays until it is dismissed, and it is keyed to a job
+ *  so two failures do not collapse into one line. */
 export function Alert({
   tone = 'error',
   title,
@@ -321,11 +319,8 @@ export function Segmented<T extends string>({
 
 // -------------------------------------------------------------------- modal
 
-/** A real modal — with a real Escape handler and a real backdrop click.
- *
- *  Worth noting because the current pricing page's modals are CSS-only
- *  `:target` hacks, and only because Gradio strips `<script>` out of
- *  `gr.HTML` (theme.py:1724). In React the constraint is gone. */
+/** A modal with a real Escape handler and a real backdrop click, so every
+ *  overlay in the app closes the two ways anybody tries first. */
 export function Modal({
   open,
   onClose,
@@ -525,11 +520,12 @@ export function ConfirmHost({ children }: { children: ReactNode }) {
 /** `**bold**` and `` `code` `` inside one line, and nothing else.
  *
  *  Not a markdown library. Exactly one string in this application arrives
- *  with markup in it: the model info line, which handlers._model_info_text
- *  and its three siblings build for a `gr.Markdown` under the dropdown —
- *  "**Turbo** · defaults: 8 steps, CFG 1 · ⚠️ **not downloaded yet**". It is
- *  worth rendering rather than stripping, because the emphasis is on the half
- *  that matters, and it is not worth 40 KB of parser. */
+ *  with markup in it: the model info line, which
+ *  `handlers._model_info_text` and its three siblings build for the line
+ *  under the dropdown — "**Turbo** · defaults: 8 steps, CFG 1 · ⚠️ **not
+ *  downloaded yet**". It is worth rendering rather than stripping, because
+ *  the emphasis is on the half that matters, and it is not worth 40 KB of
+ *  parser. */
 export function Inline({ text }: { text: string }) {
   const parts = text.split(/(\*\*[^*]+\*\*|`[^`]+`)/g)
   return (
