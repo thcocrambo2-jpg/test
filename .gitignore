@@ -24,6 +24,8 @@ venv/
 # thumbnails and zips are regenerated on demand.
 .dryrun/output/.thumbs/
 .dryrun/output/all_outputs_*.zip
+# The ~55 MB tunnel helper serve.py caches under the same base dir.
+.dryrun/cloudflared.exe
 
 tmp
 tmp2
