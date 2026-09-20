@@ -71,7 +71,8 @@ REVALIDATE = "no-cache"
 #
 # scripts/gen_webui_bundle.py carries the same table for the assets it
 # bakes in. Not shared: importing this module from there would pull in
-# fastapi and config, and config creates directories at import time.
+# fastapi, which a build step that only reads webui/dist has no business
+# needing — and which a fresh clone need not have installed to run it.
 MEDIA_TYPES = {
     ".css": "text/css; charset=utf-8",
     ".html": "text/html; charset=utf-8",
