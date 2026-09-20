@@ -30,7 +30,7 @@ come.
 Where it plugs in
 -----------------
 One tracker per Generate click, made by `tracker()` in the executors in
-handlers.py (`_run_jobs`, `_run_wan_jobs`) and fed the same client.run
+runner.py (`_run_jobs`, `_run_wan_jobs`) and fed the same client.run
 events they already consume. It reports through `jobqueue.report_eta`.
 Off the queue's worker threads — the golden snapshots and the dry run
 drive the handlers directly — it is a tracker that does nothing, so those
@@ -276,7 +276,7 @@ def _total(profile: dict | None) -> float | None:
 def is_cold(base: str, signature: tuple) -> bool:
     """Whether this ComfyUI has to load weights before it can start.
 
-    Kept here rather than read from handlers._LAST_MODEL_SIG, which only
+    Kept here rather than read from runner._LAST_MODEL_SIG, which only
     moves when KREA2_KEEP_MODELS_LOADED is off — the load happens either
     way. Marks the signature as loaded as a side effect.
     """

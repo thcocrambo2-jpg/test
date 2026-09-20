@@ -1,3 +1,43 @@
+"""What runs a job, and what the Model dropdowns are made of.
+
+The two executors every tab's generator drives — _run_jobs for pictures,
+_run_wan_jobs for clips — with the queue lanes they run on, the per-job
+filename token, the model-swap VRAM release, and the model choices and
+info lines the forms read late from the catalogue.
+
+_run_jobs is the seam scripts/golden.py captures each workflow dict at,
+which is why _run_tag is a module-level function rather than an inline
+uuid: the token lands *in* the workflow, so a snapshot needs it stubbed.
+"""
+
+import io
+import uuid
+from pathlib import Path
+
+from ember.licensing import catalog
+from ember.generation import eta
+from ember.web import gallery_index
+from ember.generation import queue as jobqueue
+from ember.generation import recipes
+from ember.comfy.client import ComfyUIError, client, model_signature, on_output, wan_client
+from ember.comfy.server import ensure_alive as comfy_ensure_alive
+from ember.logs import log
+from ember.settings import (
+    COMFY_LOG,
+    COMFY_PORT,
+    FREE_ON_SWAP,
+    WAN_COMFY_LOG,
+    WAN_COMFY_PORT,
+    WAN_PARALLEL,
+)
+from ember.pipelines.common import (
+    model_defaults,
+    model_file_available,
+)
+from ember.pipelines.wan.workflow import build_wan_i2v_workflow
+from ember.pipelines.krea2.workflow import build_workflow
+
+
 # Steps/CFG a Krea form starts on when its feature lists no model at all —
 # an empty catalogue, which the tab reports and cannot run anyway. Only
 # here so the form still has numbers to draw; a model record always wins.

@@ -1,3 +1,25 @@
+"""The 🎥 MiniMax I2V and 🎞️ MiniMax T2V generators."""
+
+import random
+import uuid
+
+from ember.comfy.client import client
+from ember.generation.handlers import MINIMAX_I2V, MINIMAX_T2V
+from ember.generation.loras import _resolve_lora_slots, _skipped_note
+from ember.generation.runner import _png_bytes, _run_tag, _run_wan_jobs
+from ember.pipelines.minimax.constants import MINIMAX_FPS
+from ember.pipelines.minimax.workflow import (
+    aspect_size as minimax_aspect_size,
+    build_minimax_video_workflow,
+    crop_to_canvas as minimax_crop_to_canvas,
+    frames_for as minimax_frames,
+    matches_image as minimax_matches_image,
+    minimax_missing,
+    minimax_models_available,
+    resolve_size as minimax_resolve_size,
+)
+
+
 def _minimax_note() -> str | None:
     """Why MiniMax cannot run yet, or None when every weight is on disk."""
     if minimax_models_available():

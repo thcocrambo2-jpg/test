@@ -2,6 +2,7 @@
 
 from ember import features
 from ember.generation import handlers
+from ember.generation import runner
 from ember.pipelines.krea2.constants import SAMPLERS
 from ember.pipelines.minimax.constants import (
     MINIMAX_ASPECT_RATIOS,
@@ -13,6 +14,10 @@ from ember.pipelines.minimax.constants import (
     MINIMAX_MIN_SECONDS,
     MINIMAX_RESOLUTIONS,
     MINIMAX_T2V_RESOLUTIONS,
+)
+from ember.pipelines.minimax.handler import (
+    generate_minimax_t2v,
+    generate_minimax_video,
 )
 from ember.web.schema.fields import (
     G_PROMPT,
@@ -31,14 +36,14 @@ Key = features.Key
 # node takes an optional first frame, so the text tab is the image tab
 # minus its upload — which is why the two field lists are the same
 # list with `image` swapped for `aspect`. Both run on the main lane:
-# see handlers._run_wan_jobs on why they never ride the Wan instance.
+# see runner._run_wan_jobs on why they never ride the Wan instance.
 # No negative prompt and no CFG, because the model is guidance-distilled
 # like Flux; the prompt carries the sound as well as the motion, since
 # every clip comes back with a soundtrack. The LoRA stack is each tab's
 # own catalogue list, eight blank rows like Krea2's; there are no presets.
 MINIMAX_I2V_SCHEMA = TabSchema(
-    key=Key.MINIMAX_I2V, handler=handlers.generate_minimax_video,
-    lane=handlers.COMFY_LANE, prompt_field="prompt",
+    key=Key.MINIMAX_I2V, handler=generate_minimax_video,
+    lane=runner.COMFY_LANE, prompt_field="prompt",
     result_keys=VIDEO_KEYS, tab_id="minimax_i2v", output="video",
     icon="🎥", blurb="Turn a still into a clip that comes with its own "
                     "sound.",
@@ -74,8 +79,8 @@ MINIMAX_I2V_SCHEMA = TabSchema(
 )
 
 MINIMAX_T2V_SCHEMA = TabSchema(
-    key=Key.MINIMAX_T2V, handler=handlers.generate_minimax_t2v,
-    lane=handlers.COMFY_LANE, prompt_field="prompt",
+    key=Key.MINIMAX_T2V, handler=generate_minimax_t2v,
+    lane=runner.COMFY_LANE, prompt_field="prompt",
     result_keys=VIDEO_KEYS, tab_id="minimax_t2v", output="video",
     icon="🎞️", blurb="A clip with sound, from words alone.",
     category="video", route="/video/minimax-t2v",

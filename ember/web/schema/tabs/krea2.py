@@ -2,12 +2,14 @@
 
 from ember import features
 from ember.generation import handlers
+from ember.generation import runner
 from ember.licensing import presets
 from ember.pipelines.krea2.constants import (
     DEFAULT_RESOLUTION,
     RESOLUTION_PRESETS,
     SAMPLERS,
 )
+from ember.pipelines.krea2.handler import generate_edit, generate_single
 from ember.web.schema.fields import (
     EDIT_PRESET_NOTE,
     GEN_PRESET_NOTE,
@@ -36,8 +38,8 @@ Key = features.Key
 
 KREA2_SCHEMA = TabSchema(
     model_registry=handlers.KREA_T2I,
-    key=Key.KREA_T2I, handler=handlers.generate_single,
-    lane=handlers.COMFY_LANE, prompt_field="prompt",
+    key=Key.KREA_T2I, handler=generate_single,
+    lane=runner.COMFY_LANE, prompt_field="prompt",
     result_keys=IMAGE_KEYS, tab_id="krea2",
     icon="🎨", blurb="Type a sentence, get a photograph.",
     category="generate", route="/generate/krea2",
@@ -74,8 +76,8 @@ KREA2_SCHEMA = TabSchema(
 
 KREA2_EDIT_SCHEMA = TabSchema(
     model_registry=handlers.KREA_EDIT,
-    key=Key.KREA_EDIT, handler=handlers.generate_edit,
-    lane=handlers.COMFY_LANE, prompt_field="prompt",
+    key=Key.KREA_EDIT, handler=generate_edit,
+    lane=runner.COMFY_LANE, prompt_field="prompt",
     result_keys=IMAGE_KEYS, tab_id="edit",
     icon="✨", blurb="Change one thing about a picture without touching "
                     "the rest.",

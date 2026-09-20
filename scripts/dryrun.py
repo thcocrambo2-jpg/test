@@ -77,7 +77,7 @@ def stub_comfy() -> None:
     """Make `import comfy` work on a machine ComfyUI cannot run on.
 
     ember.comfy.server detects GPUs at import and raises when there are
-    none, and ember.generation.handlers and the pipeline workflow modules
+    none, and ember.generation.runner and the pipeline workflow modules
     both import it for GPU_COUNT. A machine with a
     small card imports it for real and only needs ensure_alive replaced; a
     machine with no card at all needs the module faked before anything
@@ -109,9 +109,9 @@ def stub_comfy() -> None:
     else:
         log.info("GPU detected — using the real comfy module (server not started)")
 
-    # Patched before handlers is imported: handlers.py binds `from comfy
-    # import ensure_alive as comfy_ensure_alive` at import time, so a later
-    # patch would not be seen. Without this, every Generate click tries to
+    # Patched before ember.generation.runner is imported: runner.py binds
+    # `from comfy import ensure_alive as comfy_ensure_alive` at import time,
+    # so a later patch would not be seen. Without this, every Generate click tries to
     # start a ComfyUI that is not installed.
     comfy.ensure_alive = ensure_alive
 

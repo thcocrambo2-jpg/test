@@ -1,109 +1,39 @@
-"""Every generator behind a Generate button, with no web layer in sight.
+"""What every tab's generator has in common, and the pipelines do not own.
 
-This is the half of the app that decides what gets rendered — it reads
-control values, validates them, builds a workflow dict per job and drives
-client.run. Every generate_* is a plain generator yielding plain values,
-and nothing here knows what will display them.
-
-That independence is what makes the module checkable: `scripts/golden.py`
-imports it with no FastAPI, no browser and no GPU, and snapshots the
-workflow dict each handler builds. These functions encode the VAE size
-snapping, the model-swap VRAM release, the 2 MP reference cap and the Wan
-frame-count arithmetic, and a snapshot is the only thing that notices when
-one of them quietly changes.
+The feature keys the catalogue files each tab's models and LoRAs under,
+the model guard every Krea generator opens with, the preset tickbox they
+all honour, the Krea 2 resolution parser, and the zip of everything this
+pod has rendered. The generators themselves are in
+ember/pipelines/<name>/handler.py, beside the workflow.py each one
+builds through, and what they share with each other is in
+ember.generation.runner and ember.generation.loras.
 
 zip_outputs() returns `(path_or_None, message)` rather than raising, so a
 caller with nothing to zip has a sentence to show.
 """
 
-import io
-import random
 import re
 import time
-import uuid
 import zipfile
 from pathlib import Path
 
-from PIL import Image
-
-from ember.licensing import catalog
-from ember.generation import eta
 from ember.web import gallery_index
 from ember.generation import queue as jobqueue
 from ember.licensing import presets
-from ember.licensing import prompts
-from ember.generation import recipes
-from ember.comfy.client import ComfyUIError, client, model_signature, on_output, wan_client
-from ember.comfy.server import ensure_alive as comfy_ensure_alive
 from ember.features import Key
 from ember.logs import log
-from ember.settings import (
-    COMFY_LOG,
-    COMFY_PORT,
-    FREE_ON_SWAP,
-    OUTPUT_DIR,
-    WAN_COMFY_LOG,
-    WAN_COMFY_PORT,
-    WAN_PARALLEL,
+from ember.settings import OUTPUT_DIR
+from ember.pipelines.common import (
+    model_file_available,
+    resolve_model,
 )
 from ember.pipelines.krea2.constants import (
     DEFAULT_RESOLUTION,
     RESOLUTION_PRESETS,
 )
-from ember.pipelines.minimax.constants import MINIMAX_FPS
-from ember.pipelines.wan.constants import (
-    WAN_5B_DEFAULTS,
-    WAN_5B_FPS,
-    WAN_FPS,
-    WAN_MODE_DEFAULTS,
-    WAN_RESOLUTIONS,
-)
-from ember.pipelines.common import (
-    edit_lora_available,
-    feature_lora,
-    lora_file_available,
-    model_defaults,
-    model_file_available,
-    resolve_model,
-)
-from ember.pipelines.krea2.workflow import (
-    build_edit_workflow,
-    build_workflow,
-)
-from ember.pipelines.krea2_v2.workflow import (
-    build_v2_workflow,
-    default_lora_slots as v2_default_lora_slots,
-    model_defaults as v2_model_defaults,
-    resolve_size as v2_resolve_size,
-    status as v2_status,
-    turbo_lora_available as v2_turbo_lora_available,
-    turbo_lora_slot as v2_turbo_lora_slot,
-)
-from ember.pipelines.krea2_v2_edit.workflow import (
-    build_v2_edit_workflow,
-    fit_size as v2_edit_fit_size,
-    status as v2_edit_status,
-)
-from ember.pipelines.minimax.workflow import (
-    aspect_size as minimax_aspect_size,
-    build_minimax_video_workflow,
-    crop_to_canvas as minimax_crop_to_canvas,
-    frames_for as minimax_frames,
-    matches_image as minimax_matches_image,
-    minimax_missing,
-    minimax_models_available,
-    resolve_size as minimax_resolve_size,
-)
-from ember.pipelines.wan.workflow import (
-    build_wan_5b_workflow,
-    build_wan_i2v_workflow,
-    wan_5b_available,
-    wan_lightning_available,
-    wan_models_available,
-)
 
 # The four tabs whose models and LoRAs come from the catalogue, by the
-# feature key the catalogue files their lists under. Each handler below
+# feature key the catalogue files their lists under. Each generator
 # reads its own, so Krea2 and Krea2 Edit (and the two V2 tabs) can offer
 # different lists without a second code path.
 KREA_T2I = str(Key.KREA_T2I)

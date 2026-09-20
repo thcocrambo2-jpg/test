@@ -61,9 +61,10 @@ strings (context §5 rule 7). Its keys stay as they are written here even
 when the modules move; the tuple beside each one is where the name lives
 now.
 
-Importing handlers needs the comfy stub, for the reason scripts/golden.py
-documents: ember/comfy/server.py detects GPUs at import and raises when
-there are none.
+The modules it imports are read under the same comfy stub the other
+scripts in scripts/ install, for the reason scripts/golden.py documents:
+ember/comfy/server.py detects GPUs at import and raises when there are
+none.
 
 --write
 -------
@@ -158,9 +159,8 @@ def stub_comfy() -> None:
 
     Lifted from scripts/golden.py — which lifted it from scripts/dryrun.py
     — and has to stay in step with them: ember.comfy.server detects GPUs
-    at import and raises when there are none. ember.generation.handlers
-    imports it, so without this the qualified section cannot be read on a
-    laptop.
+    at import and raises when there are none, so any module that reaches
+    it cannot be read on a laptop without this.
 
     Nothing here is ever called. This file only reads constants, so the
     stub exists to make an import succeed, not to fake a run.

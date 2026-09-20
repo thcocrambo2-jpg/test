@@ -172,10 +172,9 @@ def register_lane(lane: str, interrupt: Callable[[], None]) -> None:
 
     `interrupt` is how a *running* job on this lane is stopped — for both
     of ours, the ComfyUI /interrupt of the instance that serves it. Called
-    at import time from ember.web.api; the worker parks on the condition
-    variable
-    until something is submitted, so starting it before ComfyUI is up
-    costs nothing.
+    at import time from ember.generation.runner, which declares both
+    lanes; the worker parks on the condition variable until something is
+    submitted, so starting it before ComfyUI is up costs nothing.
     """
     with _LOCK:
         _LANES[lane] = interrupt

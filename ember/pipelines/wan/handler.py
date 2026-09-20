@@ -1,3 +1,26 @@
+"""The Video tab's generator: Wan 2.2 image-to-video."""
+
+import random
+import uuid
+
+from ember.comfy.client import wan_client
+from ember.generation.runner import _png_bytes, _run_tag, _run_wan_jobs
+from ember.pipelines.wan.constants import (
+    WAN_5B_DEFAULTS,
+    WAN_5B_FPS,
+    WAN_FPS,
+    WAN_MODE_DEFAULTS,
+    WAN_RESOLUTIONS,
+)
+from ember.pipelines.wan.workflow import (
+    build_wan_5b_workflow,
+    build_wan_i2v_workflow,
+    wan_5b_available,
+    wan_lightning_available,
+    wan_models_available,
+)
+
+
 def _fit_video_size(w: int, h: int, target_area: int, snap: int = 16) -> tuple:
     """Video size: keep the source aspect ratio at roughly target_area px.
 

@@ -2,9 +2,11 @@
 
 from ember import features
 from ember.generation import handlers
+from ember.generation import runner
 from ember.licensing import presets
 from ember.pipelines.krea2_v2.constants import V2_DEFAULT_NEGATIVE
 from ember.pipelines.krea2_v2_edit.constants import V2_EDIT_FIT_MODES
+from ember.pipelines.krea2_v2_edit.handler import generate_v2_edit
 from ember.web.schema.fields import (
     EDIT_PRESET_NOTE,
     G_CORE,
@@ -33,8 +35,8 @@ Key = features.Key
 
 KREA2_V2_EDIT_SCHEMA = TabSchema(
     model_registry=handlers.KREA_V2_EDIT,
-    key=Key.KREA_V2_EDIT, handler=handlers.generate_v2_edit,
-    lane=handlers.COMFY_LANE, prompt_field="prompt",
+    key=Key.KREA_V2_EDIT, handler=generate_v2_edit,
+    lane=runner.COMFY_LANE, prompt_field="prompt",
     result_keys=IMAGE_KEYS, tab_id="v2edit",
     icon="🔷", blurb="Instruction editing on the V2 pipeline.",
     category="edit", route="/edit/krea2-v2-edit", submit_label="Edit",

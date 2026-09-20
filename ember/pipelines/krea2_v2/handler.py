@@ -1,3 +1,37 @@
+"""The 🔶 Krea2 V2 generator, and the V2 model and LoRA row helpers."""
+
+import random
+
+from ember.licensing import catalog
+from ember.licensing import presets
+from ember.licensing import prompts
+from ember.generation.handlers import (
+    KREA_V2_T2I,
+    _check_model,
+    _save_preset,
+)
+from ember.generation.loras import (
+    _enabled_lora_ids,
+    _resolve_lora_slots,
+    _skipped_note,
+    stored_lora,
+)
+from ember.generation.runner import _run_jobs
+from ember.pipelines.common import (
+    model_file_available,
+    resolve_model,
+)
+from ember.pipelines.krea2_v2.workflow import (
+    build_v2_workflow,
+    default_lora_slots as v2_default_lora_slots,
+    model_defaults as v2_model_defaults,
+    resolve_size as v2_resolve_size,
+    status as v2_status,
+    turbo_lora_available as v2_turbo_lora_available,
+    turbo_lora_slot as v2_turbo_lora_slot,
+)
+
+
 # ── Krea 2 V2 (Krea2 advanced graph) ─────────────────────────────────────────────
 # This tab is deliberately self-contained: its own VAE, LoRA rows, sampler
 # and defaults. Its models and LoRAs are its own feature's lists in the
