@@ -31,14 +31,25 @@ PREFIX = "/api/v1"
 # make the browser spend it, Secure because the tunnel is HTTPS. Named
 # without "session" because it is not one — there is no server-side
 # session, only this process's token.
-COOKIE = "krea2_key"
+COOKIE = "ember_key"
+
+# The name browsers are already holding. A cookie outlives a restart, so
+# anyone who signed in before this build is still presenting this one, and
+# accepting it is what keeps them signed in. Only COOKIE above is ever
+# written, so each browser stops presenting it after its next exchange.
+LEGACY_COOKIE = "krea2_key"
+
+# The same token, presented as a header instead of a cookie. Nothing in
+# this repo sends either name — the browser uses the cookie — so both are
+# here for an external client that holds the token itself.
+KEY_HEADERS = ("x-ember-key", "x-krea2-key")
 
 # On by default: whoever has the URL can use the app, and nothing has to
 # be pasted or kept. The token below is still generated and still works —
 # it is simply not demanded, so a link that lost its fragment (a chat app
 # that ate it, a copy-paste, a bookmark) still opens.
 #
-# Set KREA2_UI_REQUIRE_TOKEN=1 to put the gate back. Worth doing wherever
+# Set EMBER_UI_REQUIRE_TOKEN=1 to put the gate back. Worth doing wherever
 # the URL travels further than the people meant to use it: the tunnel
 # hostname is the only thing standing between a stranger and this app's
 # GPU while the gate is down.
@@ -87,11 +98,15 @@ def _authorised(request: Request) -> bool:
     """
     if ALLOW_ANON:
         return True
-    cookie = request.cookies.get(COOKIE)
-    if cookie and secrets.compare_digest(cookie, TOKEN):
-        return True
-    header = request.headers.get("x-krea2-key", "")
-    return bool(header) and secrets.compare_digest(header, TOKEN)
+    for name in (COOKIE, LEGACY_COOKIE):
+        cookie = request.cookies.get(name)
+        if cookie and secrets.compare_digest(cookie, TOKEN):
+            return True
+    for name in KEY_HEADERS:
+        header = request.headers.get(name, "")
+        if header and secrets.compare_digest(header, TOKEN):
+            return True
+    return False
 
 
 def require_auth(request: Request) -> None:
@@ -175,7 +190,7 @@ def _media(path, recipe=None) -> dict:
     `id` and `path` are both the OUTPUT_DIR-relative posix key. The
     absolute path is deliberately not here: it names this pod's
     filesystem, and there is no version of the browser knowing
-    /workspace/krea2/output/... that is worth the leak.
+    /workspace/ember/output/... that is worth the leak.
     """
     key = gallery_index.key_for(path) or Path(path).name
     quoted = quote(key)
