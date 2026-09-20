@@ -793,7 +793,7 @@ $sharedArgs = @(
     # webui_bundle.py is committed — see scripts/gen_webui_bundle.py — so
     # this host never needs Node. check_webui.py above is what stops a
     # stale one shipping.
-    '--include-module=webui_bundle'
+    '--include-module=ember.web.webui_bundle'
 
     # uvicorn is NOT optional, and its absence is the failure this whole
     # file exists to prevent: it resolves its protocol and loop backends
