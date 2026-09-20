@@ -1,6 +1,6 @@
-# Deps of the Krea 2 app itself. bootstrap.py installs this file together
-# with ComfyUI's requirements.txt in a single pip resolver pass, so a plain
-# `python app.py` on a bare pod also ends up satisfying it.
+# Deps of the Krea 2 app itself. ember/comfy/setup.py installs this file
+# together with ComfyUI's requirements.txt in a single pip resolver pass,
+# so a plain `python app.py` on a bare pod also ends up satisfying it.
 # torch is intentionally NOT listed — it comes from the RunPod PyTorch base
 # image (and ComfyUI's own requirements).
 # The web app. FastAPI serves the API and the embedded React bundle;
