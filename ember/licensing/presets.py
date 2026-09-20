@@ -42,14 +42,11 @@ siblings talking to the same API, none of them needs more than urllib for
 it, and it keeps the Nuitka build unchanged.
 """
 
-import json
 import threading
 import time
-import urllib.error
-import urllib.parse
-import urllib.request
 from dataclasses import dataclass
 
+from ember.licensing import server
 from ember.logs import log
 from ember.settings import LICENSE_API_URL, LICENSE_KEY
 
@@ -167,7 +164,7 @@ def _fetch() -> Catalogue:
                   "server to read the presets.",
         )
     try:
-        status, body = _get("/v1/presets", timeout=FETCH_TIMEOUT)
+        status, body = server.get("/v1/presets", timeout=FETCH_TIMEOUT)
     except Exception as exc:                # transport: DNS, refused, TLS
         log.warning("Could not fetch the presets (%s)", exc)
         return Catalogue(error=f"Could not reach the server ({exc}).")
@@ -253,14 +250,14 @@ def save(tab: str, name: str, settings: dict) -> tuple[bool, str]:
             return False, f"{tab} is not a tab presets can be saved for."
         if not LICENSE_API_URL or not LICENSE_KEY:
             return False, "This build cannot reach the server to save presets."
-        if not _is_admin():
+        if not server.is_admin():
             # Not a security boundary — the server checks the licence
             # document — just a request there is no point sending.
             return False, "Only an admin license can save presets."
 
-        status, body = _post("/v1/presets", {
+        status, body = server.post("/v1/presets", {
             "license_key": LICENSE_KEY,
-            "instance_id": _instance_id(),
+            "instance_id": server.instance_id(),
             "tab": tab,
             "name": name,
             "settings": settings,
@@ -293,67 +290,3 @@ def _stamped_name() -> str:
     was at the keyboard — this is a label, and nothing keys on it.
     """
     return time.strftime("Preset %Y-%m-%d %H:%M")
-
-
-def _is_admin() -> bool:
-    """Whether this pod is on one of our own licences.
-
-    Imported late for the same reason as _instance_id, and False for any
-    answer that is not a clear yes — the fallback is what every customer
-    pod does, which is not to write at all.
-    """
-    try:
-        from ember.licensing import seat as licensing
-        return licensing.is_admin()
-    except Exception:
-        return False
-
-
-def _instance_id() -> str:
-    """This pod's id, from licensing — imported late to stay acyclic.
-
-    Same as prompts._instance_id: "unknown" is a real answer for a UI
-    launched without a seat, and the server only needs it non-empty.
-    """
-    try:
-        from ember.licensing import seat as licensing
-        return licensing.instance_id() or "unknown"
-    except Exception:
-        return "unknown"
-
-
-# ── HTTP ───────────────────────────────────────────────────────────────
-
-def _post(path: str, payload: dict, timeout: int) -> tuple[int | None, dict]:
-    """POST JSON. Returns (status, body); raises only on transport error."""
-    request = urllib.request.Request(
-        f"{LICENSE_API_URL}{path}",
-        data=json.dumps(payload, default=str).encode(),
-        headers={"Content-Type": "application/json"},
-        method="POST",
-    )
-    try:
-        with urllib.request.urlopen(request, timeout=timeout) as resp:
-            return resp.status, json.loads(resp.read() or b"{}")
-    except urllib.error.HTTPError as err:
-        try:
-            return err.code, json.loads(err.read() or b"{}")
-        except Exception:
-            return err.code, {}
-
-
-def _get(path: str, timeout: int) -> tuple[int | None, dict]:
-    """GET JSON. Returns (status, body); raises only on transport error."""
-    request = urllib.request.Request(
-        f"{LICENSE_API_URL}{path}",
-        headers={"Accept": "application/json"},
-        method="GET",
-    )
-    try:
-        with urllib.request.urlopen(request, timeout=timeout) as resp:
-            return resp.status, json.loads(resp.read() or b"{}")
-    except urllib.error.HTTPError as err:
-        try:
-            return err.code, json.loads(err.read() or b"{}")
-        except Exception:
-            return err.code, {}

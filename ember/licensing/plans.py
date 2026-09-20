@@ -29,13 +29,11 @@ API, a GET returning JSON needs nothing more, and it keeps the Nuitka
 build unchanged.
 """
 
-import json
 import threading
 import time
-import urllib.error
-import urllib.request
 from dataclasses import dataclass, field
 
+from ember.licensing import server
 from ember.logs import log
 from ember.settings import LICENSE_API_URL
 
@@ -167,23 +165,6 @@ class Catalogue:
 _lock = threading.Lock()
 _cached: Catalogue | None = None
 _cached_at = 0.0
-
-
-def _get(path: str, timeout: int) -> tuple[int | None, dict]:
-    """GET JSON. Returns (status, body); status is None on transport error."""
-    request = urllib.request.Request(
-        f"{LICENSE_API_URL}{path}",
-        headers={"Accept": "application/json"},
-        method="GET",
-    )
-    try:
-        with urllib.request.urlopen(request, timeout=timeout) as resp:
-            return resp.status, json.loads(resp.read() or b"{}")
-    except urllib.error.HTTPError as err:
-        try:
-            return err.code, json.loads(err.read() or b"{}")
-        except Exception:
-            return err.code, {}
 
 
 def _number(value) -> float | None:
@@ -326,7 +307,7 @@ def _fetch() -> Catalogue:
                                "reach the licence server to read the plans.")
 
     try:
-        status, body = _get("/v1/plans", timeout=FETCH_TIMEOUT)
+        status, body = server.get("/v1/plans", timeout=FETCH_TIMEOUT)
     except Exception as exc:                # transport: DNS, refused, TLS
         log.warning("Could not fetch the plan catalogue (%s)", exc)
         return Catalogue(error=f"Could not reach the licence server ({exc}).")

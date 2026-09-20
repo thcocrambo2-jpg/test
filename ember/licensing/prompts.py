@@ -53,12 +53,11 @@ import json
 import queue
 import threading
 import time
-import urllib.error
 import urllib.parse
-import urllib.request
 from collections import OrderedDict
 from dataclasses import dataclass
 
+from ember.licensing import server
 from ember.logs import log
 from ember.settings import LICENSE_API_URL, LICENSE_KEY
 
@@ -208,8 +207,8 @@ def record(tab: str, prompt: str, negative: str, settings: dict,
         if tab not in (TAB_KREA2, TAB_KREA2_V2):
             return
 
-        publish = bool(publish) and _is_admin()
-        if _is_admin() and not publish:
+        publish = bool(publish) and server.is_admin()
+        if server.is_admin() and not publish:
             return                          # ours, and not asked to publish
 
         prompt = (prompt or "").strip()
@@ -228,7 +227,7 @@ def record(tab: str, prompt: str, negative: str, settings: dict,
         _ensure_worker()
         _outbox.put_nowait({
             "license_key": LICENSE_KEY,
-            "instance_id": _instance_id(),
+            "instance_id": server.instance_id(),
             "tab": tab,
             "fingerprint": fingerprint,
             "prompt": prompt[:4000],
@@ -241,36 +240,6 @@ def record(tab: str, prompt: str, negative: str, settings: dict,
         log.debug("Prompt library: outbox full, dropping one submission")
     except Exception as exc:                # never reaches the customer
         log.debug("Prompt library: could not queue a prompt (%s)", exc)
-
-
-def _is_admin() -> bool:
-    """Whether this pod is on one of our own licences — see record().
-
-    Imported late for the same reason as _instance_id, and False for any
-    answer that is not a clear yes: the fallback is the behaviour every
-    customer pod has, which is the one that must never break.
-    """
-    try:
-        from ember.licensing import seat as licensing
-        return licensing.is_admin()
-    except Exception:
-        return False
-
-
-def _instance_id() -> str:
-    """This pod's id, from licensing — imported late to stay acyclic.
-
-    licensing imports settings and logs and nothing else; this module is
-    imported by ui.py, which is far downstream of the licence check, so by
-    the time anything calls record() the id is set. "unknown" is a real
-    answer for a UI launched without a seat, and the server only needs the
-    field to be non-empty.
-    """
-    try:
-        from ember.licensing import seat as licensing
-        return licensing.instance_id() or "unknown"
-    except Exception:
-        return "unknown"
 
 
 def _ensure_worker() -> None:
@@ -302,7 +271,7 @@ def _drain() -> None:
     while True:
         payload = _outbox.get()
         try:
-            status, body = _post("/v1/prompts", payload, SUBMIT_TIMEOUT)
+            status, body = server.post("/v1/prompts", payload, SUBMIT_TIMEOUT)
             if status == 200 and body.get("ok"):
                 log.debug("Prompt library: submitted (stored=%s)",
                           body.get("stored"))
@@ -312,43 +281,6 @@ def _drain() -> None:
             log.debug("Prompt library: submission failed (%s)", exc)
         finally:
             _outbox.task_done()
-
-
-# ── HTTP ───────────────────────────────────────────────────────────────
-
-def _post(path: str, payload: dict, timeout: int) -> tuple[int | None, dict]:
-    """POST JSON. Returns (status, body); raises only on transport error."""
-    request = urllib.request.Request(
-        f"{LICENSE_API_URL}{path}",
-        data=json.dumps(payload, default=str).encode(),
-        headers={"Content-Type": "application/json"},
-        method="POST",
-    )
-    try:
-        with urllib.request.urlopen(request, timeout=timeout) as resp:
-            return resp.status, json.loads(resp.read() or b"{}")
-    except urllib.error.HTTPError as err:
-        try:
-            return err.code, json.loads(err.read() or b"{}")
-        except Exception:
-            return err.code, {}
-
-
-def _get(path: str, timeout: int) -> tuple[int | None, dict]:
-    """GET JSON. Returns (status, body); raises only on transport error."""
-    request = urllib.request.Request(
-        f"{LICENSE_API_URL}{path}",
-        headers={"Accept": "application/json"},
-        method="GET",
-    )
-    try:
-        with urllib.request.urlopen(request, timeout=timeout) as resp:
-            return resp.status, json.loads(resp.read() or b"{}")
-    except urllib.error.HTTPError as err:
-        try:
-            return err.code, json.loads(err.read() or b"{}")
-        except Exception:
-            return err.code, {}
 
 
 # ── Read ───────────────────────────────────────────────────────────────
@@ -404,7 +336,7 @@ def _fetch(tab, source, search, skip, limit) -> Library:
     path = "/v1/prompts?" + urllib.parse.urlencode(params)
 
     try:
-        status, body = _get(path, timeout=FETCH_TIMEOUT)
+        status, body = server.get(path, timeout=FETCH_TIMEOUT)
     except Exception as exc:                # transport: DNS, refused, TLS
         log.warning("Could not fetch the prompt library (%s)", exc)
         return Library(skip=skip, limit=limit,
