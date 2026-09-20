@@ -1,7 +1,8 @@
 """Krea 2 on RunPod — ComfyUI + a React web app. Entry point: python app.py
 
 Startup flow:
-  1. Read configuration (config.py, imported below — also sets up logging).
+  1. Read configuration (settings.py), set up logging and make the
+     output tree.
   2. Take a license seat, or stop; resolve which tabs the key grants
      (features.py) from the entitlements it returned; load the model and
      LoRA catalogue (catalog.py) — what each Krea tab offers — from the
@@ -28,6 +29,7 @@ from ember.comfy import setup as bootstrap
 from ember.licensing import catalog
 from ember import features
 from ember.licensing import seat as licensing
+from ember import logs, settings
 from ember.config import (
     COMFY_DIR,
     KREA_RESERVE_VRAM_GB,
@@ -45,6 +47,14 @@ from ember.config import (
 
 
 def main() -> None:
+    # 1 · Configuration. Nothing in ember/settings.py runs when it is
+    # imported, so the logger, the output tree and the line that says where
+    # both live are this function's first three statements — before
+    # anything else can log or write.
+    logs.setup()
+    settings.ensure_dirs()
+    settings.log_startup()
+
     # 2 · License seat. First, before anything expensive: a customer who
     # cannot take a seat finds out in seconds rather than after ~90 GB of
     # downloads. licensing uses only the stdlib, so it runs fine here —

@@ -11,89 +11,16 @@ ComfyUI-Krea2Edit custom nodes and the Identity Edit LoRA (both fetched
 during bootstrap/downloads).
 
 Which diffusion model and which style LoRAs a graph loads is not decided
-here: the builders take file names, and the helpers below turn a tab's
-catalogue ids (catalog.py) into those names. The catalogue is per
-feature, so every helper that reads it takes the feature key — the Krea2
-and Krea2 Edit tabs each read their own lists, and so do the two V2 tabs
-(workflow_krea2_v2.py).
+here: the builders take file names, and pipelines/common.py turns a tab's
+catalogue ids into those names.
 """
 
-from ember.licensing import catalog
 from ember.comfy.server import GPU_COUNT
 from ember.config import (
-    ABLITERATED_ENCODER_FILE,
     EDIT_LORA_FILE,
-    MODELS_DIR,
-    TEXT_ENCODER_FILE,
     VAE_FILE,
-    log,
 )
-
-
-# ── The catalogue, per feature ───────────────────────────────────────────────
-# Ids are what forms, presets and prompts carry; a file name appears only
-# once a graph is being built. These are shared by all four Krea tabs, so
-# they live here rather than in either family's builder module.
-
-def resolve_model(feature, model_id) -> "catalog.Model | None":
-    """The feature's model record for a form value (an id).
-
-    Exact ids only: the value came from a dropdown this pod described, or
-    from a preset the licence server checked against the same ids. An id
-    the feature does not list — a model switched off since the preset was
-    saved — falls back to the feature's first model, loudly, rather than
-    refusing the run. None only when the feature lists no model at all.
-    """
-    models = catalog.feature_models(feature)
-    if not models:
-        return None
-    for model in models:
-        if model.id == model_id:
-            return model
-    if model_id not in (None, "", catalog.NONE):
-        log.warning("Model %r is not offered on %s — using the default (%s)",
-                    model_id, feature, models[0].id)
-    return models[0]
-
-
-def model_defaults(model) -> tuple[int, float]:
-    """(steps, cfg) for a model record — the record carries them now."""
-    return int(model.steps), float(model.cfg)
-
-
-def model_file_available(model) -> bool:
-    """True once the model record's UNet file has been downloaded."""
-    return (MODELS_DIR / "diffusion_models" / model.file).exists()
-
-
-def lora_file_available(lora) -> bool:
-    """True once the LoRA record's file has been downloaded."""
-    return (MODELS_DIR / "loras" / lora.file).exists()
-
-
-def feature_lora(feature, lora_id) -> "catalog.Lora | None":
-    """The LoRA record for a form value, if the feature offers that id.
-
-    A tab's stack offers exactly its feature's list, so an id outside it —
-    one from a preset saved on another tab, or a LoRA switched off since —
-    is not this tab's to load, even when the catalogue knows it.
-    """
-    if lora_id in (None, "", catalog.NONE):
-        return None
-    return next((lora for lora in catalog.feature_loras(feature)
-                 if lora.id == lora_id), None)
-
-
-def edit_lora_available() -> bool:
-    """True once the Identity Edit LoRA has been downloaded."""
-    return (MODELS_DIR / "loras" / EDIT_LORA_FILE).exists()
-
-
-def active_text_encoder() -> str:
-    """Prefer the merged abliterated encoder, fall back to the standard one."""
-    if (MODELS_DIR / "text_encoders" / ABLITERATED_ENCODER_FILE).exists():
-        return ABLITERATED_ENCODER_FILE
-    return TEXT_ENCODER_FILE
+from ember.pipelines.common import active_text_encoder
 
 
 def _model_nodes(loras, unet_file: str) -> tuple[dict, list, list, list]:

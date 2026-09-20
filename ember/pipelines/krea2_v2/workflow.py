@@ -39,7 +39,7 @@ from ember.config import (
     V2_VARIANCE_DEFAULTS,
     log,
 )
-from ember.pipelines.krea2.workflow import (
+from ember.pipelines.common import (
     active_text_encoder,
     lora_file_available,
     model_file_available,

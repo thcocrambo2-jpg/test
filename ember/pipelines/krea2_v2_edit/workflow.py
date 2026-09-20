@@ -46,7 +46,7 @@ from ember.config import (
     V2_VARIANCE_DEFAULTS,
     log,
 )
-from ember.pipelines.krea2.workflow import active_text_encoder, edit_lora_available
+from ember.pipelines.common import active_text_encoder, edit_lora_available
 from ember.pipelines.krea2_v2.workflow import (
     REQUIRED_NODES as V2_REQUIRED_NODES,
     blocking_problems,

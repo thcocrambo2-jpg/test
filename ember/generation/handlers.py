@@ -61,15 +61,17 @@ from ember.config import (
     WAN_RESOLUTIONS,
     log,
 )
-from ember.pipelines.krea2.workflow import (
-    build_edit_workflow,
-    build_workflow,
+from ember.pipelines.common import (
     edit_lora_available,
     feature_lora,
     lora_file_available,
     model_defaults,
     model_file_available,
     resolve_model,
+)
+from ember.pipelines.krea2.workflow import (
+    build_edit_workflow,
+    build_workflow,
 )
 from ember.pipelines.krea2_v2.workflow import (
     build_v2_workflow,

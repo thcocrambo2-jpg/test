@@ -45,10 +45,10 @@ temp base dir and the repo root, are written back out as `<BASE_DIR>` and
 `<ROOT>`. `WindowsPath(...)` and `PosixPath(...)` both record as
 `Path(...)` for the same reason.
 
-A subprocess is also the only way to do this at all: config.py runs
-`logging.basicConfig` and an `mkdir` loop at import time, so importing it
-under a fabricated environment has to happen somewhere that is thrown
-away afterwards.
+A subprocess is also the only way to do this at all: the values are read
+from the environment when the module is imported, so importing it under a
+fabricated environment has to happen somewhere that is thrown away
+afterwards.
 
 The qualified names
 -------------------
@@ -94,13 +94,15 @@ BASELINE = Path(__file__).resolve().parent / "config_baseline.json"
 # to be in exactly one of them. Widen this as the phases move config.py:
 #
 #   Phase 1:  ["ember.config"]
-#   Phase 2:  ["ember.settings",
-#              "ember.pipelines.krea2.constants",
-#              "ember.pipelines.krea2_v2.constants",
-#              "ember.pipelines.krea2_v2_edit.constants",
-#              "ember.pipelines.wan.constants",
-#              "ember.pipelines.minimax.constants"]
-SOURCES = ["ember.config"]
+#   Phase 2:  the six modules below
+SOURCES = [
+    "ember.settings",
+    "ember.pipelines.krea2.constants",
+    "ember.pipelines.krea2_v2.constants",
+    "ember.pipelines.krea2_v2_edit.constants",
+    "ember.pipelines.wan.constants",
+    "ember.pipelines.minimax.constants",
+]
 
 # Baseline key -> (module, attribute) it lives at today. The keys are the
 # baseline's, so they do not move when the modules do; only the tuples are
@@ -242,8 +244,8 @@ def _child_env(base_dir: Path) -> dict:
 def gather() -> dict:
     """Run `collect()` in a subprocess and hand back what it printed.
 
-    The base dir is a temp tree because config.py's `mkdir` loop makes it,
-    whatever it is pointed at, at import time.
+    The base dir is a temp tree, because a child that calls
+    `settings.ensure_dirs()` makes whatever it is pointed at.
     """
     base_dir = Path(tempfile.mkdtemp(prefix="check-config-")).resolve()
     try:
