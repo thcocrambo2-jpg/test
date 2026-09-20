@@ -35,19 +35,34 @@ Determinism
 -----------
 Half of settings.py is derived from the environment, so collecting it in
 this process would record this machine. Instead the values come from a
-**subprocess** with a built environment: every `KREA2_*`, `HF_TOKEN`,
-`CIVITAI_TOKEN` and `RUNPOD_*` variable is dropped, and four are set to
-fixed values (see `_child_env`). `LICENSE_API_URL`, `LICENSE_KEY`,
-`SHOWCASE_BASE_URL`, the tokens and every path under `BASE_DIR` are then
-the same on any machine — and the two directories that still differ, the
-temp base dir and the repo root, are written back out as `<BASE_DIR>` and
-`<ROOT>`. `WindowsPath(...)` and `PosixPath(...)` both record as
-`Path(...)` for the same reason.
+**subprocess** with a built environment: every `EMBER_*`, `KREA2_*`,
+`HF_TOKEN`, `CIVITAI_TOKEN` and `RUNPOD_*` variable is dropped, and four
+are set to fixed values (see `_child_env`). `LICENSE_API_URL`,
+`LICENSE_KEY`, `SHOWCASE_BASE_URL`, the tokens and every path under
+`BASE_DIR` are then the same on any machine — and the two directories
+that still differ, the temp base dir and the repo root, are written back
+out as `<BASE_DIR>` and `<ROOT>`. `WindowsPath(...)` and
+`PosixPath(...)` both record as `Path(...)` for the same reason.
 
 A subprocess is also the only way to do this at all: the values are read
 from the environment when the module is imported, so importing it under a
 fabricated environment has to happen somewhere that is thrown away
 afterwards.
+
+Both spellings
+--------------
+settings.py reads each customer variable as `EMBER_<name>` or, when that
+is unset, `KREA2_<name>`. That is a promise about values, not about
+names, so it is checked as one: the collection runs **twice**, once with
+the four fixed variables spelled `EMBER_*` and once spelled `KREA2_*`,
+and the two runs have to agree name for name. A fallback that quietly
+resolved to a different default, or missed a variable and fell back to
+the shipped constant, shows up here as a difference between the runs
+rather than as a customer whose pod changed behaviour on upgrade.
+
+The baseline is diffed against the `EMBER_*` run, because that is the
+spelling the documentation gives. Its keys are unchanged: they are
+Python names, and none of those moved.
 
 The qualified names
 -------------------
@@ -130,22 +145,31 @@ PUBLIC = re.compile(r"[A-Z][A-Z0-9_]*\Z")
 # DNS-label check, so LICENSE_API_URL is a URL rather than the empty
 # string the malformed case produces, and the showcase URL passes the
 # https check, so SHOWCASE_BASE_URL is the stripped value rather than "".
+# Given without a prefix, because each run supplies its own. A licence
+# key keeps the KREA2- prefix it was issued under whatever the variable is
+# called: existing keys are valid forever.
 _FIXED_ENV = {
-    "KREA2_NODE_TAG": "restructure-test",
-    "KREA2_LICENSE_KEY": "KREA2-TEST-TEST-TEST",
-    "KREA2_SHOWCASE_URL": "https://pub-test.r2.dev/x",
-    # None of these values is set-valued today. This is here so that the
-    # day one of the constants modules holds a set, its repr does not
-    # depend on the child's hash seed and the check does not start
-    # flickering for a reason that has nothing to do with the code.
-    "PYTHONHASHSEED": "0",
+    "NODE_TAG": "restructure-test",
+    "LICENSE_KEY": "KREA2-TEST-TEST-TEST",
+    "SHOWCASE_URL": "https://pub-test.r2.dev/x",
 }
 
-# Anything that could reach one of these values. KREA2_* covers the base
-# dir, the ports, the swap and attention flags, the Wan reserves, the
+# Set the same in both runs, since it is not one of ours. None of these
+# values is set-valued today; this is here so that the day one of the
+# constants modules holds a set, its repr does not depend on the child's
+# hash seed and the check does not start flickering for a reason that has
+# nothing to do with the code.
+_FIXED_UNPREFIXED = {"PYTHONHASHSEED": "0"}
+
+# The two prefixes a customer variable can be spelled with, and the label
+# each run is reported under.
+_PREFIXES = ("EMBER_", "KREA2_")
+
+# Anything that could reach one of these values. The two prefixes cover
+# the base dir, the swap and attention flags, the Wan reserves, the
 # licence key, tag and grace, and the showcase URL; the rest are the two
 # download credentials and the RunPod ids ember/licensing/seat.py reads.
-_WIPE = ("KREA2_", "RUNPOD_", "HF_TOKEN", "CIVITAI_TOKEN")
+_WIPE = _PREFIXES + ("RUNPOD_", "HF_TOKEN", "CIVITAI_TOKEN")
 
 # The child's stdout also carries whatever a module decides to print when
 # it is imported, so the payload says where it starts and ends rather than
@@ -212,8 +236,8 @@ def collect() -> dict:
     not a value to overwrite.
     """
     stub_comfy()
-    base_dir = Path(
-        os.environ["KREA2_BASE_DIR"]).expanduser().resolve()
+    base_dir = Path(os.environ.get("EMBER_BASE_DIR")
+                    or os.environ["KREA2_BASE_DIR"]).expanduser().resolve()
 
     names = {}
     for source in SOURCES:
@@ -232,25 +256,28 @@ def collect() -> dict:
     return {"sources": list(SOURCES), "names": names, "qualified": qualified}
 
 
-def _child_env(base_dir: Path) -> dict:
+def _child_env(base_dir: Path, prefix: str) -> dict:
+    """The child's environment, with every customer variable under `prefix`."""
     env = {k: v for k, v in os.environ.items()
            if not any(k == w or k.startswith(w) for w in _WIPE)}
-    env.update(_FIXED_ENV)
-    env["KREA2_BASE_DIR"] = str(base_dir)
+    env.update(_FIXED_UNPREFIXED)
+    env.update({prefix + k: v for k, v in _FIXED_ENV.items()})
+    env[prefix + "BASE_DIR"] = str(base_dir)
     return env
 
 
-def gather() -> dict:
+def gather(prefix: str) -> dict:
     """Run `collect()` in a subprocess and hand back what it printed.
 
     The base dir is a temp tree, because a child that calls
-    `settings.ensure_dirs()` makes whatever it is pointed at.
+    `settings.ensure_dirs()` makes whatever it is pointed at. Each run
+    gets its own, so neither can see what the other left behind.
     """
     base_dir = Path(tempfile.mkdtemp(prefix="check-config-")).resolve()
     try:
         done = subprocess.run(
             [sys.executable, str(Path(__file__).resolve()), "--collect"],
-            env=_child_env(base_dir), cwd=str(ROOT),
+            env=_child_env(base_dir, prefix), cwd=str(ROOT),
             capture_output=True, text=True, encoding="utf-8",
             # The payload is ASCII (json.dumps escapes), so this only ever
             # touches whatever the imported modules log on their way up,
@@ -262,8 +289,8 @@ def gather() -> dict:
         shutil.rmtree(base_dir, ignore_errors=True)
     if done.returncode != 0 or _BEGIN not in done.stdout:
         sys.stderr.write(done.stderr)
-        sys.exit("could not import %s (exit %d)"
-                 % (", ".join(SOURCES), done.returncode))
+        sys.exit("could not import %s under %s* (exit %d)"
+                 % (", ".join(SOURCES), prefix, done.returncode))
     payload = done.stdout.split(_BEGIN, 1)[1].split(_END, 1)[0]
     return json.loads(payload)
 
@@ -311,6 +338,37 @@ def compare(baseline: dict, current: dict) -> tuple:
     return missing, duplicated, changed, qualified, new
 
 
+def both_spellings(runs: dict) -> list:
+    """Differences between the EMBER_* run and the KREA2_* run.
+
+    Every name in either run, so a value that exists under one spelling
+    and not the other is reported rather than skipped. This is the whole
+    promise the fallback makes: the same environment, spelled either way,
+    produces the same app.
+    """
+    first, second = _PREFIXES
+    lines = []
+    for section in ("names", "qualified"):
+        left, right = _section(runs[first], section), _section(runs[second],
+                                                               section)
+        for name in sorted(set(left) | set(right)):
+            if left.get(name) != right.get(name):
+                lines.append("%s   %s* -> %s   %s* -> %s"
+                             % (name, first, left.get(name, "(absent)"),
+                                second, right.get(name, "(absent)")))
+    return lines
+
+
+def _section(current: dict, section: str) -> dict:
+    """One run's `names` (flattened across modules) or `qualified`."""
+    if section == "qualified":
+        return current["qualified"]
+    flat = {}
+    for values in current["names"].values():
+        flat.update(values)
+    return flat
+
+
 def _flatten(current: dict) -> dict:
     """The baseline's shape: one flat name -> repr map, not one per module.
 
@@ -352,7 +410,8 @@ def main() -> None:
         print(_END)
         return
 
-    current = gather()
+    runs = {prefix: gather(prefix) for prefix in _PREFIXES}
+    current = runs[_PREFIXES[0]]
 
     if args.write:
         frozen = _flatten(current)
@@ -372,6 +431,7 @@ def main() -> None:
     baseline = json.loads(args.baseline.read_text(encoding="utf-8"))
 
     missing, duplicated, changed, qualified, new = compare(baseline, current)
+    spelling = both_spellings(runs)
 
     for title, lines in (
         ("missing - in the baseline, nowhere in %s"
@@ -380,6 +440,8 @@ def main() -> None:
         ("changed - this is what no phase is allowed to do", changed),
         ("qualified names (tab keys) - stored data is filed under these",
          qualified),
+        ("spelling - the two runs must agree, that is what the fallback "
+         "promises", spelling),
     ):
         if lines:
             print("%s: %d" % (title, len(lines)))
@@ -391,11 +453,13 @@ def main() -> None:
         for name in new:
             print("  %s" % name)
 
-    if missing or duplicated or changed or qualified:
+    if missing or duplicated or changed or qualified or spelling:
         sys.exit(1)
-    print("config OK - %d name(s) in %s and %d tab key(s) match %s"
+    print("config OK - %d name(s) in %s and %d tab key(s) match %s, "
+          "and %s and %s read the same"
           % (len(baseline["names"]), " / ".join(SOURCES),
-             len(baseline["qualified"]), args.baseline.name))
+             len(baseline["qualified"]), args.baseline.name,
+             _PREFIXES[0] + "*", _PREFIXES[1] + "*"))
 
 
 if __name__ == "__main__":

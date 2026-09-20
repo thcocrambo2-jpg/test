@@ -108,7 +108,7 @@ STUB_MODULE = "comfy" if MODULE_ROOT == "." else "ember.comfy.server"
 # Environment variables cleared from every child, so that a developer's
 # shell cannot change what this check sees. The same posture as
 # scripts/check_config.py's collection subprocess.
-CLEARED_PREFIXES = ("KREA2_", "RUNPOD_")
+CLEARED_PREFIXES = ("EMBER_", "KREA2_", "RUNPOD_")
 CLEARED_NAMES = ("HF_TOKEN", "CIVITAI_TOKEN", "HF_WRITE_TOKEN")
 
 # The catalogue the Krea tabs read their models and LoRAs from — the seed
@@ -166,21 +166,23 @@ def module_path(name: str) -> Path:
 def child_env() -> dict:
     """A controlled environment for the child processes.
 
-    Every KREA2_* and RUNPOD_* variable is dropped and the ones that decide
-    where files land are set explicitly, so that this check answers the
-    same on a pod, in CI and on the machine that wrote it. KREA2_BASE_DIR
-    points at a throwaway directory so that a child which does make the
-    tree — by calling settings.ensure_dirs(), or by importing something
-    that still does — cannot write to the shipped default, the pod path
-    /workspace/krea2.
+    Every EMBER_*, KREA2_* and RUNPOD_* variable is dropped and the ones
+    that decide where files land are set explicitly, so that this check
+    answers the same on a pod, in CI and on the machine that wrote it.
+    Both prefixes go, because settings.py reads either spelling and a
+    developer's shell carrying one of them would otherwise decide what
+    this check sees. EMBER_BASE_DIR points at a throwaway directory so
+    that a child which does make the tree — by calling
+    settings.ensure_dirs(), or by importing something that still does —
+    cannot write to the shipped default, the pod path /workspace/ember.
     """
     env = {k: v for k, v in os.environ.items()
            if not k.startswith(CLEARED_PREFIXES) and k not in CLEARED_NAMES}
-    env["KREA2_BASE_DIR"] = tempfile.mkdtemp(prefix="check_imports-")
-    env["KREA2_CATALOG_FILE"] = str(SEED_CATALOG)
+    env["EMBER_BASE_DIR"] = tempfile.mkdtemp(prefix="check_imports-")
+    env["EMBER_CATALOG_FILE"] = str(SEED_CATALOG)
     # A syntactically valid tag, so LICENSE_API_URL is a URL rather than the
     # empty string. Nothing here calls it.
-    env["KREA2_NODE_TAG"] = "restructure-test"
+    env["EMBER_NODE_TAG"] = "restructure-test"
     # Nothing imported here writes a .pyc worth keeping, and a stale one in
     # a half-moved tree is a class of confusion this check must not create.
     env["PYTHONDONTWRITEBYTECODE"] = "1"
@@ -435,7 +437,7 @@ def main() -> int:
                                 % (name, _indent(traceback)))
     finally:
         # Gone whether or not a child made the tree inside it.
-        shutil.rmtree(env["KREA2_BASE_DIR"], ignore_errors=True)
+        shutil.rmtree(env["EMBER_BASE_DIR"], ignore_errors=True)
 
     rules = ["%d module(s) import alone" % len(names)]
     if CHECK_EMPTY_INITS:
