@@ -1,8 +1,7 @@
 """Feature flags — which tabs are built and which assets are downloaded.
 
 Every tab is a feature with a stable key. A feature that is off costs
-nothing at all: its tab is never constructed (so its handlers are never
-registered on Gradio's HTTP API either), its custom node packs are not
+nothing at all: its routes refuse, its custom node packs are not
 installed, and its weights are not downloaded.
 
 **The license decides, and nothing else.** The set comes from the
@@ -132,7 +131,8 @@ class Feature:
 #
 # "catalog" is the one group whose contents are not fixed here or in a
 # pipeline's constants.py: it is every model and LoRA the catalogue
-# (catalog.py, from the licence server) lists for the enabled features
+# (ember.licensing.catalog, from the licence server) lists for the enabled
+# features
 # that name it. Each Krea tab names it, and so do the MiniMax tabs for
 # their LoRAs; downloads.download_catalog reads the lists of exactly
 # those that are on — so a feature's own models are what it pulls in, not

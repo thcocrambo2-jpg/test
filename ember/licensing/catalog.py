@@ -27,7 +27,7 @@ With none of them the catalogue is empty: the Krea tabs report that they
 have no models, the MiniMax tabs offer no LoRAs but still run, and the
 tabs that do not use it are unaffected.
 
-Stdlib-only, like licensing.py and presets.py — it runs before the pip
+Stdlib-only, like the rest of this package — it runs before the pip
 install that the heavier modules wait for.
 """
 

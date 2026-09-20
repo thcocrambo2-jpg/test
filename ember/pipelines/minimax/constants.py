@@ -73,7 +73,7 @@ MINIMAX_CANVAS_MULTIPLE = 32
 MINIMAX_MIN_SIDE = 256
 MINIMAX_MAX_SIDE = 1536
 # Three canvas rules, chosen per job with the Resolution radio — see
-# workflow_minimax.resolve_size. "Standard" is the template's
+# the minimax pipeline's resolve_size. "Standard" is the template's
 # ResolutionSelector at 0.7 MP, and the default. "Native" is the model's
 # own canvas, which the node file calls adapt_canvas: a 768 short edge with
 # the area capped at 768 × 1344 — 40-50% more pixels, slower, and what the

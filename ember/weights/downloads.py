@@ -7,10 +7,11 @@ idempotent — re-running only downloads what is missing.
 
 Two kinds of weights, two sources of truth. The pipeline pieces every
 build needs — VAEs, text encoders, the Identity Edit LoRA, the Wan and
-MiniMax weights — are named in config.py and fetched by their own groups.
-The Krea models and the Krea and MiniMax LoRAs a customer picks from are
-named by the catalogue (catalog.py, from the licence server) and fetched by the
-"catalog" group, which asks nothing of config.py at all.
+MiniMax weights — are named in each pipeline's constants.py and fetched by
+their own groups. The Krea models and the Krea and MiniMax LoRAs a customer
+picks from are named by the catalogue (ember.licensing.catalog, from the
+licence server) and fetched by the "catalog" group, which asks nothing of
+the pipeline constants at all.
 """
 
 import time

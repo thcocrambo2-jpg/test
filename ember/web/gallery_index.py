@@ -26,8 +26,9 @@ this module arrived never gets a thumbnail, and `thumb_for()` simply returns
 the original for it. That keeps startup free and means a missing, failed or
 still-encoding thumbnail all land in the same, already-working code path.
 
-Imports nothing from `ui` or `gradio` — the index is testable headless, and
-`client.py` can call `note_new` without dragging the UI in behind it.
+Imports nothing from the API layer — the index is testable headless, and
+`ember.comfy.client` can call `note_new` without dragging the web app in
+behind it.
 """
 
 import os
@@ -51,10 +52,10 @@ IMAGE_EXT = (".png",)
 VIDEO_EXT = (".mp4", ".webm")
 MEDIA_EXT = IMAGE_EXT + VIDEO_EXT
 
-# Thumbnails live under OUTPUT_DIR so Gradio's allowed_paths (see
-# ui.launch_ui) and set_static_paths already cover them, and under a *dotted*
-# name so the one rule that skips them from the index — "ignore entries
-# starting with a dot" — also keeps them out of the zip.
+# Thumbnails live under OUTPUT_DIR so the same containment that serves
+# generated files already covers them, and under a *dotted* name so the one
+# rule that skips them from the index — "ignore entries starting with a
+# dot" — also keeps them out of the zip.
 THUMBS_DIR = OUTPUT_DIR / ".thumbs"
 THUMB_LONG_EDGE = 512
 THUMB_QUALITY = 80
@@ -84,8 +85,8 @@ class _Dir:
         self.subdirs = subdirs      # [path, ...]
 
 
-# Guards _DIRS and _ORDER together. Gradio serves handlers from a thread
-# pool, so concurrent readers are the normal case, not the edge case. The
+# Guards _DIRS and _ORDER together. Routes are served from a thread pool,
+# so concurrent readers are the normal case, not the edge case. The
 # thumbnail workers never take it — encoding must not block a page load.
 _LOCK = threading.RLock()
 _DIRS: dict[str, _Dir] = {}
@@ -222,10 +223,9 @@ def safe_path(path) -> Path:
 
     Extracted from delete() because two more callers arrived that need
     exactly this and nothing else: the API serves generated files at
-    /media and /thumbs, replacing Gradio's `allowed_paths=` and
-    `gr.set_static_paths`, which did this containment invisibly. Three
-    call sites and one implementation, rather than three implementations
-    and a hope.
+    /media and /thumbs, and both have to be contained to OUTPUT_DIR.
+    Three call sites and one implementation, rather than three
+    implementations and a hope.
     """
     target = Path(path)
     if not target.is_absolute():

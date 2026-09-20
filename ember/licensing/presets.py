@@ -37,9 +37,9 @@ licence document rather than trusting the flag — see POST /v1/presets. The
 check here is the same one prompts.record makes: not a security boundary,
 just a reason not to send a request that is certain to be refused.
 
-Stdlib-only, like licensing.py, plans.py and prompts.py. The four are
-siblings talking to the same API, none of them needs more than urllib for
-it, and it keeps the Nuitka build unchanged.
+Stdlib-only, like the rest of this package. These modules are siblings
+talking to the same API, none of them needs more than urllib for it, and
+it keeps the Nuitka build unchanged.
 """
 
 import threading
@@ -54,13 +54,13 @@ from ember.settings import LICENSE_API_URL, LICENSE_KEY
 # Tabs a preset can be written for. The same two the prompt library
 # replays into, and necessarily so: applying a preset means writing values
 # into a specific set of form controls, which is exactly what replaying a
-# prompt does. A tab joins this list in the commit that teaches ui.py to
-# load settings back into it.
+# prompt does. A tab joins this list in the commit that teaches its schema
+# to load settings back into it.
 #
-# Written for, not applied to: which panels *offer* a tab's presets is
-# ui.py's business, and it offers each of these two in its generation tab
-# and again in that tab's Edit tab, where the same dials exist under the
-# same names. Nothing here changes for that — one row, read by more than
+# Written for, not applied to: which panels *offer* a tab's presets is the
+# front end's business, and it offers each of these two in its generation
+# tab and again in that tab's Edit tab, where the same dials exist under
+# the same names. Nothing here changes for that — one row, read by more than
 # one dropdown.
 TAB_KREA2 = str(features.Key.KREA_T2I)
 TAB_KREA2_V2 = str(features.Key.KREA_V2_T2I)
@@ -80,9 +80,9 @@ TTL_SECONDS = 300
 # rather than two per visitor.
 ERROR_TTL_SECONDS = 30
 
-# Short on purpose. The catalogue is read while ui.py is building its
-# Blocks, i.e. on the pod's startup path — a licence server having a bad
-# minute may cost the dropdowns, never the app coming up.
+# Short on purpose. The catalogue is read on the pod's startup path — a
+# licence server having a bad minute may cost the dropdowns, never the app
+# coming up.
 FETCH_TIMEOUT = 8
 SAVE_TIMEOUT = 10
 
@@ -131,8 +131,9 @@ def _preset(raw: dict) -> Preset | None:
     """One preset from the wire, or None if it is too broken to offer.
 
     An id, a known tab, a name and a settings object are the whole bar. A
-    preset with odd values inside `settings` still applies fine — ui.py
-    guards every value against what this pod offers — but one with no name
+    preset with odd values inside `settings` still applies fine — the
+    apply route guards every value against what this pod offers — but one
+    with no name
     has nothing to put in a dropdown, and one for a tab this build does
     not know has nowhere to be applied.
     """
@@ -191,9 +192,8 @@ def catalogue(force: bool = False) -> Catalogue:
     dropdown without waiting it out.
 
     Both outcomes are cached, each with its own TTL, and both for the same
-    reason — this is read while ui.py builds its Blocks and again on every
-    page load, so an answer that is not remembered is a request per
-    visitor. An empty list is a perfectly normal steady state for a
+    reason — this is read on the startup path and again on every page
+    load, so an answer that is not remembered is a request per visitor. An empty list is a perfectly normal steady state for a
     deployment that has seeded no presets, and a failure is remembered
     only briefly (ERROR_TTL_SECONDS) so a server that comes back is
     noticed without every page load paying FETCH_TIMEOUT while it is down.

@@ -447,10 +447,9 @@ def showcase() -> Showcase | None:
     are filtered by features.enabled(), which is only resolved after the
     licence check in app.py.
 
-    Nothing that happens in here is allowed to reach the caller. ui.py
-    builds this into its Blocks tree at import, so an exception would not
-    cost the pricing page a decorative panel — it would stop the app from
-    starting at all, over a folder walk.
+    Nothing that happens in here is allowed to reach the caller. An
+    exception would not cost the pricing page a decorative panel — it
+    would fail the request that draws the page, over a folder walk.
     """
     global _cached, _loaded
     if _loaded:

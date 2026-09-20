@@ -1,39 +1,24 @@
 """Start the app: uvicorn, plus a Cloudflare quick tunnel for the URL.
 
-Replaces `ui.launch_ui()`. What that did was call `gr.Blocks.launch(
-share=True)` and let Gradio run both the web server and the public
-tunnel, falling back to cloudflared only when the *.gradio.live link did
-not answer. Deleting Gradio deletes both halves, so both are here.
+Both halves live here. uvicorn serves the app on the pod's loopback and
+the tunnel is what makes that reachable — the customer never has a
+routable address of their own, on either platform.
 
-The tunnel is now the **default**, not the fallback, and that is the
-change with the widest blast radius in the whole rewrite.
-
-Why cloudflared, and why default
---------------------------------
-`share=True` is a *Gradio service*. It is the only thing that has ever
-given a Windows customer a public URL — scripts/windows_start.ps1 has no
-tunnel logic at all, and never needed any. So when Gradio goes, so does
-the link, on both platforms at once.
-
+Why cloudflared
+---------------
 A Cloudflare quick tunnel is free, needs no account and no signup, and
-`ui._start_cloudflared` already implemented it here as Gradio's fallback.
-Promoting it costs one binary download on first launch. The alternatives
-were rejected on the same ground each time: pyngrok needs an account,
-localtunnel needs Node on the target machine, and constraint 5 says
-neither build host has Node.
+costs one binary download on first launch. The alternatives were rejected
+on the same ground each time: pyngrok needs an account, and localtunnel
+needs Node on the target machine — which neither build host has, for the
+reason docs/architecture/web-ui.md gives under "Why the React bundle is
+committed".
 
-The Windows branch
-------------------
-The code this came from hardcoded `cloudflared-linux-amd64` — correct,
-because on Linux it was a fallback and on Windows it was never reached at
-all: Gradio's share link always worked, so the fallback never ran. After
-Section 3 it runs on *every* launch, on both platforms, so the download
-picks its asset by `sys.platform`, keeps the `.exe` suffix Windows needs
-to execute it, and skips the chmod that only means something on POSIX.
-
-That single missing branch would have been a Windows launch that prints
-no URL, on the first build after Gradio was removed, for every Windows
-customer at once.
+The tunnel is the **default**, not a fallback. It runs on every launch,
+on both platforms, so nothing here may assume Linux: the download picks
+its asset by `sys.platform`, keeps the `.exe` suffix Windows needs to
+execute it, and skips the chmod that only means something on POSIX. A
+Linux-only asset name here is a Windows launch that prints no URL, for
+every Windows customer at once.
 """
 
 import argparse
@@ -66,10 +51,9 @@ RELEASES = {
 DOWNLOAD = ("https://github.com/cloudflare/cloudflared/releases/latest/"
             "download/%s")
 
-# How long to wait for the tunnel to name itself. Ninety seconds is what
-# the Gradio fallback allowed and it has been enough; the failure it
-# guards against is a network that blocks the Cloudflare edge, where
-# waiting longer changes nothing.
+# How long to wait for the tunnel to name itself. Ninety seconds has been
+# enough; the failure it guards against is a network that blocks the
+# Cloudflare edge, where waiting longer changes nothing.
 TUNNEL_TIMEOUT = 90
 
 

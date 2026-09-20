@@ -1,26 +1,19 @@
-"""Every generator behind a Generate button, with no Gradio in sight.
+"""Every generator behind a Generate button, with no web layer in sight.
 
-Lifted out of ui.py unchanged. This is the half of that file that decides
-what gets rendered — it reads control values, validates them, builds a
-workflow dict per job and drives client.run — and none of it ever knew it
-was talking to Gradio: every generate_* is a plain generator yielding
-plain values, and not one of them returns a gr.update().
+This is the half of the app that decides what gets rendered — it reads
+control values, validates them, builds a workflow dict per job and drives
+client.run. Every generate_* is a plain generator yielding plain values,
+and nothing here knows what will display them.
 
-That was true before this module existed; splitting it out only makes it
-checkable. `import handlers` must not pull Gradio in, which is what lets
-the FastAPI adapter (api.py) and the Gradio UI (ui.py) call exactly the
-same code while one of the two is being replaced — and what stops the
-replacement from quietly re-earning the bugs these functions encode: the
-VAE size snapping, the model-swap VRAM release, the 2 MP reference cap,
-the Wan frame-count arithmetic.
+That independence is what makes the module checkable: `scripts/golden.py`
+imports it with no FastAPI, no browser and no GPU, and snapshots the
+workflow dict each handler builds. These functions encode the VAE size
+snapping, the model-swap VRAM release, the 2 MP reference cap and the Wan
+frame-count arithmetic, and a snapshot is the only thing that notices when
+one of them quietly changes.
 
-The one function that changed shape in the move is zip_outputs(), which
-used to return a `gr.update()` for the file component it fills. It now
-returns `(path_or_None, message)` and ui.py wraps that back into an
-update — the same two facts, minus the dependency.
-
-ui.py keeps working by importing from here; there is no second copy of
-anything.
+zip_outputs() returns `(path_or_None, message)` rather than raising, so a
+caller with nothing to zip has a sentence to show.
 """
 
 import io
@@ -113,7 +106,7 @@ from ember.pipelines.wan.workflow import (
 # blank. The UI rows, the handlers and the workflow chain are all driven
 # from this, so changing it here is the whole change. (The V2 tabs have
 # one row per LoRA in their feature's list instead — see
-# workflow_krea2_v2.default_lora_slots.)
+# ember.pipelines.krea2_v2.workflow.default_lora_slots.)
 MAX_LORA_SLOTS = 8
 # Slots past this stay in a collapsed accordion so a tall stack does not
 # eat the whole column. Set it >= MAX_LORA_SLOTS to show every slot.
@@ -140,7 +133,7 @@ _NO_MODEL_DEFAULTS = {"steps": 10, "cfg": 1.0}
 
 
 # ── The catalogue, as the forms see it ───────────────────────────────────────
-# Read late, never at import: the catalogue is loaded once by app.py after
+# Read late, never at import: the catalogue is loaded once by main.py after
 # the licence check, and a list captured at import would be whatever an
 # earlier import happened to see. Values are ids; labels are names.
 
@@ -1078,10 +1071,8 @@ def zip_outputs():
 
     Returns (path_or_None, message). The path is None when there is
     nothing to zip, which is what the caller renders as "hide the
-    download panel" — in Gradio that panel is a
-    full-width drop zone with nothing in it until this runs, and on a
-    phone it was a screenful of nothing between the button and the
-    picture — on every visit, for the sake of the one that asks for a zip.
+    download panel" rather than showing an empty drop zone on every visit
+    for the sake of the one that asks for a zip.
     """
     images = list_output_images()
     if not images:

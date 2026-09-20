@@ -1,22 +1,17 @@
 """One declarative schema per tab — what a form is, in one place.
 
-The keystone of the rewrite. Gradio kept five different answers to "what
-is on this tab" in five different shapes, and kept them consistent by
-sheer proximity: the `gr.Slider(...)` that drew a control sat six lines
-above the `click(inputs=[...])` that submitted it, so a human editing one
-saw the other. Take the layout out of Python and that proximity is gone —
-the React form is in another language, in another directory, built by
-another toolchain.
-
-So the five answers become one object, and everything else is derived:
+The keystone of the web layer. "What is on this tab" has five separate
+consumers, and the React form that draws it is in another language, in
+another directory, built by another toolchain — so nothing keeps those
+five in step by proximity. They have to be one object, with everything
+else derived from it:
 
   1. **The React form.** `to_json()` is what `/api/v1/schema/{tab}` serves.
   2. **API validation.** `coerce()` — the submit path, where an illegal
      value is a 422 rather than something the handler has to survive.
-  3. **Recipe labels.** `recipe_fields()` writes the same
-     `[[label, value], ...]` rows `ui._recipe_fields` wrote, in the same
-     order, with the same labels — live pods have a `.recipes.jsonl`
-     keyed on that text and a reworded label orphans history silently.
+  3. **Recipe labels.** `recipe_fields()` writes `[[label, value], ...]`
+     rows — live pods have a `.recipes.jsonl` keyed on that text, so a
+     reworded label orphans history silently.
   4. **The preset settings dict.** `settings()` rebuilds the blob
      `_krea_settings` / `generate_v2` store on the licence server, and
      `preset_values()` reads one back into the controls.
@@ -31,31 +26,30 @@ The invariant
 `call_args` four lines instead of a lookup table nobody can audit.
 
 `_assert_signatures()` at the bottom of this module enforces it against
-`inspect.signature(handler)` at import, the same way features.py:169-173
+`inspect.signature(handler)` at import, the same way `features.FEATURES`
 validates its own registry. **This is the most important defensive
-measure in the whole rewrite.** What it replaces is the safety of seeing
-`click(inputs=[...])` next to the components it names: without it, a
-parameter renamed in handlers.py and not here is a silent argument shift,
-and `generate_v2` takes 31 of them.
+measure in the module.** Without it, a parameter renamed in
+`ember.generation.handlers` and not here is a silent argument shift, and
+`generate_v2` takes 31 of them.
 
-The two coercion paths Gradio conflated
----------------------------------------
-Gradio had one notion of "put a value in a control", and it had to be
-forgiving because the same code served a fresh click and a two-year-old
-recipe. Split here, because the two want opposite things:
+The two coercion paths
+----------------------
+"Put a value in a control" is two different jobs, and they want opposite
+things, so they are two functions:
 
 * `coerce()` is the **submit** path. The value came from a form this
   server just described. An out-of-range number or an unknown dropdown
   value is a bug or an attack, and it is a 422.
 * `restore()` is the **recipe / preset apply** path. The value came from
-  another pod, possibly from an older build. Out of range means *leave
-  the control alone* (`ui._pick`, :2868) or *clamp it* (`ui._num`, :2880),
-  and never an error — the rest of the recipe still loads.
+  another pod, possibly from an older build. An unknown choice leaves the
+  control alone and a number is clamped, never an error — the rest of the
+  recipe still loads.
 
 `restore()` runs server-side rather than in the browser because the
 choices for a Model or LoRA dropdown are **this pod's catalogue** — the
 feature's lists as the licence server answered them at startup
-(catalog.py). The browser only ever sees them through this module.
+(ember.licensing.catalog). The browser only ever sees them through this
+module.
 
 Ids and labels
 --------------
@@ -68,13 +62,13 @@ own label, as it always was.
 
 What is deliberately not here
 -----------------------------
-The ~150 lines of `*_changed` handlers in ui.py. `krea_model_changed`,
-`v2_model_changed`, `wan_mode_changed` and friends are reactivity over
-data the pod already holds — each catalogue model record's steps, CFG and
-turbo LoRA, and the Wan pipeline's WAN_MODE_DEFAULTS. The API ships that
-data in `/api/v1/catalog` (see `catalog()`) and React applies it, which
-is one round trip saved per keystroke and one fewer copy of the same
-three numbers.
+Per-control reactivity. Resetting Steps and CFG when the model changes,
+or swapping a Wan mode's defaults in, is a lookup in data the pod already
+holds — each catalogue model record's steps, CFG and turbo LoRA, and the
+Wan pipeline's WAN_MODE_DEFAULTS. The API ships that data in
+`/api/v1/catalog` (see `catalog()`) and React applies it, which is one
+round trip saved per keystroke and one fewer copy of the same three
+numbers.
 """
 
 import inspect
@@ -171,8 +165,9 @@ class Repeat:
     """The handler's `*varargs` tail, as a repeating row of sub-fields.
 
     Every tab submits **triples** `(enabled, lora id, weight)`, and the
-    order shifts every argument after it (context.md 4.3). The row
-    carries a per-row on/off checkbox, so switching one off keeps its
+    order shifts every argument after it — see
+    docs/architecture/web-ui.md, "Submission order is load-bearing". The
+    row carries a per-row on/off checkbox, so switching one off keeps its
     LoRA instead of resetting the dropdown to "None".
 
     `parts` is the submission order *within* one slot, so `call_args`
@@ -223,14 +218,12 @@ class Field:
     The first ten attributes are the contract the module docstring names.
     The rest are presentation — where the control sits and when it is
     shown — which lives here rather than in the React layout so that
-    moving a control is a one-word edit in one language (Section 1's
-    decision 5, and the fix for V2's Steps/CFG/Sampler having sat in the
-    *output* column while the other five tabs put them with the controls).
+    moving a control is a one-word edit in one language.
     """
 
     # ── the contract ────────────────────────────────────────────────
     name: str                       # == the handler's parameter name
-    label: str                      # verbatim from ui.py — see the docstring
+    label: str                      # recipe-keyed text — see the docstring
     kind: str                       # text|textarea|number|slider|select|...
     default: Any = None             # value, or a callable read late
     choices: Any = None             # sequence, or a callable read late
@@ -255,7 +248,7 @@ class Field:
     # the tabs default it to ~1,300 characters of comma-separated
     # boilerplate nobody reads twice, and a textarea showing two rows of
     # that is two rows of noise above the control anybody actually came
-    # for. Gradio put it in a closed gr.Accordion for the same reason.
+    # for.
     #
     # Distinct from the length-triggered Expand on every long textarea:
     # that one keeps the box and grows it, this one removes the box.
@@ -330,13 +323,11 @@ class Field:
     def restore(self, value, current=_resolve):
         """Recipe / preset path: (ok, value). `ok` False means leave it alone.
 
-        The whole cross-pod safety story, and it is deliberately the same
-        two rules ui._pick and ui._num state:
+        The whole cross-pod safety story, in two rules:
 
           * a choice this pod does not offer leaves the control where it
-            was — a Gradio dropdown handed a value outside its `choices`
-            is a *broken* component rather than a wrong one, and the React
-            select has the same problem;
+            was — a select handed a value outside its options is a
+            *broken* control rather than a wrong one;
           * a number outside this build's range is clamped into it rather
             than dropped, because the range is a property of this build
             and not of the recipe. The recipe stays as close as this UI
@@ -445,7 +436,7 @@ class TabSchema:
     fields: tuple                   # SUBMISSION ORDER. Never reorder.
 
     # ── presentation ────────────────────────────────────────────────
-    tab_id: str = ""                # the Gradio tab id, kept for recipes
+    tab_id: str = ""                # the tab id recipes are keyed on
     label: str = ""                 # falls back to features.label_for()
     icon: str = ""
     blurb: str = ""
@@ -515,7 +506,7 @@ class TabSchema:
         Missing keys fall back to the field's own default rather than
         failing: a browser that has not been reloaded since a control was
         added should submit the other twenty-nine and get the new one at
-        its default, which is what Gradio did too.
+        its default.
         """
         values = {}
         for f in self.named():
@@ -620,7 +611,7 @@ class TabSchema:
         for the Krea2 tab. That local check is the whole proof, because
         the licence server stores the blob opaquely — presetWire() in
         license-validator/src/app.js returns `settings: row.settings || {}`
-        and never inspects it (context.md 4.10).
+        and never inspects it.
         """
         blob = {}
         for f in self.named():
@@ -735,9 +726,11 @@ class TabSchema:
         route-level one is a *registration* decision and this is a *call*
         decision, and they fail differently: a route that is accidentally
         registered unconditionally still cannot get past this line. See
-        api.py's four layers, and context.md 4.5 for why one layer is not
-        enough — `community_prompts` has `needs=()`, so the downloads.py
-        backstop that covers every other tab does not cover it.
+        api.py's four layers, and
+        docs/architecture/licensing-and-features.md, "The licence gate on
+        the API", for why one layer is not enough — `community_prompts`
+        has `needs=()`, so the weights backstop that covers every other
+        tab does not cover it.
         """
         if not features.enabled(self.key):
             raise PermissionError(
@@ -892,7 +885,7 @@ def _blank_lora_tail(feature):
     """The Krea2 / Krea2 Edit / MiniMax stack: eight blank rows, all off,
     over the feature's list.
 
-    Model-only (`LoraLoaderModelOnly`, workflow.py and workflow_minimax.py),
+    Model-only (`LoraLoaderModelOnly`, in the krea2 and minimax pipelines),
     where the V2 stack is model *and* CLIP, so the title stays plain rather
     than borrowing V2's.
     """
@@ -1071,15 +1064,13 @@ G_SAMPLER = Group("sampler", "Sampler", renderer="sampler", collapsible=True)
 G_VARIANCE = Group("variance", "Variance", renderer="variance",
                    collapsible=True, default_open=False)
 G_INPUTS = Group("inputs", "Images", column="right")
-# The two that used to be written out per tab, which is how one of them
-# ended up titled "Output" on three tabs and "Sampling" on one while
-# holding the same kind of thing. Shared so they cannot drift again.
+# Shared rather than written out per tab, so two tabs cannot end up
+# titling the same kind of thing differently.
 G_CORE = Group("core", "Output", dense=True)
 G_REFERENCE = Group("reference", "Reference", dense=True)
 
-# The Wan tab's two radio lists, verbatim from ui.py:3549-3552. They name
-# model families rather than files, and the strings are what generate_wan_
-# video branches on (`_is_wan_5b`, `mode.startswith("turbo")`) — so they
+# The Wan tab's two radio lists. They name model families rather than
+# files, and the strings are what generate_wan_video branches on (`_is_wan_5b`, `mode.startswith("turbo")`) — so they
 # are wire values, not labels, and cannot be reworded freely.
 WAN_MODEL_CHOICES = ["14B two-expert (best quality, 16 fps)",
                      "5B TI2V (lighter, 24 fps)"]
@@ -1159,8 +1150,7 @@ SCHEMAS = (
         submit_label="Generate", preset_tab=presets.TAB_KREA2_V2,
         preset_note=GEN_PRESET_NOTE,
         groups=(G_PROMPT, G_CORE,
-                # In ui.py these sat in the *output* column, as on V2 Edit and
-                # no other tab. They are controls, so they go with the controls.
+                # Controls, so they go with the controls.
                 G_SAMPLER, G_VARIANCE,
                 Group("post", "Post-processing", dense=True, collapsible=True,
                       default_open=False),
@@ -1425,7 +1415,9 @@ def get(key) -> TabSchema:
 def entitled() -> tuple:
     """The schemas this licence grants, in navigation order.
 
-    One of the four layers guarding the licence gate (context.md 4.5).
+    One of the four layers guarding the licence gate — see
+    docs/architecture/licensing-and-features.md, "The licence gate on the
+    API".
     `/catalog` and `/schema/{tab}` both filter through this, so a tab the
     licence does not grant is not merely unreachable — it is not described
     either, and the React navigation never learns it exists.
@@ -1445,12 +1437,12 @@ BESPOKE = (
 
 
 # ══════════════════════════════════════════════ the reactivity catalogue
-# What the ~150 lines of *_changed handlers in ui.py were made of. Every
-# one of them is a lookup in data the pod already holds — a model
-# dropdown that resets Steps and CFG from the model record, a Wan mode
-# radio that does the same, a model that swaps its trigger words into the
-# prompt. Shipped as data so React applies them locally, with no round
-# trip and no second copy of the same three numbers.
+# Per-control reactivity, as data. Every rule here is a lookup in what
+# the pod already holds — a model dropdown that resets Steps and CFG from
+# the model record, a Wan mode radio that does the same, a model that
+# swaps its trigger words into the prompt. Shipped so React applies them
+# locally, with no round trip and no second copy of the same three
+# numbers.
 
 # The V2 family's rows carry one more default than the Krea2 family's:
 # whether the model's recipe switches its turbo LoRA on.
@@ -1538,13 +1530,12 @@ def catalog() -> dict:
 def _assert_signatures() -> None:
     """Every schema against inspect.signature(handler).
 
-    **The most important defensive measure in the rewrite.** What it
-    replaces is the safety Gradio gave for free — `click(inputs=[...])`
-    written six lines under the components it names, so a human editing
-    one saw the other. Nothing enforces that across a language boundary,
+    **The most important defensive measure in this module.** The form
+    that submits these arguments is in another language, in another
+    directory, so nothing across that boundary enforces the invariant,
     and the failure it prevents is silent: rename a parameter in
-    handlers.py, forget it here, and `call_args` shifts every argument
-    after it. generate_v2 has 31.
+    `ember.generation.handlers`, forget it here, and `call_args` shifts
+    every argument after it. generate_v2 has 31.
     """
     for schema in SCHEMAS:
         sig = inspect.signature(schema.handler)
@@ -1612,15 +1603,14 @@ def _assert_signatures() -> None:
 
 
 def _assert_settings() -> None:
-    """schema.settings() == ui's _krea_settings(), for the same values.
+    """schema.settings() == handlers._krea_settings(), for the same values.
 
     This is the entire proof that presets keep working, and it really is
     enough on its own. `presetWire()` in license-validator/src/app.js
     returns `settings: row.settings || {}` and never looks inside, so the
     blob is opaque server-side — nothing about it is validated, migrated
-    or indexed anywhere but here (context.md 4.10). If this local
-    comparison holds, a preset written by the Gradio build loads into the
-    React build and back again unchanged.
+    or indexed anywhere but here. If this local comparison holds, a preset
+    written by any build loads into any other and back again unchanged.
 
     Checked on the Krea 2 tab because _krea_settings is a plain function
     with no availability guards, so it can be called at import on a

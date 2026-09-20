@@ -489,7 +489,7 @@ def _shutdown(message: str, release_seat: bool) -> None:
     if release_seat:
         release()
     # os._exit, not sys.exit: SystemExit raised here would only unwind this
-    # thread and leave Gradio serving without a valid license.
+    # thread and leave the app serving without a valid license.
     os._exit(5)
 
 

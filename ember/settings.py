@@ -69,7 +69,8 @@ ASSETS_DIR = PROJECT_DIR / "assets"
 # .resolve() is load-bearing, not tidiness: a relative KREA2_BASE_DIR
 # (KREA2_BASE_DIR=./tmp, natural on a dev box) would otherwise be resolved
 # by each process against its own cwd. ComfyUI runs with cwd=COMFY_DIR
-# (comfy.py) and is handed --output-directory as a string, so it would
+# (ember/comfy/server.py) and is handed --output-directory as a string, so
+# it would
 # write to <cwd>/tmp/ComfyUI/tmp/output while this process — ensure_dirs()
 # below, the gallery scan, the "saved under ..." status line — all meant
 # <cwd>/tmp/output. Images land somewhere real and the app cannot find
