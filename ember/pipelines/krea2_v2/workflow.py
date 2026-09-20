@@ -28,8 +28,9 @@ as shipped: VAEDecode straight to SaveImage.
 
 from ember.licensing import catalog
 from ember.comfy.server import GPU_COUNT
-from ember.config import (
-    MODELS_DIR,
+from ember.logs import log
+from ember.settings import MODELS_DIR
+from ember.pipelines.krea2_v2.constants import (
     V2_ASPECT_RATIOS,
     V2_FILMGRAIN_DEFAULTS,
     V2_NODE_REPOS,
@@ -37,7 +38,6 @@ from ember.config import (
     V2_SHARPEN_DEFAULTS,
     V2_VAE_FILE,
     V2_VARIANCE_DEFAULTS,
-    log,
 )
 from ember.pipelines.common import (
     active_text_encoder,

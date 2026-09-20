@@ -47,7 +47,8 @@ scheduler block below is that LoRA's recipe.
 import math
 
 from ember.comfy.server import GPU_COUNT
-from ember.config import (
+from ember.settings import MODELS_DIR
+from ember.pipelines.minimax.constants import (
     MINIMAX_ASPECT_RATIOS,
     MINIMAX_AUDIO_VAE,
     MINIMAX_CANVAS_MULTIPLE,
@@ -67,7 +68,6 @@ from ember.config import (
     MINIMAX_TURBO_LORA_STRENGTH,
     MINIMAX_UNET,
     MINIMAX_VIDEO_VAE,
-    MODELS_DIR,
 )
 
 

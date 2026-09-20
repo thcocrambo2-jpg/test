@@ -47,7 +47,8 @@ import threading
 import time
 
 from ember.generation import queue as jobqueue
-from ember.config import WORKING_DIR, log
+from ember.logs import log
+from ember.settings import WORKING_DIR
 
 # Where the history lives: beside the images and the logs, so it survives
 # restarts and is per-pod, which is right — an A40 and an RTX 5050 take
