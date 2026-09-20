@@ -86,7 +86,9 @@ WORKDIR /src
 # scripts/ first: PINS.json and mirror_manifest.json change far more often
 # than the four modules, and mirror.py looks in PROJECT_DIR/scripts for both.
 COPY scripts/PINS.json scripts/mirror_manifest.json /src/scripts/
-COPY config.py features.py mirror.py bootstrap.py /src/
+COPY ember/__init__.py ember/config.py ember/features.py /src/ember/
+COPY ember/weights/__init__.py ember/weights/mirror.py /src/ember/weights/
+COPY ember/comfy/__init__.py ember/comfy/setup.py /src/ember/comfy/
 COPY docker/bake_nodes.py /src/bake_nodes.py
 
 RUN python3 /src/bake_nodes.py

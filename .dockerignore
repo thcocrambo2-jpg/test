@@ -19,10 +19,13 @@
 !scripts/mirror_manifest.json
 
 # What bake_nodes.py imports to read them. Build stage only.
-!config.py
-!features.py
-!mirror.py
-!bootstrap.py
+!ember/__init__.py
+!ember/config.py
+!ember/features.py
+!ember/weights/__init__.py
+!ember/weights/mirror.py
+!ember/comfy/__init__.py
+!ember/comfy/setup.py
 
 # The start script, copied in verbatim: the same file build.sh publishes
 # to R2 and a RunPod template downloads from /v1/start.sh.
