@@ -46,7 +46,8 @@ import time
 import urllib.request
 from pathlib import Path
 
-from ember.config import TEMP_DIR, log
+from ember.logs import log
+from ember.settings import TEMP_DIR
 
 # Where the quick tunnel URL appears in cloudflared's own output. It
 # writes it to stderr in a box of ASCII art, so this is a search rather

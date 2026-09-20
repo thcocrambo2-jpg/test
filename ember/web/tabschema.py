@@ -71,10 +71,10 @@ What is deliberately not here
 The ~150 lines of `*_changed` handlers in ui.py. `krea_model_changed`,
 `v2_model_changed`, `wan_mode_changed` and friends are reactivity over
 data the pod already holds — each catalogue model record's steps, CFG and
-turbo LoRA, and config.py's WAN_MODE_DEFAULTS. The API ships that data in
-`/api/v1/catalog` (see `catalog()`) and React applies it, which is one
-round trip saved per keystroke and one fewer copy of the same three
-numbers.
+turbo LoRA, and the Wan pipeline's WAN_MODE_DEFAULTS. The API ships that
+data in `/api/v1/catalog` (see `catalog()`) and React applies it, which
+is one round trip saved per keystroke and one fewer copy of the same
+three numbers.
 """
 
 import inspect
@@ -86,7 +86,33 @@ from ember.licensing import catalog as assets
 from ember import features
 from ember.licensing import presets
 from ember.generation import handlers
-from ember.config import (
+from ember.logs import log
+from ember.pipelines.krea2.constants import (
+    DEFAULT_RESOLUTION,
+    RESOLUTION_PRESETS,
+    SAMPLERS,
+)
+from ember.pipelines.krea2_v2.constants import (
+    V2_ASPECT_RATIOS,
+    V2_DEFAULT_ASPECT,
+    V2_DEFAULT_MEGAPIXELS,
+    V2_DEFAULT_MULTIPLE,
+    V2_DEFAULT_NEGATIVE,
+    V2_SAMPLER_DEFAULTS,
+    V2_SAMPLER_MODES,
+    V2_SAMPLER_NAMES,
+    V2_SCHEDULERS,
+    V2_VARIANCE_DEFAULTS,
+    V2_VARIANCE_MODEL_TYPES,
+    V2_VARIANCE_PRESETS,
+    V2_VARIANCE_SCHEDULES,
+)
+from ember.pipelines.krea2_v2_edit.constants import (
+    V2_EDIT_DEFAULT_GROUNDING,
+    V2_EDIT_DEFAULT_REF_BOOST,
+    V2_EDIT_FIT_MODES,
+)
+from ember.pipelines.minimax.constants import (
     MINIMAX_ASPECT_RATIOS,
     MINIMAX_DEFAULT_ASPECT,
     MINIMAX_DEFAULT_RESOLUTION,
@@ -96,25 +122,8 @@ from ember.config import (
     MINIMAX_MIN_SECONDS,
     MINIMAX_RESOLUTIONS,
     MINIMAX_T2V_RESOLUTIONS,
-    RESOLUTION_PRESETS,
-    DEFAULT_RESOLUTION,
-    SAMPLERS,
-    V2_ASPECT_RATIOS,
-    V2_DEFAULT_ASPECT,
-    V2_DEFAULT_MEGAPIXELS,
-    V2_DEFAULT_MULTIPLE,
-    V2_DEFAULT_NEGATIVE,
-    V2_EDIT_DEFAULT_GROUNDING,
-    V2_EDIT_DEFAULT_REF_BOOST,
-    V2_EDIT_FIT_MODES,
-    V2_SAMPLER_DEFAULTS,
-    V2_SAMPLER_MODES,
-    V2_SAMPLER_NAMES,
-    V2_SCHEDULERS,
-    V2_VARIANCE_DEFAULTS,
-    V2_VARIANCE_MODEL_TYPES,
-    V2_VARIANCE_PRESETS,
-    V2_VARIANCE_SCHEDULES,
+)
+from ember.pipelines.wan.constants import (
     WAN_5B_DEFAULTS,
     WAN_5B_FPS,
     WAN_DEFAULT_NEGATIVE,
@@ -124,7 +133,6 @@ from ember.config import (
     WAN_MODE_DEFAULTS,
     WAN_RESOLUTIONS,
     WAN_VARIANT,
-    log,
 )
 
 Key = features.Key

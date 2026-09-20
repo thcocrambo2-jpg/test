@@ -32,7 +32,6 @@ install that the heavier modules wait for.
 """
 
 import json
-import os
 import re
 import threading
 import time
@@ -41,10 +40,16 @@ import urllib.request
 from dataclasses import dataclass, field
 from pathlib import Path
 
-from ember.config import BASE_DIR, LICENSE_API_URL, LICENSE_KEY, log
+from ember import settings
+from ember.logs import log
+from ember.settings import (
+    BASE_DIR,
+    CATALOG_FILE_ENV as FILE_ENV,
+    LICENSE_API_URL,
+    LICENSE_KEY,
+)
 
 CACHE_PATH = BASE_DIR / ".catalog.json"
-FILE_ENV = "KREA2_CATALOG_FILE"
 
 FETCH_ATTEMPTS = 3
 FETCH_BACKOFF = (2, 5)
@@ -273,7 +278,7 @@ def _fetch(instance_id: str | None) -> dict | None:
 def load(instance_id: str | None = None) -> Catalogue:
     """Fetch (or read) the catalogue and freeze it. Call once, from app.py."""
     global _current
-    override = os.environ.get(FILE_ENV)
+    override = settings.catalog_file()
     document, origin = None, "empty"
     if override:
         document, origin = _from_file(override), f"file {override}"

@@ -15,7 +15,7 @@ request — and hands back a frozen dataclass carrying either rows or a
 short human `error`, never an exception, cached with a TTL. Every tab's
 dropdown is built from it, so a server that cannot be reached costs the
 dropdown and nothing else: the controls keep the values compiled into
-config.py, which is what they were built with anyway.
+the pipeline constants, which is what they were built with anyway.
 
 **Write.** save() is called from the generate handlers when an admin has
 ticked "save these settings as a preset". Unlike prompts.record() this one
@@ -50,7 +50,8 @@ import urllib.parse
 import urllib.request
 from dataclasses import dataclass
 
-from ember.config import LICENSE_API_URL, LICENSE_KEY, log
+from ember.logs import log
+from ember.settings import LICENSE_API_URL, LICENSE_KEY
 
 # Tabs a preset can be written for. The same two the prompt library
 # replays into, and necessarily so: applying a preset means writing values

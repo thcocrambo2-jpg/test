@@ -56,7 +56,7 @@ from typing import NamedTuple
 from fastapi import HTTPException, Request
 from fastapi.responses import HTMLResponse, Response
 
-from ember.config import log
+from ember.logs import log
 
 DIST = Path(__file__).resolve().parents[2] / "webui" / "dist"
 

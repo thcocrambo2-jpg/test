@@ -41,7 +41,8 @@ from pathlib import Path
 
 from PIL import Image
 
-from ember.config import OUTPUT_DIR, log
+from ember.logs import log
+from ember.settings import OUTPUT_DIR
 
 # What counts as a generated output. Anything else in OUTPUT_DIR — notably
 # the zip zip_outputs() writes there — is not indexed and so cannot end up
