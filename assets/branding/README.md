@@ -11,31 +11,31 @@ The app mark: a flame, for the name.
 | `ember-icon-{32,64,128,256,512}.png` | Rasterised `ember-icon.svg`, transparent outside the tile's rounded corners. |
 | `ember-logo-{256,512}.png` | Rasterised `ember-logo.svg`, rose on transparency. |
 
-## The two copies inside theme.py
+## What the running app uses
 
-The running app does **not** read these files. `theme.py` carries its own
-inline copies of the outline — `_FAVICON` (the `<head>` data URI) and
-`_MARK` (the header tile) — because a file path would be one more data
-file for the Nuitka build to carry, and `build.sh` bundles only
-`assets/showcase/showcase.json` out of this tree.
+Only one thing here reaches a customer: **`ember-icon-256.png` is the
+Windows executable's icon.** `build.ps1` converts it to a multi-frame
+`.ico` (16 through 256) and passes it to Nuitka as
+`--windows-icon-from-ico`. Sizes rather than one large frame, because
+Windows downscales badly and a shortcut at 32x32 off a single 256x256
+frame looks blurred next to everything else on the desktop. If the
+conversion fails the build carries on with no icon rather than stopping.
 
-Both inline copies use a **decimated** outline: the curve is flattened and
-run through Ramer-Douglas-Peucker at a 1.0-unit tolerance, which cuts ~4800
-points to ~105 and the markup to about a fifth. They render at 16-32px
-(favicon) and 22px (header), where the dropped detail is a small fraction
-of a pixel. Anywhere the mark is drawn large, use `ember-logo.svg` — not
-the inline path.
+Nothing else in this directory is read at run time. The React UI draws its
+own header tile in CSS — a letter on `--c-accent`, in
+`webui/src/features/shell/shell.module.css` — and `webui/index.html`
+declares no favicon, so the browser shows its default. The Linux build
+bundles only `assets/showcase/showcase.json` out of this tree.
 
-So: **editing a file in this directory does not change the app.** If the
-mark itself ever changes, `_FAVICON` and `_MARK` in `theme.py` have to be
-regenerated alongside it.
+So: **editing a file here changes the Windows icon and nothing else.**
+Redraw the mark and `ember-icon-256.png` has to be re-rasterised from
+`ember-logo.svg` alongside it, or the next Windows build ships the old one.
 
 ## Colour
 
-`ember-logo.svg` keeps the mark's own rose. The app chrome does not use it:
-the header tile and the favicon reverse the flame out in white over the
-existing accent gradient (`--kx-accent` -> `--kx-accent-alt`, indigo to
-violet), so the rename did not introduce a colour that appears nowhere else
-in the UI. To make rose the product accent instead, change `ACCENT` /
-`ACCENT_ALT` at the top of `theme.py` — that recolours the whole app, which
-is a bigger decision than the logo.
+`ember-logo.svg` keeps the mark's own rose, and the app chrome does not use
+it. The product accent is `--c-accent` in `webui/src/theme/tokens.css`,
+which every surface derives from — there are no hex digits in component
+stylesheets by design. Making rose the accent means changing that one token
+(and its `-hover`, `-soft` and `-line` companions), which recolours the
+whole UI: a bigger decision than the logo.

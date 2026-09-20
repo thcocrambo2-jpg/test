@@ -7,7 +7,7 @@ nodes bolted on. This module is that same edit recipe grafted onto the
 Krea 2 V2 pipeline instead — exactly the relationship the 🔶 Krea2 V2 tab
 has to the 🎨 Krea2 one.
 
-Everything V2 about it is imported from workflow_krea2_v2 rather than
+Everything V2 about it is imported from the krea2_v2 pipeline rather than
 restated, so the two tabs cannot drift: the same catalogue helpers (read
 with this tab's own feature key, `krea_v2_edit`, so its dropdowns offer
 its own feature's lists), the same model-record defaults, the same Wan 2.1
@@ -59,7 +59,7 @@ from ember.pipelines.krea2_v2.workflow import (
 
 # Node classes this tab cannot run without: the V2 sampler and variance
 # nodes plus the two Krea2Edit ones. FilmGrain is absent for the same
-# reason as in workflow_krea2_v2 — and here the tab does not build it at
+# reason as in the krea2_v2 pipeline — and here the tab does not build it at
 # all.
 REQUIRED_NODES = (*V2_REQUIRED_NODES,
                   "Krea2EditModelPatch", "Krea2EditGroundedEncode")
@@ -93,7 +93,7 @@ def fit_size(width: int, height: int,
 def status(feature, enabled=None) -> tuple[bool, str]:
     """(ready, message) for the tab — what is missing, in plain words.
 
-    The V2 half of this is workflow_krea2_v2's, read with this tab's own
+    The V2 half of this is the krea2_v2 pipeline's, read with this tab's own
     feature key; `enabled` means what it means there. The edit LoRA is
     the extra requirement, and it is fatal rather than a warning because
     without it the graph is just an expensive img2img that ignores the
@@ -105,9 +105,9 @@ def status(feature, enabled=None) -> tuple[bool, str]:
         problems.append(f"the Identity Edit LoRA `{EDIT_LORA_FILE}` has not "
                         "downloaded")
     if problems:
-        # Comma-and rather than the plain " and ".join workflow_krea2_v2
-        # uses: this tab has three things to be missing, and "A and B and
-        # C" reads as a run-on where two items did not.
+        # Comma-and rather than the plain " and ".join the krea2_v2
+        # pipeline uses: this tab has three things to be missing, and
+        # "A and B and C" reads as a run-on where two items did not.
         if len(problems) > 2:
             listed = ", ".join(problems[:-1]) + " and " + problems[-1]
         else:

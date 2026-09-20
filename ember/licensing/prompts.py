@@ -43,7 +43,7 @@ correctness mechanism. The unique index on the server collapses whatever
 gets through — a restart, a second pod on one licence, two customers who
 typed the same thing.
 
-Stdlib-only, like licensing.py and plans.py. The three are siblings
+Stdlib-only, like the rest of this package. These modules are siblings
 talking to the same API, none of them needs more than urllib for it, and
 it keeps the Nuitka build unchanged.
 """
@@ -64,7 +64,7 @@ from ember.settings import LICENSE_API_URL, LICENSE_KEY
 
 # Tab keys a prompt can be captured from and replayed into. These are the
 # feature keys, and they are also the wire values the server validates
-# against — a tab joins this list only once ui.py knows how to load a
+# against — a tab joins this list only once its schema knows how to load a
 # prompt back into its controls.
 TAB_KREA2 = str(features.Key.KREA_T2I)
 TAB_KREA2_V2 = str(features.Key.KREA_V2_T2I)

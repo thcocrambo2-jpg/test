@@ -1,10 +1,10 @@
 """The HTTP API the React UI talks to. A thin adapter, and nothing else.
 
-Everything real happens elsewhere. handlers.py runs the generators,
-jobqueue.py runs them one at a time per lane, tabschema.py says what a
-form is and how its values become a positional call, gallery_index.py
-lists and thumbnails the outputs, and licensing / plans / presets /
-prompts / showcase talk to the licence server. This module is the layer
+Everything real happens elsewhere. ember.generation.handlers runs the
+generators, ember.generation.queue runs them one at a time per lane,
+tabschema.py says what a form is and how its values become a positional
+call, gallery_index.py lists and thumbnails the outputs, and
+ember.licensing plus showcase.py talk to the licence server. This module is the layer
 that turns those into routes, and it is deliberately the thinnest thing
 in the repository: the ~2,600 lines it wraps encode VAE size snapping,
 model-swap VRAM release, seat heartbeats, HF mirror pinning and crash
@@ -15,16 +15,16 @@ would be gone if nobody wrote them down.
 
 The licence gate
 ----------------
-`ui.py:5139` reads `if not features.enabled(_key): continue`. It is a
-**render** gate, and it worked only because a tab that is never built has
-no Gradio endpoint either. Register FastAPI routes unconditionally and
-that gate is not weakened, it is *removed*.
+Hiding a tab the licence does not grant is a **render** gate, and the
+front end is a bundle the browser holds — so a tab that is not drawn is
+still a route anyone can call by hand. Registering FastAPI routes
+unconditionally therefore needs a gate of its own.
 
-The partial backstop is downloads.py:706 — weights for ungranted features
-are never fetched, so most tabs would fail at "the model is not
+The partial backstop is `ember.weights.downloads` — weights for ungranted
+features are never fetched, so most tabs would fail at "the model is not
 downloaded". One tab has no weights at all: `community_prompts` declares
-`needs=()` (features.py:160), so it would be fully working for a licence
-that does not include it.
+`needs=()` in `features.FEATURES`, so it would be fully working for a
+licence that does not include it.
 
 Four layers, and each one alone would be enough on a good day:
 
@@ -42,16 +42,16 @@ Four layers, and each one alone would be enough on a good day:
 
 Path containment
 ----------------
-`/media` and `/thumbs` replace Gradio's `allowed_paths=[OUTPUT_DIR]` plus
-`gr.set_static_paths`, which did the containment invisibly. They do it
-through `gallery_index.safe_path()` — the one implementation, shared with
+`/media` and `/thumbs` are the only way a generated file reaches the
+browser, and they contain themselves to OUTPUT_DIR through
+`gallery_index.safe_path()` — the one implementation, shared with
 `delete()`. A `path_id` is the OUTPUT_DIR-relative posix path, the same
 key `recipes._key()` uses, and **no absolute path ever crosses the wire**.
 
 Auth
 ----
-There was none, on a public URL: possession of the *.gradio.live link was
-the whole access control. A per-process `secrets.token_urlsafe(32)` is
+The app is served over a public tunnel URL, so the link cannot be the
+access control. A per-process `secrets.token_urlsafe(32)` is
 printed in the URL **fragment**, and the SPA exchanges it for an
 HttpOnly cookie and strips it with `history.replaceState`.
 
@@ -119,7 +119,8 @@ ALLOW_ANON = not UI_REQUIRE_TOKEN
 TOKEN = secrets.token_urlsafe(32)
 
 # Uploads land here and are read once, at submit. Under TEMP_DIR because
-# that is already the ephemeral tree comfy.py and the tunnel binary use.
+# that is already the ephemeral tree ember/comfy/server.py and the tunnel
+# binary use.
 UPLOADS = TEMP_DIR / "uploads"
 UPLOADS.mkdir(parents=True, exist_ok=True)
 
@@ -194,8 +195,8 @@ def require_feature(key):
 
     Layer one of four. Attached by `_mount_tabs()` to every per-tab route
     at registration time, which is the only place per-tab routes are
-    created — see the module docstring on why "the route simply does not
-    exist" stopped being true when Gradio went.
+    created — see the module docstring on why not drawing a tab is not by
+    itself a gate.
     """
     def check() -> None:
         if not features.enabled(key):
@@ -259,8 +260,7 @@ def _resolve_uploads(schema, raw: dict) -> dict:
     values a job runs on are frozen the moment it is queued (jobqueue.Job)
     and that is the behaviour a queue has to have — changing a control, or
     closing the page, after pressing Generate must not reach a job already
-    in the line. Gradio decoded the upload on the click for the same
-    reason.
+    in the line.
 
     Only `image` fields need it; each upload id becomes a PIL image.
     """
@@ -471,9 +471,9 @@ def create_app() -> FastAPI:
     def catalog():
         """Every entitled tab's schema, plus each Krea feature's model list.
 
-        The model lists are what the ~150 lines of `*_changed` handlers in
-        ui.py were made of: picking a model resets Steps and CFG to that
-        model record's defaults and swaps its trigger words into the prompt.
+        The model lists drive the dependent-control behaviour: picking a
+        model resets Steps and CFG to that model record's defaults and
+        swaps its trigger words into the prompt.
         Shipped as data so React does it locally — see tabschema.catalog.
         """
         return tabschema.catalog()
@@ -493,10 +493,10 @@ def create_app() -> FastAPI:
     def queue():
         """The whole queue as JSON. The fallback under /stream.
 
-        Kept deliberately: this *is* today's behaviour — ui.py polls
-        jobqueue on a one-second gr.Timer — so if SSE turns out to be
-        blocked by something between the pod and the browser, the worst
-        case is the behaviour customers already have.
+        Kept deliberately: polling the queue once a second is a complete
+        answer on its own, so if SSE turns out to be blocked by something
+        between the pod and the browser, the worst case is a slightly
+        coarser progress line.
         """
         return _queue_json()
 
@@ -544,7 +544,7 @@ def create_app() -> FastAPI:
 
     @api.get("/media/{path_id:path}", dependencies=[Depends(require_auth)])
     def media(path_id: str):
-        """One generated file. Replaces Gradio's allowed_paths.
+        """One generated file, contained to OUTPUT_DIR.
 
         Containment is gallery_index.safe_path() and nothing else — see
         the module docstring. Deliberately not reimplemented here: a
@@ -825,17 +825,17 @@ _STEP = re.compile(r"step (\d+)\s*/\s*(\d+)")
 def _progress_pair(text: str):
     """(step, total) out of a status line, or None.
 
-    A bridge, and worth naming as one. client.py:270 already yields
-    `{"type": "progress", "step", "total"}` as structured data; _run_jobs
-    formats it into a sentence and jobqueue records the sentence, because
-    a Gradio textbox could hold nothing else. Reading it back out here is
-    a regex over text this repository writes, which is safe but is not
-    where this wants to end up.
+    A bridge, and worth naming as one. `ember.comfy.client` already
+    yields `{"type": "progress", "step", "total"}` as structured data;
+    `_run_jobs` formats it into a sentence and the queue records the
+    sentence. Reading it back out here is a regex over text this
+    repository writes, which is safe but is not where this wants to end
+    up.
 
     The structural version is to carry step/total on the Job alongside
-    the line, which is also what a live latent preview would ride on
-    (context.md 4.12). Until then, one regex in one place beats a
-    determinate progress bar that nobody can have.
+    the line, which is also what a live latent preview would ride on.
+    Until then, one regex in one place beats a determinate progress bar
+    that nobody can have.
     """
     found = _STEP.search(text or "")
     if not found:
@@ -1009,12 +1009,11 @@ def _mount_tab(api: APIRouter, schema) -> None:
     @api.post("/tabs/%s/generate" % key, dependencies=gate,
               name="generate_" + key)
     def generate(body: dict = Body(default={})):
-        """Queue one click. Returns in microseconds, like the Gradio one.
+        """Queue one click. Returns in microseconds.
 
         The click does not generate — it writes the click down and hands
-        it to jobqueue, which runs one job at a time per lane on a worker
-        thread. Everything about that is unchanged; this is the same
-        `_enqueue` shape ui.py has, minus the components.
+        it to the queue, which runs one job at a time per lane on a worker
+        thread.
         """
         raw = body.get("values")
         if not isinstance(raw, dict):

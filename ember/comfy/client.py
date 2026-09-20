@@ -7,7 +7,7 @@ import urllib.request
 import uuid
 
 import requests
-import websocket  # websocket-client, installed by bootstrap.py
+import websocket  # websocket-client, installed by ember.comfy.setup
 
 from ember.logs import log
 from ember.settings import (
@@ -25,9 +25,9 @@ class ComfyUIError(RuntimeError):
 
 # Called with the list of paths a finished prompt wrote. A registry rather
 # than a direct import because there are two separate consumers of the
-# "done" event upstream (the still and video executors in ui.py)
-# and only one producer — and because bookkeeping about generated files is
-# not this module's business to know about.
+# "done" event upstream (the still and the video executor) and only one
+# producer — and because bookkeeping about generated files is not this
+# module's business to know about.
 _output_hooks = []
 
 
@@ -136,7 +136,7 @@ class ComfyClient:
         except (urllib.error.URLError, OSError) as err:
             # Nothing listening: the server exited rather than refusing the
             # job. Raised as ComfyUIError so the UI reports it in the status
-            # box like any other failure instead of a Gradio traceback.
+            # box like any other failure instead of an unhandled traceback.
             raise ComfyUIError(
                 f"ComfyUI is not answering on {self.base} — the server has "
                 "exited. This most often happens while swapping models. "

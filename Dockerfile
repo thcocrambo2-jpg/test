@@ -72,9 +72,10 @@ RUN apt-get update && \
 
 # ── Stage 1: clone ────────────────────────────────────────────────────────
 # Separate purely so the app's source does not reach the published image.
-# bake_nodes.py needs settings.py/bootstrap.py/mirror.py to resolve the pins,
-# and those are exactly the files build.sh compiles into a binary rather
-# than shipping. They stay in this stage; only /opt/krea2 is copied out.
+# bake_nodes.py needs ember/settings.py, ember/comfy/setup.py and
+# ember/weights/mirror.py to resolve the pins, and those are exactly the
+# files build.sh compiles into a binary rather than shipping. They stay in
+# this stage; only /opt/krea2 is copied out.
 FROM python-base AS nodes
 
 # huggingface_hub for the mirror tarball path in bootstrap.node_pack_from_mirror;
@@ -84,7 +85,8 @@ RUN python3 -m pip install --no-cache-dir huggingface_hub hf_xet
 
 WORKDIR /src
 # scripts/ first: PINS.json and mirror_manifest.json change far more often
-# than the four modules, and mirror.py looks in PROJECT_DIR/scripts for both.
+# than the thirteen ember/ files below, and ember/weights/mirror.py looks in
+# PROJECT_DIR/scripts for both.
 COPY scripts/PINS.json scripts/mirror_manifest.json /src/scripts/
 COPY ember/__init__.py ember/features.py ember/logs.py ember/settings.py \
      /src/ember/
@@ -195,7 +197,8 @@ COPY scripts/runpod_start.sh /opt/krea2/bin/start.sh
 COPY docker/entrypoint.sh /entrypoint.sh
 RUN chmod +x /opt/krea2/bin/start.sh /entrypoint.sh
 
-# Gradio. ComfyUI listens on 127.0.0.1 (comfy.py) and is not exposed.
+# The app's web UI. ComfyUI listens on 127.0.0.1 (ember/comfy/server.py)
+# and is not exposed.
 EXPOSE 7860
 
 CMD ["/entrypoint.sh"]

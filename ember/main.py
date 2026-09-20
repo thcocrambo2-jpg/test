@@ -175,18 +175,15 @@ def main() -> None:
     # 7 · The web app: uvicorn, the React bundle, and the tunnel that gives
     # it a public URL.
     #
-    # This import used to be load-bearing. `ui` built its gr.Blocks at
-    # *import* time and skipped any tab the licence did not grant, so where
-    # this line sat — below features.resolve() — was the licence gate: an
-    # unbuilt tab had no endpoint. Nothing about that survives here. The
-    # React client is one bundle for every licence and learns what it may
-    # show from /api/v1/session, over the wire, so a gate made of import
-    # order would gate nothing at all.
+    # Where this import sits does not gate anything. The React client is
+    # one bundle for every licence and learns what it may show from
+    # /api/v1/session, over the wire, so import order cannot hide a tab.
     #
-    # What replaces it is `api._mount_tab`, which hangs a features.enabled()
-    # dependency on every per-tab route, and `scripts/check_routes.py`, which
-    # fails the build if any of them would answer a licence that grants
-    # nothing. See context.md §4.5.
+    # The gate is `api._mount_tabs()`, which hangs a `require_feature(key)`
+    # dependency on every per-tab route, and `scripts/check_routes.py`,
+    # which fails the build if any of them would answer a licence that
+    # grants nothing. See docs/architecture/licensing-and-features.md,
+    # "The licence gate on the API".
     from ember.web import serve
 
     # Counted from the catalogue rather than the loras/ folder: a file the

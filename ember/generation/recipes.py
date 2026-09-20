@@ -43,9 +43,9 @@ Keyed by the path *relative* to OUTPUT_DIR, so moving the output tree, or
 mounting it somewhere else on the next pod, does not orphan every recipe
 in it.
 
-Imports nothing from `ui` or `gradio`: like `gallery_index`, this has to
-be callable from `client.py`'s output hook without dragging the UI in
-behind it.
+Imports nothing from the web layer: like `gallery_index`, this has to be
+callable from `ember.comfy.client`'s output hook without dragging the API
+in behind it.
 """
 
 import json

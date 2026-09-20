@@ -8,7 +8,7 @@
 # Building where you deploy makes both problems disappear by construction.
 #
 # The build needs no GPU: Nuitka compiles source rather than executing it, so
-# comfy.py's import-time GPU check never fires here.
+# ember/comfy/server.py's import-time GPU check never fires here.
 #
 # What ends up inside: this app plus everything it imports (fastapi,
 # uvicorn, huggingface_hub, requests, safetensors, websocket-client,
@@ -35,7 +35,8 @@
 #   R2_BUILDS_BUCKET       krea2-builds
 #   KREA2_NODE_TAG         the deployment id — the same tag pods carry.
 #                          The API is https://<tag>.vercel.app, assembled
-#                          here exactly as config.py assembles it there
+#                          here exactly as ember/settings.py assembles it
+#                          there
 #   KREA2_ADMIN_TOKEN      the ADMIN_TOKEN set on that deployment
 #
 #   KREA2_BUILD_CHANNEL    which channel to point at this build
@@ -102,10 +103,10 @@ publish() {
 # script has long outgrown.
 #
 # What stops a stranger *running* this build is still the seat check in
-# licensing.py, not where the bytes are kept — see the note at the top of
-# that module. Gating the download stops a lapsed key getting a new build
-# and shows which machines pull on which key. It does not stop a binary
-# someone already has from being copied.
+# ember/licensing/seat.py, not where the bytes are kept — see the note at
+# the top of that module. Gating the download stops a lapsed key getting a
+# new build and shows which machines pull on which key. It does not stop a
+# binary someone already has from being copied.
 #
 # The binary is content-addressed, so publishing never overwrites: this
 # adds a build and then moves a channel pointer to it. Rolling back is
@@ -127,8 +128,8 @@ START_SCRIPT="scripts/runpod_start.sh"
 # naming it would be a second thing to keep in step — and the one that is
 # wrong is always the one you forget you set.
 #
-# Normalised and validated exactly as config.py and runpod_start.sh do it,
-# so a tag that works on a pod works here.
+# Normalised and validated exactly as ember/settings.py and
+# runpod_start.sh do it, so a tag that works on a pod works here.
 NODE_TAG="${KREA2_NODE_TAG:-}"
 NODE_TAG="${NODE_TAG//[[:space:]]/}"
 NODE_TAG="${NODE_TAG,,}"
@@ -729,7 +730,7 @@ echo ">>> Built: $OUTPUT_DIR/$OUTPUT_NAME"
 # Three needles, and they are not all the same question.
 #
 #   def generate_single   licensed Python logic shipping as readable
-#                         source. It lives in handlers.py now, not ui.py.
+#                         source. It lives in ember/generation/handlers.py.
 #   sourceMappingURL      a Vite build with sourcemaps on, which would put
 #   webui/src/            the whole TSX tree inside the binary.
 #

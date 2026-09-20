@@ -18,8 +18,8 @@ Two data files drive this, both produced by scripts/mirror_to_hf.py:
     PINS.json              the revision every source must resolve to
 
 This module only answers questions about them. Nothing here downloads —
-downloads.py and bootstrap.py do that, so the policy stays in one place and
-the transport stays in theirs.
+ember.weights.downloads and ember.comfy.setup do that, so the policy stays
+in one place and the transport stays in theirs.
 """
 
 import json

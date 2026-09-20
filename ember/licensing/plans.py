@@ -12,7 +12,7 @@ invoice disagrees with — and a cycle launched on the server appears here
 as one more entry, with no rebuild.
 
 **Nothing here decides what this pod can run.** That stays with
-licensing.py → features.py, which act on the flat `features` array in the
+seat.py → ember.features, which act on the flat `features` array in the
 acquire response and never learn that tiers exist. This module is read
 only and its answer reaches nothing but the markup — so a plan renamed,
 repriced or added on the server shows up on the page with no rebuild, and
@@ -24,9 +24,9 @@ than an exception, because a price list that cannot be fetched must not
 take the page down with it. The caller renders the error and offers a
 retry.
 
-Stdlib-only, like licensing.py: the two are siblings talking to the same
-API, a GET returning JSON needs nothing more, and it keeps the Nuitka
-build unchanged.
+Stdlib-only, like the rest of this package: the request itself goes
+through server.py, a GET returning JSON needs nothing more than urllib,
+and it keeps the Nuitka build unchanged.
 """
 
 import threading
@@ -275,7 +275,7 @@ def _clean_url(value) -> str | None:
     on a page the customer is looking at.
 
     https only, not http: the intended value is a t.me link, the page is
-    served over the Gradio share URL's TLS, and a plain-http link from it
+    served over the tunnel URL's TLS, and a plain-http link from it
     would be both a downgrade and a mixed-content warning. Anything
     unusable is dropped entirely — the dialog reads fine without a link.
     """

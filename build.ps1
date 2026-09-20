@@ -9,7 +9,8 @@
     that is a property of Nuitka rather than a decision taken here.
 
     The build needs no GPU: Nuitka compiles source rather than executing
-    it, so comfy.py's import-time GPU check never fires here.
+    it, so ember/comfy/server.py's import-time GPU check never fires
+    here.
 
     What ends up inside: this app plus everything it imports (fastapi,
     uvicorn, huggingface_hub, requests, safetensors, websocket-client,
@@ -44,7 +45,8 @@
       R2_BUILDS_BUCKET       krea2-builds
       KREA2_NODE_TAG         the deployment id — the same tag pods carry.
                              The API is https://<tag>.vercel.app, assembled
-                             here exactly as config.py assembles it there
+                             here exactly as ember/settings.py assembles
+                             it there
       KREA2_ADMIN_TOKEN      the ADMIN_TOKEN set on that deployment
 
       KREA2_BUILD_CHANNEL    which channel to point at this build
@@ -225,12 +227,14 @@ if ($UploadOnly -and -not $Publish) {
 # desktop fetches the current one every time.
 #
 # What stops a stranger *running* this build is still the seat check in
-# licensing.py, not where the bytes are kept. Gating the download stops a
-# lapsed key getting a new build and shows which machines pull on which
-# key. It does not stop a binary someone already has from being copied.
+# ember/licensing/seat.py, not where the bytes are kept. Gating the
+# download stops a lapsed key getting a new build and shows which machines
+# pull on which key. It does not stop a binary someone already has from
+# being copied.
 function Invoke-Publish {
-    # Normalised and validated exactly as config.py and windows_start.ps1
-    # do it, so a tag that works on a customer machine works here.
+    # Normalised and validated exactly as ember/settings.py and
+    # windows_start.ps1 do it, so a tag that works on a customer machine
+    # works here.
     $nodeTag = ''
     if ($env:KREA2_NODE_TAG) {
         $nodeTag = ($env:KREA2_NODE_TAG -replace '\s', '').ToLowerInvariant()
@@ -894,7 +898,7 @@ Say ">>> Built: $ARTIFACT"
 # Three needles, and they are not all the same question.
 #
 #   def generate_single   licensed Python logic shipping as readable
-#                         source. It lives in handlers.py now, not ui.py.
+#                         source. It lives in ember/generation/handlers.py.
 #   sourceMappingURL      a Vite build with sourcemaps on, which would put
 #   webui/src/            the whole TSX tree inside the binary.
 #

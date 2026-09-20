@@ -2,7 +2,8 @@
 
 Installs current ComfyUI's own requirements.txt as-is on top of the pod's
 base image, in a single pip resolver pass together with this app's own
-requirements.txt (Gradio 6, websocket-client, huggingface_hub, ...).
+requirements.txt (fastapi, uvicorn, websocket-client, huggingface_hub,
+...).
 Nothing is pinned or downgraded: current ComfyUI has no conflict with a
 standard PyTorch base image's torch / transformers / safetensors / requests.
 Last, the SageAttention build that torch can load, where the GPU runs it
@@ -46,9 +47,9 @@ def runtime_python() -> str:
     nonsense arguments to ourselves. Fall back to the system python3 that
     the pod already ships.
 
-    Uncompiled this returns sys.executable, so `python3 app.py` behaves
-    exactly as before — that has to stay true, it is how the app is
-    developed.
+    Uncompiled this returns sys.executable, so `python3 app.py` uses the
+    interpreter that started it — that has to stay true, it is how the app
+    is developed.
     """
     if not FROZEN:
         return sys.executable
@@ -763,14 +764,13 @@ def install_custom_nodes() -> None:
     starts so the nodes register; the pack has no extra Python deps.
 
     Only the two Edit tabs use those two nodes, so this is skipped
-    entirely when both features are off — it used to run unconditionally.
+    entirely when both features are off.
 
     A failure here is logged, not raised, which is the contract
-    install_v2_nodes already follows: the two Edit tabs then report the
+    install_v2_nodes also follows: the two Edit tabs then report the
     missing nodes and refuse to run, and every other tab starts normally.
-    It used to abort the whole bootstrap, so one unreachable node pack
-    took the entire app down with it — including the tabs that never
-    needed those nodes.
+    Raising instead would let one unreachable node pack take the whole app
+    down with it, including the tabs that never needed those nodes.
     """
     if not (features.enabled(features.Key.KREA_EDIT)
             or features.enabled(features.Key.KREA_V2_EDIT)):
@@ -796,8 +796,8 @@ def install_v2_nodes() -> None:
 
     Nothing here is fatal, and each pack is independent: a failed clone or a
     failed requirements install leaves the V2 tab reporting which node is
-    missing and every other tab untouched. app.py verifies afterwards that
-    each class actually registered.
+    missing and every other tab untouched. main.py verifies afterwards
+    that each class actually registered.
 
     Krea 2 V2 Edit runs the same sampler and variance nodes, so it pulls
     these packs in too — either feature on its own is enough.

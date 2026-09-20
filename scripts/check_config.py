@@ -62,7 +62,8 @@ when the modules move; the tuple beside each one is where the name lives
 now.
 
 Importing handlers needs the comfy stub, for the reason scripts/golden.py
-documents: comfy.py detects GPUs at import and raises when there are none.
+documents: ember/comfy/server.py detects GPUs at import and raises when
+there are none.
 
 --write
 -------
@@ -142,7 +143,7 @@ _FIXED_ENV = {
 # Anything that could reach one of these values. KREA2_* covers the base
 # dir, the ports, the swap and attention flags, the Wan reserves, the
 # licence key, tag and grace, and the showcase URL; the rest are the two
-# download credentials and the RunPod ids licensing.py reads.
+# download credentials and the RunPod ids ember/licensing/seat.py reads.
 _WIPE = ("KREA2_", "RUNPOD_", "HF_TOKEN", "CIVITAI_TOKEN")
 
 # The child's stdout also carries whatever a module decides to print when
@@ -156,9 +157,10 @@ def stub_comfy() -> None:
     """Make `import comfy` work on a machine ComfyUI cannot run on.
 
     Lifted from scripts/golden.py — which lifted it from scripts/dryrun.py
-    — and has to stay in step with them: comfy.py detects GPUs at import
-    and raises when there are none. handlers.py imports it, so without
-    this the qualified section cannot be read on a laptop.
+    — and has to stay in step with them: ember.comfy.server detects GPUs
+    at import and raises when there are none. ember.generation.handlers
+    imports it, so without this the qualified section cannot be read on a
+    laptop.
 
     Nothing here is ever called. This file only reads constants, so the
     stub exists to make an import succeed, not to fake a run.
@@ -177,8 +179,8 @@ def stub_comfy() -> None:
         comfy.node_registered = lambda *a, **k: True
         comfy.log_tail = lambda *a, **k: "<check_config>"
         sys.modules["ember.comfy.server"] = comfy
-        # A from-import of the parent package copies the binding, so the
-        # stub has to be visible as an attribute too (context.md §6).
+        # A from-import of the parent package copies the binding at import
+        # time, so the stub has to be visible as that attribute too.
         import ember.comfy
         ember.comfy.server = comfy
     comfy.ensure_alive = ensure_alive

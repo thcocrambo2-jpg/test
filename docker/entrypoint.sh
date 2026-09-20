@@ -63,8 +63,9 @@ mkdir -p "$BASE" || {
 # A symlink rather than a copy: ComfyUI's source is a couple of gigabytes
 # of small files and $BASE is usually network storage, where copying it is
 # minutes on every fresh volume. Nothing that must survive a restart lives
-# in there — comfy.py passes --output-directory and --temp-directory, and
-# link_model_dirs() symlinks the model folders back out to $BASE/models.
+# in there — ember/comfy/server.py passes --output-directory and
+# --temp-directory, and link_model_dirs() symlinks the model folders back
+# out to $BASE/models.
 if [[ "${KREA2_USE_BAKED_COMFY:-1}" == "0" ]]; then
     say "KREA2_USE_BAKED_COMFY=0 — ignoring the baked ComfyUI; the app will"
     say "install its own, which is the non-Docker behaviour."
@@ -132,6 +133,7 @@ if [[ "${KREA2_START_SOURCE:-baked}" == "api" ]]; then
 fi
 
 # exec, not a call: start.sh execs the binary in turn, so the app ends up
-# as PID 1 and a `docker stop` SIGTERM reaches licensing.py's handler,
-# which gives the seat back. A wrapper process in between would swallow it.
+# as PID 1 and a `docker stop` SIGTERM reaches the handler in
+# ember/licensing/seat.py, which gives the seat back. A wrapper process in
+# between would swallow it.
 exec bash "$START"

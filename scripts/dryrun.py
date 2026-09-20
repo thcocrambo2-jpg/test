@@ -76,8 +76,9 @@ settings.log_startup()
 def stub_comfy() -> None:
     """Make `import comfy` work on a machine ComfyUI cannot run on.
 
-    comfy.py detects GPUs at import and raises when there are none, and
-    handlers.py/workflow.py both import it for GPU_COUNT. A machine with a
+    ember.comfy.server detects GPUs at import and raises when there are
+    none, and ember.generation.handlers and the pipeline workflow modules
+    both import it for GPU_COUNT. A machine with a
     small card imports it for real and only needs ensure_alive replaced; a
     machine with no card at all needs the module faked before anything
     imports it. Either way the app's own code is untouched.
@@ -101,8 +102,8 @@ def stub_comfy() -> None:
         comfy.node_registered = lambda *a, **k: True
         comfy.log_tail = lambda *a, **k: "<dry run>"
         sys.modules["ember.comfy.server"] = comfy
-        # A from-import of the parent package copies the binding, so the
-        # stub has to be visible as an attribute too (context.md §6).
+        # A from-import of the parent package copies the binding at import
+        # time, so the stub has to be visible as that attribute too.
         import ember.comfy
         ember.comfy.server = comfy
     else:

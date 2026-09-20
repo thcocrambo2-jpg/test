@@ -2,33 +2,27 @@
 
 Why this module exists
 ----------------------
-Generation used to happen *inside* the Gradio event the Generate button
-fired: the click stayed open for the whole render, and Gradio's default
-`trigger_mode="once"` left the button dead until it came back. A second
-idea had to wait for the first render to finish and for a human to be
-sitting there to click again — the pod idles between jobs for no reason
-other than that nobody was watching.
+Generating inside the request that asked for it holds the button dead
+until the render comes back, so a second idea has to wait for the first
+picture *and* for a human to be sitting there to ask again. The pod idles
+between jobs for no reason other than that nobody was watching.
 
-Gradio's own queue does serialise the work (`concurrency_id="comfy"` still
-expresses that, and this module keeps the same rule), but it is invisible
-and nothing can be taken back out of it. A queue you cannot see and cannot
-edit is a waiting room, not a queue.
+Serialising the work is not enough on its own: a queue you cannot see and
+cannot take anything back out of is a waiting room, not a queue.
 
-So a click now only *records* the work — which function, with which
+So a click only *records* the work — which function, with which
 arguments, for which tab — and returns in microseconds. The button comes
 straight back, and a worker thread per lane runs the recorded jobs one at
 a time in arrival order. `api.py` reads this module to draw the queue and
-to carry each job's output back into the tab it came from — over SSE now,
-though it was a one-second `gr.Timer` poll while Gradio drew the page.
+to carry each job's output back into the tab it came from, over SSE.
 
 Lanes
 -----
-A lane is one worker, so a lane is exactly the "only one of these at a
-time" rule the `concurrency_id` used to state: image work runs on "comfy",
-video work on "wan" when it has a ComfyUI instance of its own and on
-"comfy" when it shares one. Registering a lane starts its worker, and
-ui.py registers each with the ComfyUI client that serves it so a running
-job can be interrupted.
+A lane is one worker, so a lane states the "only one of these at a time"
+rule directly: image work runs on "comfy", video work on "wan" when it has
+a ComfyUI instance of its own and on "comfy" when it shares one.
+Registering a lane starts its worker, and each is registered with the
+ComfyUI client that serves it so a running job can be interrupted.
 
 Everything here is process-wide, like the ComfyUI server it feeds. Two
 browser tabs open on the same pod see one queue, which is the truthful
@@ -178,7 +172,8 @@ def register_lane(lane: str, interrupt: Callable[[], None]) -> None:
 
     `interrupt` is how a *running* job on this lane is stopped — for both
     of ours, the ComfyUI /interrupt of the instance that serves it. Called
-    at import time from ui.py; the worker parks on the condition variable
+    at import time from ember.web.api; the worker parks on the condition
+    variable
     until something is submitted, so starting it before ComfyUI is up
     costs nothing.
     """
@@ -263,8 +258,8 @@ def cancel(job_id: str) -> str:
 def clear_finished() -> str:
     """Drop every finished job from the list.
 
-    The galleries showing their images are untouched — a Gradio component
-    keeps the value it was last given — so this only tidies the list.
+    The galleries showing their images are untouched — a gallery keeps
+    whatever it was last given — so this only tidies the list.
     """
     with _LOCK:
         gone = [job for job in _JOBS if job.status in FINISHED]
@@ -489,10 +484,9 @@ def _run(job: Job) -> None:
 def _freeze(job: Job, value) -> dict:
     """A yield, named and copied so it cannot change under its reader.
 
-    **Named**, because a positional tuple was the one Gradio-shaped thing
-    left in this module: `result[1]` is the status on four tabs and
-    `result[2]` on the video one, and every consumer had to be told which.
-    Zipping `job.result_keys` on removes the question.
+    **Named**, because a positional tuple makes every consumer guess:
+    `result[1]` is the status on four tabs and `result[2]` on the video
+    one. Zipping `job.result_keys` on removes the question.
 
     **Copied**, and that half is load-bearing in a way that looks like
     tidiness. _run_jobs builds one gallery list and extends it in place,

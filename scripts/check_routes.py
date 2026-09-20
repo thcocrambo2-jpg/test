@@ -5,10 +5,10 @@
 
 Why this is a separate file
 ---------------------------
-`ui.py:5139` reads `if not features.enabled(_key): continue`. That is a
-**render** gate, and it was airtight for one reason only: a tab that is
-never constructed has no Gradio endpoint either, so an ungranted feature
-was not merely hidden, it did not exist on the wire.
+Hiding a tab the licence does not grant is a **render** gate, and a
+render gate alone proves nothing: the front end is a React bundle the
+browser holds, so a tab that is not drawn is still a route anyone can
+call by hand.
 
 Registering FastAPI routes unconditionally does not weaken that gate. It
 **removes** it. And the failure is silent in the worst way — everything
@@ -95,8 +95,8 @@ def _stub_comfy() -> None:
         comfy.node_registered = lambda *a, **k: True
         comfy.log_tail = lambda *a, **k: "<check_routes>"
         sys.modules["ember.comfy.server"] = comfy
-        # A from-import of the parent package copies the binding, so the
-        # stub has to be visible as an attribute too (context.md §6).
+        # A from-import of the parent package copies the binding at import
+        # time, so the stub has to be visible as that attribute too.
         import ember.comfy
         ember.comfy.server = comfy
     comfy.ensure_alive = lambda *a, **k: (False, "not running")
