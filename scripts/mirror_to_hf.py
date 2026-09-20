@@ -103,11 +103,11 @@ os.environ["KREA2_NO_MIRROR"] = "1"
 from huggingface_hub import HfApi  # noqa: E402
 from huggingface_hub.utils import HfHubHTTPError  # noqa: E402
 
-import catalog  # noqa: E402
-import config  # noqa: E402
-import downloads  # noqa: E402
-import mirror  # noqa: E402
-from config import COMFY_DIR, MODELS_DIR, log  # noqa: E402
+from ember.licensing import catalog  # noqa: E402
+from ember import config  # noqa: E402
+from ember.weights import downloads  # noqa: E402
+from ember.weights import mirror  # noqa: E402
+from ember.config import COMFY_DIR, MODELS_DIR, log  # noqa: E402
 
 # ── Credentials ───────────────────────────────────────────────────────────────
 # A *write*-scoped token. Prefer the environment variable — this file is in

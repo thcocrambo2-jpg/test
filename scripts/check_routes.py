@@ -56,7 +56,7 @@ os.environ.setdefault("KREA2_CATALOG_FILE",
 # the feature check would make every assertion below pass for the wrong
 # reason, so KREA2_UI_REQUIRE_TOKEN must stay unset.
 
-from config import log  # noqa: E402
+from ember.config import log  # noqa: E402
 
 # Named in the source, not derived. See the module docstring: this is
 # the feature with no weights behind it, so it is the one the
@@ -76,17 +76,21 @@ def _stub_comfy() -> None:
     import types
 
     try:
-        import comfy
+        from ember.comfy import server as comfy
     except RuntimeError as exc:
         log.warning("No GPU detected (%s) - faking the comfy module", exc)
-        comfy = types.ModuleType("comfy")
+        comfy = types.ModuleType("ember.comfy.server")
         comfy.GPUS, comfy.GPU_COUNT = [], 1
         comfy.start_comfyui = lambda *a, **k: None
         comfy.wait_for_comfyui = lambda *a, **k: None
         comfy.verify_custom_node = lambda *a, **k: True
         comfy.node_registered = lambda *a, **k: True
         comfy.log_tail = lambda *a, **k: "<check_routes>"
-        sys.modules["comfy"] = comfy
+        sys.modules["ember.comfy.server"] = comfy
+        # A from-import of the parent package copies the binding, so the
+        # stub has to be visible as an attribute too (context.md §6).
+        import ember.comfy
+        ember.comfy.server = comfy
     comfy.ensure_alive = lambda *a, **k: (False, "not running")
 
 
@@ -150,14 +154,14 @@ def _probe(client, path: str, methods):
 def main() -> None:
     from fastapi.testclient import TestClient
 
-    import features
+    from ember import features
 
     _stub_comfy()
 
     # ── every feature key must own a route prefix ───────────────────
     features.resolve([f.key for f in features.FEATURES])
-    import tabschema
-    import api
+    from ember.web import tabschema
+    from ember.web import api
 
     failures = []
 

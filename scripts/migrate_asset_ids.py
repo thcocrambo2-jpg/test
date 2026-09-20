@@ -90,7 +90,7 @@ COLLECTIONS = ("presets", "prompts")
 os.environ.setdefault("KREA2_BASE_DIR",
                       tempfile.mkdtemp(prefix="krea2-migrate-"))
 sys.path.insert(0, str(ROOT))
-from prompts import _fingerprint  # noqa: E402
+from ember.licensing.prompts import _fingerprint  # noqa: E402
 
 KREA2 = "krea_t2i"
 KREA2_V2 = "krea_v2_t2i"

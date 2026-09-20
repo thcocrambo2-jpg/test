@@ -88,7 +88,7 @@ def main() -> int:
         return 1
 
     try:
-        import webui_bundle
+        from ember.web import webui_bundle
     except ImportError:
         print(MISSING, file=sys.stderr)
         return 1

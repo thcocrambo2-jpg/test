@@ -233,10 +233,10 @@ def main() -> None:
     parser.add_argument("--baseline", type=Path, default=BASELINE)
     args = parser.parse_args()
 
-    import features
+    from ember import features
     features.resolve([f.key for f in features.FEATURES])
 
-    import tabschema
+    from ember.web import tabschema
 
     baseline = json.loads(args.baseline.read_text(encoding="utf-8"))
     failures, checked = 0, 0

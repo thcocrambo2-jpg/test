@@ -62,7 +62,7 @@ os.environ.setdefault("KREA2_BASE_DIR", str(ROOT / ".dryrun"))
 # The seed catalogue, for the offline form (--features). See main().
 SEED_CATALOG = ROOT / "license-validator" / "data" / "assets.json"
 
-from config import log  # noqa: E402
+from ember.config import log  # noqa: E402
 
 
 def stub_comfy() -> None:
@@ -82,17 +82,21 @@ def stub_comfy() -> None:
         )
 
     try:
-        import comfy
+        from ember.comfy import server as comfy
     except RuntimeError as exc:            # no NVIDIA GPU visible
         log.warning("No GPU detected (%s) — faking the comfy module", exc)
-        comfy = types.ModuleType("comfy")
+        comfy = types.ModuleType("ember.comfy.server")
         comfy.GPUS, comfy.GPU_COUNT = [], 1
         comfy.start_comfyui = lambda *a, **k: None
         comfy.wait_for_comfyui = lambda *a, **k: None
         comfy.verify_custom_node = lambda *a, **k: True
         comfy.node_registered = lambda *a, **k: True
         comfy.log_tail = lambda *a, **k: "<dry run>"
-        sys.modules["comfy"] = comfy
+        sys.modules["ember.comfy.server"] = comfy
+        # A from-import of the parent package copies the binding, so the
+        # stub has to be visible as an attribute too (context.md §6).
+        import ember.comfy
+        ember.comfy.server = comfy
     else:
         log.info("GPU detected — using the real comfy module (server not started)")
 
@@ -126,8 +130,8 @@ def main() -> None:
     )
     args = parser.parse_args()
 
-    import catalog
-    import features
+    from ember.licensing import catalog
+    from ember import features
 
     if args.features:
         keys = [f.key for f in features.FEATURES] if args.features == "all" else [
@@ -142,7 +146,7 @@ def main() -> None:
         os.environ.setdefault(catalog.FILE_ENV, str(SEED_CATALOG))
         catalog.load()
     else:
-        import licensing
+        from ember.licensing import seat as licensing
         licensing.acquire_or_exit()
         features.resolve(licensing.entitlements())
         # The same order app.py keeps: after the licence check (the
@@ -158,7 +162,7 @@ def main() -> None:
     # says otherwise. It is still why this script refuses to bind anything
     # but loopback — an app that asks for no token should not be reachable
     # from the next desk.
-    import serve
+    from ember.web import serve
 
     # webui.mount() logs which source it picked — the committed bundle or
     # webui/dist — on the next line, so this one does not guess.

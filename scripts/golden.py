@@ -84,7 +84,7 @@ os.environ.setdefault("KREA2_BASE_DIR", str(ROOT / ".dryrun"))
 os.environ.setdefault("KREA2_CATALOG_FILE",
                       str(ROOT / "license-validator" / "data" / "assets.json"))
 
-from config import log  # noqa: E402
+from ember.config import log  # noqa: E402
 
 SNAPSHOTS = Path(__file__).resolve().parent / "golden"
 
@@ -115,17 +115,21 @@ def stub_comfy() -> None:
         return True, ""
 
     try:
-        import comfy
+        from ember.comfy import server as comfy
     except RuntimeError as exc:            # no NVIDIA GPU visible
         log.warning("No GPU detected (%s) - faking the comfy module", exc)
-        comfy = types.ModuleType("comfy")
+        comfy = types.ModuleType("ember.comfy.server")
         comfy.GPUS, comfy.GPU_COUNT = [], 1
         comfy.start_comfyui = lambda *a, **k: None
         comfy.wait_for_comfyui = lambda *a, **k: None
         comfy.verify_custom_node = lambda *a, **k: True
         comfy.node_registered = lambda *a, **k: True
         comfy.log_tail = lambda *a, **k: "<golden>"
-        sys.modules["comfy"] = comfy
+        sys.modules["ember.comfy.server"] = comfy
+        # A from-import of the parent package copies the binding, so the
+        # stub has to be visible as an attribute too (context.md §6).
+        import ember.comfy
+        ember.comfy.server = comfy
     comfy.ensure_alive = ensure_alive
 
 
@@ -138,7 +142,7 @@ def handler_module():
     have to change, and that the JSON does not either.
     """
     try:
-        import handlers
+        from ember.generation import handlers
     except ImportError:
         import ui as handlers            # pre-split layout
     return handlers
@@ -178,16 +182,26 @@ def _png_bytes(image) -> bytes:
 def patch(module, capture) -> None:
     """Stub everything that would touch a GPU, a disk or the network.
 
-    Patched on the *handler module's* namespace rather than on the module
-    that defines each name, because that is where the handlers resolve
-    them: `from workflow import model_file_available` binds a local name,
-    and patching `workflow.model_file_available` afterwards would not be
-    seen. The same reason scripts/dryrun.py patches `comfy.ensure_alive`
-    before ui is imported.
+    Patched on the namespace of every module that *uses* a name rather than
+    on the one that defines it, because a from-import copies the binding:
+    `from ember.pipelines.krea2.workflow import model_file_available` gives
+    ember.generation.handlers a name of its own, and patching the workflow
+    module afterwards would not be seen there. The handler module comes
+    first because that is where every generate_* resolves them; the
+    pipeline modules are here because they share the three availability
+    helpers with it. The same reason scripts/dryrun.py patches
+    `ensure_alive` before handlers is imported.
     """
-    import client
-    import presets
-    import prompts
+    from ember.comfy import client
+    from ember.licensing import presets
+    from ember.licensing import prompts
+    from ember.pipelines.krea2 import workflow as krea2
+    from ember.pipelines.krea2_v2 import workflow as krea2_v2
+    from ember.pipelines.krea2_v2_edit import workflow as krea2_v2_edit
+    from ember.pipelines.minimax import workflow as minimax
+    from ember.pipelines.wan import workflow as wan
+
+    users = (module, krea2, krea2_v2, krea2_v2_edit, wan, minimax)
 
     for name in (
         "model_file_available", "lora_file_available", "edit_lora_available",
@@ -195,12 +209,14 @@ def patch(module, capture) -> None:
         "wan_models_available", "wan_5b_available", "wan_lightning_available",
         "minimax_models_available",
     ):
-        if hasattr(module, name):
-            setattr(module, name, lambda *a, **k: True)
+        for user in users:
+            if hasattr(user, name):
+                setattr(user, name, lambda *a, **k: True)
 
     for name in ("v2_status", "v2_edit_status"):
-        if hasattr(module, name):
-            setattr(module, name, lambda *a, **k: (True, ""))
+        for user in users:
+            if hasattr(user, name):
+                setattr(user, name, lambda *a, **k: (True, ""))
 
     module.comfy_ensure_alive = lambda *a, **k: (True, "")
 
@@ -350,7 +366,7 @@ def check_settings(name, args, settings) -> None:
     reconstruction is wrong and the comparison fails, which is the
     behaviour you want from a check whose whole premise is the invariant.
     """
-    import tabschema
+    from ember.web import tabschema
 
     schema = next((s for s in tabschema.SCHEMAS
                    if s.handler.__name__ == name), None)
@@ -441,7 +457,7 @@ def main() -> None:
     parser.add_argument("--out", type=Path, default=SNAPSHOTS)
     args = parser.parse_args()
 
-    import features
+    from ember import features
     features.resolve([f.key for f in features.FEATURES])
 
     stub_comfy()

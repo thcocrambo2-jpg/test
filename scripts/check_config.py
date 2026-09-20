@@ -100,22 +100,22 @@ BASELINE = Path(__file__).resolve().parent / "config_baseline.json"
 #              "ember.pipelines.krea2_v2_edit.constants",
 #              "ember.pipelines.wan.constants",
 #              "ember.pipelines.minimax.constants"]
-SOURCES = ["config"]
+SOURCES = ["ember.config"]
 
 # Baseline key -> (module, attribute) it lives at today. The keys are the
 # baseline's, so they do not move when the modules do; only the tuples are
 # rewritten by a phase that moves a module. See the docstring.
 QUALIFIED = {
-    "presets.TAB_KREA2": ("presets", "TAB_KREA2"),
-    "presets.TAB_KREA2_V2": ("presets", "TAB_KREA2_V2"),
-    "prompts.TAB_KREA2": ("prompts", "TAB_KREA2"),
-    "prompts.TAB_KREA2_V2": ("prompts", "TAB_KREA2_V2"),
-    "handlers.KREA_T2I": ("handlers", "KREA_T2I"),
-    "handlers.KREA_EDIT": ("handlers", "KREA_EDIT"),
-    "handlers.KREA_V2_T2I": ("handlers", "KREA_V2_T2I"),
-    "handlers.KREA_V2_EDIT": ("handlers", "KREA_V2_EDIT"),
-    "handlers.MINIMAX_I2V": ("handlers", "MINIMAX_I2V"),
-    "handlers.MINIMAX_T2V": ("handlers", "MINIMAX_T2V"),
+    "presets.TAB_KREA2": ("ember.licensing.presets", "TAB_KREA2"),
+    "presets.TAB_KREA2_V2": ("ember.licensing.presets", "TAB_KREA2_V2"),
+    "prompts.TAB_KREA2": ("ember.licensing.prompts", "TAB_KREA2"),
+    "prompts.TAB_KREA2_V2": ("ember.licensing.prompts", "TAB_KREA2_V2"),
+    "handlers.KREA_T2I": ("ember.generation.handlers", "KREA_T2I"),
+    "handlers.KREA_EDIT": ("ember.generation.handlers", "KREA_EDIT"),
+    "handlers.KREA_V2_T2I": ("ember.generation.handlers", "KREA_V2_T2I"),
+    "handlers.KREA_V2_EDIT": ("ember.generation.handlers", "KREA_V2_EDIT"),
+    "handlers.MINIMAX_I2V": ("ember.generation.handlers", "MINIMAX_I2V"),
+    "handlers.MINIMAX_T2V": ("ember.generation.handlers", "MINIMAX_T2V"),
 }
 
 # A public module-level constant: upper case, not starting with an
@@ -168,16 +168,20 @@ def stub_comfy() -> None:
         return True, ""
 
     try:
-        import comfy
+        from ember.comfy import server as comfy
     except RuntimeError:                   # no NVIDIA GPU visible
-        comfy = types.ModuleType("comfy")
+        comfy = types.ModuleType("ember.comfy.server")
         comfy.GPUS, comfy.GPU_COUNT = [], 1
         comfy.start_comfyui = lambda *a, **k: None
         comfy.wait_for_comfyui = lambda *a, **k: None
         comfy.verify_custom_node = lambda *a, **k: True
         comfy.node_registered = lambda *a, **k: True
         comfy.log_tail = lambda *a, **k: "<check_config>"
-        sys.modules["comfy"] = comfy
+        sys.modules["ember.comfy.server"] = comfy
+        # A from-import of the parent package copies the binding, so the
+        # stub has to be visible as an attribute too (context.md §6).
+        import ember.comfy
+        ember.comfy.server = comfy
     comfy.ensure_alive = ensure_alive
 
 

@@ -73,7 +73,7 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parent.parent
 WEBUI = ROOT / "webui"
 DIST = WEBUI / "dist"
-OUTPUT = ROOT / "webui_bundle.py"
+OUTPUT = ROOT / "ember" / "web" / "webui_bundle.py"
 
 # What SOURCE_HASH covers, and therefore what check_webui.py calls a stale
 # bundle. The source tree, plus every input that changes the output of

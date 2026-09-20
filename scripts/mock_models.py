@@ -51,9 +51,9 @@ if not os.environ.get("KREA2_BASE_DIR"):
 os.environ.setdefault("KREA2_CATALOG_FILE",
                       str(ROOT / "license-validator" / "data" / "assets.json"))
 
-import downloads  # noqa: E402
-import features  # noqa: E402
-from config import (  # noqa: E402
+from ember.weights import downloads  # noqa: E402
+from ember import features  # noqa: E402
+from ember.config import (  # noqa: E402
     ABLITERATED_ENCODER_FILE,
     BASE_DIR,
     MODELS_DIR,

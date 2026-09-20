@@ -72,8 +72,8 @@ from pathlib import Path
 # so build.sh / Nuitka never sweep it into the shipped binary.
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
-import showcase                                              # noqa: E402
-from config import BASE_DIR, SHOWCASE_BASE_URL, log          # noqa: E402
+from ember.web import showcase                               # noqa: E402
+from ember.config import BASE_DIR, SHOWCASE_BASE_URL, log    # noqa: E402
 from r2_presign import presign                               # noqa: E402
 
 # Where the pictures are staged before upload. Deliberately BASE_DIR/input

@@ -43,14 +43,14 @@ os.environ["KREA2_BASE_DIR"] = BAKE_ROOT
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 
-import bootstrap                                             # noqa: E402
-from config import (                                         # noqa: E402
+from ember.comfy import setup as bootstrap                   # noqa: E402
+from ember.config import (                                   # noqa: E402
     COMFY_DIR,
     KREA2EDIT_NODES_REPO,
     V2_NODE_REPOS,
     log,
 )
-import mirror                                                # noqa: E402
+from ember.weights import mirror                             # noqa: E402
 
 
 def git_sha(path: Path) -> str | None:
