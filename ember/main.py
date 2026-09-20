@@ -1,4 +1,4 @@
-"""Krea 2 on RunPod — ComfyUI + a React web app. Entry point: python app.py
+"""Ember — ComfyUI + a React web app. Entry point: python app.py
 
 Startup flow:
   1. Read configuration (settings.py), set up logging and make the
@@ -49,10 +49,24 @@ from ember.pipelines.minimax.constants import (
 
 def main() -> None:
     # 1 · Configuration. Nothing in ember/settings.py runs when it is
-    # imported, so the logger, the output tree and the line that says where
-    # both live are this function's first three statements — before
-    # anything else can log or write.
+    # imported, so the logger, the output tree and the lines that say what
+    # was read and where it lands are this function's first statements —
+    # before anything else can log or write.
     logs.setup()
+    # Both spellings of the fifteen customer variables work (settings.
+    # _env), so a pod configured before the rename boots untouched. This is
+    # the only place an operator learns there is anything to change, so it
+    # names every legacy variable the run is reading through, once, and
+    # says nothing when there is none.
+    #
+    # Here rather than in log_startup(): the scripts in scripts/ call that
+    # too, and each of them sets its own base directory and catalogue file,
+    # so there the line would report the script's own choices as if they
+    # were the customer's.
+    legacy = settings.legacy_names()
+    if legacy:
+        log.warning("Using legacy KREA2_* names: %s; rename them to EMBER_*",
+                    ", ".join(legacy))
     settings.ensure_dirs()
     settings.log_startup()
 
@@ -121,13 +135,13 @@ def main() -> None:
     )
 
     # 6 · GPU detection runs when comfy is imported; then start the server.
-    # With KREA2_WAN_PARALLEL=1 a second ComfyUI instance serves video jobs
+    # With EMBER_WAN_PARALLEL=1 a second ComfyUI instance serves video jobs
     # on its own port; each instance reserves VRAM for the other so they can
     # coexist on one GPU (defaults tuned for a 48 GB A40).
     from ember.comfy import server as comfy
 
     # A second instance is only worth its VRAM reservation when there is a
-    # Video tab to serve — KREA2_WAN_PARALLEL on its own no longer buys one.
+    # Video tab to serve — EMBER_WAN_PARALLEL on its own no longer buys one.
     wan_parallel = WAN_PARALLEL and features.enabled(features.Key.WAN_I2V)
     main_args = (
         ("--reserve-vram", str(KREA_RESERVE_VRAM_GB)) if wan_parallel else ()
