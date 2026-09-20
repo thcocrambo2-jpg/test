@@ -103,8 +103,17 @@ the target machine needs
   mentions symlinks.
 - **~45 GB free**, more with Wan.
 
-`scripts/windows_start.ps1` checks all of these and says which is missing
-before downloading anything.
+`scripts/windows_start.ps1` checks **most** of these before downloading
+anything, and says which is missing: `curl.exe`, `python` (and that the
+interpreter it found can actually `import pip` — an MSYS2 python and the
+Microsoft Store alias both satisfy `Get-Command` and then install
+nothing), `git`, and the symlink privilege, which it probes by calling
+`os.symlink` rather than reading the registry.
+
+**It does not check for a GPU.** Nothing in the start script tests for
+one; the card and its driver are proved later, when `ensure_torch()`
+launches a real kernel. So a machine with no NVIDIA card gets past every
+pre-flight message and fails further in.
 
 **SmartScreen and antivirus will complain.** The binary is unsigned, so
 the first run gets "Windows protected your PC" → *More info* → *Run
