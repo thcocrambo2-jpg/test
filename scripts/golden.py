@@ -141,10 +141,7 @@ def handler_module():
     verify the move: the point of a pure move is that this file does not
     have to change, and that the JSON does not either.
     """
-    try:
-        from ember.generation import handlers
-    except ImportError:
-        import ui as handlers            # pre-split layout
+    from ember.generation import handlers
     return handlers
 
 

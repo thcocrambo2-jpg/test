@@ -1,0 +1,15 @@
+# Commits that moved every line without changing any of them, so that
+# `git blame` skips them and lands on the commit that last changed the code
+# itself. Bulk import rewrites only: a commit that changed behaviour never
+# belongs here, and neither does a pure `git mv`, which blame already
+# follows with rename detection.
+#
+# Turn it on for this checkout with:
+#
+#     git config blame.ignoreRevsFile .git-blame-ignore-revs
+
+# Phase 1: point every import inside ember at its new home (92 statements).
+ec5552c12a849735430be4cba16627a602124aae
+
+# Phase 1: point the scripts and bake scripts at the ember package.
+e4e6a0984e290950ba85b188c8bf2563427f46d4

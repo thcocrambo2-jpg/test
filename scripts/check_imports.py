@@ -59,15 +59,13 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parent.parent
 
 # ── the layout switch ────────────────────────────────────────────────────
-# Where the app's modules live, relative to the repo root. "." is the flat
-# root layout of Phases 0 and 1's starting point; PHASE 1 CHANGES THIS TO
-# "ember" once the 29 modules have moved, and module discovery, the rule-2
-# scan and the rule-3 scan all follow it. It is the only place in this file
-# that knows the layout.
+# Where the app's modules live, relative to the repo root. Module
+# discovery, the rule-2 scan and the rule-3 scan all follow it, so it is
+# the only place in this file that knows the layout.
 MODULE_ROOT = "ember"
 
-# Root .py files that are not part of the app. webui_bundle.py is
-# deliberately absent: it is 316 KB of generated base64, but it declares
+# Modules under MODULE_ROOT that are not part of the app.
+# ember/web/webui_bundle.py is deliberately absent: it is 316 KB of generated base64, but it declares
 # two dicts and nothing else, and it imports in under 10 ms — there is no
 # reason to leave the front end out of the check. Anything listed here
 # needs a reason next to it.
@@ -76,8 +74,8 @@ NOT_APP_MODULES: frozenset[str] = frozenset()
 # ── the rules ────────────────────────────────────────────────────────────
 # Rule 1 is unconditional: every discovered module imports alone.
 
-# Rule 2 — PHASE 1 TURNS THIS ON: every __init__.py under MODULE_ROOT holds
-# nothing but whitespace or a docstring (context.md §5 rule 3).
+# Rule 2: every __init__.py under MODULE_ROOT holds nothing but whitespace
+# or a docstring (context.md §5 rule 3).
 CHECK_EMPTY_INITS = True
 
 # Rule 3 — PHASE 2 TURNS THIS ON: settings.py is the only module that reads
