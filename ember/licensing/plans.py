@@ -36,7 +36,8 @@ import urllib.error
 import urllib.request
 from dataclasses import dataclass, field
 
-from ember.config import LICENSE_API_URL, log
+from ember.logs import log
+from ember.settings import LICENSE_API_URL
 
 # How long a fetched catalogue is served without asking again. The server
 # caches the collection for 60s of its own (see plans.js), so anything
@@ -318,7 +319,7 @@ def _feature(raw: dict) -> FeatureInfo | None:
 def _fetch() -> Catalogue:
     """One trip to /v1/plans, every failure turned into `error`."""
     if not LICENSE_API_URL:
-        # Empty when KREA2_NODE_TAG is unset or malformed — see config.py.
+        # Empty when KREA2_NODE_TAG is unset or malformed — see settings.py.
         # A pod in that state never got past licensing.acquire_or_exit(),
         # so in practice this is the offline dry run (`--features ...`).
         return Catalogue(error="This build has no node tag, so it cannot "

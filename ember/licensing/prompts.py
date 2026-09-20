@@ -59,7 +59,8 @@ import urllib.request
 from collections import OrderedDict
 from dataclasses import dataclass
 
-from ember.config import LICENSE_API_URL, LICENSE_KEY, log
+from ember.logs import log
+from ember.settings import LICENSE_API_URL, LICENSE_KEY
 
 # Tab keys a prompt can be captured from and replayed into. These are the
 # feature keys, and they are also the wire values the server validates
@@ -259,11 +260,11 @@ def _is_admin() -> bool:
 def _instance_id() -> str:
     """This pod's id, from licensing — imported late to stay acyclic.
 
-    licensing imports config and nothing else; this module is imported by
-    ui.py, which is far downstream of the licence check, so by the time
-    anything calls record() the id is set. "unknown" is a real answer for
-    a UI launched without a seat, and the server only needs the field to
-    be non-empty.
+    licensing imports settings and logs and nothing else; this module is
+    imported by ui.py, which is far downstream of the licence check, so by
+    the time anything calls record() the id is set. "unknown" is a real
+    answer for a UI launched without a seat, and the server only needs the
+    field to be non-empty.
     """
     try:
         from ember.licensing import seat as licensing

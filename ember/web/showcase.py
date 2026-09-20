@@ -3,7 +3,7 @@
 The prose lives in `assets/showcase/showcase.json`, which is bundled — a
 few kilobytes of text, and the thing that decides whether the section
 renders at all. The pictures do not: they are served from the public R2
-bucket at config.SHOWCASE_BASE_URL, in the same folder layout the JSON
+bucket at settings.SHOWCASE_BASE_URL, in the same folder layout the JSON
 names, and this module only ever builds URLs for them.
 
 Nothing here downloads an image. The URLs go into the markup and the
@@ -57,7 +57,8 @@ from dataclasses import dataclass
 from urllib.parse import quote
 
 from ember import features
-from ember.config import ASSETS_DIR, SHOWCASE_BASE_URL, log
+from ember.logs import log
+from ember.settings import ASSETS_DIR, SHOWCASE_BASE_URL
 
 CATALOGUE_PATH = ASSETS_DIR / "showcase" / "showcase.json"
 

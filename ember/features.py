@@ -42,7 +42,7 @@ step 2 still reaches all of them.
 from dataclasses import dataclass
 from enum import Enum
 
-from ember.config import log
+from ember.logs import log
 
 
 class Key(str, Enum):
@@ -130,13 +130,13 @@ class Feature:
 # its own still fetches the pieces it cannot run without, and enabling both
 # Single and Edit fetches them once.
 #
-# "catalog" is the one group whose contents are not fixed here or in
-# config.py: it is every model and LoRA the catalogue (catalog.py, from the
-# licence server) lists for the enabled features that name it. Each Krea
-# tab names it, and so do the MiniMax tabs for their LoRAs;
-# downloads.download_catalog reads the lists of exactly those that are on
-# — so a feature's own models are what it pulls in, not a group-wide set,
-# and a file two tabs share is fetched once.
+# "catalog" is the one group whose contents are not fixed here or in a
+# pipeline's constants.py: it is every model and LoRA the catalogue
+# (catalog.py, from the licence server) lists for the enabled features
+# that name it. Each Krea tab names it, and so do the MiniMax tabs for
+# their LoRAs; downloads.download_catalog reads the lists of exactly
+# those that are on — so a feature's own models are what it pulls in, not
+# a group-wide set, and a file two tabs share is fetched once.
 FEATURES = (
     Feature(Key.KREA_T2I, "🎨 Krea2", default=True,
             needs=("text_encoder", "krea2", "catalog")),

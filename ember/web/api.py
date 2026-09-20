@@ -64,7 +64,6 @@ import dataclasses
 import io
 import json
 import mimetypes
-import os
 import re
 import secrets
 import threading
@@ -94,7 +93,8 @@ from ember.generation import recipes
 from ember.web import showcase
 from ember.web import tabschema
 from ember.comfy.server import GPU_COUNT
-from ember.config import TEMP_DIR, log
+from ember.logs import log
+from ember.settings import TEMP_DIR, UI_REQUIRE_TOKEN
 
 PREFIX = "/api/v1"
 
@@ -114,7 +114,7 @@ COOKIE = "krea2_key"
 # the URL travels further than the people meant to use it: the tunnel
 # hostname is the only thing standing between a stranger and this app's
 # GPU while the gate is down.
-ALLOW_ANON = not os.environ.get("KREA2_UI_REQUIRE_TOKEN")
+ALLOW_ANON = not UI_REQUIRE_TOKEN
 
 TOKEN = secrets.token_urlsafe(32)
 

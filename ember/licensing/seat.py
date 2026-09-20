@@ -44,11 +44,12 @@ import urllib.request
 import uuid
 from datetime import datetime, timezone
 
-from ember.config import (
+from ember import settings
+from ember.logs import log
+from ember.settings import (
     LICENSE_API_URL,
     LICENSE_GRACE_SECONDS,
     LICENSE_KEY,
-    log,
 )
 
 CLIENT_VERSION = "1"
@@ -115,10 +116,9 @@ def _resolve_instance_id() -> str:
     pod id means restarting the app on one pod reclaims its own seat
     instead of spending a second one while the first goes stale.
     """
-    for var in ("RUNPOD_POD_ID", "RUNPOD_POD_HOSTNAME"):
-        value = os.environ.get(var)
-        if value:
-            return value.strip()
+    candidates = settings.instance_id_candidates()
+    if candidates:
+        return candidates[0]
     try:
         host = socket.gethostname().strip()
         if host:
@@ -154,7 +154,7 @@ def _payload(**extra) -> dict:
 
 def _meta() -> dict:
     return {
-        "pod_id": os.environ.get("RUNPOD_POD_ID", ""),
+        "pod_id": settings.pod_id(),
         "hostname": socket.gethostname(),
         "version": CLIENT_VERSION,
     }
@@ -319,7 +319,7 @@ def acquire_or_exit() -> None:
         )
 
     # Empty when KREA2_NODE_TAG is unset or is not a single DNS label — see
-    # config.py. Both cases are the same fix, and neither is worth spelling
+    # settings.py. Both cases are the same fix, and neither is worth spelling
     # out further here: a customer types the value they were handed.
     if not LICENSE_API_URL:
         _fail(
