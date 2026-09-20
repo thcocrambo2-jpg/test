@@ -68,12 +68,12 @@ police honest customers, who have one open order at a time.
 
 ## The delivery message carries two values
 
-`KREA2_LICENSE_KEY` **and** `KREA2_NODE_TAG`. A pod with the key and no tag
+`EMBER_LICENSE_KEY` **and** `EMBER_NODE_TAG`. A pod with the key and no tag
 exits with code 2 before it prints anything —
 [`../../ember/settings.py`](../../ember/settings.py) builds
 `LICENSE_API_URL` from the tag, validating it as a single DNS label — and
 there is no key-entry screen anywhere in the app; both are environment
-variables. The bot refuses to sell at all while `KREA2_NODE_TAG` is unset,
+variables. The bot refuses to sell at all while `EMBER_NODE_TAG` is unset,
 checked before the invoice rather than after the money.
 
 ## When something goes wrong

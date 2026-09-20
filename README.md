@@ -19,8 +19,8 @@ same licence check.
 
 | | For | What runs | Where the app comes from |
 | --- | --- | --- | --- |
-| **1. Linux binary** | pod customers | `scripts/runpod_start.sh` → `dist/krea2app` | built by `./build.sh` on a pod, fetched from the licence server on every start |
-| **2. Windows binary** | Windows customers | `scripts/windows_start.ps1` → `dist\krea2app.exe` | built by `.\build.ps1` on Windows, fetched the same way |
+| **1. Linux binary** | pod customers | `scripts/runpod_start.sh` → `dist/ember` | built by `./build.sh` on a pod, fetched from the licence server on every start |
+| **2. Windows binary** | Windows customers | `scripts/windows_start.ps1` → `dist\ember.exe` | built by `.\build.ps1` on Windows, fetched the same way |
 | **3. Docker image** | anyone with a GPU and Docker | `docker compose up` | the image carries the *environment*; the binary is still fetched inside it |
 | **4. From source** | you, while developing | `python app.py` | your working tree |
 
@@ -65,7 +65,7 @@ python3 scripts/dryrun.py --features all
 ```
 
 `--features` fakes an entitlement, so no licence key is needed. Pass a
-real `KREA2_LICENSE_KEY` and `KREA2_NODE_TAG` instead to exercise the
+real `EMBER_LICENSE_KEY` and `EMBER_NODE_TAG` instead to exercise the
 prompt library, presets and plans against the live server. See
 [Running without a GPU](docs/running/dry-run.md).
 

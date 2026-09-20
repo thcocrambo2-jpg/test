@@ -1,7 +1,7 @@
 # Building the Windows binary
 
 For whoever ships a build. `build.ps1` compiles the same app to
-`dist\krea2app.exe`, so a customer with an NVIDIA card and no cloud
+`dist\ember.exe`, so a customer with an NVIDIA card and no cloud
 account runs one script and gets the RunPod experience on their own
 machine. Everything about licences, seats, channels and rollback is
 unchanged: the same licence server, the same private bucket, the same
@@ -26,8 +26,8 @@ to build, so the common case is "does it still compile" on a tree with
 uncommitted work in it, and that must not end at a prompt whose yes
 reaches customers.
 
-It needs the same credentials `build.sh` does (`R2_*`, `KREA2_NODE_TAG`,
-`KREA2_ADMIN_TOKEN`) and reads them from the environment. On Windows
+It needs the same credentials `build.sh` does (`R2_*`, `EMBER_NODE_TAG`,
+`EMBER_ADMIN_TOKEN`) and reads them from the environment. On Windows
 there is no `make`, so set them in the shell:
 
 ```powershell
@@ -127,29 +127,29 @@ anyone who finds startup slow.
 The exact counterpart of the RunPod template's container start command —
 fetch the current start script, then run it. Windows has no template
 field to paste it into, so it goes in a file the customer keeps. Save
-this as **`krea2.cmd`** on their desktop; double-clicking it starts the
+this as **`ember.cmd`** on their desktop; double-clicking it starts the
 app:
 
 ```bat
 @echo off
-powershell -NoProfile -ExecutionPolicy Bypass -Command "$s = Join-Path $env:TEMP 'krea2-start.ps1'; $u = 'https://' + $env:KREA2_NODE_TAG + '.vercel.app/v1/start.ps1'; curl.exe -fsSL $u -o $s; if ($LASTEXITCODE -ne 0) { Write-Host 'Could not fetch the start script. Check KREA2_NODE_TAG and your internet connection.'; exit 1 }; & $s; exit $LASTEXITCODE"
+powershell -NoProfile -ExecutionPolicy Bypass -Command "$s = Join-Path $env:TEMP 'ember-start.ps1'; $u = 'https://' + $env:EMBER_NODE_TAG + '.vercel.app/v1/start.ps1'; curl.exe -fsSL $u -o $s; if ($LASTEXITCODE -ne 0) { Write-Host 'Could not fetch the start script. Check EMBER_NODE_TAG and your internet connection.'; exit 1 }; & $s; exit $LASTEXITCODE"
 ```
 
 Or, from a PowerShell window they already have open — **PS**:
 
 ```powershell
-$s = "$env:TEMP\krea2-start.ps1"
-curl.exe -fsSL https://$env:KREA2_NODE_TAG.vercel.app/v1/start.ps1 -o $s
+$s = "$env:TEMP\ember-start.ps1"
+curl.exe -fsSL https://$env:EMBER_NODE_TAG.vercel.app/v1/start.ps1 -o $s
 powershell -ExecutionPolicy Bypass -File $s
 ```
 
-Both need `KREA2_LICENSE_KEY` and `KREA2_NODE_TAG` set as **user**
+Both need `EMBER_LICENSE_KEY` and `EMBER_NODE_TAG` set as **user**
 environment variables (not just for the session), which is the equivalent
 of filling them into a pod's environment panel — **PS**:
 
 ```powershell
-[Environment]::SetEnvironmentVariable("KREA2_LICENSE_KEY", "<key>", "User")
-[Environment]::SetEnvironmentVariable("KREA2_NODE_TAG", "<tag>", "User")
+[Environment]::SetEnvironmentVariable("EMBER_LICENSE_KEY", "<key>", "User")
+[Environment]::SetEnvironmentVariable("EMBER_NODE_TAG", "<tag>", "User")
 ```
 
 Three details differ from the bash one-liner, all forced by Windows:
@@ -176,9 +176,9 @@ to the on-disk build when the server is unreachable, verifies the
 download before running it. Two things differ, both because Windows
 differs:
 
-- Models default to **`C:\krea2`**, not `/workspace/krea2`. The pod
-  default resolves to `C:\workspace\krea2` on Windows, which is a real
-  path and the wrong one. Override with `KREA2_BASE_DIR`.
+- Models default to **`C:\ember`**, not `/workspace/ember`. The pod
+  default resolves to `C:\workspace\ember` on Windows, which is a real
+  path and the wrong one. Override with `EMBER_BASE_DIR`.
 - There is no `exec`, so the app runs as a child process. Ctrl-C reaches
   it and releases the seat cleanly; closing the window does not, and that
   seat is freed by the server's stale-lease sweep a few minutes later.
@@ -215,7 +215,7 @@ Three things hold it together, all in
    and every Linux pod would get `no_build` on its next start — an outage
    caused at publish time, before any pod asked for anything.
 3. `buildKey()` takes the filename from the build document, so a Windows
-   artifact is stored at `builds/<sha>/krea2app.exe`. Content addressing
+   artifact is stored at `builds/<sha>/ember.exe`. Content addressing
    already keeps the two apart; this is so a bucket listing is readable.
 
 Builds published with no `platform` field are treated as Linux, so

@@ -1,7 +1,7 @@
 # Building the Linux binary
 
 For whoever ships a build. `build.sh` compiles the app into one
-self-contained executable, `dist/krea2app`, so it can be handed to
+self-contained executable, `dist/ember`, so it can be handed to
 someone without shipping the source. Uploading that artifact is a
 separate step — see [publishing](publishing.md).
 
@@ -78,7 +78,7 @@ bash build.sh          # or chmod +x build.sh && ./build.sh
 carry when the file is committed from Windows. The script installs
 whatever the pod lacks — `build-essential`, `patchelf`, `ccache`,
 `nuitka`, `zstandard` — none of which ship in the RunPod image, and all
-of which are gone again on a fresh pod. Output is `dist/krea2app`.
+of which are gone again on a fresh pod. Output is `dist/ember`.
 
 The flags:
 
@@ -86,7 +86,7 @@ The flags:
 ./build.sh --no-publish    # build only — needs no credentials
 ./build.sh                 # build, then offer to publish
 ./build.sh -y              # build and publish without asking
-./build.sh --upload-only   # publish the existing dist/krea2app, compile nothing
+./build.sh --upload-only   # publish the existing dist/ember, compile nothing
 ./build.sh --help
 ```
 
@@ -109,7 +109,7 @@ and the models are already on disk, so the setup step skips everything
 and goes straight to serving.
 
 ```bash
-./dist/krea2app
+./dist/ember
 ```
 
 Expect `ComfyUI already present … — skipping clone`, `ComfyUI API on port
@@ -204,13 +204,13 @@ Locally (bash):
 
 ```bash
 # works only if the proxy supports SCP
-scp -i ~/.ssh/id_ed25519 <user>@ssh.runpod.io:/test/dist/krea2app .
+scp -i ~/.ssh/id_ed25519 <user>@ssh.runpod.io:/test/dist/ember .
 ```
 
 **POD** then locally (bash):
 
 ```bash
-runpodctl send /test/dist/krea2app      # on the pod — prints a one-time code
+runpodctl send /test/dist/ember      # on the pod — prints a one-time code
 runpodctl receive <code>                # locally
 ```
 
@@ -220,12 +220,12 @@ port while the app is stopped — **POD**:
 
 ```bash
 cd /test/dist && python3 -m http.server 7860
-# then download https://<POD_ID>-7860.proxy.runpod.net/krea2app
+# then download https://<POD_ID>-7860.proxy.runpod.net/ember
 ```
 
 The artifact is a **Linux** binary — it will not run on Windows;
 downloading is only for redistribution. Whoever receives it needs
-`chmod +x krea2app` first, since the executable bit does not survive most
+`chmod +x ember` first, since the executable bit does not survive most
 transfers. For a Windows customer you do not transcode this file, you
 build [the other one](build-windows.md).
 

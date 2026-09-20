@@ -82,8 +82,8 @@ granted tab needs were never downloaded.
 ## Licensing
 
 The app takes a **licence seat** before it does anything else and will not
-start without one. Set `KREA2_LICENSE_KEY` on the pod to the key you were
-given, and `KREA2_NODE_TAG` to the node tag issued with it; one key allows
+start without one. Set `EMBER_LICENSE_KEY` on the pod to the key you were
+given, and `EMBER_NODE_TAG` to the node tag issued with it; one key allows
 a fixed number of instances running at the same time. Both are required —
 the tag names the deployment the key checks in against and there is no
 built-in default, so a pod missing either one stops at startup.
@@ -108,7 +108,7 @@ is used as the instance identity when it is present, with the pod hostname
 as the fallback.
 
 If the licence server becomes unreachable *while* the app is running, a
-background heartbeat keeps it going for `KREA2_LICENSE_GRACE` seconds
+background heartbeat keeps it going for `EMBER_LICENSE_GRACE` seconds
 (default 1800) so an outage does not kill a long video render. Past that,
 the app stops itself.
 

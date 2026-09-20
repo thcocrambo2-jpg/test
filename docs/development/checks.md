@@ -171,7 +171,7 @@ who did not touch that control.
 
 The four Krea tabs' Model and LoRA dropdowns hold catalogue **ids** — the
 feature's lists as the licence server answers them. Unless
-`KREA2_CATALOG_FILE` is already set, the check points it at the seed
+`EMBER_CATALOG_FILE` is already set, the check points it at the seed
 document, `license-validator/data/assets.json`, which is what those
 baseline entries were written from; point it at another catalogue and
 they differ for reasons that are not regressions. That is also why
@@ -232,7 +232,7 @@ constants that drift apart later. New names are fine and are only listed.
 
 Half of `ember/settings.py` is derived from the environment, so the
 values are collected in a **subprocess** with a built environment — every
-`KREA2_*`, `HF_TOKEN`, `CIVITAI_TOKEN` and `RUNPOD_*` variable dropped, a
+`EMBER_*`, `HF_TOKEN`, `CIVITAI_TOKEN` and `RUNPOD_*` variable dropped, a
 few set to fixed values, the two paths that still differ written back out
 as `<BASE_DIR>` and `<ROOT>` — so the answer is the same on any machine.
 

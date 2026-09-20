@@ -78,7 +78,7 @@ rename detection.
 
 ## "license" in identifiers, "licence" in prose
 
-The code spells it **license** — `KREA2_LICENSE_KEY`, `license_key`,
+The code spells it **license** — `EMBER_LICENSE_KEY`, `license_key`,
 `license-validator/`, the `license` field on a document — because those
 are wire values, file names and API paths, and they are contracts. Prose
 spells it **licence**: "the licence server", "a licence that grants two

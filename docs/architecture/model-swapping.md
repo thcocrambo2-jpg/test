@@ -48,7 +48,7 @@ cost a full UNet reload.
 A consequence worth knowing: **point V1 and V2 at the same UNet and
 switching between the tabs needs no reload at all.**
 
-Set `KREA2_KEEP_MODELS_LOADED=1` to turn the unload off on a machine with
+Set `EMBER_KEEP_MODELS_LOADED=1` to turn the unload off on a machine with
 room to spare, where keeping models warm is faster. It is read once, in
 [`ember/settings.py`](../../ember/settings.py), as `FREE_ON_SWAP`.
 
@@ -61,7 +61,7 @@ one single-threaded ComfyUI prompt worker anyway, so nothing real is lost.
 But without it, a second handler would run far enough to call `/free`
 while the first job still holds the models, stalling on the VRAM-settle
 wait and corrupting the what-is-loaded bookkeeping. Video keeps its own
-lane when `KREA2_WAN_PARALLEL` gives it a separate ComfyUI instance, which
+lane when `EMBER_WAN_PARALLEL` gives it a separate ComfyUI instance, which
 is also a separate signature to track. See [job-queue.md](job-queue.md).
 
 ## Restart if it died anyway

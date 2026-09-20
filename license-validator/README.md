@@ -1,6 +1,6 @@
 # license-validator
 
-Seat-limited licence server for the Krea 2 app. One customer gets one key;
+Seat-limited licence server for Ember. One customer gets one key;
 the key allows N concurrent running instances **and decides which tabs
 they get**. It exists so the Atlas connection string stays on a server
 instead of inside a binary handed to customers — extracting a read-write
@@ -66,16 +66,16 @@ npm start
 Every seed step is idempotent, so re-running one is safe. Add `--dry-run`
 to any of them to see what a run would change before it changes it.
 
-`issue-key` prints the `KREA2_LICENSE_KEY=...` line to hand the customer,
+`issue-key` prints the `EMBER_LICENSE_KEY=...` line to hand the customer,
 and the resolved feature list underneath it so you can see what they will
 actually get before you send it.
 
 ```bash
 npm run issue-key -- --name "Trial" --plan studio --seats 1 --days 30
 npm run issue-key -- --name "Acme Corp" --seats 3 --update      # seats only
-npm run issue-key -- --key KREA2-XXXX-XXXX-XXXX --plan creator --update
-npm run issue-key -- --key KREA2-XXXX-XXXX-XXXX --features-extra "wan_i2v" --update
-npm run issue-key -- --key KREA2-XXXX-XXXX-XXXX --revoke
+npm run issue-key -- --key EMBER-XXXX-XXXX-XXXX --plan creator --update
+npm run issue-key -- --key EMBER-XXXX-XXXX-XXXX --features-extra "wan_i2v" --update
+npm run issue-key -- --key EMBER-XXXX-XXXX-XXXX --revoke
 ```
 
 `--update` only touches `features`, `features_extra` and `plan_id` when the
@@ -140,7 +140,7 @@ The production URL (`<project>.vercel.app`) is stable across redeploys —
 it only changes if you rename or delete the project.
 
 The client does not hold that URL. It reads the subdomain alone from
-`KREA2_NODE_TAG` on the pod and rebuilds `https://<tag>.vercel.app` itself
+`EMBER_NODE_TAG` on the pod and rebuilds `https://<tag>.vercel.app` itself
 ([`../ember/settings.py`](../ember/settings.py)), so hand the customer the
 bare label — no scheme, no `.vercel.app` — alongside their key. The label
 must be plain `[a-z0-9-]`, 8–63 characters; anything with a dot or slash in

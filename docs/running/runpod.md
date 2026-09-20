@@ -14,8 +14,8 @@ through the same licence check.
 
 | | For | What runs | Where the app comes from |
 | --- | --- | --- | --- |
-| **1. Linux binary** | RunPod customers | `scripts/runpod_start.sh` → `dist/krea2app` | built by `./build.sh` on a pod, fetched from the licence server on every start |
-| **2. Windows binary** | Windows customers | `scripts/windows_start.ps1` → `dist\krea2app.exe` | built by `.\build.ps1` on Windows, fetched the same way |
+| **1. Linux binary** | RunPod customers | `scripts/runpod_start.sh` → `dist/ember` | built by `./build.sh` on a pod, fetched from the licence server on every start |
+| **2. Windows binary** | Windows customers | `scripts/windows_start.ps1` → `dist\ember.exe` | built by `.\build.ps1` on Windows, fetched the same way |
 | **3. Docker image** | anyone with a GPU and Docker | `docker compose up` | the image carries the *environment*; the binary is still fetched by `runpod_start.sh` inside it |
 | **4. From source** | you, while developing | `python app.py` | your working tree |
 
@@ -48,15 +48,15 @@ cross-compile. They bundle the same set of data files and packages, and
 fetches the published build, verifies it, and runs it. On the pod (bash):
 
 ```bash
-bash -c 'curl -fsSL https://<tag>.vercel.app/v1/start.sh -o /tmp/krea2-start.sh && exec bash /tmp/krea2-start.sh'
+bash -c 'curl -fsSL https://<tag>.vercel.app/v1/start.sh -o /tmp/ember-start.sh && exec bash /tmp/ember-start.sh'
 ```
 
 The customer sets two environment variables on the pod and nothing else:
 
 | Variable | What it is |
 | --- | --- |
-| `KREA2_LICENSE_KEY` | the key they were issued |
-| `KREA2_NODE_TAG` | the deployment id issued with it |
+| `EMBER_LICENSE_KEY` | the key they were issued |
+| `EMBER_NODE_TAG` | the deployment id issued with it |
 
 Leave both **empty in the template**. A template is public and every field
 in it is readable by whoever clones it, so a key typed in there is a key
@@ -70,7 +70,7 @@ lapsed key fetching a new build and shows which machines pull on which
 key; it does not stop a binary someone already has from being copied, and
 nothing here pretends otherwise.
 
-Optional on the pod: `KREA2_BASE_DIR` and `CIVITAI_TOKEN` — see
+Optional on the pod: `EMBER_BASE_DIR` and `CIVITAI_TOKEN` — see
 [Configuration](../configuration.md).
 
 There is no variable that pins a build. Which build a licence gets is
@@ -134,7 +134,7 @@ only useful against a pod that has already started once.
 
 The pod filesystem is treated as ephemeral: the ComfyUI install, model
 weights, generated images and logs all live under `settings.BASE_DIR` and
-are lost when the pod is destroyed. The default, `/workspace/krea2`, is
+are lost when the pod is destroyed. The default, `/workspace/ember`, is
 under the RunPod network volume, so the weights survive a Stop and the
 second start takes minutes instead of an hour. Terminate destroys the
 volume and pays for the whole download again.

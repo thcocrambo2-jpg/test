@@ -146,7 +146,7 @@ pins `12d52794`, the v0.34.0 tag. Three things follow:
 ## Why they never ride the parallel instance
 
 Both tabs run on the **main** ComfyUI instance whatever
-`KREA2_WAN_PARALLEL` says. The int8 model plus the 32B text encoder is
+`EMBER_WAN_PARALLEL` says. The int8 model plus the 32B text encoder is
 about 48 GB of weights, which does not fit beside a second instance
 holding VRAM back for Wan on a 48 GB card.
 

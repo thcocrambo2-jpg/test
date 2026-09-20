@@ -24,26 +24,26 @@ its caveats, on the page named beside it.
 
 ```bash
 # what a customer runs: fetch the published build and start it
-KREA2_LICENSE_KEY=<key> KREA2_NODE_TAG=<tag> \
-  bash -c 'curl -fsSL https://<tag>.vercel.app/v1/start.sh -o /tmp/krea2-start.sh && exec bash /tmp/krea2-start.sh'
+EMBER_LICENSE_KEY=<key> EMBER_NODE_TAG=<tag> \
+  bash -c 'curl -fsSL https://<tag>.vercel.app/v1/start.sh -o /tmp/ember-start.sh && exec bash /tmp/ember-start.sh'
 
 # from source, on a pod that already has the repo
-KREA2_LICENSE_KEY=<key> KREA2_NODE_TAG=<tag> python3 app.py
+EMBER_LICENSE_KEY=<key> EMBER_NODE_TAG=<tag> python3 app.py
 
 # no GPU, no ComfyUI, no weights — just the UI
-KREA2_LICENSE_KEY=<key> KREA2_NODE_TAG=<tag> python3 scripts/dryrun.py
+EMBER_LICENSE_KEY=<key> EMBER_NODE_TAG=<tag> python3 scripts/dryrun.py
 ```
 
 ### Windows — desktop ([running on Windows](../running/windows.md))
 
 ```powershell
 # what a customer runs
-$env:KREA2_LICENSE_KEY="<key>"
-$env:KREA2_NODE_TAG="<tag>"
-powershell -ExecutionPolicy Bypass -File krea2-start.ps1
+$env:EMBER_LICENSE_KEY="<key>"
+$env:EMBER_NODE_TAG="<tag>"
+powershell -ExecutionPolicy Bypass -File ember-start.ps1
 
 # no GPU, no ComfyUI, no weights — just the UI
-$env:KREA2_LICENSE_KEY="<key>"; $env:KREA2_NODE_TAG="<tag>"; .\.venv\Scripts\python.exe scripts\dryrun.py
+$env:EMBER_LICENSE_KEY="<key>"; $env:EMBER_NODE_TAG="<tag>"; .\.venv\Scripts\python.exe scripts\dryrun.py
 ```
 
 Needs Python 3.12, git and an NVIDIA GPU on the machine — the `.exe` is
@@ -54,7 +54,7 @@ not self-contained. Docker instead:
 
 Nuitka does not cross-compile: each platform builds its own artifact.
 
-### Linux — `dist/krea2app`, on a **POD** or **WSL** ([build-linux](../releasing/build-linux.md))
+### Linux — `dist/ember`, on a **POD** or **WSL** ([build-linux](../releasing/build-linux.md))
 
 ```bash
 ./build.sh --no-publish    # build only, needs no credentials
@@ -66,7 +66,7 @@ make compile               # check-args, then ./build.sh --no-publish
 make release               # check-args, compile, publish
 ```
 
-### Windows — `dist\krea2app.exe`, on **PS** ([build-windows](../releasing/build-windows.md))
+### Windows — `dist\ember.exe`, on **PS** ([build-windows](../releasing/build-windows.md))
 
 ```powershell
 .\build.ps1                    # compile only — publishing is OFF by default here
@@ -76,7 +76,7 @@ make release               # check-args, compile, publish
 ```
 
 Publishing (either platform) needs `R2_ACCOUNT_ID`, the **write** R2
-token, `R2_BUILDS_BUCKET`, `KREA2_NODE_TAG` and `KREA2_ADMIN_TOKEN` —
+token, `R2_BUILDS_BUCKET`, `EMBER_NODE_TAG` and `EMBER_ADMIN_TOKEN` —
 `make` loads all of them from `license-validator/.env`. A plain build
 needs none.
 
@@ -97,14 +97,14 @@ Setting an env var for one command:
 
 ```powershell
 # PS
-$env:KREA2_LICENSE_KEY="<key>"; python scripts\dryrun.py
+$env:EMBER_LICENSE_KEY="<key>"; python scripts\dryrun.py
 ```
 
 ```bash
 # WSL / POD
-KREA2_LICENSE_KEY=<key> python3 scripts/dryrun.py
+EMBER_LICENSE_KEY=<key> python3 scripts/dryrun.py
 # or for a whole session:
-export KREA2_LICENSE_KEY=<key>
+export EMBER_LICENSE_KEY=<key>
 ```
 
 **`make` is WSL/POD only.** The Makefile declares `SHELL := /bin/bash`
@@ -260,13 +260,13 @@ beside it for the rest:
 What the showcase is and how the page decides what to render is in
 [Pricing page](../features/pricing-page.md); these are the commands.
 
-**PS**, needs `KREA2_BASE_DIR`. The upload also needs `R2_ACCOUNT_ID`,
+**PS**, needs `EMBER_BASE_DIR`. The upload also needs `R2_ACCOUNT_ID`,
 `R2_ACCESS_KEY_ID`, `R2_SECRET_ACCESS_KEY` and `R2_SHOWCASE_BUCKET` (the
 **public** bucket — `--list`, `--scaffold` and `--dry-run` need none of
 them):
 
 ```powershell
-$env:KREA2_BASE_DIR = "C:\Adarsh\Personal\Learn\DSA\cp\test\test\tmp"
+$env:EMBER_BASE_DIR = "C:\Adarsh\Personal\Learn\DSA\cp\test\test\tmp"
 python scripts\r2_upload_showcase.py --scaffold      # tree + dummy images
 python scripts\r2_upload_showcase.py --list          # every path the page requests
 python scripts\r2_upload_showcase.py --dry-run

@@ -53,8 +53,8 @@ what a pod can generate.
 ```bash
 # bash, in license-validator/
 npm run issue-key -- --name "Internal" --plan admin --seats 3 --admin
-npm run issue-key -- --key KREA2-XXXX-XXXX-XXXX --admin --update
-npm run issue-key -- --key KREA2-XXXX-XXXX-XXXX --no-admin --update
+npm run issue-key -- --key EMBER-XXXX-XXXX-XXXX --admin --update
+npm run issue-key -- --key EMBER-XXXX-XXXX-XXXX --no-admin --update
 ```
 
 On an admin pod **nothing is captured automatically.** Instead the 🎨

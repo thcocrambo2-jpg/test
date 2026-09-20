@@ -46,7 +46,7 @@ interrupted.
 | Lane | Jobs | ComfyUI instance |
 | --- | --- | --- |
 | `comfy` | every image tab, and video when it shares an instance | the main one |
-| `wan` | video, only when `KREA2_WAN_PARALLEL=1` grants it a second instance | the second one |
+| `wan` | video, only when `EMBER_WAN_PARALLEL=1` grants it a second instance | the second one |
 
 One worker per lane is also what keeps the model-swap bookkeeping honest —
 see [model-swapping.md](model-swapping.md).

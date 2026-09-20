@@ -19,10 +19,10 @@ just a name in the `channels` array of a build document, which makes
 rolling forward and rolling back the identical operation:
 
 ```bash
-curl -s -H "Authorization: Bearer $KREA2_ADMIN_TOKEN" \
+curl -s -H "Authorization: Bearer $EMBER_ADMIN_TOKEN" \
      https://<deployment>.vercel.app/v1/admin/builds
 
-curl -s -X POST -H "Authorization: Bearer $KREA2_ADMIN_TOKEN" \
+curl -s -X POST -H "Authorization: Bearer $EMBER_ADMIN_TOKEN" \
      -H 'Content-Type: application/json' \
      -d '{"sha256":"<older sha>","channel":"stable"}' \
      https://<deployment>.vercel.app/v1/admin/builds/promote

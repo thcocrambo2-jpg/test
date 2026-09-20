@@ -7,7 +7,7 @@ the database directly.
 ## `licenses`
 
 ```js
-{ key: "KREA2-XXXX-XXXX-XXXX", name: "Acme Corp", seats: 2,
+{ key: "EMBER-XXXX-XXXX-XXXX", name: "Acme Corp", seats: 2,
   active: true, expires_at: ISODate | null,
   plan_id: "creator" | null,          // the normal route
   features: [...] | null,             // literal override; wins over plan_id
@@ -108,7 +108,7 @@ one small query, warm invocations pay nothing.
 ## `sessions`
 
 ```js
-{ license_key: "KREA2-...", instance_id: "<RUNPOD_POD_ID or uuid>",
+{ license_key: "EMBER-...", instance_id: "<RUNPOD_POD_ID or uuid>",
   last_seen: ISODate, created_at: ISODate,
   meta: { ip, pod_id, hostname, version, gpu, seen_at } }
 ```
@@ -127,7 +127,7 @@ and `last_seen` is how long that instance has been up.
   title: null,                       // admin prompts only
   prompt: "...", negative: "...",
   settings: { ... },                 // the whole replay blob; models and LoRAs by id
-  license_key: "KREA2-...",          // never projected to any client
+  license_key: "EMBER-...",          // never projected to any client
   seen_count: 3,                     // how many pods sent this same recipe
   created_at: ISODate, updated_at: ISODate }
 ```
@@ -156,7 +156,7 @@ The same blob shape as a prompt, under a name, per tab.
   enabled: true,                     // off = still stored, no longer offered
   is_default: false,                 // at most one per tab
   sort_order: 0,
-  created_by: "KREA2-...",           // the licence that saved it
+  created_by: "EMBER-...",           // the licence that saved it
   created_at: ISODate, updated_at: ISODate }
 ```
 
@@ -210,7 +210,7 @@ feature's `feature_assets` document along with its catalogue row; the
 { _id: "<sha256>", size: 412398112, version: "<git commit>",
   git_commit: "...", git_branch: "...", arch: "x86_64",
   platform: "linux" | "windows",
-  filename: "krea2app",              // part of the signed object key
+  filename: "ember",                 // part of the signed object key
   channels: ["stable"],              // $setOnInsert — promote edits it
   built_at: ISODate, published_at: ISODate }
 ```
@@ -219,6 +219,11 @@ Registering a build is an upsert on the sha, so republishing the same
 artifact is idempotent; `channels` and `published_at` are `$setOnInsert`
 so a re-register never silently unpromotes anything. `downloads` logs one
 row per presigned URL, keyed on the licence, and expires itself.
+
+`filename` is stored per build rather than assumed, which is what makes
+promoting an older build to `stable` work: the start script downloads
+under whatever name that build recorded, not under the name the current
+build would have.
 
 ## `orders`
 
@@ -236,7 +241,7 @@ can be received twice without selling anything twice.
   status: "CREATED" | "INVOICED" | "PAID" | "PROVISIONED" |
           "DELIVERED" | "FAILED_PROVISION" | "EXPIRED_UNPAID",
   telegram_payment_charge_id: "...",// absent until paid — sparse index
-  license_key: "KREA2-...",         // absent until provisioned
+  license_key: "EMBER-...",         // absent until provisioned
   provision_attempts: 0, last_error: null,
   created_at, updated_at, invoiced_at, paid_at, provisioned_at,
   delivered_at }

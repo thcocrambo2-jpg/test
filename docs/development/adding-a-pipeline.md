@@ -82,7 +82,7 @@ see [the mirror and the pins](../releasing/mirror-and-pins.md).
 In [`license-validator/data/assets.json`](../../license-validator/data/assets.json),
 then re-seeded into the licence database. The database is the source of
 truth; the JSON is the seed document, and it is also what
-`check_schema.py` reads when `KREA2_CATALOG_FILE` is unset.
+`check_schema.py` reads when `EMBER_CATALOG_FILE` is unset.
 
 **If the tab has LoRAs but no models**, add its key to
 `LORA_ONLY_FEATURES` in
@@ -158,7 +158,7 @@ committed.
 step 5's tail: once the LoRAs existed and had been uploaded, each
 record's `mirror` was filled in, so pods fetch them from the mirror
 rather than from upstream. That is the edit `mirror_to_hf.py` makes for
-you when it has `KREA2_ADMIN_TOKEN`.
+you when it has `EMBER_ADMIN_TOKEN`.
 
 ## Before you push
 

@@ -1,7 +1,7 @@
 # Publishing, channels and rollback
 
-For whoever ships a build. Compiling produces `dist/krea2app` or
-`dist\krea2app.exe`; this page is what happens after that — uploading the
+For whoever ships a build. Compiling produces `dist/ember` or
+`dist\ember.exe`; this page is what happens after that — uploading the
 artifact to R2, pointing a channel at it, and moving that channel back
 when something is wrong.
 
@@ -25,7 +25,7 @@ PowerShell or dash. The Windows build has no make target; it is
 | `make health` | the deployment's `/health` — `db`, `r2`, `stable_build` | admin |
 | `make builds` | every build ever published, newest first | admin |
 | `make check-args` | every check a build must pass — see [the checks](../development/checks.md) | nothing |
-| `make compile` | `check-args`, then `build.sh --no-publish` — compiles `dist/krea2app`, uploads nothing | nothing |
+| `make compile` | `check-args`, then `build.sh --no-publish` — compiles `dist/ember`, uploads nothing | nothing |
 | `make publish` | `build.sh --upload-only` — uploads the binary already in `dist/` and points `stable` at it | write token + admin |
 | `make release` | `check-args`, then `build.sh -y` — compile **and** publish in one step | write token + admin |
 | `make promote SHA=<sha256>` | point a channel at a build | admin |
@@ -38,7 +38,7 @@ PowerShell or dash. The Windows build has no make target; it is
 Two variables tune a publish — **WSL or POD**:
 
 ```bash
-KREA2_BUILD_CHANNEL=beta make publish    # upload without customers getting it
+EMBER_BUILD_CHANNEL=beta make publish    # upload without customers getting it
 make promote SHA=<older sha> CHANNEL=beta
 ```
 
@@ -54,7 +54,7 @@ The Makefile resolves the names so neither side has to know the other's:
 `build.sh` wants `R2_ACCESS_KEY_ID` / `R2_SECRET_ACCESS_KEY`, and the
 publish targets export the **write** pair under those names for the
 length of the recipe. The admin token is the same story — the file holds
-`ADMIN_TOKEN`, and the Makefile exports it as `KREA2_ADMIN_TOKEN`, which
+`ADMIN_TOKEN`, and the Makefile exports it as `EMBER_ADMIN_TOKEN`, which
 is the name `build.sh` and the raw `curl` calls below read.
 
 `make check` refuses to publish if the read and write keys are identical,
@@ -73,7 +73,7 @@ on a machine that has never built anything.
   bucket      krea2-builds
   api         https://<node-tag>.vercel.app
   write key   038e9e…  (differs from read key: ok)
-  artifact    dist/krea2app  (100600024 bytes)
+  artifact    dist/ember  (100600024 bytes)
   admin api   ok
 ```
 
@@ -95,7 +95,7 @@ Where the real values live is in
 
 ## Rollback and roll-forward are the same call
 
-Builds are content-addressed at `builds/<sha256>/krea2app`, so publishing
+Builds are content-addressed at `builds/<sha256>/ember`, so publishing
 never overwrites and every build stays in the bucket. A channel is just a
 name sitting on one build document — `make builds` lists them,
 `make promote` moves the name. Nothing is re-uploaded and pods take it on
@@ -120,13 +120,13 @@ that does not say. The detail is in
 
 ### Raw equivalents
 
-Any shell with `curl`, needs `KREA2_ADMIN_TOKEN`:
+Any shell with `curl`, needs `EMBER_ADMIN_TOKEN`:
 
 ```bash
-curl -s -H "Authorization: Bearer $KREA2_ADMIN_TOKEN" \
+curl -s -H "Authorization: Bearer $EMBER_ADMIN_TOKEN" \
      https://<tag>.vercel.app/v1/admin/builds
 
-curl -s -X POST -H "Authorization: Bearer $KREA2_ADMIN_TOKEN" \
+curl -s -X POST -H "Authorization: Bearer $EMBER_ADMIN_TOKEN" \
      -H 'Content-Type: application/json' \
      -d '{"sha256":"<older sha>","channel":"stable"}' \
      https://<tag>.vercel.app/v1/admin/builds/promote
@@ -137,7 +137,7 @@ curl -s https://<tag>.vercel.app/health
 Presign an R2 URL by hand — any shell, needs the four `R2_*`:
 
 ```bash
-python scripts/r2_presign.py --key builds/<sha256>/krea2app
+python scripts/r2_presign.py --key builds/<sha256>/ember
 python scripts/r2_presign.py --key start.ps1 --method PUT --expires 900
 ```
 

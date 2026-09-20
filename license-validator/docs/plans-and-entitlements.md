@@ -14,8 +14,8 @@ that tier instead of requiring a bulk update across `licenses`.
 ```bash
 npm run seed-catalog                                             # once, and after editing plans
 npm run issue-key -- --name "Acme Corp" --plan creator --seats 2
-npm run issue-key -- --key KREA2-XXXX-XXXX-XXXX --plan studio --update
-npm run issue-key -- --key KREA2-XXXX-XXXX-XXXX --features-extra "wan_i2v" --update
+npm run issue-key -- --key EMBER-XXXX-XXXX-XXXX --plan studio --update
+npm run issue-key -- --key EMBER-XXXX-XXXX-XXXX --features-extra "wan_i2v" --update
 ```
 
 ## Shipped plans
