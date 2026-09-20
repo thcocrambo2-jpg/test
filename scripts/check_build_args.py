@@ -60,7 +60,7 @@ BUILD_PS1 = ROOT / "build.ps1"
 PLATFORM_SPECIFIC = {
     "--jobs": "nproc on Linux, NUMBER_OF_PROCESSORS on Windows",
     "--output-dir": "same value, set from a variable on each side",
-    "--output-filename": "krea2app vs krea2app.exe — Windows cannot execute an extensionless file",
+    "--output-filename": "ember vs ember.exe — Windows cannot execute an extensionless file",
     "--static-libpython": "Unix-only linking choice; an error on Windows",
     "--mingw64": "Windows only, and only when MSVC is absent",
     "--windows-icon-from-ico": "Windows only",

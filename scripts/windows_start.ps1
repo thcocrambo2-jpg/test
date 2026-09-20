@@ -5,12 +5,16 @@
 
     The customer sets two environment variables and nothing else:
 
-        KREA2_LICENSE_KEY   the key they were issued
-        KREA2_NODE_TAG      the deployment id issued with it
+        EMBER_LICENSE_KEY   the key they were issued
+        EMBER_NODE_TAG      the deployment id issued with it
 
     and then runs, from PowerShell:
 
-        powershell -ExecutionPolicy Bypass -File krea2-start.ps1
+        powershell -ExecutionPolicy Bypass -File ember-start.ps1
+
+    KREA2_LICENSE_KEY and KREA2_NODE_TAG are read as well, so a machine
+    that already has those set in its user environment keeps working
+    without anyone touching it.
 
     There is no credential in this file. The build comes from a private
     bucket, but the thing that opens it is the customer's own licence key,
@@ -71,7 +75,7 @@ $ProgressPreference = 'SilentlyContinue'
 # harmless on 5.1, where it is just an unused variable.
 $PSNativeCommandUseErrorActionPreference = $false
 
-$NAME = 'krea2app.exe'
+$NAME = 'ember.exe'
 
 # ── Where everything lives ───────────────────────────────────────────────
 # C:\krea2 rather than somewhere under the user profile: this holds ~90 GB
@@ -107,28 +111,44 @@ Say 'starting'
 # ember/licensing/seat.py says for the same two problems, so a customer who
 # hits one of them later reads the same sentence twice rather than two
 # different ones about the same mistake.
-if ([string]::IsNullOrWhiteSpace($env:KREA2_LICENSE_KEY)) {
+#
+# Both spellings are read because both are in use: the EMBER_ names are
+# what the instructions say to set, and the KREA2_ names are what machines
+# already running the app carry in their user environment. EMBER_ wins when
+# both are set, so adding the new name is enough and nobody has to find and
+# delete the old one first. Blank counts as unset, the same as it does for
+# a variable that was never created.
+$LICENSE_KEY = $env:EMBER_LICENSE_KEY
+if ([string]::IsNullOrWhiteSpace($LICENSE_KEY)) {
+    $LICENSE_KEY = $env:KREA2_LICENSE_KEY
+}
+$NODE_TAG_RAW = $env:EMBER_NODE_TAG
+if ([string]::IsNullOrWhiteSpace($NODE_TAG_RAW)) {
+    $NODE_TAG_RAW = $env:KREA2_NODE_TAG
+}
+
+if ([string]::IsNullOrWhiteSpace($LICENSE_KEY)) {
     Die @'
 No license key found.
-       Set KREA2_LICENSE_KEY to the key you were given, then run this
+       Set EMBER_LICENSE_KEY to the key you were given, then run this
        script again:
 
-           $env:KREA2_LICENSE_KEY = "<your key>"
+           $env:EMBER_LICENSE_KEY = "<your key>"
 
        To keep it across reboots:
 
            [Environment]::SetEnvironmentVariable(
-               "KREA2_LICENSE_KEY", "<your key>", "User")
+               "EMBER_LICENSE_KEY", "<your key>", "User")
 '@
 }
 
-if ([string]::IsNullOrWhiteSpace($env:KREA2_NODE_TAG)) {
+if ([string]::IsNullOrWhiteSpace($NODE_TAG_RAW)) {
     Die @'
 This machine is missing its node tag.
-       Set KREA2_NODE_TAG to the value issued with your license key, then
+       Set EMBER_NODE_TAG to the value issued with your license key, then
        run this script again:
 
-           $env:KREA2_NODE_TAG = "<your node tag>"
+           $env:EMBER_NODE_TAG = "<your node tag>"
 '@
 }
 
@@ -138,7 +158,7 @@ This machine is missing its node tag.
 # someone lowercases it by hand. settings.py strips and lowercases;
 # whitespace anywhere fails the pattern either way, so removing all of it
 # reaches the same verdict more legibly.
-$NODE_TAG = ($env:KREA2_NODE_TAG -replace '\s', '').ToLowerInvariant()
+$NODE_TAG = ($NODE_TAG_RAW -replace '\s', '').ToLowerInvariant()
 
 # One DNS label and nothing else. The tag is what the endpoint is assembled
 # from, so a value carrying a dot, a slash, a colon or a port is a value
@@ -149,7 +169,7 @@ $NODE_TAG = ($env:KREA2_NODE_TAG -replace '\s', '').ToLowerInvariant()
 if ($NODE_TAG -notmatch '^[a-z0-9][a-z0-9-]{6,61}[a-z0-9]$') {
     Die @'
 this machine's node tag is not valid.
-       Set KREA2_NODE_TAG to the value issued with your license key -
+       Set EMBER_NODE_TAG to the value issued with your license key -
        it is a single name, with no dots, slashes or colons in it.
 '@
 }
@@ -164,8 +184,8 @@ $API = "https://$NODE_TAG.vercel.app"
 # rather than two.
 $INSTANCE = "host-$([System.Net.Dns]::GetHostName())"
 
-$keyPrefix = $env:KREA2_LICENSE_KEY.Substring(
-    0, [Math]::Min(10, $env:KREA2_LICENSE_KEY.Length))
+$keyPrefix = $LICENSE_KEY.Substring(
+    0, [Math]::Min(10, $LICENSE_KEY.Length))
 Say "license key $keyPrefix... | node tag $NODE_TAG"
 
 # ── Tooling ──────────────────────────────────────────────────────────────
@@ -277,7 +297,7 @@ try {
 # $BASE: the privilege is the same either way, and PowerShell 5.1's
 # Remove-Item has a long history of following a directory symlink and
 # deleting what it points at, which here would be the model tree.
-$probeTarget = Join-Path $env:TEMP ('krea2-probe-' + [guid]::NewGuid().ToString('N'))
+$probeTarget = Join-Path $env:TEMP ('ember-probe-' + [guid]::NewGuid().ToString('N'))
 $probeLink = "$probeTarget.link"
 try {
     [System.IO.File]::WriteAllText($probeTarget, '')
@@ -342,7 +362,7 @@ Say 'checking for the current build ...'
 $currentSha = $null
 if ($have) { $currentSha = $have }
 $payload = @{
-    license_key = $env:KREA2_LICENSE_KEY
+    license_key = $LICENSE_KEY
     instance_id = $INSTANCE
     current_sha = $currentSha
     platform    = 'windows'
@@ -354,7 +374,7 @@ $payload = @{
 # 5.1's native-argument quoting mangles embedded quotes in ways that are
 # entertaining to debug. UTF8 without a BOM, because a BOM would ride along
 # into the JSON body and the server would reject it as malformed.
-$payloadFile = Join-Path $env:TEMP ('krea2-build-req-' + [guid]::NewGuid().ToString('N') + '.json')
+$payloadFile = Join-Path $env:TEMP ('ember-build-req-' + [guid]::NewGuid().ToString('N') + '.json')
 [System.IO.File]::WriteAllText($payloadFile, $payload, (New-Object System.Text.UTF8Encoding($false)))
 
 # --fail is deliberately NOT used: a refusal here carries a message written
@@ -536,7 +556,7 @@ the downloaded app is damaged (checksum does not match).
 
     # No chmod +x equivalent: on Windows the extension is what makes a file
     # executable, which is why the artifact is named .exe rather than
-    # matching the Linux build's bare "krea2app".
+    # matching the Linux build's bare "ember".
     Move-Item -LiteralPath $tmp -Destination $BIN -Force
     Say 'downloaded and verified'
 }

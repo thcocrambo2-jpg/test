@@ -18,10 +18,10 @@
 # them at runtime and launches ComfyUI as a separate process. That is why
 # bootstrap.runtime_python() exists.
 #
-#   ./build.sh                 -> dist/krea2app, then offer to publish it
+#   ./build.sh                 -> dist/ember, then offer to publish it
 #   ./build.sh -y              -> ... and publish without asking
 #   ./build.sh --no-publish    -> build only
-#   ./build.sh --upload-only   -> publish the dist/krea2app already there,
+#   ./build.sh --upload-only   -> publish the dist/ember already there,
 #                                 compiling nothing
 #
 # Publishing uploads to a private Cloudflare R2 bucket and then registers
@@ -37,9 +37,9 @@
 #                          The API is https://<tag>.vercel.app, assembled
 #                          here exactly as ember/settings.py assembles it
 #                          there
-#   KREA2_ADMIN_TOKEN      the ADMIN_TOKEN set on that deployment
+#   EMBER_ADMIN_TOKEN      the ADMIN_TOKEN set on that deployment
 #
-#   KREA2_BUILD_CHANNEL    which channel to point at this build
+#   EMBER_BUILD_CHANNEL    which channel to point at this build
 #                          (default "stable"; set it to something else to
 #                          upload without customers getting it)
 #
@@ -74,7 +74,7 @@ done
 # Needed by both paths below, so they are set before either runs.
 PYTHON="${PYTHON:-python3}"
 OUTPUT_DIR="dist"
-OUTPUT_NAME="krea2app"
+OUTPUT_NAME="ember"
 
 # The Publish section is a function so --upload-only can reach it without
 # running the build. Its body is deliberately NOT indented: it is mostly
@@ -86,7 +86,7 @@ publish() {
 #
 # Two objects go to one PRIVATE Cloudflare R2 bucket:
 #
-#   builds/<sha256>/krea2app   the binary, addressed by its own hash
+#   builds/<sha256>/ember      the binary, addressed by its own hash
 #   start.sh                   scripts/runpod_start.sh, at a fixed key
 #
 # Neither is reachable without going through the licence API. A pod asks
@@ -137,7 +137,7 @@ API_URL=""
 [[ "$NODE_TAG" =~ ^[a-z0-9][a-z0-9-]{6,61}[a-z0-9]$ ]] \
     && API_URL="https://$NODE_TAG.vercel.app"
 
-CHANNEL="${KREA2_BUILD_CHANNEL:-stable}"
+CHANNEL="${EMBER_BUILD_CHANNEL:-stable}"
 
 publish_unavailable() {
     # The build itself succeeded, so this is only fatal when -y said to
@@ -228,14 +228,14 @@ It has to be one name as it appears in <name>.vercel.app — no dots, no
 slashes, no https:// prefix. Got: $KREA2_NODE_TAG"
 fi
 
-if [[ -z "${KREA2_ADMIN_TOKEN:-}" ]]; then
+if [[ -z "${EMBER_ADMIN_TOKEN:-}" ]]; then
     publish_unavailable "\
-Not publishing: KREA2_ADMIN_TOKEN is unset.
+Not publishing: EMBER_ADMIN_TOKEN is unset.
 Uploading the binary without registering it would put bytes in the bucket
 that nothing points at — pods would keep running the previous build and
 nothing would say why. Export it and re-run with --upload-only:
 
-    KREA2_ADMIN_TOKEN  the ADMIN_TOKEN set on $API_URL"
+    EMBER_ADMIN_TOKEN  the ADMIN_TOKEN set on $API_URL"
 fi
 
 echo
@@ -339,33 +339,37 @@ upload "$START_SCRIPT" "start.sh" || {
 # the bucket and no channel points at them, so pods carry on running the
 # previous build.
 echo ">>> Registering the build ..."
-KREA2_REG_SHA="$sha" \
-KREA2_REG_SIZE="$size" \
-KREA2_REG_COMMIT="$commit" \
-KREA2_REG_BRANCH="$branch" \
-KREA2_REG_CHANNEL="$CHANNEL" \
-KREA2_REG_URL="$API_URL" \
-KREA2_ADMIN_TOKEN="$KREA2_ADMIN_TOKEN" \
+EMBER_REG_SHA="$sha" \
+EMBER_REG_SIZE="$size" \
+EMBER_REG_COMMIT="$commit" \
+EMBER_REG_BRANCH="$branch" \
+EMBER_REG_CHANNEL="$CHANNEL" \
+EMBER_REG_URL="$API_URL" \
+EMBER_REG_FILENAME="$OUTPUT_NAME" \
+EMBER_ADMIN_TOKEN="$EMBER_ADMIN_TOKEN" \
 "$PYTHON" - <<'PY' || { echo >&2 "ERROR: registering the build failed."; exit 1; }
 import json, os, platform, sys, time
 import urllib.error, urllib.request
 
 body = json.dumps({
-    "sha256": os.environ["KREA2_REG_SHA"],
-    "size": int(os.environ["KREA2_REG_SIZE"]),
-    "git_commit": os.environ.get("KREA2_REG_COMMIT") or None,
-    "git_branch": os.environ.get("KREA2_REG_BRANCH") or None,
+    "sha256": os.environ["EMBER_REG_SHA"],
+    "size": int(os.environ["EMBER_REG_SIZE"]),
+    "git_commit": os.environ.get("EMBER_REG_COMMIT") or None,
+    "git_branch": os.environ.get("EMBER_REG_BRANCH") or None,
     "arch": f"{platform.system().lower()}-{platform.machine()}",
+    # What the object is called inside its content-addressed prefix, so
+    # the API signs a URL for the name that was actually uploaded.
+    "filename": os.environ["EMBER_REG_FILENAME"],
     "built_at": time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime()),
-    "promote": os.environ["KREA2_REG_CHANNEL"],
+    "promote": os.environ["EMBER_REG_CHANNEL"],
 }).encode()
 
 request = urllib.request.Request(
-    f"{os.environ['KREA2_REG_URL'].rstrip('/')}/v1/admin/builds",
+    f"{os.environ['EMBER_REG_URL'].rstrip('/')}/v1/admin/builds",
     data=body,
     headers={
         "Content-Type": "application/json",
-        "Authorization": f"Bearer {os.environ['KREA2_ADMIN_TOKEN']}",
+        "Authorization": f"Bearer {os.environ['EMBER_ADMIN_TOKEN']}",
     },
     method="POST",
 )
@@ -379,11 +383,11 @@ except urllib.error.HTTPError as err:
     # variable and a --upload-only re-run, not a rebuild.
     print(f"  HTTP {err.code} from the API: {detail}", file=sys.stderr)
     if err.code == 401:
-        print("  KREA2_ADMIN_TOKEN does not match the ADMIN_TOKEN set on "
+        print("  EMBER_ADMIN_TOKEN does not match the ADMIN_TOKEN set on "
               "that deployment.", file=sys.stderr)
     raise SystemExit(1)
 except Exception as err:
-    print(f"  could not reach {os.environ['KREA2_REG_URL']}: {err}",
+    print(f"  could not reach {os.environ['EMBER_REG_URL']}: {err}",
           file=sys.stderr)
     raise SystemExit(1)
 PY
@@ -397,15 +401,15 @@ cat <<EOF
     on its next start — \$KREA2_NODE_TAG is expanded on the pod, from the
     same variable the licence check already needs:
 
-      bash -c 'curl -fsSL https://\$KREA2_NODE_TAG.vercel.app/v1/start.sh -o /tmp/krea2-start.sh && exec bash /tmp/krea2-start.sh'
+      bash -c 'curl -fsSL https://\$KREA2_NODE_TAG.vercel.app/v1/start.sh -o /tmp/ember-start.sh && exec bash /tmp/ember-start.sh'
 
     To roll back, every build stays in the bucket and in the builds
     collection. List them and move the channel — no re-upload, and pods
     take it on their next start:
 
-      curl -s -H "Authorization: Bearer \$KREA2_ADMIN_TOKEN" \\
+      curl -s -H "Authorization: Bearer \$EMBER_ADMIN_TOKEN" \\
            $API_URL/v1/admin/builds
-      curl -s -X POST -H "Authorization: Bearer \$KREA2_ADMIN_TOKEN" \\
+      curl -s -X POST -H "Authorization: Bearer \$EMBER_ADMIN_TOKEN" \\
            -H 'Content-Type: application/json' \\
            -d '{"sha256":"<older sha>","channel":"$CHANNEL"}' \\
            $API_URL/v1/admin/builds/promote
