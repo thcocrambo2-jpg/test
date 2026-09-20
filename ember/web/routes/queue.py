@@ -4,6 +4,12 @@ Running a job is `ember.generation.queue`'s business, and shaping a
 snapshot into JSON is `common._queue_json`. This is only the three routes.
 """
 
+from fastapi import APIRouter, Depends
+
+from ember.generation import queue as jobqueue
+from ember.logs import log
+from ember.web.routes.common import require_auth, _queue_json
+
 
 def register(api: APIRouter) -> None:
     @api.get("/queue", dependencies=[Depends(require_auth)])

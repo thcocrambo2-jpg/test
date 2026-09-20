@@ -8,6 +8,22 @@ Nothing here registers a route. Each sibling module does that for its own
 area, and `ember.web.api` calls them in turn.
 """
 
+import re
+import secrets
+import time
+from pathlib import Path
+from urllib.parse import quote
+
+from fastapi import HTTPException, Request
+from PIL import Image
+
+from ember import features
+from ember.web import gallery_index
+from ember.generation import queue as jobqueue
+from ember.generation import recipes
+from ember.web import tabschema
+from ember.settings import TEMP_DIR, UI_REQUIRE_TOKEN
+
 PREFIX = "/api/v1"
 
 # The cookie the SPA trades the fragment token for. HttpOnly so no script

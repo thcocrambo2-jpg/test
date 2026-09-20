@@ -5,6 +5,13 @@ routes are what need it. This module only writes the file down and sweeps
 the ones nobody ever claimed.
 """
 
+import time
+import uuid
+
+from fastapi import APIRouter, Depends, HTTPException, UploadFile
+
+from ember.web.routes.common import UPLOADS, require_auth
+
 # An upload nothing has claimed within this long is abandoned — a page
 # closed between choosing an image and pressing Generate. Swept lazily on
 # the next upload rather than by a timer: there is no idle cost, and the

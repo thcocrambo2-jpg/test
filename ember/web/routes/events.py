@@ -5,6 +5,21 @@ Queue changes, each run's latest output, and a preset dropdown going stale
 nothing in between decides a quiet stream is a dead one.
 """
 
+import json
+import time
+
+import anyio
+
+from fastapi import APIRouter, Depends, Request
+from fastapi.responses import StreamingResponse
+
+from ember.generation import queue as jobqueue
+from ember.licensing import presets
+from ember.web import tabschema
+from ember.web.routes.common import (
+    require_auth, _display_json, _queue_json,
+)
+
 # How often the SSE loop looks for something to say, and how often it
 # says nothing out loud. jobqueue is thread-based and pull-oriented with
 # a revision() counter, so this is a poll either way — see stream().

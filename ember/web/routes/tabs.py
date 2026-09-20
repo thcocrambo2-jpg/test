@@ -5,6 +5,18 @@ one of its runs, and queueing a click. All four are registered by the loop
 below and nowhere else, which is what makes `require_feature` unskippable.
 """
 
+from fastapi import APIRouter, Body, Depends, HTTPException
+
+from ember.web import gallery_index
+from ember.generation import queue as jobqueue
+from ember.licensing import presets
+from ember.generation import recipes
+from ember.web import tabschema
+from ember.web.routes.common import (
+    require_auth, require_feature, _display_json, _queue_json,
+    _resolve_uploads,
+)
+
 
 def _mount_tabs(api: APIRouter) -> None:
     """Register the per-tab routes — the only place they are created.

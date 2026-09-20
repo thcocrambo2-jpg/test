@@ -60,41 +60,27 @@ token stays out of Cloudflare's logs, out of every proxy in between and
 out of `Referer` headers. A query parameter would be in all three.
 """
 
-import dataclasses
-import io
-import json
-import mimetypes
-import re
 import secrets
-import threading
-import time
-import uuid
-from pathlib import Path
-from urllib.parse import quote
-
-import anyio
 
 from fastapi import (
-    APIRouter, Body, Depends, FastAPI, HTTPException, Query, Request,
-    Response, UploadFile,
+    APIRouter, Body, Depends, FastAPI, HTTPException, Request, Response,
 )
-from fastapi.responses import FileResponse, JSONResponse, StreamingResponse
-from PIL import Image
 
 from ember.licensing import catalog as assets  # the route below is called catalog()
 from ember import features
-from ember.web import gallery_index
-from ember.generation import queue as jobqueue
 from ember.licensing import seat as licensing
-from ember.licensing import plans
-from ember.licensing import presets
-from ember.licensing import prompts
-from ember.generation import recipes
-from ember.web import showcase
 from ember.web import tabschema
 from ember.comfy.server import GPU_COUNT
 from ember.logs import log
-from ember.settings import TEMP_DIR, UI_REQUIRE_TOKEN
+from ember.web.routes import events
+from ember.web.routes import licence
+from ember.web.routes import media
+from ember.web.routes import queue
+from ember.web.routes import tabs
+from ember.web.routes import uploads
+from ember.web.routes.common import (
+    ALLOW_ANON, COOKIE, PREFIX, TOKEN, _is_https, require_auth,
+)
 
 
 # ───────────────────────────────────────────────────────────── app
@@ -176,6 +162,18 @@ def create_app() -> FastAPI:
         tab list before it needs any registry. Filtered the same way.
         """
         return [schema.to_json() for schema in tabschema.entitled()]
+
+    # Registration order is the route table's order, and a path like
+    # /gallery/delete only reaches its own handler because it is
+    # registered above /gallery/{path_id:path}. Each call below is where
+    # one area's routes go in; moving a call moves its whole block.
+
+    queue.register(api)
+    uploads.register(api)
+    media.register(api)
+    licence.register(api)
+    tabs._mount_tabs(api)
+    events.register(api)
 
     app.include_router(api)
     _mount_spa(app)

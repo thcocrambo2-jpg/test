@@ -8,6 +8,20 @@ browser, and they contain themselves to OUTPUT_DIR through
 absolute path ever crosses the wire.
 """
 
+import mimetypes
+from pathlib import Path
+
+from fastapi import APIRouter, Body, Depends, HTTPException, Query
+from fastapi.responses import FileResponse
+
+from ember import features
+from ember.web import gallery_index
+from ember.generation import recipes
+from ember.web import tabschema
+from ember.web.routes.common import (
+    require_auth, require_feature, _media_list,
+)
+
 # The most files one bulk delete may name. A gallery page holds at most
 # 100 (the `limit` on GET /gallery) and the selection is cleared when the
 # page turns, so this is well past anything the UI can ask for — it is

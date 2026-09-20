@@ -6,6 +6,18 @@ the community prompt library. Every one of these is a cached read in
 dataclass into JSON and say who is allowed to ask.
 """
 
+import dataclasses
+
+from fastapi import APIRouter, Depends, HTTPException, Query
+
+from ember import features
+from ember.generation import queue as jobqueue
+from ember.licensing import plans
+from ember.licensing import presets
+from ember.licensing import prompts
+from ember.web import showcase
+from ember.web.routes.common import require_auth, require_feature
+
 
 def register(api: APIRouter) -> None:
     @api.get("/plans", dependencies=[Depends(require_auth)])
