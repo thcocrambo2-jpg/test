@@ -29,9 +29,17 @@ Three tiers are public:
 | `creator` | 999 | 850 | + `krea_v2_t2i`, `krea_edit`, `krea_v2_edit` |
 | `studio` | 1799 | 1550 | + `wan_i2v`, `minimax_i2v`, `minimax_t2v` |
 
-Three more carry `is_public: false` and never reach the pricing page or
-the bot: `admin` (every tab the binary can build, and where a new tab
-lands first), `admin-minimal`, and `test-krea1-only`.
+Three more in `DEFAULT_PLANS` carry `is_public: false` and never reach
+the pricing page: `admin` (every tab the binary can build, and where a
+new tab lands first), `admin-minimal`, and `test-krea1-only`. A fourth
+internal tier, `customer-admin`, exists only as a hand-made document in
+Atlas, so it is not in `DEFAULT_PLANS` and cannot be read from this
+repository.
+
+None of the four carries a Stars price, and that — not `is_public` — is
+what keeps them out of an invoice. The bot requires both, so adding a
+Stars price to an internal tier by mistake still does not put it on
+sale.
 
 `krea_t2i` is turbo-only by its model list — the Raw model is not in
 `feature_assets.krea_t2i`, see [Catalogue data](catalogue-data.md) — which
