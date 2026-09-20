@@ -117,13 +117,11 @@ changing that one constant is the whole change: the handlers take their
 slots as a variadic tail and the builders already loop over the resolved
 list. Slots left at `None` drop out of the graph.
 
-To keep a tall stack from eating the column, only the first
-`VISIBLE_LORA_SLOTS` (3) rows are shown; the rest sit in a collapsed
-**"➕ N more LoRA slots"** accordion, which opens on load if any hidden
-slot is already in use, so an active LoRA is never invisible. The nesting
-is purely visual — the slot list stays flat and ordered. Set
-`VISIBLE_LORA_SLOTS >= MAX_LORA_SLOTS` to show every slot and skip the
-accordion.
+Eight "None" dropdowns would be eight rows of nothing, so `LoraStack`
+renders the whole stack as one collapsed card and puts the count on its
+header — "3/8 active", or "no slots" for a feature with none. Opening it
+shows every slot at once; the list is flat and ordered, and the collapse
+is purely visual.
 
 The V2 tabs' rows are described under
 [krea2-v2.md](krea2-v2.md#lora-stack); the MiniMax chain under

@@ -72,8 +72,8 @@ import { collections } from "./db.js";
 // An edit in Atlas reaches running instances within this window.
 const FEATURE_TTL_MS = 60_000;
 
-let cache = globalThis.__krea2Features;
-if (!cache) cache = globalThis.__krea2Features = { at: 0, byKey: null };
+let cache = globalThis.__emberFeatures;
+if (!cache) cache = globalThis.__emberFeatures = { at: 0, byKey: null };
 
 export const FEATURES = [
   {

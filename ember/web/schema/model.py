@@ -371,7 +371,6 @@ class TabSchema:
             "route": self.route,
             "output": self.output,
             "submitLabel": self.submit_label,
-            "ready": True,
             "promptField": self.prompt_field,
             "resultKeys": list(self.result_keys),
             "presetTab": self.preset_tab,

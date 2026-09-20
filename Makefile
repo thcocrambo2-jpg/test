@@ -6,7 +6,7 @@
 #
 #     make              what you can run
 #     make check        verify the credentials without using them
-#     make publish      upload dist/krea2app and point "stable" at it
+#     make publish      upload dist/ember and point "stable" at it
 #     make release      compile, then do the same
 #
 # Run it from WSL or a Linux pod. The recipes are bash — `source`, arrays
@@ -18,7 +18,7 @@ SHELL := /bin/bash
 .DEFAULT_GOAL := help
 
 ENV_FILE := license-validator/.env
-ARTIFACT := dist/krea2app
+ARTIFACT := dist/ember
 
 # The pod's start script. Published by build.sh as part of a full
 # release, but it is a plain file at a fixed key and a fix to it should
@@ -35,7 +35,7 @@ WIN_START := scripts/windows_start.ps1
 # artifact above and to $(ENV_FILE): it carries no credential and no
 # licensed code, which is what makes it publishable. Running it is
 # `docker compose up`, so there is no target for that here.
-IMAGE    := krea2
+IMAGE    := ember
 TAG      := latest
 REGISTRY :=
 
@@ -59,7 +59,7 @@ source "$(ENV_FILE)"
 set +a
 
 read_key="$${R2_ACCESS_KEY_ID:-}"
-export KREA2_ADMIN_TOKEN="$${ADMIN_TOKEN:-}"
+export EMBER_ADMIN_TOKEN="$${ADMIN_TOKEN:-}"
 
 missing=()
 for name in KREA2_NODE_TAG ADMIN_TOKEN; do
@@ -129,7 +129,7 @@ help:
 	echo "  make promote SHA=<sha256>    roll a channel back to a build"
 	echo
 	echo "  Windows builds are made on Windows - Nuitka cannot cross-compile:"
-	echo "      .\\\\build.ps1               compile dist/krea2app.exe"
+	echo "      .\\\\build.ps1               compile dist/ember.exe"
 	echo "      .\\\\build.ps1 -Publish      ... and publish it"
 	echo "  make start-ps1  push a $(WIN_START) fix without a Windows box"
 	echo
@@ -150,7 +150,7 @@ check:
 	echo "  account     $${R2_ACCOUNT_ID:-(unset)}"
 	echo "  bucket      $${R2_BUILDS_BUCKET:-(unset)}"
 	echo "  api         $$API"
-	echo "  admin token $${KREA2_ADMIN_TOKEN:0:6}..."
+	echo "  admin token $${EMBER_ADMIN_TOKEN:0:6}..."
 	if [[ -z "$${R2_WRITE_ACCESS_KEY_ID:-}" ]]; then
 	    echo "  write key   NOT SET - 'make publish' will refuse; everything else works"
 	elif [[ "$$read_key" == "$${R2_WRITE_ACCESS_KEY_ID}" ]]; then
@@ -173,7 +173,7 @@ check:
 	# Proves the admin token actually opens the deployment, which is the
 	# one credential a successful upload still cannot tell you about.
 	code=$$(curl -s -o /dev/null -w '%{http_code}' \
-	        -H "Authorization: Bearer $$KREA2_ADMIN_TOKEN" \
+	        -H "Authorization: Bearer $$EMBER_ADMIN_TOKEN" \
 	        "$$API/v1/admin/builds" || echo 000)
 	case "$$code" in
 	    200) echo "  admin api   ok" ;;
@@ -207,7 +207,7 @@ health:
 
 builds:
 	@$(LOAD_ENV)
-	curl -s -H "Authorization: Bearer $$KREA2_ADMIN_TOKEN" \
+	curl -s -H "Authorization: Bearer $$EMBER_ADMIN_TOKEN" \
 	     "$$API/v1/admin/builds" | python3 -m json.tool 2>/dev/null || \
 	    echo "could not list builds - try 'make check'"
 
@@ -383,7 +383,7 @@ promote:
 	    exit 2
 	fi
 	curl -s -X POST \
-	     -H "Authorization: Bearer $$KREA2_ADMIN_TOKEN" \
+	     -H "Authorization: Bearer $$EMBER_ADMIN_TOKEN" \
 	     -H 'Content-Type: application/json' \
 	     -d "{\"sha256\":\"$$SHA\",\"channel\":\"$${CHANNEL:-stable}\"}" \
 	     "$$API/v1/admin/builds/promote" | python3 -m json.tool
@@ -423,6 +423,6 @@ image-push:
 	docker push "$(REGISTRY)/$(IMAGE):$(TAG)"
 	echo
 	echo "pushed $(REGISTRY)/$(IMAGE):$(TAG)"
-	echo "customers set KREA2_IMAGE=$(REGISTRY)/$(IMAGE):$(TAG) in .env"
+	echo "customers set EMBER_IMAGE=$(REGISTRY)/$(IMAGE):$(TAG) in .env"
 	echo
 

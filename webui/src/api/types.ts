@@ -123,7 +123,7 @@ export type TabCategory = 'generate' | 'edit' | 'video' | 'library'
  *
  *  Part of the schema, not of the layout code: `SchemaForm` renders what it is
  *  given, and moving a control between groups (or columns) is a schema edit.
- *  `ember/web/tabschema.py` serves them. */
+ *  `ember/web/schema/model.py` serves them. */
 export interface GroupSpec {
   id: string
   title: string
@@ -153,7 +153,6 @@ export interface TabSchema {
   fields: Field[]
   groups: GroupSpec[]
   lora: LoraSpec | null
-  ready: boolean
   submitLabel: string
   /** Which field names the job in the queue. */
   promptField: string

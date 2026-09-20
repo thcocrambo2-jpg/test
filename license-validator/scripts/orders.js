@@ -172,4 +172,4 @@ process.exitCode = await main();
 // process with a libuv assertion and a non-zero code — a retry that
 // worked, reported as a failure. Closing the one connection db.js caches
 // lets the process end on its own instead.
-await globalThis.__krea2License?.client?.close();
+await globalThis.__emberLicense?.client?.close();

@@ -9,7 +9,7 @@ reads at runtime. Bump a pin and the next image build follows it with no
 edit here.
 
 What this does NOT do is install anything with pip. The clones land in a
-build stage that is thrown away; only /opt/krea2 is copied forward, and the
+build stage that is thrown away; only /opt/ember is copied forward, and the
 Dockerfile does the pip passes in the final stage where they will survive.
 
 Which packs get baked, and why each is treated differently:
@@ -39,7 +39,7 @@ from pathlib import Path
 # everything downstream (COMFY_DIR in particular) is derived from it. This
 # is the whole trick that lets the app's own installers write to the image
 # path instead of a pod path.
-BAKE_ROOT = os.environ.get("KREA2_BAKE_ROOT", "/opt/krea2")
+BAKE_ROOT = os.environ.get("EMBER_BAKE_ROOT", "/opt/ember")
 os.environ["KREA2_BASE_DIR"] = BAKE_ROOT
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))

@@ -13,8 +13,8 @@ import {
   DOWNLOAD_TTL_SECONDS,
 } from "./config.js";
 
-let cached = globalThis.__krea2License;
-if (!cached) cached = globalThis.__krea2License = { client: null, promise: null };
+let cached = globalThis.__emberLicense;
+if (!cached) cached = globalThis.__emberLicense = { client: null, promise: null };
 
 export async function getDb() {
   if (cached.client) return cached.client.db(DB_NAME);

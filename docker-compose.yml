@@ -11,13 +11,13 @@
 
 # Without this the project is named after whatever directory the repo was
 # cloned into, which then prefixes the container and volume names.
-name: krea2
+name: ember
 
 services:
-  krea2:
-    # Built by `make image`. Point KREA2_IMAGE at a published tag to run one
-    # you did not build (e.g. ghcr.io/<owner>/krea2:latest).
-    image: ${KREA2_IMAGE:-krea2:latest}
+  ember:
+    # Built by `make image`. Point EMBER_IMAGE at a published tag to run one
+    # you did not build (e.g. ghcr.io/<owner>/ember:latest).
+    image: ${EMBER_IMAGE:-ember:latest}
     build:
       context: .
       dockerfile: Dockerfile

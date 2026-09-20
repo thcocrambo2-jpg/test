@@ -317,7 +317,7 @@ export function GenerateTab({ schema }: { schema: TabSchema }) {
 
 /** The selected model's trigger words, swapped into the prompt.
  *
- *  ui._swap_trigger, character for character in effect: the trigger of any
+ *  The trigger of any
  *  *other* model this tab offers is removed first, so switching models swaps
  *  triggers instead of stacking them, and the text stays fully editable —
  *  whatever ends up in the box is what gets used, with nothing added silently

@@ -37,12 +37,3 @@ export function defaultsFor(schema: TabSchema): Record<string, unknown> {
   return values
 }
 
-/** How many controls this tab has, form plus LoRA stack.
- *
- *  Display only. The argument *count* that matters is asserted on the Python
- *  side against `inspect.signature`, which is the only place it can be
- *  checked rather than believed. */
-export function controlCount(schema: TabSchema): number {
-  const lora = schema.lora
-  return schema.fields.length + (lora ? lora.count * lora.parts.length : 0)
-}

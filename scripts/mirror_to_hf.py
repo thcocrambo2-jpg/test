@@ -11,14 +11,14 @@ Operator tool, not part of the shipped app. The intended run is:
     2. python3 scripts/mirror_to_hf.py --pins-only    # capture pod state
     3. python3 scripts/mirror_to_hf.py --audit        # what has no mirror
     4. python3 scripts/mirror_to_hf.py --dry-run      # read the checklist
-    5. KREA2_ADMIN_TOKEN=... HF_WRITE_TOKEN=... \\
+    5. EMBER_ADMIN_TOKEN=... HF_WRITE_TOKEN=... \\
        python3 scripts/mirror_to_hf.py                # top up + upload
 
 Steps 3-5 read the catalogue the way the pod does — POST /v1/catalog with
 KREA2_LICENSE_KEY and KREA2_NODE_TAG, which the pod already carries — or,
 with --catalog FILE, from a file in the same shape
 (license-validator/data/assets.json is one). --audit and --dry-run need no
-HF_WRITE_TOKEN and no KREA2_ADMIN_TOKEN, and neither writes anything to
+HF_WRITE_TOKEN and no EMBER_ADMIN_TOKEN, and neither writes anything to
 the mirror or to the DB.
 
 WHAT GETS MIRRORED IS NOT DECIDED HERE. There are two lists and neither is
@@ -35,7 +35,7 @@ in this file:
     checked like a manifest item. A LoRA whose `mirror` is null is fetched
     from its `source` (disk first, never the mirror), uploaded to the
     `loras` repo at loras/<file>, and then the location is written back to
-    its record with POST /v1/admin/loras, authorised by KREA2_ADMIN_TOKEN.
+    its record with POST /v1/admin/loras, authorised by EMBER_ADMIN_TOKEN.
     Without that token (or without KREA2_NODE_TAG) the script prints the
     `npm run assets` command that records it by hand instead. Adding a
     LoRA is therefore a DB edit followed by a run of this script.
@@ -128,7 +128,7 @@ HF_WRITE_TOKEN = os.environ.get("HF_WRITE_TOKEN") or ""     # ← paste here if 
 # its upload. Environment only: unlike the HF token there is no reason to
 # ever paste it here, since without it the script prints the command that
 # records the location by hand.
-ADMIN_TOKEN = os.environ.get("KREA2_ADMIN_TOKEN") or ""
+ADMIN_TOKEN = os.environ.get("EMBER_ADMIN_TOKEN") or ""
 
 # What this script calls itself when it asks for the catalogue. The route
 # checks the licence like /v1/acquire does; a readable id keeps the
@@ -137,7 +137,7 @@ CATALOG_INSTANCE_ID = "mirror-operator"
 ADMIN_TIMEOUT = 30
 
 # How to record a mirror by hand, from license-validator/, when this script
-# cannot (no KREA2_ADMIN_TOKEN, no KREA2_NODE_TAG, or the request failed).
+# cannot (no EMBER_ADMIN_TOKEN, no KREA2_NODE_TAG, or the request failed).
 ASSETS_COMMAND = ("npm run assets -- --mirror {id} "
                   "--repo {repo} --path {path}")
 
@@ -556,7 +556,7 @@ def write_records(pending: list[tuple[str, str, str]], dry_run: bool) -> list:
     if not pending:
         return []
     if not ADMIN_TOKEN:
-        why = "KREA2_ADMIN_TOKEN is not set"
+        why = "EMBER_ADMIN_TOKEN is not set"
     elif not settings.LICENSE_API_URL:
         why = "KREA2_NODE_TAG is not set, so there is no server to call"
     else:
@@ -1134,7 +1134,7 @@ def main() -> int:
         print("  Re-run to retry — completed uploads are skipped by size.")
     if unrecorded:
         print(f"  {len(unrecorded)} mirror location(s) not recorded — run "
-              f"the commands above, or re-run with KREA2_ADMIN_TOKEN set.")
+              f"the commands above, or re-run with EMBER_ADMIN_TOKEN set.")
     print(f"  PINS.json  → {PINS_PATH}  (commit this)")
     print(f"  report     → {report_path}\n")
     return 1 if failed or unrecorded else 0

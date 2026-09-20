@@ -56,8 +56,8 @@ const PLAN_TTL_MS = 60_000;
 
 // On globalThis for the same reason db.js caches its client there: warm
 // serverless invocations reuse the module scope, cold ones do not.
-let cache = globalThis.__krea2Plans;
-if (!cache) cache = globalThis.__krea2Plans = { at: 0, byId: null, cycles: null };
+let cache = globalThis.__emberPlans;
+if (!cache) cache = globalThis.__emberPlans = { at: 0, byId: null, cycles: null };
 
 /**
  * A license points at a plan that does not exist.

@@ -3,7 +3,7 @@
 # An allowlist rather than a list of exclusions, and that is the whole
 # point: this image is published, and the repo it is built from contains
 # license-validator/.env (R2 write credentials, the admin token), a root
-# .env (a customer licence key) and dist/krea2app (the licensed binary).
+# .env (a customer licence key) and dist/ember (the licensed binary).
 # A deny-list is one forgotten line away from shipping one of them; a file
 # that is not listed below cannot reach the build context at all.
 #

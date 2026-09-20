@@ -21,9 +21,6 @@ from ember.pipelines.common import (
 # one row per LoRA in their feature's list instead — see
 # ember.pipelines.krea2_v2.workflow.default_lora_slots.)
 MAX_LORA_SLOTS = 8
-# Slots past this stay in a collapsed accordion so a tall stack does not
-# eat the whole column. Set it >= MAX_LORA_SLOTS to show every slot.
-VISIBLE_LORA_SLOTS = 3
 
 
 def lora_choices(feature) -> list:

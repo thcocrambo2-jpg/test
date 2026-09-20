@@ -15,17 +15,17 @@
 # This shares krea2-data with the production service, so both see the same
 # models. Do not run both at once.
 
-name: krea2-dev
+name: ember-dev
 
 services:
-  krea2-dev:
-    image: ${KREA2_DEV_IMAGE:-krea2:dev}
+  ember-dev:
+    image: ${EMBER_DEV_IMAGE:-ember:dev}
     build:
       context: .
       dockerfile: docker/Dockerfile.dev
       args:
         # The production image this is layered on. Build it first.
-        BASE_IMAGE: ${KREA2_IMAGE:-krea2:latest}
+        BASE_IMAGE: ${EMBER_IMAGE:-ember:latest}
 
     # The same two values a customer sets. app.py still takes a licence
     # seat when run from source — that is the app's behaviour, and a dev
@@ -35,7 +35,7 @@ services:
     environment:
       # What flips the entrypoint out of "fetch the published build" and
       # into "run this". The path is where the source is mounted below.
-      KREA2_DEV_SOURCE: /src
+      EMBER_DEV_SOURCE: /src
       # Keeps Linux .pyc files out of the Windows checkout this is mounted
       # from. They would be harmless — the interpreter tag differs from a
       # local run's — but they are noise in `git status` either way.

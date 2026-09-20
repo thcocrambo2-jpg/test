@@ -3,8 +3,8 @@
 Runs in the Dockerfile's first stage, after bake_nodes.py, and writes two
 pip requirement files for the final stage to install:
 
-    /opt/krea2/torch-stack.txt   the torch trio and its wheel index
-    /opt/krea2/sage-wheel.txt    the SageAttention for that torch
+    /opt/ember/torch-stack.txt   the torch trio and its wheel index
+    /opt/ember/sage-wheel.txt    the SageAttention for that torch
 
 and records both in baked.json, which the entrypoint prints on every boot.
 
@@ -28,7 +28,7 @@ import os
 import sys
 from pathlib import Path
 
-BAKE_ROOT = os.environ.get("KREA2_BAKE_ROOT", "/opt/krea2")
+BAKE_ROOT = os.environ.get("EMBER_BAKE_ROOT", "/opt/ember")
 os.environ["KREA2_BASE_DIR"] = BAKE_ROOT
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))

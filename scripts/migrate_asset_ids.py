@@ -88,7 +88,7 @@ COLLECTIONS = ("presets", "prompts")
 # environment — a pod path (/workspace/krea2) by default. Somewhere
 # disposable instead, set before the import below.
 os.environ.setdefault("KREA2_BASE_DIR",
-                      tempfile.mkdtemp(prefix="krea2-migrate-"))
+                      tempfile.mkdtemp(prefix="ember-migrate-"))
 sys.path.insert(0, str(ROOT))
 from ember.licensing.prompts import _fingerprint  # noqa: E402
 

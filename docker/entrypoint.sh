@@ -7,25 +7,25 @@
 #
 #     1. say what this image is made of
 #     2. point $KREA2_BASE_DIR/ComfyUI at the baked checkout
-#     3. exec /opt/krea2/bin/start.sh
+#     3. exec /opt/ember/bin/start.sh
 #
 # Two escape hatches, both for the case where the baked tree turns out to
 # be wrong:
 #
-#     KREA2_USE_BAKED_COMFY=0   ignore the baked ComfyUI entirely. The app
+#     EMBER_USE_BAKED_COMFY=0   ignore the baked ComfyUI entirely. The app
 #                               then clones and pip-installs on its own,
 #                               exactly as a non-Docker pod does today.
-#     KREA2_START_SOURCE=api    fetch the current start.sh from the licence
+#     EMBER_START_SOURCE=api    fetch the current start.sh from the licence
 #                               server instead of using the baked copy, so
 #                               a start-script fix ships without a new
 #                               image. Needs KREA2_NODE_TAG, same as ever.
 
 set -uo pipefail
 
-BAKED="/opt/krea2"
+BAKED="/opt/ember"
 BASE="${KREA2_BASE_DIR:-/workspace/krea2}"
 
-say() { printf '[krea2-image] %s\n' "$*"; }
+say() { printf '[ember-image] %s\n' "$*"; }
 
 echo
 # What is actually in here, from the manifest bake_nodes.py wrote — so a
@@ -35,18 +35,18 @@ if [[ -f "$BAKED/baked.json" ]]; then
     python3 - "$BAKED/baked.json" <<'PY' || true
 import json, sys
 d = json.load(open(sys.argv[1]))
-print("[krea2-image] built %s" % d.get("built_at"))
-print("[krea2-image] ComfyUI %s" % (d.get("comfyui_sha") or "?")[:12])
+print("[ember-image] built %s" % d.get("built_at"))
+print("[ember-image] ComfyUI %s" % (d.get("comfyui_sha") or "?")[:12])
 t = d.get("torch") or {}
 if t:
-    print("[krea2-image] torch %s (CUDA %s) - SageAttention %s"
+    print("[ember-image] torch %s (CUDA %s) - SageAttention %s"
           % (t.get("version"), t.get("cuda"),
              t.get("sageattention") or "none"))
 for name, sha in sorted((d.get("custom_nodes") or {}).items()):
     # ASCII on purpose: this runs under whatever locale the base image
     # happens to set, and a UnicodeEncodeError here would swallow the
     # whole manifest over a dash.
-    print("[krea2-image]   %-32s %s"
+    print("[ember-image]   %-32s %s"
           % (name, (sha[:12] if sha else "NOT BAKED - installed at boot")))
 PY
 else
@@ -54,7 +54,7 @@ else
 fi
 
 mkdir -p "$BASE" || {
-    printf '\n[krea2-image] ERROR: could not create %s\n' "$BASE" >&2
+    printf '\n[ember-image] ERROR: could not create %s\n' "$BASE" >&2
     printf '       Mount a volume there, or set KREA2_BASE_DIR.\n\n' >&2
     exit 1
 }
@@ -66,8 +66,8 @@ mkdir -p "$BASE" || {
 # in there — ember/comfy/server.py passes --output-directory and
 # --temp-directory, and link_model_dirs() symlinks the model folders back
 # out to $BASE/models.
-if [[ "${KREA2_USE_BAKED_COMFY:-1}" == "0" ]]; then
-    say "KREA2_USE_BAKED_COMFY=0 — ignoring the baked ComfyUI; the app will"
+if [[ "${EMBER_USE_BAKED_COMFY:-1}" == "0" ]]; then
+    say "EMBER_USE_BAKED_COMFY=0 — ignoring the baked ComfyUI; the app will"
     say "install its own, which is the non-Docker behaviour."
 elif [[ -e "$BASE/ComfyUI" && ! -L "$BASE/ComfyUI" ]]; then
     # A volume carrying an install from the current non-Docker flow. Left
@@ -86,7 +86,7 @@ else
     say "could not symlink $BASE/ComfyUI — copying instead. This is slow;"
     say "a named volume (docker volume create) avoids it."
     cp -a "$BAKED/ComfyUI" "$BASE/ComfyUI" || {
-        printf '\n[krea2-image] ERROR: could not install ComfyUI to %s\n\n' \
+        printf '\n[ember-image] ERROR: could not install ComfyUI to %s\n\n' \
             "$BASE/ComfyUI" >&2
         exit 1
     }
@@ -100,16 +100,16 @@ fi
 # The licence check is NOT bypassed — app.py still takes a seat, because
 # licensing is the app's behaviour and a dev mode that skipped it would be
 # testing something customers never run. Only the *download* is skipped.
-if [[ -n "${KREA2_DEV_SOURCE:-}" ]]; then
-    if [[ ! -f "$KREA2_DEV_SOURCE/app.py" ]]; then
-        printf '\n[krea2-image] ERROR: no app.py in %s\n' "$KREA2_DEV_SOURCE" >&2
-        printf '       KREA2_DEV_SOURCE must point at the repo, mounted\n' >&2
+if [[ -n "${EMBER_DEV_SOURCE:-}" ]]; then
+    if [[ ! -f "$EMBER_DEV_SOURCE/app.py" ]]; then
+        printf '\n[ember-image] ERROR: no app.py in %s\n' "$EMBER_DEV_SOURCE" >&2
+        printf '       EMBER_DEV_SOURCE must point at the repo, mounted\n' >&2
         printf '       into the container. See docker-compose.dev.yml.\n\n' >&2
         exit 1
     fi
-    say "dev mode — running $KREA2_DEV_SOURCE/app.py"
+    say "dev mode — running $EMBER_DEV_SOURCE/app.py"
     say "the licence server is not asked for a build; your code is the build."
-    cd "$KREA2_DEV_SOURCE" || exit 1
+    cd "$EMBER_DEV_SOURCE" || exit 1
     # Uncompiled, config.FROZEN is False, so install_comfyui() also installs
     # requirements.txt — the app repairs a dev image that is missing its own
     # dependencies. docker/Dockerfile.dev pre-installs them so that pass is
@@ -119,14 +119,14 @@ fi
 
 # ── Which start script ───────────────────────────────────────────────────
 START="$BAKED/bin/start.sh"
-if [[ "${KREA2_START_SOURCE:-baked}" == "api" ]]; then
+if [[ "${EMBER_START_SOURCE:-baked}" == "api" ]]; then
     if [[ -z "${KREA2_NODE_TAG:-}" ]]; then
-        say "KREA2_START_SOURCE=api needs KREA2_NODE_TAG — using the baked"
+        say "EMBER_START_SOURCE=api needs KREA2_NODE_TAG — using the baked"
         say "start script instead."
     elif curl -fsSL "https://${KREA2_NODE_TAG}.vercel.app/v1/start.sh" \
-            -o /tmp/krea2-start.sh; then
+            -o /tmp/ember-start.sh; then
         say "using the start script from the licence server"
-        START=/tmp/krea2-start.sh
+        START=/tmp/ember-start.sh
     else
         say "could not fetch the start script — using the baked copy."
     fi

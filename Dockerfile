@@ -5,7 +5,7 @@
 # the custom node packs and ComfyUI's Python requirements.
 #
 # What it deliberately is NOT: the app. The binary is still fetched at boot
-# by scripts/runpod_start.sh, unmodified and baked in at /opt/krea2/bin.
+# by scripts/runpod_start.sh, unmodified and baked in at /opt/ember/bin.
 # That keeps three things true — publishing a build still reaches these
 # containers through /v1/build, `make promote` can still roll them back,
 # and the image holds no secret and no licensed code, so it is safe to
@@ -13,14 +13,14 @@
 #
 # Boot then looks like this:
 #
-#     /entrypoint.sh  ->  /opt/krea2/bin/start.sh  ->  the binary
+#     /entrypoint.sh  ->  /opt/ember/bin/start.sh  ->  the binary
 #      (symlinks the        (fetches + verifies       (bootstrap finds
 #       baked ComfyUI)       the build)                everything present)
 #
 # Models are never baked: ~90 GB, licence-gated, and they belong on the
 # volume. See docker-compose.yml.
 #
-#     docker build -t krea2:latest .
+#     docker build -t ember:latest .
 #     docker compose up
 
 # CUDA 13.0 and cuDNN on Ubuntu 24.04, and nothing else — the same family
@@ -75,7 +75,7 @@ RUN apt-get update && \
 # bake_nodes.py needs ember/settings.py, ember/comfy/setup.py and
 # ember/weights/mirror.py to resolve the pins, and those are exactly the
 # files build.sh compiles into a binary rather than shipping. They stay in
-# this stage; only /opt/krea2 is copied out.
+# this stage; only /opt/ember is copied out.
 FROM python-base AS nodes
 
 # huggingface_hub for the mirror tarball path in bootstrap.node_pack_from_mirror;
@@ -130,15 +130,15 @@ RUN python3 -c "import sys, pip; \
     sys.exit(0 if sys.version_info[:2] == (3, 12) else \
              'python 3.12 is what the wheels here are built for')"
 
-COPY --from=nodes /opt/krea2 /opt/krea2
+COPY --from=nodes /opt/ember /opt/ember
 
 # Template v8's torch (2.11.0+cu130), over the base image's, before anything
 # that installs against it. Asserted against baked.json, so a wheel index
 # that quietly served a different build fails here rather than as a
 # SageAttention kernel that will not load on a customer's pod.
-RUN python3 -m pip install --no-cache-dir -r /opt/krea2/torch-stack.txt && \
+RUN python3 -m pip install --no-cache-dir -r /opt/ember/torch-stack.txt && \
     python3 -c "import json, sys, torch; \
-    want = json.load(open('/opt/krea2/baked.json'))['torch']['version']; \
+    want = json.load(open('/opt/ember/baked.json'))['torch']['version']; \
     print('torch', torch.__version__, 'CUDA', torch.version.cuda); \
     sys.exit(0 if torch.__version__ == want else 'torch %s is not the %s bake_torch chose' % (torch.__version__, want))"
 
@@ -150,26 +150,26 @@ RUN python3 -m pip install --no-cache-dir -r /opt/krea2/torch-stack.txt && \
 # extensions that link against it.
 RUN python3 -c "\
 import torch, torchvision, torchaudio; \
-open('/opt/krea2/torch-constraints.txt', 'w').write(''.join( \
+open('/opt/ember/torch-constraints.txt', 'w').write(''.join( \
     '%s==%s\n' % (n, m.__version__.split('+')[0]) \
     for n, m in (('torch', torch), ('torchvision', torchvision), \
                  ('torchaudio', torchaudio))))" && \
-    cat /opt/krea2/torch-constraints.txt
+    cat /opt/ember/torch-constraints.txt
 
 RUN python3 -m pip install --no-cache-dir \
-        -r /opt/krea2/ComfyUI/requirements.txt \
-        --constraint /opt/krea2/torch-constraints.txt
+        -r /opt/ember/ComfyUI/requirements.txt \
+        --constraint /opt/ember/torch-constraints.txt
 
 # Every baked pack's requirements, under the torch constraint. A pack that
 # fails here fails the build — unlike at boot, where install_v2_nodes()
 # logs it and leaves one tab broken. An image is built once and run by
 # everyone, so the tradeoff points the other way.
 RUN set -eu; \
-    for reqs in /opt/krea2/ComfyUI/custom_nodes/*/requirements.txt; do \
+    for reqs in /opt/ember/ComfyUI/custom_nodes/*/requirements.txt; do \
         [ -e "$reqs" ] || continue; \
         echo ">>> $reqs"; \
         python3 -m pip install --no-cache-dir -r "$reqs" \
-            --constraint /opt/krea2/torch-constraints.txt; \
+            --constraint /opt/ember/torch-constraints.txt; \
     done
 
 # SageAttention 2.2.0 for that torch, hash-pinned, from the file bake_torch
@@ -178,7 +178,7 @@ RUN set -eu; \
 # present and only has to prove it runs before ComfyUI gets
 # --use-sage-attention.
 RUN python3 -m pip install --no-cache-dir --no-deps \
-        -r /opt/krea2/sage-wheel.txt && \
+        -r /opt/ember/sage-wheel.txt && \
     python3 -c "import importlib.metadata as m; \
         print('sageattention', m.version('sageattention'))"
 
@@ -193,9 +193,9 @@ RUN python3 -c "import cv2; \
 # The start script, unmodified and byte-identical to the one published to
 # R2 by build.sh. The entrypoint execs it; everything about how a build is
 # fetched, verified and run stays in that one file.
-COPY scripts/runpod_start.sh /opt/krea2/bin/start.sh
+COPY scripts/runpod_start.sh /opt/ember/bin/start.sh
 COPY docker/entrypoint.sh /entrypoint.sh
-RUN chmod +x /opt/krea2/bin/start.sh /entrypoint.sh
+RUN chmod +x /opt/ember/bin/start.sh /entrypoint.sh
 
 # The app's web UI. ComfyUI listens on 127.0.0.1 (ember/comfy/server.py)
 # and is not exposed.

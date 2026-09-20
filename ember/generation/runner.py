@@ -285,29 +285,6 @@ on_output(gallery_index.note_new)
 on_output(recipes.note_output)
 
 
-def _swap_trigger(text, entry, feature) -> str:
-    """Put the selected model's trigger words into the prompt text.
-
-    Any other model's trigger in the same feature's list is removed first,
-    so switching models swaps triggers instead of stacking them. The text
-    stays fully editable — whatever ends up in the box is used verbatim
-    (nothing is added silently at generation time).
-    """
-    text = text or ""
-    for other in catalog.feature_models(feature):
-        trig = (other.trigger or "").strip()
-        if not trig:
-            continue
-        idx = text.lower().find(trig.lower())
-        if idx >= 0:
-            text = text[:idx] + text[idx + len(trig):]
-    text = text.strip().strip(",").strip()
-    trigger = (entry.trigger or "").strip()
-    if trigger:
-        return f"{trigger}, {text}" if text else trigger
-    return text
-
-
 def _model_info_text(entry) -> str:
     """One-line summary shown under the Model dropdown."""
     steps, cfg = model_defaults(entry)

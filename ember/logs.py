@@ -1,6 +1,6 @@
 """The application logger, and the one call that configures it.
 
-One logger for the whole app, named "krea2", so every line a pod prints
+One logger for the whole app, named "ember", so every line a pod prints
 carries the same prefix whichever module wrote it. Importing this module
 configures nothing: `setup()` is called by each entry point — app.py, the
 Docker bake scripts, and the operator scripts under scripts/ — before it
@@ -14,7 +14,7 @@ also meant a module that wanted a constant got a `basicConfig` with it.
 
 import logging
 
-log = logging.getLogger("krea2")
+log = logging.getLogger("ember")
 
 _configured = False
 

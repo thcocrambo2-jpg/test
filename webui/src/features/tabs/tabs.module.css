@@ -154,33 +154,3 @@
   border-radius: var(--r-md);
   border: 1px solid var(--c-accent-line);
 }
-
-/* ---------------------------------------------------------- stage pending */
-
-.pending {
-  display: flex;
-  flex-direction: column;
-  gap: var(--s-5);
-  max-width: 720px;
-}
-
-.pendingGrid {
-  display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(160px, 1fr));
-  gap: var(--s-2);
-}
-
-.pendingItem {
-  border: 1px solid var(--c-border);
-  border-radius: var(--r-sm);
-  padding: var(--s-2) var(--s-3);
-  background: var(--c-panel);
-  font-size: var(--t-xs);
-}
-
-.pendingItem span {
-  display: block;
-  color: var(--c-text-faint);
-  font-family: var(--font-mono);
-  font-size: var(--t-2xs);
-}

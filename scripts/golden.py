@@ -317,6 +317,7 @@ def cases(module) -> dict:
     too, so a regression that wires unticked rows shows up as a new node.
     """
     model = module.default_model(module.KREA_T2I)
+    edit_model = module.default_model(module.KREA_EDIT)
     v2_model = module.default_model(module.KREA_V2_T2I)
     v2_edit_model = module.default_model(module.KREA_V2_EDIT)
     image = _image()
@@ -330,6 +331,17 @@ def cases(module) -> dict:
         v for i in range(module.MAX_LORA_SLOTS)
         for v in (*krea_named.get(i, (False, "None")),
                   round(0.35 + i / 100, 2)))
+    # Krea2 Edit: its own eight blank slots over its own feature's list,
+    # so the snapshot shows the Identity Edit LoRA and the stack landing
+    # on the same chain. Different rows and weights from the Krea2 tail,
+    # so a tail copied from the wrong tab shows up.
+    edit_named = {0: (True, "realism-v2"),
+                  2: (True, "purelens"),
+                  3: (False, "lenovo")}
+    edit_triples = tuple(
+        v for i in range(module.MAX_LORA_SLOTS)
+        for v in (*edit_named.get(i, (False, "None")),
+                  round(0.75 + i / 100, 2)))
     # MiniMax: the same eight blank slots over its own list, so the
     # snapshots show the chain landing between the model and the turbo
     # LoRA. The image tab has two on and one named but off; the text tab
@@ -356,6 +368,15 @@ def cases(module) -> dict:
             model, 2, False, "", False, "",
         ) + krea_triples,
 
+        # The two-input edit: the second reference is on, so the snapshot
+        # holds both LoadImage nodes and the dual conditioning. It is the
+        # only case that exercises `edit_lora_available`, which is the
+        # only patched name ember/pipelines/krea2/handler.py carries.
+        "generate_edit": (
+            image, True, image, "put a red scarf on her",
+            "blurry, watermark", 2345678, False, 14, 2.3, "dpmpp_2m",
+            576, 4.5, 1.5, edit_model, 2,
+        ) + edit_triples,
 
         "generate_v2": (
             "a lighthouse in a storm, 35mm", "blurry, watermark",

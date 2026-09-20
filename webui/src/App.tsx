@@ -7,7 +7,6 @@ import { Footer } from '@/features/shell/Footer'
 import { Nav } from '@/features/shell/Nav'
 import { QueuePanel } from '@/features/queue/QueuePanel'
 import { GenerateTab } from '@/features/tabs/GenerateTab'
-import { StagePending } from '@/features/tabs/StagePending'
 import { Gallery } from '@/features/gallery/Gallery'
 import { PromptLibrary } from '@/features/library/PromptLibrary'
 import { Pricing } from '@/features/pricing/Pricing'
@@ -102,7 +101,7 @@ export function App() {
 function TabPage({ schema }: { schema: TabSchema }) {
   return (
     <Page title={labelText(schema.label)} icon={schema.icon} blurb={schema.blurb}>
-      {schema.ready ? <GenerateTab schema={schema} /> : <StagePending schema={schema} />}
+      <GenerateTab schema={schema} />
     </Page>
   )
 }

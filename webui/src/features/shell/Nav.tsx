@@ -55,7 +55,9 @@ export function Nav() {
       icon: schema.icon,
       route: schema.route,
       category: schema.category,
-      ready: schema.ready,
+      // Every schema-driven tab is submittable; only a bespoke page can be
+      // unfinished, and BESPOKE_TABS says which.
+      ready: true,
     })),
     ...BESPOKE_TABS,
   ].filter((item) => !granted || granted.includes(item.key))
