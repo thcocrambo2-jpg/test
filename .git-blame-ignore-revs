@@ -19,3 +19,6 @@ e4e6a0984e290950ba85b188c8bf2563427f46d4
 
 # Phase 4: give the ember/web/schema package its imports.
 3fdfa6dbe1a40eefa069066cf012528dd45c5a1f
+
+# Phase 4: point the split generation modules and their callers at each other.
+ab4287f369b83aeb3be77101e983c4a48191b50e
