@@ -289,10 +289,11 @@ never imports a markdown file, so a link that stopped resolving, a
 variable nobody wrote down, and a paragraph naming a module deleted two
 changes ago all read exactly like working documentation.
 
-1. **Every relative link resolves**, in `README.md`, `docs/**`,
-   `license-validator/**/*.md` and `webui/README.md`. Checked as far as
-   the file, not the heading: a wrong `#anchor` is a nuisance, a wrong
-   file name is a dead end.
+1. **Every relative link in the documentation resolves.** Checked as far
+   as the file, not the heading: a wrong `#anchor` is a nuisance, a wrong
+   file name is a dead end. `LINK_GLOBS` in the script is the list of
+   what counts as documentation; a new page outside it is not a page the
+   rule protects, so add to it rather than assuming.
 2. **Every environment variable is documented.** `ember/settings.py`'s
    docstring table is the list of everything the app reads from the
    environment, and [Configuration](../configuration.md) is where somebody running the
