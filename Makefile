@@ -237,7 +237,7 @@ webui:
 webui-dev:
 	@cd webui && npm run dev
 
-# Cheap, credential-free, and a dependency of both build targets. Three
+# Cheap, credential-free, and a dependency of both build targets. Five
 # checks, one gate — widened rather than given its own target so that
 # `compile` and `release` keep their single prerequisite:
 #
@@ -249,6 +249,12 @@ webui-dev:
 #                     webui/src that nobody rebuilt would ship the
 #                     previous front end without a word.
 #   check_routes      the API's routes against what the front end calls.
+#   check_config      every configuration value against its recorded
+#                     value, wherever the module holding it now lives, so
+#                     a constant cannot quietly change while being moved.
+#   check_imports     every module imports on its own, so a cycle or a
+#                     GPU-only import lands here and not in the bake
+#                     stage or on a laptop.
 #
 # Every one of them catches a defect that a successful compile hides,
 # which is why they cost a fraction of a second here rather than an
@@ -257,6 +263,8 @@ check-args:
 	@python3 scripts/check_build_args.py
 	python3 scripts/check_webui.py
 	python3 scripts/check_routes.py
+	python3 scripts/check_config.py
+	python3 scripts/check_imports.py
 
 compile: check-args
 	@./build.sh --no-publish
