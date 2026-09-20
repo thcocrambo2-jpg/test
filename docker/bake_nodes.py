@@ -34,7 +34,7 @@ import sys
 from datetime import datetime, timezone
 from pathlib import Path
 
-# Set before importing config: BASE_DIR is read at import time, and
+# Set before importing settings: BASE_DIR is read at import time, and
 # everything downstream (COMFY_DIR in particular) is derived from it. This
 # is the whole trick that lets the app's own installers write to the image
 # path instead of a pod path.
@@ -44,13 +44,18 @@ os.environ["KREA2_BASE_DIR"] = BAKE_ROOT
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 
 from ember.comfy import setup as bootstrap                   # noqa: E402
-from ember.config import (                                   # noqa: E402
-    COMFY_DIR,
-    KREA2EDIT_NODES_REPO,
-    V2_NODE_REPOS,
-    log,
-)
+from ember import logs, settings                             # noqa: E402
+from ember.logs import log                                   # noqa: E402
+from ember.settings import COMFY_DIR                         # noqa: E402
+from ember.pipelines.krea2.constants import KREA2EDIT_NODES_REPO  # noqa: E402
+from ember.pipelines.krea2_v2.constants import V2_NODE_REPOS  # noqa: E402
 from ember.weights import mirror                             # noqa: E402
+
+# An import configures nothing and makes nothing, so the two side effects
+# this script used to inherit are spelled out here instead: the logger every
+# line below is written through, and the tree under BAKE_ROOT.
+logs.setup()
+settings.ensure_dirs()
 
 
 def git_sha(path: Path) -> str | None:
@@ -147,7 +152,7 @@ def main() -> int:
         strip_git(dest)
         log.info("Baked %s (%s)", dirname, (sha or "unpinned")[:12])
 
-    # config.py creates models/ and output/ under BASE_DIR at import time.
+    # ensure_dirs() made models/ and output/ under BASE_DIR above.
     # Here that is the image path, and the real ones live on the volume —
     # leaving empty twins next to the baked ComfyUI would only invite
     # someone to wonder which of the two ComfyUI is reading from.

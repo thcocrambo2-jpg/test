@@ -22,28 +22,29 @@ from huggingface_hub import hf_hub_download, snapshot_download
 from ember.licensing import catalog
 from ember import features
 from ember.weights import mirror
-from ember.config import (
+from ember.logs import log
+from ember.settings import CIVITAI_TOKEN, HF_TOKEN, MODELS_DIR
+from ember.pipelines.krea2.constants import (
     ABLITERATED_ENCODER_FILE,
     ABLITERATED_ENCODER_REPO,
-    CIVITAI_TOKEN,
     EDIT_LORA_FILE,
     EDIT_LORA_REPO,
     HF_MODEL_FILES,
     HF_MODEL_REPO,
-    HF_TOKEN,
+    TEXT_ENCODER_FILE,
+)
+from ember.pipelines.krea2_v2.constants import (
+    V2_VAE_FILE,
+    V2_VAE_HF_PATH,
+    V2_VAE_HF_REPO,
+)
+from ember.pipelines.minimax.constants import (
     MINIMAX_HF_FILES,
     MINIMAX_HF_REPO,
     MINIMAX_TURBO_LORA,
     MINIMAX_TURBO_LORA_REPO,
-    MODELS_DIR,
-    TEXT_ENCODER_FILE,
-    V2_VAE_FILE,
-    V2_VAE_HF_PATH,
-    V2_VAE_HF_REPO,
-    WAN_HF_FILES,
-    WAN_HF_REPO,
-    log,
 )
+from ember.pipelines.wan.constants import WAN_HF_FILES, WAN_HF_REPO
 
 DOWNLOAD_CHUNK = 8 * 1024 * 1024
 DOWNLOAD_RETRIES = 3

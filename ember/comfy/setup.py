@@ -19,16 +19,16 @@ from pathlib import Path
 
 from ember import features
 from ember.weights import mirror
-from ember.config import (
+from ember.logs import log
+from ember.settings import (
     COMFY_DIR,
     FROZEN,
-    KREA2EDIT_NODES_REPO,
     MODELS_DIR,
     PROJECT_DIR,
     SAGE_ATTENTION,
-    V2_NODE_REPOS,
-    log,
 )
+from ember.pipelines.krea2.constants import KREA2EDIT_NODES_REPO
+from ember.pipelines.krea2_v2.constants import V2_NODE_REPOS
 
 COMFYUI_REPO = "https://github.com/comfyanonymous/ComfyUI.git"
 

@@ -21,7 +21,6 @@ uvicorn, websocket-client, ...) are imported only after step 3 has
 installed them, so the app can bootstrap itself on a bare pod.
 """
 
-import os
 import shutil
 import sys
 
@@ -30,19 +29,21 @@ from ember.licensing import catalog
 from ember import features
 from ember.licensing import seat as licensing
 from ember import logs, settings
-from ember.config import (
+from ember.logs import log
+from ember.settings import (
     COMFY_DIR,
     KREA_RESERVE_VRAM_GB,
-    MINIMAX_COMFYUI_MIN,
-    MINIMAX_NODE,
     MODELS_DIR,
     TEMP_DIR,
-    V2_NODE_REPOS,
     WAN_COMFY_LOG,
     WAN_COMFY_PORT,
     WAN_PARALLEL,
     WAN_RESERVE_VRAM_GB,
-    log,
+)
+from ember.pipelines.krea2_v2.constants import V2_NODE_REPOS
+from ember.pipelines.minimax.constants import (
+    MINIMAX_COMFYUI_MIN,
+    MINIMAX_NODE,
 )
 
 
@@ -83,7 +84,7 @@ def main() -> None:
     # so the app keeps working and nothing looks wrong until the day an
     # upstream file has actually vanished.
     from ember.weights import mirror
-    from ember.config import HF_TOKEN
+    from ember.settings import HF_TOKEN
     log.info("Assets — %s", mirror.describe())
     if mirror.MIRROR_ENABLED and not mirror.MIRROR_PUBLIC and not HF_TOKEN:
         log.warning(
@@ -201,7 +202,7 @@ def main() -> None:
         sum((MODELS_DIR / "loras" / name).exists() for name in lora_files),
         len(lora_files),
     )
-    if not os.environ.get("KREA2_SKIP_LAUNCH"):
+    if not settings.SKIP_LAUNCH:
         serve.serve()
 
 

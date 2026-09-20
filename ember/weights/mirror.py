@@ -23,9 +23,9 @@ the transport stays in theirs.
 """
 
 import json
-import os
 
-from ember.config import HF_TOKEN, PROJECT_DIR, log
+from ember.logs import log
+from ember.settings import HF_TOKEN, MIRROR_ENABLED, MIRROR_USER, PROJECT_DIR
 
 # ── Data files ────────────────────────────────────────────────────────────────
 # A dev checkout keeps both under scripts/ (deliberately outside the package
@@ -33,11 +33,6 @@ from ember.config import HF_TOKEN, PROJECT_DIR, log
 # build.sh copies them next to the code for the frozen build, so look in
 # both places rather than making the two layouts disagree.
 _SEARCH_DIRS = (PROJECT_DIR, PROJECT_DIR / "scripts")
-
-MIRROR_USER = os.environ.get("KREA2_MIRROR_USER", "thcocrambo2")
-# KREA2_NO_MIRROR=1 goes straight to upstream — the escape hatch for
-# debugging a suspected bad mirror without editing anything.
-MIRROR_ENABLED = not os.environ.get("KREA2_NO_MIRROR")
 
 
 def _load(name: str) -> dict:
