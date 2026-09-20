@@ -80,9 +80,9 @@ $NAME = 'krea2app.exe'
 # A standard user can create a directory at the root of C:, so this needs
 # no elevation.
 #
-# config.py defaults KREA2_BASE_DIR to /workspace/krea2, which on Windows
-# resolves to C:\workspace\krea2 — a pod path that happens to be a legal
-# Windows one. Setting it explicitly here is what stops the app quietly
+# ember/settings.py defaults KREA2_BASE_DIR to /workspace/krea2, which on
+# Windows resolves to C:\workspace\krea2 — a pod path that happens to be a
+# legal Windows one. Setting it explicitly here is what stops the app quietly
 # using it.
 $BASE = $env:KREA2_BASE_DIR
 if ([string]::IsNullOrWhiteSpace($BASE)) { $BASE = 'C:\krea2' }
@@ -104,9 +104,9 @@ Say 'starting'
 # ── What the customer has to have set ────────────────────────────────────
 # Checked here rather than left to the binary so a missing variable costs a
 # few seconds instead of a 300 MB download. The wording matches what
-# licensing.py says for the same two problems, so a customer who hits one
-# of them later reads the same sentence twice rather than two different
-# ones about the same mistake.
+# ember/licensing/seat.py says for the same two problems, so a customer who
+# hits one of them later reads the same sentence twice rather than two
+# different ones about the same mistake.
 if ([string]::IsNullOrWhiteSpace($env:KREA2_LICENSE_KEY)) {
     Die @'
 No license key found.
@@ -132,10 +132,10 @@ This machine is missing its node tag.
 '@
 }
 
-# Normalised and then checked exactly as config.py does it, so a tag the
-# binary would accept is never rejected here — the two must agree, or this
-# fails with a message about the tag and then works fine the moment
-# someone lowercases it by hand. config.py strips and lowercases;
+# Normalised and then checked exactly as ember/settings.py does it, so a
+# tag the binary would accept is never rejected here — the two must agree,
+# or this fails with a message about the tag and then works fine the moment
+# someone lowercases it by hand. settings.py strips and lowercases;
 # whitespace anywhere fails the pattern either way, so removing all of it
 # reaches the same verdict more legibly.
 $NODE_TAG = ($env:KREA2_NODE_TAG -replace '\s', '').ToLowerInvariant()
@@ -157,8 +157,8 @@ this machine's node tag is not valid.
 $API = "https://$NODE_TAG.vercel.app"
 
 # The machine id, so the server can tell one machine's downloads from
-# another's on the same key. This is the value licensing.py will report
-# once the app starts (_resolve_instance_id falls through to
+# another's on the same key. This is the value ember/licensing/seat.py will
+# report once the app starts (_resolve_instance_id falls through to
 # "host-<hostname>" when RunPod's variables are absent, which they always
 # are here), so the download row and the seat row name the same machine
 # rather than two.
@@ -542,11 +542,11 @@ the downloaded app is damaged (checksum does not match).
 }
 
 # ── The tunnel helper ────────────────────────────────────────────────────
-# serve.py needs cloudflared to hand the customer a public URL, and since
-# the Gradio UI was removed it is the ONLY thing that produces one. Left to
-# itself the app fetches it from the GitHub "latest" release on first
-# launch, which makes one github.com endpoint a hard dependency of every
-# first start - and the failure mode is a customer with no link at all.
+# ember/web/serve.py needs cloudflared to hand the customer a public URL,
+# and nothing else produces one. Left to itself the app fetches it from the
+# GitHub "latest" release on first launch, which makes one github.com
+# endpoint a hard dependency of every first start - and the failure mode is
+# a customer with no link at all.
 #
 # So it is fetched here instead, from the same public Hugging Face mirror
 # the weights come from, pinned to a release and checked against a known
@@ -633,8 +633,8 @@ Write-Host @"
 # There is no exec on Windows, so the app runs as a child process and this
 # script waits for it. That is not merely a syntactic difference:
 # runpod_start.sh uses exec so the binary becomes PID 1 and a container
-# stop delivers SIGTERM straight to licensing.py's handler, which gives the
-# seat back. Nothing here can reproduce that. Ctrl-C does reach the child
+# stop delivers SIGTERM straight to the handler in ember/licensing/seat.py,
+# which gives the seat back. Nothing here can reproduce that. Ctrl-C does reach the child
 # (same console, same process group) and exits cleanly through atexit;
 # closing the window does not, and that seat is freed by the server's
 # stale-lease sweep a few minutes later instead.

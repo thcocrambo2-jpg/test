@@ -1,9 +1,9 @@
 {
   "_note": [
-    "The list of PIPELINE assets the mirror holds - the merged text encoder, the VAEs, the Identity Edit LoRA, whatever config.py still names - plus the node packs and the upstream repos to pin. mirror_to_hf.py has no built-in list.",
+    "The list of PIPELINE assets the mirror holds - the merged text encoder, the VAEs, the Identity Edit LoRA, whatever a pipeline's constants.py still names - plus the node packs and the upstream repos to pin. mirror_to_hf.py has no built-in list.",
     "The catalogue's models and style LoRAs are NOT listed here. They live in the licence-server DB (the loras and models collections) and each record carries its own `mirror` {repo, path}: mirror_to_hf.py uploads every LoRA whose `mirror` is null and then records where it put it. Adding a LoRA is a DB edit, never an edit here.",
     "Run `mirror_to_hf.py --audit` to be told which catalogue records have no mirror.",
-    "A pipeline entry stays here after config.py stops mentioning it - that is the point of a mirror.",
+    "A pipeline entry stays here after the pipeline's constants.py stops mentioning it - that is the point of a mirror.",
     "local/path_in_repo are relative to MODELS_DIR and the repo root.",
     "source.kind: civitai | hf | dir | abliterated_merge | local",
     "pin_upstream: repos pinned to a revision in PINS.json. An hf repo pinned here that no item mirrors from (the Comfy-Org ones) is upstream-only on purpose - a catalogue record sourced from it needs no mirror."

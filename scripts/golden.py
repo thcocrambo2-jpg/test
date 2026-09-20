@@ -22,7 +22,8 @@ worse. Nothing in the app notices, and no human reading a 5,000-line diff
 notices either.
 
 So take the answer from the code while it is still the truth. The seam is
-`_run_jobs` (ui.py:356), which calls `builder(filename_prefix=..., **job)`
+`_run_jobs` in ember.generation.handlers, which calls
+`builder(filename_prefix=..., **job)`
 and then `client.run(workflow)` — patch `run`, keep the dict it was handed,
 and that dict is the complete statement of what the arguments meant. A
 swapped pair of ints moves a number inside it, and `--check` names the
@@ -111,9 +112,10 @@ UPLOADED = "golden_upload.png"
 def stub_comfy() -> None:
     """Make `import comfy` work on a machine ComfyUI cannot run on.
 
-    Lifted from scripts/dryrun.py and has to stay in step with it: comfy.py
-    detects GPUs at import and raises when there are none, while ui.py
-    binds `ensure_alive` at import time so a later patch is not seen.
+    Lifted from scripts/dryrun.py and has to stay in step with it:
+    ember.comfy.server detects GPUs at import and raises when there are
+    none, while ember.generation.handlers binds `ensure_alive` at import
+    time so a later patch is not seen.
 
     Note the difference from the other two scripts: theirs returns False,
     so nothing is ever built. This one returns **True** — see the module
@@ -134,8 +136,8 @@ def stub_comfy() -> None:
         comfy.node_registered = lambda *a, **k: True
         comfy.log_tail = lambda *a, **k: "<golden>"
         sys.modules["ember.comfy.server"] = comfy
-        # A from-import of the parent package copies the binding, so the
-        # stub has to be visible as an attribute too (context.md §6).
+        # A from-import of the parent package copies the binding at import
+        # time, so the stub has to be visible as that attribute too.
         import ember.comfy
         ember.comfy.server = comfy
     comfy.ensure_alive = ensure_alive
@@ -256,8 +258,9 @@ def cases(module) -> dict:
     the swap this file exists to catch, so `cutoff_step` is 7 and
     `total_steps` is 23 rather than both being what the slider ships with.
 
-    The LoRA tails are triples `(enabled, lora id, weight)` (context.md
-    4.3): every tab's row carries an on/off column. Models and LoRAs are
+    The LoRA tails are triples `(enabled, lora id, weight)` — every tab's
+    row carries an on/off column; see docs/architecture/web-ui.md,
+    "Submission order is load-bearing". Models and LoRAs are
     catalogue ids, and each case switches a few rows on so the snapshot
     holds a real LoRA chain — the file names in it are the one place the
     id -> file mapping is visible. A named row left *off* is in each tail

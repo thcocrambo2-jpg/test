@@ -23,7 +23,7 @@ is then wrong in a way nobody notices for a while:
                                                 the binary compiles,
                                                 starts, and dies inside
                                                 uvicorn.run()
-    --include-module=webui_bundle               the app serves an API and
+    --include-module=ember.web.webui_bundle     the app serves an API and
                                                 a "front end not built"
                                                 notice — no UI at all
 

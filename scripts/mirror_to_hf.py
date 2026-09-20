@@ -765,7 +765,8 @@ def add_upstream_revisions(api: HfApi, manifest: dict, pins: dict) -> None:
     fallback silently serves different weights than the mirror.
     """
     pins["_note"] = ("SHAs/revisions captured at mirror time. Feed these to "
-                     "bootstrap.py clones and hf_hub_download(revision=...). "
+                     "ember/comfy/setup.py clones and "
+                     "hf_hub_download(revision=...). "
                      "The mirror and the upstream fallback MUST resolve to "
                      "the same revision.")
     for repo_id, kind in manifest.get("pin_upstream", {}).items():
@@ -781,8 +782,9 @@ def add_upstream_revisions(api: HfApi, manifest: dict, pins: dict) -> None:
 def write_pins(pins: dict) -> Path:
     """Write PINS.json into the repo checkout, next to the manifest.
 
-    Not into the staging dir: this is what bootstrap.py and downloads.py
-    will read, so it has to be versioned with the code that consumes it. It
+    Not into the staging dir: this is what ember.comfy.setup and
+    ember.weights.downloads will read, so it has to be versioned with the
+    code that consumes it. It
     also records the one thing that cannot be recreated once the pod is
     destroyed — which commit of each node pack worked.
     """

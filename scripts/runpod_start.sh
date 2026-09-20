@@ -56,9 +56,9 @@ say "starting"
 # ── What the customer has to have set ────────────────────────────────────────
 # Checked here rather than left to the binary so a missing variable costs a
 # few seconds instead of a 300 MB download. The wording matches what
-# licensing.py says for the same two problems, so a customer who hits one
-# of them later reads the same sentence twice rather than two different
-# ones about the same mistake.
+# ember/licensing/seat.py says for the same two problems, so a customer who
+# hits one of them later reads the same sentence twice rather than two
+# different ones about the same mistake.
 [[ -n "${KREA2_LICENSE_KEY:-}" ]] || die "\
 No license key found.
        Set KREA2_LICENSE_KEY in this pod's environment variables to the
@@ -69,10 +69,11 @@ This pod is missing its node tag.
        Set KREA2_NODE_TAG in this pod's environment variables to the value
        issued with your license key, then start the pod again."
 
-# Normalised and then checked exactly as config.py does it, so a tag the
-# binary would accept is never rejected here — the two must agree, or a pod
-# fails at this step with a message about its tag and then works fine the
-# moment someone lowercases it by hand. config.py strips and lowercases;
+# Normalised and then checked exactly as ember/settings.py does it, so a tag
+# the binary would accept is never rejected here — the two must agree, or a
+# pod fails at this step with a message about its tag and then works fine
+# the moment someone lowercases it by hand. settings.py strips and
+# lowercases;
 # whitespace anywhere fails the pattern either way, so removing all of it
 # reaches the same verdict more legibly.
 NODE_TAG="${KREA2_NODE_TAG//[[:space:]]/}"
@@ -94,9 +95,10 @@ fi
 API="https://$NODE_TAG.vercel.app"
 
 # The pod id, so the server can tell one machine's downloads from another's
-# on the same key. Same preference order as licensing.py's instance id, and
-# for the same reason: a stable value means a pod that restarts looks like
-# itself rather than like a new machine every time.
+# on the same key. Same preference order as the instance id in
+# ember/licensing/seat.py, and for the same reason: a stable value means a
+# pod that restarts looks like itself rather than like a new machine every
+# time.
 INSTANCE="${RUNPOD_POD_ID:-${RUNPOD_POD_HOSTNAME:-$(hostname 2>/dev/null || echo unknown)}}"
 
 say "license key ${KREA2_LICENSE_KEY:0:10}… · node tag $NODE_TAG"
@@ -258,11 +260,11 @@ the downloaded app is damaged (checksum does not match).
 fi
 
 # ── The tunnel helper ────────────────────────────────────────────────────────
-# serve.py needs cloudflared to hand the customer a public URL, and since
-# the Gradio UI was removed it is the ONLY thing that produces one. Left to
-# itself the app fetches it from the GitHub "latest" release on first
-# launch, which makes one github.com endpoint a hard dependency of every
-# first start - and the failure mode is a customer with no link at all.
+# ember/web/serve.py needs cloudflared to hand the customer a public URL,
+# and nothing else produces one. Left to itself the app fetches it from the
+# GitHub "latest" release on first launch, which makes one github.com
+# endpoint a hard dependency of every first start - and the failure mode is
+# a customer with no link at all.
 #
 # So it is fetched here instead, from the same public Hugging Face mirror
 # the weights come from, pinned to a release and checked against a known
@@ -331,6 +333,6 @@ cat <<EOF
 EOF
 
 # exec, not a plain call: the binary becomes PID 1, so RunPod's stop sends
-# SIGTERM straight to it and licensing.py's handler gives the seat back
-# instead of the pod dying with it still held.
+# SIGTERM straight to it and the handler in ember/licensing/seat.py gives
+# the seat back instead of the pod dying with it still held.
 exec "$BIN"

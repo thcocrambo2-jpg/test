@@ -18,8 +18,9 @@ Docker bake stage, weeks later. So every module is imported **alone, in a
 fresh subprocess**, which is the only arrangement that has no earlier
 import to lean on.
 
-The second is import-time work that needs hardware. comfy.py detects GPUs
-when it is imported and raises without one (comfy.detect_gpus), so a
+The second is import-time work that needs hardware. ember.comfy.server
+detects GPUs when it is imported and raises without one (its
+`detect_gpus`), so a
 package `__init__` that imported its siblings would drag GPU detection
 into `docker/bake_nodes.py` and into every laptop script. Hence rule 2:
 every `__init__.py` under the package is empty. The comfy module itself is
@@ -75,11 +76,12 @@ NOT_APP_MODULES: frozenset[str] = frozenset()
 # Rule 1 is unconditional: every discovered module imports alone.
 
 # Rule 2: every __init__.py under MODULE_ROOT holds nothing but whitespace
-# or a docstring (context.md §5 rule 3).
+# or a docstring — see docs/development/conventions.md, "Every `__init__.py`
+# is empty".
 CHECK_EMPTY_INITS = True
 
-# Rule 3: settings.py is the only module that reads the environment
-# (context.md §4, tier 1).
+# Rule 3: settings.py is the only module that reads the environment — tier
+# 1 of docs/development/conventions.md, "The three config tiers".
 CHECK_ENV_READS = True
 
 # Rule 4: the configuration has been split, so nothing may import the
@@ -97,10 +99,10 @@ ENV_HOME = "settings.py"
 ENV_COPY_METHOD = "copy"
 
 # The module stubbed before every import, as a dotted name under the
-# package (see the docstring). Under the flat layout it is the top-level
-# `comfy`; from Phase 1 it is `ember.comfy.server`, and the stub is also
-# hung on `ember.comfy` as its `server` attribute, because a from-import of
-# the parent package would otherwise not find it (context.md §6).
+# package (see the docstring). Dotted, so the stub is also hung on
+# `ember.comfy` as its `server` attribute: a from-import of the parent
+# package copies that binding at import time and would otherwise not find
+# it. A MODULE_ROOT of "." means a flat tree with no package to hang it on.
 STUB_MODULE = "comfy" if MODULE_ROOT == "." else "ember.comfy.server"
 
 # Environment variables cleared from every child, so that a developer's
@@ -211,8 +213,8 @@ def _stub_comfy() -> None:
         sys.modules[STUB_MODULE] = module
         parent, _, leaf = STUB_MODULE.rpartition(".")
         if parent:
-            # A from-import of the parent package copies the binding, so the
-            # stub has to be visible as an attribute too (context.md §6).
+            # A from-import of the parent package copies the binding at
+            # import time, so the stub has to be visible as that attribute.
             setattr(importlib.import_module(parent), leaf, module)
 
 

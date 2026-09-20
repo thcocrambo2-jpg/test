@@ -2,7 +2,8 @@
 """Fail when the committed webui_bundle.py is older than webui/src.
 
 Pure stdlib, and deliberately **no Node**: this is what both build hosts
-run, and neither of them has npm (context.md constraint 5). It recomputes
+run, and neither of them has npm — see docs/architecture/web-ui.md, "Why
+the React bundle is committed". It recomputes
 `SOURCE_HASH` over the front-end sources and compares it to the one baked
 into the generated module. Nothing is compiled and nothing is compared
 byte-for-byte against `webui/dist/`, so the answer does not depend on
