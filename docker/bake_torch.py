@@ -34,7 +34,13 @@ os.environ["KREA2_BASE_DIR"] = BAKE_ROOT
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 
 from ember.comfy import setup as bootstrap                   # noqa: E402
-from ember.config import log                                 # noqa: E402
+from ember import logs                                       # noqa: E402
+from ember.logs import log                                   # noqa: E402
+
+# Importing configures no logging, so this script asks for it itself. It
+# makes no directories: the only one it writes into is BAKE_ROOT, which
+# main() creates, and bake_nodes.py has already swept the rest away.
+logs.setup()
 
 TORCH_VERSION = "2.11.0"
 TORCH_CUDA = "cu130"

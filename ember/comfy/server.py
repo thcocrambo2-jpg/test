@@ -18,7 +18,8 @@ import time
 import urllib.request
 
 from ember.comfy.setup import attention_args, runtime_python
-from ember.config import (
+from ember.logs import log
+from ember.settings import (
     COMFY_DIR,
     COMFY_HOST,
     COMFY_LOG,
@@ -29,7 +30,6 @@ from ember.config import (
     WAN_COMFY_PORT,
     WAN_PARALLEL,
     WAN_RESERVE_VRAM_GB,
-    log,
 )
 
 

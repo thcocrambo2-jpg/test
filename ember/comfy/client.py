@@ -9,13 +9,13 @@ import uuid
 import requests
 import websocket  # websocket-client, installed by bootstrap.py
 
-from ember.config import (
+from ember.logs import log
+from ember.settings import (
     COMFY_HOST,
     COMFY_PORT,
     OUTPUT_DIR,
     WAN_COMFY_PORT,
     WAN_PARALLEL,
-    log,
 )
 
 

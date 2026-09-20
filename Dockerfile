@@ -72,7 +72,7 @@ RUN apt-get update && \
 
 # ── Stage 1: clone ────────────────────────────────────────────────────────
 # Separate purely so the app's source does not reach the published image.
-# bake_nodes.py needs config.py/bootstrap.py/mirror.py to resolve the pins,
+# bake_nodes.py needs settings.py/bootstrap.py/mirror.py to resolve the pins,
 # and those are exactly the files build.sh compiles into a binary rather
 # than shipping. They stay in this stage; only /opt/krea2 is copied out.
 FROM python-base AS nodes
@@ -86,9 +86,15 @@ WORKDIR /src
 # scripts/ first: PINS.json and mirror_manifest.json change far more often
 # than the four modules, and mirror.py looks in PROJECT_DIR/scripts for both.
 COPY scripts/PINS.json scripts/mirror_manifest.json /src/scripts/
-COPY ember/__init__.py ember/config.py ember/features.py /src/ember/
+COPY ember/__init__.py ember/features.py ember/logs.py ember/settings.py \
+     /src/ember/
 COPY ember/weights/__init__.py ember/weights/mirror.py /src/ember/weights/
 COPY ember/comfy/__init__.py ember/comfy/setup.py /src/ember/comfy/
+COPY ember/pipelines/__init__.py /src/ember/pipelines/
+COPY ember/pipelines/krea2/__init__.py ember/pipelines/krea2/constants.py \
+     /src/ember/pipelines/krea2/
+COPY ember/pipelines/krea2_v2/__init__.py \
+     ember/pipelines/krea2_v2/constants.py /src/ember/pipelines/krea2_v2/
 COPY docker/bake_nodes.py /src/bake_nodes.py
 
 RUN python3 /src/bake_nodes.py

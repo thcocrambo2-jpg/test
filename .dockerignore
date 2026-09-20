@@ -20,12 +20,18 @@
 
 # What bake_nodes.py imports to read them. Build stage only.
 !ember/__init__.py
-!ember/config.py
 !ember/features.py
+!ember/logs.py
+!ember/settings.py
 !ember/weights/__init__.py
 !ember/weights/mirror.py
 !ember/comfy/__init__.py
 !ember/comfy/setup.py
+!ember/pipelines/__init__.py
+!ember/pipelines/krea2/__init__.py
+!ember/pipelines/krea2/constants.py
+!ember/pipelines/krea2_v2/__init__.py
+!ember/pipelines/krea2_v2/constants.py
 
 # The start script, copied in verbatim: the same file build.sh publishes
 # to R2 and a RunPod template downloads from /v1/start.sh.
