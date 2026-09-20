@@ -19,8 +19,8 @@ in VRAM, 24 fps, no turbo/raw split.
 """
 
 from ember.comfy.server import GPU_COUNT
-from ember.config import (
-    MODELS_DIR,
+from ember.settings import MODELS_DIR
+from ember.pipelines.wan.constants import (
     WAN_5B_UNET,
     WAN_5B_VAE,
     WAN_HIGH_UNET,

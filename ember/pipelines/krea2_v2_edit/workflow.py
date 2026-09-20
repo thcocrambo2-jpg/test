@@ -37,15 +37,15 @@ passes through whichever input it does not touch.
 """
 
 from ember.comfy.server import GPU_COUNT
-from ember.config import (
-    EDIT_LORA_FILE,
-    V2_EDIT_MAX_PIXELS,
+from ember.logs import log
+from ember.pipelines.krea2.constants import EDIT_LORA_FILE
+from ember.pipelines.krea2_v2.constants import (
     V2_NODE_REPOS,
     V2_SAMPLER_DEFAULTS,
     V2_VAE_FILE,
     V2_VARIANCE_DEFAULTS,
-    log,
 )
+from ember.pipelines.krea2_v2_edit.constants import V2_EDIT_MAX_PIXELS
 from ember.pipelines.common import active_text_encoder, edit_lora_available
 from ember.pipelines.krea2_v2.workflow import (
     REQUIRED_NODES as V2_REQUIRED_NODES,

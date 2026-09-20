@@ -16,7 +16,7 @@ catalogue ids into those names.
 """
 
 from ember.comfy.server import GPU_COUNT
-from ember.config import (
+from ember.pipelines.krea2.constants import (
     EDIT_LORA_FILE,
     VAE_FILE,
 )

@@ -43,23 +43,27 @@ from ember.generation import recipes
 from ember.comfy.client import ComfyUIError, client, model_signature, on_output, wan_client
 from ember.comfy.server import ensure_alive as comfy_ensure_alive
 from ember.features import Key
-from ember.config import (
+from ember.logs import log
+from ember.settings import (
     COMFY_LOG,
     COMFY_PORT,
-    DEFAULT_RESOLUTION,
     FREE_ON_SWAP,
-    MINIMAX_FPS,
     OUTPUT_DIR,
-    RESOLUTION_PRESETS,
-    WAN_5B_DEFAULTS,
-    WAN_5B_FPS,
     WAN_COMFY_LOG,
     WAN_COMFY_PORT,
+    WAN_PARALLEL,
+)
+from ember.pipelines.krea2.constants import (
+    DEFAULT_RESOLUTION,
+    RESOLUTION_PRESETS,
+)
+from ember.pipelines.minimax.constants import MINIMAX_FPS
+from ember.pipelines.wan.constants import (
+    WAN_5B_DEFAULTS,
+    WAN_5B_FPS,
     WAN_FPS,
     WAN_MODE_DEFAULTS,
-    WAN_PARALLEL,
     WAN_RESOLUTIONS,
-    log,
 )
 from ember.pipelines.common import (
     edit_lora_available,
@@ -124,7 +128,8 @@ KREA_EDIT = str(Key.KREA_EDIT)
 KREA_V2_T2I = str(Key.KREA_V2_T2I)
 KREA_V2_EDIT = str(Key.KREA_V2_EDIT)
 # The MiniMax tabs take LoRAs from the catalogue too, but no model: their
-# weights are fixed in config.py, so only the LoRA list is read.
+# weights are fixed in pipelines/minimax/constants.py, so only the LoRA
+# list is read.
 MINIMAX_I2V = str(Key.MINIMAX_I2V)
 MINIMAX_T2V = str(Key.MINIMAX_T2V)
 
