@@ -5,8 +5,12 @@
 #
 # The customer sets two environment variables on the pod and nothing else:
 #
-#     KREA2_LICENSE_KEY   the key they were issued
-#     KREA2_NODE_TAG      the deployment id issued with it
+#     EMBER_LICENSE_KEY   the key they were issued
+#     EMBER_NODE_TAG      the deployment id issued with it
+#
+# KREA2_LICENSE_KEY and KREA2_NODE_TAG are read as well, because a RunPod
+# template is cloned once and never updated: pods started from templates
+# in the field carry those names.
 #
 # Leave both EMPTY in the template. A template is public and every field in
 # it is readable by whoever clones it, so a key typed in here is a key
@@ -26,10 +30,10 @@
 #     KREA2_BASE_DIR      where models and outputs live (default below)
 #     CIVITAI_TOKEN       only if a CivitAI download starts refusing anonymous
 #
-# There is no longer a KREA2_BUILD_REV. Which build a licence gets is
-# decided by the server, so pinning one customer to an older build or
-# rolling everybody back is done there — see /v1/admin/builds/promote —
-# rather than by talking a customer through editing their pod.
+# Which build a licence gets is decided by the server, so pinning one
+# customer to an older build or rolling everybody back is done there —
+# see /v1/admin/builds/promote — rather than by talking a customer
+# through editing their pod.
 #
 # Note this REPLACES the image's own /start.sh, so SSH and JupyterLab do
 # not come up. That is deliberate for a customer pod — the app's output
@@ -37,7 +41,7 @@
 
 set -uo pipefail
 
-NAME="krea2app"
+NAME="ember"
 
 # Under /workspace on purpose: that is the RunPod volume, so the ~90 GB of
 # weights downloaded on the first run survive a Stop and the second start
@@ -59,14 +63,24 @@ say "starting"
 # ember/licensing/seat.py says for the same two problems, so a customer who
 # hits one of them later reads the same sentence twice rather than two
 # different ones about the same mistake.
-[[ -n "${KREA2_LICENSE_KEY:-}" ]] || die "\
+#
+# Both spellings are read because both are in use: the EMBER_ names are
+# what the instructions say to set, and the KREA2_ names are what RunPod
+# templates in the field carry. EMBER_ wins when both are set, so adding
+# the new name is enough and nobody has to find and delete the old one
+# first. An empty value counts as unset, which is what lets a template
+# ship these fields blank.
+LICENSE_KEY="${EMBER_LICENSE_KEY:-${KREA2_LICENSE_KEY:-}}"
+NODE_TAG_RAW="${EMBER_NODE_TAG:-${KREA2_NODE_TAG:-}}"
+
+[[ -n "$LICENSE_KEY" ]] || die "\
 No license key found.
-       Set KREA2_LICENSE_KEY in this pod's environment variables to the
+       Set EMBER_LICENSE_KEY in this pod's environment variables to the
        key you were given, then start the pod again."
 
-[[ -n "${KREA2_NODE_TAG:-}" ]] || die "\
+[[ -n "$NODE_TAG_RAW" ]] || die "\
 This pod is missing its node tag.
-       Set KREA2_NODE_TAG in this pod's environment variables to the value
+       Set EMBER_NODE_TAG in this pod's environment variables to the value
        issued with your license key, then start the pod again."
 
 # Normalised and then checked exactly as ember/settings.py does it, so a tag
@@ -76,7 +90,7 @@ This pod is missing its node tag.
 # lowercases;
 # whitespace anywhere fails the pattern either way, so removing all of it
 # reaches the same verdict more legibly.
-NODE_TAG="${KREA2_NODE_TAG//[[:space:]]/}"
+NODE_TAG="${NODE_TAG_RAW//[[:space:]]/}"
 NODE_TAG="${NODE_TAG,,}"
 
 # One DNS label and nothing else. The tag is what the endpoint is assembled
@@ -88,7 +102,7 @@ NODE_TAG="${NODE_TAG,,}"
 if [[ ! "$NODE_TAG" =~ ^[a-z0-9][a-z0-9-]{6,61}[a-z0-9]$ ]]; then
     die "\
 this pod's node tag is not valid.
-       Set KREA2_NODE_TAG to the value issued with your license key —
+       Set EMBER_NODE_TAG to the value issued with your license key —
        it is a single name, with no dots, slashes or colons in it."
 fi
 
@@ -101,7 +115,7 @@ API="https://$NODE_TAG.vercel.app"
 # time.
 INSTANCE="${RUNPOD_POD_ID:-${RUNPOD_POD_HOSTNAME:-$(hostname 2>/dev/null || echo unknown)}}"
 
-say "license key ${KREA2_LICENSE_KEY:0:10}… · node tag $NODE_TAG"
+say "license key ${LICENSE_KEY:0:10}… · node tag $NODE_TAG"
 
 # ── Tooling ──────────────────────────────────────────────────────────────────
 # The RunPod PyTorch images ship all of these; a leaner base image might
@@ -147,7 +161,7 @@ say "checking for the current build ..."
 # --fail is deliberately NOT used: a refusal here carries a message written
 # for the customer ("this license expired on ..."), and -f would throw the
 # body away and leave nothing to print but a number.
-payload="$(KEY="$KREA2_LICENSE_KEY" INST="$INSTANCE" HAVE="$have" python3 -c '
+payload="$(KEY="$LICENSE_KEY" INST="$INSTANCE" HAVE="$have" python3 -c '
 import json, os
 print(json.dumps({
     "license_key": os.environ["KEY"],
