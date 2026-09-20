@@ -6,9 +6,9 @@
 
 What this is for
 ----------------
-The restructure splits config.py into ember/settings.py, ember/logs.py and
-five ember/pipelines/*/constants.py modules. None of that is supposed to
-change a single value. But a constant is not like a route or a form: no
+The restructure split the configuration into ember/settings.py,
+ember/logs.py and five ember/pipelines/*/constants.py modules. None of
+that was supposed to change a single value. But a constant is not like a route or a form: no
 test fails when one moves and quietly loses its meaning, because nothing
 in the app asserts what a number *is*. Drop a line while splitting a
 390-line data module into six, keep a `PROJECT_DIR` that resolves one
@@ -17,24 +17,23 @@ constants and the app still starts — the pictures are just wrong, or the
 weights are unpinned, or the showcase is empty.
 
 So take the answer from the code while it is still the truth. This is the
-complete list of what config.py holds today and what each name's value
-`repr()`s to, and the check is that every one of them is still findable
-and still the same.
+complete list of what the configuration held before the split and what
+each name's value `repr()`s to, and the check is that every one of them is
+still findable and still the same.
 
 **Where** a name lives is not what this proves. `SOURCES` below is the
-list of modules the names are looked for in, and each phase widens or
-moves it: one module today, one renamed module after Phase 1, seven after
-Phase 2. A name is allowed to move between the modules in that list. What
-is not allowed is for it to vanish, to change value, or to end up in two
-of them at once — the last one being how a "shared" constant becomes two
-constants that drift apart later.
+list of modules the names are looked for in, and a phase that moves a
+value rewrites it. A name is allowed to move between the modules in that
+list. What is not allowed is for it to vanish, to change value, or to end
+up in two of them at once — the last one being how a "shared" constant
+becomes two constants that drift apart later.
 
-New names are fine and are only listed: Phase 2 adds the ones that were
-read from the environment in other modules (context §4).
+New names are fine and are only listed: the environment reads that used
+to sit in other modules arrived this way (context §4).
 
 Determinism
 -----------
-Half of config.py is derived from the environment, so collecting it in
+Half of settings.py is derived from the environment, so collecting it in
 this process would record this machine. Instead the values come from a
 **subprocess** with a built environment: every `KREA2_*`, `HF_TOKEN`,
 `CIVITAI_TOKEN` and `RUNPOD_*` variable is dropped, and four are set to
@@ -91,10 +90,8 @@ sys.path.insert(0, str(ROOT))
 BASELINE = Path(__file__).resolve().parent / "config_baseline.json"
 
 # The modules the baseline's names are searched for, in order. One name has
-# to be in exactly one of them. Widen this as the phases move config.py:
-#
-#   Phase 1:  ["ember.config"]
-#   Phase 2:  the six modules below
+# to be in exactly one of them. A phase that moves a value rewrites this
+# list; the baseline's keys do not move with it.
 SOURCES = [
     "ember.settings",
     "ember.pipelines.krea2.constants",
@@ -121,13 +118,13 @@ QUALIFIED = {
 }
 
 # A public module-level constant: upper case, not starting with an
-# underscore. config.py's own convention (context §5 rule 5), so the rule
-# can stay this blunt.
+# underscore. The configuration's own convention (context §5 rule 5), so
+# the rule can stay this blunt.
 PUBLIC = re.compile(r"[A-Z][A-Z0-9_]*\Z")
 
 # Environment the child is given, on top of a copy of this one stripped of
 # everything in _WIPE. Four values, chosen so that nothing derived from
-# them names this machine or this checkout: the node tag passes config's
+# them names this machine or this checkout: the node tag passes settings'
 # DNS-label check, so LICENSE_API_URL is a URL rather than the empty
 # string the malformed case produces, and the showcase URL passes the
 # https check, so SHOWCASE_BASE_URL is the stripped value rather than "".
@@ -135,14 +132,14 @@ _FIXED_ENV = {
     "KREA2_NODE_TAG": "restructure-test",
     "KREA2_LICENSE_KEY": "KREA2-TEST-TEST-TEST",
     "KREA2_SHOWCASE_URL": "https://pub-test.r2.dev/x",
-    # Nothing in config.py is set-valued today. This is here so that the
+    # None of these values is set-valued today. This is here so that the
     # day one of the constants modules holds a set, its repr does not
     # depend on the child's hash seed and the check does not start
     # flickering for a reason that has nothing to do with the code.
     "PYTHONHASHSEED": "0",
 }
 
-# Anything that could reach a value in config.py. KREA2_* covers the base
+# Anything that could reach one of these values. KREA2_* covers the base
 # dir, the ports, the swap and attention flags, the Wan reserves, the
 # licence key, tag and grace, and the showcase URL; the rest are the two
 # download credentials and the RunPod ids licensing.py reads.
@@ -254,9 +251,9 @@ def gather() -> dict:
             env=_child_env(base_dir), cwd=str(ROOT),
             capture_output=True, text=True, encoding="utf-8",
             # The payload is ASCII (json.dumps escapes), so this only ever
-            # touches the log lines config.py emits on its way up, and a
-            # console codepage that cannot spell "·" must not be the reason
-            # this check fails.
+            # touches whatever the imported modules log on their way up,
+            # and a console codepage that cannot spell "·" must not be the
+            # reason this check fails.
             errors="replace",
         )
     finally:

@@ -28,17 +28,17 @@ scripts/dryrun.py stub it, and the stub is installed *before* the module
 under test so that importing a module which imports comfy is a test of
 that module rather than of this machine's GPU.
 
-Rules 3 and 4 are the config split's half of the same problem. Once
+Rules 3 and 4 are the config split's half of the same problem. Now that
 settings.py owns the environment, a stray `os.environ.get` left behind in
-another module is a value that no longer appears in check_config.py's
-baseline and no longer gets validated — and it reads correctly on the
-machine where it was written. An AST scan is the only thing that finds
-those, because they do nothing wrong at runtime.
+another module is a value that does not appear in check_config.py's
+baseline and never gets validated — and it reads correctly on the machine
+where it was written. An AST scan is the only thing that finds those,
+because they do nothing wrong at runtime.
 
 The flags
 ---------
-Each rule below its own module-level constant, off until the phase that
-makes it true. A later phase flips one value and changes nothing else.
+Each rule below its own module-level constant, so a layout change that
+retires one is a single value rather than a rewrite.
 """
 
 from __future__ import annotations
@@ -78,18 +78,16 @@ NOT_APP_MODULES: frozenset[str] = frozenset()
 # or a docstring (context.md §5 rule 3).
 CHECK_EMPTY_INITS = True
 
-# Rule 3 — PHASE 2 TURNS THIS ON: settings.py is the only module that reads
-# the environment (context.md §4, tier 1).
-CHECK_ENV_READS = False
+# Rule 3: settings.py is the only module that reads the environment
+# (context.md §4, tier 1).
+CHECK_ENV_READS = True
 
-# Rule 4 — PHASE 2 TURNS THIS ON: config.py has been split, so nothing may
-# import it any more.
-CHECK_NO_CONFIG_IMPORT = False
+# Rule 4: the configuration has been split, so nothing may import the
+# module it was split out of.
+CHECK_NO_CONFIG_IMPORT = True
 
 # The one module allowed to read the environment, as a path under
-# MODULE_ROOT. Rule 3 is off until Phase 2 splits config.py, so this names
-# the file that will hold the env reads rather than the one that holds them
-# today. Phase 2 turns the flag on in the same commit that makes this true.
+# MODULE_ROOT.
 ENV_HOME = "settings.py"
 
 # `os.environ.copy()` is allowed anywhere: handing the whole environment to
