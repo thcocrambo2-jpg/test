@@ -33,8 +33,8 @@ os.environ["KREA2_BASE_DIR"] = BAKE_ROOT
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 
-import bootstrap                                             # noqa: E402
-from config import log                                       # noqa: E402
+from ember.comfy import setup as bootstrap                   # noqa: E402
+from ember.config import log                                 # noqa: E402
 
 TORCH_VERSION = "2.11.0"
 TORCH_CUDA = "cu130"
