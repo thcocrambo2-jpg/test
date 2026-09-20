@@ -238,7 +238,7 @@ webui:
 webui-dev:
 	@cd webui && npm run dev
 
-# Cheap, credential-free, and a dependency of both build targets. Five
+# Cheap, credential-free, and a dependency of both build targets. Six
 # checks, one gate — widened rather than given its own target so that
 # `compile` and `release` keep their single prerequisite:
 #
@@ -259,6 +259,10 @@ webui-dev:
 #   check_imports     every module imports on its own, so a cycle or a
 #                     GPU-only import lands here and not in the bake
 #                     stage or on a laptop.
+#   check_docs        every relative link in the documentation resolves,
+#                     docs/configuration.md documents every variable
+#                     settings.py reads, and nothing names a module that
+#                     no longer exists.
 #
 # Every one of them catches a defect that a successful compile hides,
 # which is why they cost a fraction of a second here rather than an
@@ -269,6 +273,7 @@ check-args:
 	python3 scripts/check_routes.py
 	python3 scripts/check_config.py
 	python3 scripts/check_imports.py
+	python3 scripts/check_docs.py
 
 compile: check-args
 	@./build.sh --no-publish
