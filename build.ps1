@@ -3,8 +3,8 @@
     Build the single-file Windows artifact with Nuitka.
 
     RUN THIS ON WINDOWS. Nuitka emits native code for the OS it runs on, so
-    this is the Windows half of a pair: build.sh produces dist/krea2app for
-    Linux pods on a pod, this produces dist/krea2app.exe for Windows
+    this is the Windows half of a pair: build.sh produces dist/ember for
+    Linux pods on a pod, this produces dist/ember.exe for Windows
     customers on Windows. Neither can produce the other's artifact, and
     that is a property of Nuitka rather than a decision taken here.
 
@@ -21,10 +21,10 @@
     That is why bootstrap.runtime_python() exists, and why the machine
     running the .exe still needs its own Python 3.12 and git.
 
-      .\build.ps1                  -> dist\krea2app.exe, and stop
+      .\build.ps1                  -> dist\ember.exe, and stop
       .\build.ps1 -Publish         -> ... then offer to publish it
       .\build.ps1 -Publish -Yes    -> ... and publish without asking
-      .\build.ps1 -UploadOnly      -> publish the dist\krea2app.exe already
+      .\build.ps1 -UploadOnly      -> publish the dist\ember.exe already
                                       there, compiling nothing
 
     PUBLISHING IS OFF BY DEFAULT, and that differs deliberately from
@@ -47,9 +47,9 @@
                              The API is https://<tag>.vercel.app, assembled
                              here exactly as ember/settings.py assembles
                              it there
-      KREA2_ADMIN_TOKEN      the ADMIN_TOKEN set on that deployment
+      EMBER_ADMIN_TOKEN      the ADMIN_TOKEN set on that deployment
 
-      KREA2_BUILD_CHANNEL    which channel to point at this build
+      EMBER_BUILD_CHANNEL    which channel to point at this build
                              (default "stable"; set it to something else to
                              upload without customers getting it)
 
@@ -94,7 +94,7 @@ Set-Location -LiteralPath $PSScriptRoot
 $PYTHON = $env:PYTHON
 if (-not $PYTHON) { $PYTHON = 'python' }
 $OUTPUT_DIR = 'dist'
-$OUTPUT_NAME = 'krea2app.exe'
+$OUTPUT_NAME = 'ember.exe'
 $ARTIFACT = Join-Path $OUTPUT_DIR $OUTPUT_NAME
 $START_SCRIPT = 'scripts\windows_start.ps1'
 
@@ -155,7 +155,7 @@ function Get-NativeOutput([scriptblock]$Command) {
 # which is a SyntaxError blamed on the snippet rather than on the shell.
 # A file has no quoting layer to get wrong.
 function Invoke-PythonFile([string]$Snippet) {
-    $file = Join-Path ([System.IO.Path]::GetTempPath()) ('krea2-' + [guid]::NewGuid().ToString('N') + '.py')
+    $file = Join-Path ([System.IO.Path]::GetTempPath()) ('ember-' + [guid]::NewGuid().ToString('N') + '.py')
     [System.IO.File]::WriteAllText($file, $Snippet, (New-Object System.Text.UTF8Encoding($false)))
     try {
         return Get-NativeOutput { & $PYTHON $file }
@@ -182,7 +182,7 @@ import pathlib, sys, tempfile
 from PIL import Image
 
 source = pathlib.Path("assets/branding/ember-icon-256.png")
-target = pathlib.Path(tempfile.gettempdir()) / "krea2app-icon.ico"
+target = pathlib.Path(tempfile.gettempdir()) / "ember-icon.ico"
 image = Image.open(source).convert("RGBA")
 image.save(target, format="ICO",
            sizes=[(16, 16), (32, 32), (48, 48), (64, 64), (128, 128), (256, 256)])
@@ -207,11 +207,11 @@ if ($UploadOnly -and -not $Publish) {
 #
 # Two objects go to one PRIVATE Cloudflare R2 bucket:
 #
-#   builds/<sha256>/krea2app.exe   the binary, addressed by its own hash
+#   builds/<sha256>/ember.exe      the binary, addressed by its own hash
 #   start.ps1                      scripts/windows_start.ps1, fixed key
 #
 # The Linux side of the bucket is untouched by this: its binaries are at
-# builds/<sha256>/krea2app and its script at start.sh. The two never
+# builds/<sha256>/ember and its script at start.sh. The two never
 # collide, because a sha256 prefix is per-artifact and the two start
 # scripts have different names.
 #
@@ -244,7 +244,7 @@ function Invoke-Publish {
         $apiUrl = "https://$nodeTag.vercel.app"
     }
 
-    $channel = $env:KREA2_BUILD_CHANNEL
+    $channel = $env:EMBER_BUILD_CHANNEL
     if (-not $channel) { $channel = 'stable' }
 
     # The build itself succeeded, so this is only fatal when -Yes said to
@@ -323,14 +323,14 @@ slashes, no https:// prefix. Got: $env:KREA2_NODE_TAG
 "@
     }
 
-    if (-not $env:KREA2_ADMIN_TOKEN) {
+    if (-not $env:EMBER_ADMIN_TOKEN) {
         Stop-Publish @"
-Not publishing: KREA2_ADMIN_TOKEN is unset.
+Not publishing: EMBER_ADMIN_TOKEN is unset.
 Uploading the binary without registering it would put bytes in the bucket
 that nothing points at — customers would keep running the previous build
 and nothing would say why. Set it and re-run with -UploadOnly:
 
-    KREA2_ADMIN_TOKEN  the ADMIN_TOKEN set on $apiUrl
+    EMBER_ADMIN_TOKEN  the ADMIN_TOKEN set on $apiUrl
 "@
     }
 
@@ -445,13 +445,13 @@ ERROR: uploading start.ps1 to R2 failed. The binary is already up
     # are in the bucket and no channel points at them, so customers carry
     # on running the previous build.
     Say '>>> Registering the build ...'
-    $env:KREA2_REG_SHA = $sha
-    $env:KREA2_REG_SIZE = "$size"
-    $env:KREA2_REG_COMMIT = $commit
-    $env:KREA2_REG_BRANCH = $branch
-    $env:KREA2_REG_CHANNEL = $channel
-    $env:KREA2_REG_URL = $apiUrl
-    $env:KREA2_REG_FILENAME = $OUTPUT_NAME
+    $env:EMBER_REG_SHA = $sha
+    $env:EMBER_REG_SIZE = "$size"
+    $env:EMBER_REG_COMMIT = $commit
+    $env:EMBER_REG_BRANCH = $branch
+    $env:EMBER_REG_CHANNEL = $channel
+    $env:EMBER_REG_URL = $apiUrl
+    $env:EMBER_REG_FILENAME = $OUTPUT_NAME
 
     # Inline Python rather than PowerShell's Invoke-RestMethod: it is the
     # same request build.sh sends, written the same way, so the two
@@ -462,10 +462,10 @@ import json, os, platform, sys, time
 import urllib.error, urllib.request
 
 body = json.dumps({
-    "sha256": os.environ["KREA2_REG_SHA"],
-    "size": int(os.environ["KREA2_REG_SIZE"]),
-    "git_commit": os.environ.get("KREA2_REG_COMMIT") or None,
-    "git_branch": os.environ.get("KREA2_REG_BRANCH") or None,
+    "sha256": os.environ["EMBER_REG_SHA"],
+    "size": int(os.environ["EMBER_REG_SIZE"]),
+    "git_commit": os.environ.get("EMBER_REG_COMMIT") or None,
+    "git_branch": os.environ.get("EMBER_REG_BRANCH") or None,
     "arch": f"{platform.system().lower()}-{platform.machine()}",
     # The field that keeps this artifact away from Linux pods. `arch`
     # above is close but not it: platform.machine() is not lowercased, so
@@ -474,17 +474,17 @@ body = json.dumps({
     "platform": "windows",
     # What the object is called inside its content-addressed prefix, so
     # the API signs a URL for the name that was actually uploaded.
-    "filename": os.environ["KREA2_REG_FILENAME"],
+    "filename": os.environ["EMBER_REG_FILENAME"],
     "built_at": time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime()),
-    "promote": os.environ["KREA2_REG_CHANNEL"],
+    "promote": os.environ["EMBER_REG_CHANNEL"],
 }).encode()
 
 request = urllib.request.Request(
-    f"{os.environ['KREA2_REG_URL'].rstrip('/')}/v1/admin/builds",
+    f"{os.environ['EMBER_REG_URL'].rstrip('/')}/v1/admin/builds",
     data=body,
     headers={
         "Content-Type": "application/json",
-        "Authorization": f"Bearer {os.environ['KREA2_ADMIN_TOKEN']}",
+        "Authorization": f"Bearer {os.environ['EMBER_ADMIN_TOKEN']}",
     },
     method="POST",
 )
@@ -498,7 +498,7 @@ except urllib.error.HTTPError as err:
     # variable and an -UploadOnly re-run, not a rebuild.
     print(f"  HTTP {err.code} from the API: {detail}", file=sys.stderr)
     if err.code == 401:
-        print("  KREA2_ADMIN_TOKEN does not match the ADMIN_TOKEN set on "
+        print("  EMBER_ADMIN_TOKEN does not match the ADMIN_TOKEN set on "
               "that deployment.", file=sys.stderr)
     if err.code == 400 and "platform" in detail:
         print("  This deployment does not know about platforms yet. Deploy "
@@ -507,14 +507,14 @@ except urllib.error.HTTPError as err:
               "which is the safe failure.", file=sys.stderr)
     raise SystemExit(1)
 except Exception as err:
-    print(f"  could not reach {os.environ['KREA2_REG_URL']}: {err}",
+    print(f"  could not reach {os.environ['EMBER_REG_URL']}: {err}",
           file=sys.stderr)
     raise SystemExit(1)
 '@
     # A file rather than -c, for the reason in Invoke-PythonFile. This one
     # runs in the foreground rather than through that helper because its
     # stderr is the diagnosis when registration fails.
-    $registerFile = Join-Path ([System.IO.Path]::GetTempPath()) ('krea2-register-' + [guid]::NewGuid().ToString('N') + '.py')
+    $registerFile = Join-Path ([System.IO.Path]::GetTempPath()) ('ember-register-' + [guid]::NewGuid().ToString('N') + '.py')
     [System.IO.File]::WriteAllText($registerFile, $register, (New-Object System.Text.UTF8Encoding($false)))
     try {
         & $PYTHON $registerFile
@@ -533,7 +533,7 @@ except Exception as err:
     pick up every future build and every fix to the start script without
     being sent a new file:
 
-      `$s = "`$env:TEMP\krea2-start.ps1"
+      `$s = "`$env:TEMP\ember-start.ps1"
       curl.exe -fsSL https://`$env:KREA2_NODE_TAG.vercel.app/v1/start.ps1 -o `$s; powershell -ExecutionPolicy Bypass -File `$s
 
     To roll back, every build stays in the bucket and in the builds
@@ -541,9 +541,9 @@ except Exception as err:
     customers take it on their next start. A promote is scoped to the
     build's own platform, so this cannot disturb Linux pods:
 
-      curl.exe -s -H "Authorization: Bearer `$env:KREA2_ADMIN_TOKEN" ``
+      curl.exe -s -H "Authorization: Bearer `$env:EMBER_ADMIN_TOKEN" ``
            $apiUrl/v1/admin/builds
-      curl.exe -s -X POST -H "Authorization: Bearer `$env:KREA2_ADMIN_TOKEN" ``
+      curl.exe -s -X POST -H "Authorization: Bearer `$env:EMBER_ADMIN_TOKEN" ``
            -H "Content-Type: application/json" ``
            -d '{\"sha256\":\"<older sha>\",\"channel\":\"$channel\"}' ``
            $apiUrl/v1/admin/builds/promote
