@@ -29,7 +29,6 @@ venv/
 
 tmp
 tmp2
-.gradio
 
 # Where scripts/mirror_cloudflared.py keeps the release binaries it is
 # uploading. ~95 MB of someone else's build artifacts, kept between runs
@@ -37,6 +36,11 @@ tmp2
 .cloudflared-mirror/
 
 commands.txt
+
+# Claude Code's own state: local settings and the worktrees it creates
+# for parallel agents, which sit inside the repo and would otherwise be
+# one `git add -A` away from being committed whole.
+.claude/
 
 
 prompts/

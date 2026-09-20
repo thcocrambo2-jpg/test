@@ -15,12 +15,13 @@
 # A Dockerfile checked out with CRLF appends a \r to the last argument of
 # every command, so `RUN python3 -c "..."` runs and fails on a trailing
 # carriage return that nothing in the error message mentions. The
-# multi-line RUN blocks in ours make that likelier, not less.
+# multi-line RUN blocks in ours make that likelier, not less. The glob
+# covers docker/Dockerfile.dev too, which has the same RUN blocks.
 #
 # .env.example is copied to .env and read by docker compose, where a \r
 # would ride along on the end of the licence key and turn a correct key
 # into an invalid one.
-Dockerfile text eol=lf
+Dockerfile* text eol=lf
 *.env.example text eol=lf
 
 # The mirror image of the rule above, for the same reason in reverse.
