@@ -42,7 +42,7 @@ step 2 still reaches all of them.
 from dataclasses import dataclass
 from enum import Enum
 
-from config import log
+from ember.config import log
 
 
 class Key(str, Enum):

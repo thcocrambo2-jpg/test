@@ -26,9 +26,9 @@ They are built only when their toggle is on, so the defaults reproduce it
 as shipped: VAEDecode straight to SaveImage.
 """
 
-import catalog
-from comfy import GPU_COUNT
-from config import (
+from ember.licensing import catalog
+from ember.comfy.server import GPU_COUNT
+from ember.config import (
     MODELS_DIR,
     V2_ASPECT_RATIOS,
     V2_FILMGRAIN_DEFAULTS,
@@ -39,7 +39,7 @@ from config import (
     V2_VARIANCE_DEFAULTS,
     log,
 )
-from workflow import (
+from ember.pipelines.krea2.workflow import (
     active_text_encoder,
     lora_file_available,
     model_file_available,

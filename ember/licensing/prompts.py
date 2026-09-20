@@ -59,7 +59,7 @@ import urllib.request
 from collections import OrderedDict
 from dataclasses import dataclass
 
-from config import LICENSE_API_URL, LICENSE_KEY, log
+from ember.config import LICENSE_API_URL, LICENSE_KEY, log
 
 # Tab keys a prompt can be captured from and replayed into. These are the
 # feature keys, and they are also the wire values the server validates
@@ -250,7 +250,7 @@ def _is_admin() -> bool:
     customer pod has, which is the one that must never break.
     """
     try:
-        import licensing
+        from ember.licensing import seat as licensing
         return licensing.is_admin()
     except Exception:
         return False
@@ -266,7 +266,7 @@ def _instance_id() -> str:
     be non-empty.
     """
     try:
-        import licensing
+        from ember.licensing import seat as licensing
         return licensing.instance_id() or "unknown"
     except Exception:
         return "unknown"

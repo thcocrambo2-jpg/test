@@ -17,8 +17,8 @@ import subprocess
 import time
 import urllib.request
 
-from bootstrap import attention_args, runtime_python
-from config import (
+from ember.comfy.setup import attention_args, runtime_python
+from ember.config import (
     COMFY_DIR,
     COMFY_HOST,
     COMFY_LOG,

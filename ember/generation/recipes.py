@@ -54,7 +54,7 @@ import threading
 import time
 from pathlib import Path
 
-from config import OUTPUT_DIR, log
+from ember.config import OUTPUT_DIR, log
 
 STORE = OUTPUT_DIR / ".recipes.jsonl"
 

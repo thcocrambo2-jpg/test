@@ -56,8 +56,8 @@ import zlib
 from dataclasses import dataclass
 from urllib.parse import quote
 
-import features
-from config import ASSETS_DIR, SHOWCASE_BASE_URL, log
+from ember import features
+from ember.config import ASSETS_DIR, SHOWCASE_BASE_URL, log
 
 CATALOGUE_PATH = ASSETS_DIR / "showcase" / "showcase.json"
 

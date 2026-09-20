@@ -74,7 +74,7 @@ FROZEN = "__compiled__" in globals()
 # Under --onefile PROJECT_DIR is Nuitka's temp extraction dir, which is
 # correct: build.sh bundles requirements.txt alongside the code.
 # BASE_DIR is unaffected — it is absolute, so models outlive the extraction.
-PROJECT_DIR = Path(__file__).resolve().parent
+PROJECT_DIR = Path(__file__).resolve().parents[1]
 # The pricing page's showcase copy — prose only, a few kilobytes, bundled
 # because it is what decides whether the section renders at all. Under
 # --onefile this resolves inside the extraction dir; build.sh bundles it

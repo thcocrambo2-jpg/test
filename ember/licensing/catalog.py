@@ -41,7 +41,7 @@ import urllib.request
 from dataclasses import dataclass, field
 from pathlib import Path
 
-from config import BASE_DIR, LICENSE_API_URL, LICENSE_KEY, log
+from ember.config import BASE_DIR, LICENSE_API_URL, LICENSE_KEY, log
 
 CACHE_PATH = BASE_DIR / ".catalog.json"
 FILE_ENV = "KREA2_CATALOG_FILE"

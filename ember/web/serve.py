@@ -46,7 +46,7 @@ import time
 import urllib.request
 from pathlib import Path
 
-from config import TEMP_DIR, log
+from ember.config import TEMP_DIR, log
 
 # Where the quick tunnel URL appears in cloudflared's own output. It
 # writes it to stderr in a box of ASCII art, so this is a search rather
@@ -166,7 +166,7 @@ def serve(port: int = 7860, host: str = "0.0.0.0", tunnel: bool = True,
     """Run the app until Ctrl-C."""
     import uvicorn
 
-    import api
+    from ember.web import api
 
     app = api.create_app()
     config = uvicorn.Config(app, host=host, port=port, log_level="info",

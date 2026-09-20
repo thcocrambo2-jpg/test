@@ -33,17 +33,17 @@ from pathlib import Path
 
 from PIL import Image
 
-import catalog
-import eta
-import gallery_index
-import jobqueue
-import presets
-import prompts
-import recipes
-from client import ComfyUIError, client, model_signature, on_output, wan_client
-from comfy import ensure_alive as comfy_ensure_alive
-from features import Key
-from config import (
+from ember.licensing import catalog
+from ember.generation import eta
+from ember.web import gallery_index
+from ember.generation import queue as jobqueue
+from ember.licensing import presets
+from ember.licensing import prompts
+from ember.generation import recipes
+from ember.comfy.client import ComfyUIError, client, model_signature, on_output, wan_client
+from ember.comfy.server import ensure_alive as comfy_ensure_alive
+from ember.features import Key
+from ember.config import (
     COMFY_LOG,
     COMFY_PORT,
     DEFAULT_RESOLUTION,
@@ -61,7 +61,7 @@ from config import (
     WAN_RESOLUTIONS,
     log,
 )
-from workflow import (
+from ember.pipelines.krea2.workflow import (
     build_edit_workflow,
     build_workflow,
     edit_lora_available,
@@ -71,7 +71,7 @@ from workflow import (
     model_file_available,
     resolve_model,
 )
-from workflow_krea2_v2 import (
+from ember.pipelines.krea2_v2.workflow import (
     build_v2_workflow,
     default_lora_slots as v2_default_lora_slots,
     model_defaults as v2_model_defaults,
@@ -80,12 +80,12 @@ from workflow_krea2_v2 import (
     turbo_lora_available as v2_turbo_lora_available,
     turbo_lora_slot as v2_turbo_lora_slot,
 )
-from workflow_krea2_v2_edit import (
+from ember.pipelines.krea2_v2_edit.workflow import (
     build_v2_edit_workflow,
     fit_size as v2_edit_fit_size,
     status as v2_edit_status,
 )
-from workflow_minimax import (
+from ember.pipelines.minimax.workflow import (
     aspect_size as minimax_aspect_size,
     build_minimax_video_workflow,
     crop_to_canvas as minimax_crop_to_canvas,
@@ -95,7 +95,7 @@ from workflow_minimax import (
     minimax_models_available,
     resolve_size as minimax_resolve_size,
 )
-from workflow_wan import (
+from ember.pipelines.wan.workflow import (
     build_wan_5b_workflow,
     build_wan_i2v_workflow,
     wan_5b_available,

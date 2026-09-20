@@ -18,8 +18,8 @@ model with its own Wan 2.2 VAE and a plain one-KSampler graph — lighter
 in VRAM, 24 fps, no turbo/raw split.
 """
 
-from comfy import GPU_COUNT
-from config import (
+from ember.comfy.server import GPU_COUNT
+from ember.config import (
     MODELS_DIR,
     WAN_5B_UNET,
     WAN_5B_VAE,

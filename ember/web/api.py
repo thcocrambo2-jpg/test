@@ -82,19 +82,19 @@ from fastapi import (
 from fastapi.responses import FileResponse, JSONResponse, StreamingResponse
 from PIL import Image
 
-import catalog as assets  # the route below is called catalog()
-import features
-import gallery_index
-import jobqueue
-import licensing
-import plans
-import presets
-import prompts
-import recipes
-import showcase
-import tabschema
-from comfy import GPU_COUNT
-from config import TEMP_DIR, log
+from ember.licensing import catalog as assets  # the route below is called catalog()
+from ember import features
+from ember.web import gallery_index
+from ember.generation import queue as jobqueue
+from ember.licensing import seat as licensing
+from ember.licensing import plans
+from ember.licensing import presets
+from ember.licensing import prompts
+from ember.generation import recipes
+from ember.web import showcase
+from ember.web import tabschema
+from ember.comfy.server import GPU_COUNT
+from ember.config import TEMP_DIR, log
 
 PREFIX = "/api/v1"
 
@@ -1218,7 +1218,7 @@ def _mount_spa(app: FastAPI) -> None:
     and "the route does not exist" look identical from a browser.
     """
     try:
-        import webui
+        from ember.web import spa as webui
     except ImportError:
         log.info("No webui module — serving the API only "
                  "(run `npm run dev` in webui/ for the front end)")

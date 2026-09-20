@@ -17,9 +17,9 @@ import tarfile
 from collections import deque
 from pathlib import Path
 
-import features
-import mirror
-from config import (
+from ember import features
+from ember.weights import mirror
+from ember.config import (
     COMFY_DIR,
     FROZEN,
     KREA2EDIT_NODES_REPO,

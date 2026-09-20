@@ -44,7 +44,7 @@ import urllib.request
 import uuid
 from datetime import datetime, timezone
 
-from config import (
+from ember.config import (
     LICENSE_API_URL,
     LICENSE_GRACE_SECONDS,
     LICENSE_KEY,

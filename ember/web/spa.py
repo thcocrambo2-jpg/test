@@ -56,9 +56,9 @@ from typing import NamedTuple
 from fastapi import HTTPException, Request
 from fastapi.responses import HTMLResponse, Response
 
-from config import log
+from ember.config import log
 
-DIST = Path(__file__).resolve().parent / "webui" / "dist"
+DIST = Path(__file__).resolve().parents[2] / "webui" / "dist"
 
 IMMUTABLE = "public, max-age=31536000, immutable"
 REVALIDATE = "no-cache"
@@ -148,7 +148,7 @@ def _bundle():
     that is supposed to exist and has no obvious owner.
     """
     try:
-        import webui_bundle
+        from ember.web import webui_bundle
     except ImportError:
         return None
     return webui_bundle

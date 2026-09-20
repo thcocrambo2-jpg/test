@@ -24,11 +24,11 @@ import os
 import shutil
 import sys
 
-import bootstrap
-import catalog
-import features
-import licensing
-from config import (
+from ember.comfy import setup as bootstrap
+from ember.licensing import catalog
+from ember import features
+from ember.licensing import seat as licensing
+from ember.config import (
     COMFY_DIR,
     KREA_RESERVE_VRAM_GB,
     MINIMAX_COMFYUI_MIN,
@@ -72,8 +72,8 @@ def main() -> None:
     # cannot be reached every download quietly falls through to upstream,
     # so the app keeps working and nothing looks wrong until the day an
     # upstream file has actually vanished.
-    import mirror
-    from config import HF_TOKEN
+    from ember.weights import mirror
+    from ember.config import HF_TOKEN
     log.info("Assets — %s", mirror.describe())
     if mirror.MIRROR_ENABLED and not mirror.MIRROR_PUBLIC and not HF_TOKEN:
         log.warning(
@@ -101,7 +101,7 @@ def main() -> None:
     log.info("Environment ready (Python %s)", sys.version.split()[0])
 
     # 5 · Model + LoRA downloads (idempotent — only fetches what is missing).
-    import downloads
+    from ember.weights import downloads
 
     downloads.download_everything()
     log.info(
@@ -113,7 +113,7 @@ def main() -> None:
     # With KREA2_WAN_PARALLEL=1 a second ComfyUI instance serves video jobs
     # on its own port; each instance reserves VRAM for the other so they can
     # coexist on one GPU (defaults tuned for a 48 GB A40).
-    import comfy
+    from ember.comfy import server as comfy
 
     # A second instance is only worth its VRAM reservation when there is a
     # Video tab to serve — KREA2_WAN_PARALLEL on its own no longer buys one.
@@ -176,7 +176,7 @@ def main() -> None:
     # dependency on every per-tab route, and `scripts/check_routes.py`, which
     # fails the build if any of them would answer a licence that grants
     # nothing. See context.md §4.5.
-    import serve
+    from ember.web import serve
 
     # Counted from the catalogue rather than the loras/ folder: a file the
     # catalogue does not list is never offered, so the folder would count

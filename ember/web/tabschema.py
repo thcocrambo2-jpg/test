@@ -82,11 +82,11 @@ from dataclasses import dataclass, field as dc_field, replace
 from typing import Any, Callable
 
 # As `assets`: this module has a catalog() of its own — the /catalog answer.
-import catalog as assets
-import features
-import presets
-import handlers
-from config import (
+from ember.licensing import catalog as assets
+from ember import features
+from ember.licensing import presets
+from ember.generation import handlers
+from ember.config import (
     MINIMAX_ASPECT_RATIOS,
     MINIMAX_DEFAULT_ASPECT,
     MINIMAX_DEFAULT_RESOLUTION,

@@ -42,7 +42,7 @@ import uuid
 from dataclasses import dataclass, field
 from typing import Callable
 
-from config import log
+from ember.config import log
 
 # Job states. QUEUED and RUNNING are the live ones; the other three are
 # terminal and differ only in what they tell the customer.

@@ -50,7 +50,7 @@ import urllib.parse
 import urllib.request
 from dataclasses import dataclass
 
-from config import LICENSE_API_URL, LICENSE_KEY, log
+from ember.config import LICENSE_API_URL, LICENSE_KEY, log
 
 # Tabs a preset can be written for. The same two the prompt library
 # replays into, and necessarily so: applying a preset means writing values
@@ -302,7 +302,7 @@ def _is_admin() -> bool:
     pod does, which is not to write at all.
     """
     try:
-        import licensing
+        from ember.licensing import seat as licensing
         return licensing.is_admin()
     except Exception:
         return False
@@ -315,7 +315,7 @@ def _instance_id() -> str:
     launched without a seat, and the server only needs it non-empty.
     """
     try:
-        import licensing
+        from ember.licensing import seat as licensing
         return licensing.instance_id() or "unknown"
     except Exception:
         return "unknown"

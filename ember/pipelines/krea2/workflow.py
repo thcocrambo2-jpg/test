@@ -18,9 +18,9 @@ and Krea2 Edit tabs each read their own lists, and so do the two V2 tabs
 (workflow_krea2_v2.py).
 """
 
-import catalog
-from comfy import GPU_COUNT
-from config import (
+from ember.licensing import catalog
+from ember.comfy.server import GPU_COUNT
+from ember.config import (
     ABLITERATED_ENCODER_FILE,
     EDIT_LORA_FILE,
     MODELS_DIR,

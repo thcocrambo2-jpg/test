@@ -19,10 +19,10 @@ from pathlib import Path
 import requests
 from huggingface_hub import hf_hub_download, snapshot_download
 
-import catalog
-import features
-import mirror
-from config import (
+from ember.licensing import catalog
+from ember import features
+from ember.weights import mirror
+from ember.config import (
     ABLITERATED_ENCODER_FILE,
     ABLITERATED_ENCODER_REPO,
     CIVITAI_TOKEN,

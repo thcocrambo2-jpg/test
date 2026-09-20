@@ -36,7 +36,7 @@ import urllib.error
 import urllib.request
 from dataclasses import dataclass, field
 
-from config import LICENSE_API_URL, log
+from ember.config import LICENSE_API_URL, log
 
 # How long a fetched catalogue is served without asking again. The server
 # caches the collection for 60s of its own (see plans.js), so anything

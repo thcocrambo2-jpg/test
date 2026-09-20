@@ -36,8 +36,8 @@ Strength" mode, and the edit LoRA's from its own training recipe. Mixing
 passes through whichever input it does not touch.
 """
 
-from comfy import GPU_COUNT
-from config import (
+from ember.comfy.server import GPU_COUNT
+from ember.config import (
     EDIT_LORA_FILE,
     V2_EDIT_MAX_PIXELS,
     V2_NODE_REPOS,
@@ -46,8 +46,8 @@ from config import (
     V2_VARIANCE_DEFAULTS,
     log,
 )
-from workflow import active_text_encoder, edit_lora_available
-from workflow_krea2_v2 import (
+from ember.pipelines.krea2.workflow import active_text_encoder, edit_lora_available
+from ember.pipelines.krea2_v2.workflow import (
     REQUIRED_NODES as V2_REQUIRED_NODES,
     blocking_problems,
     default_lora_slots,

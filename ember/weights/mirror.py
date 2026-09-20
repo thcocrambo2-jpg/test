@@ -25,7 +25,7 @@ the transport stays in theirs.
 import json
 import os
 
-from config import HF_TOKEN, PROJECT_DIR, log
+from ember.config import HF_TOKEN, PROJECT_DIR, log
 
 # ── Data files ────────────────────────────────────────────────────────────────
 # A dev checkout keeps both under scripts/ (deliberately outside the package
