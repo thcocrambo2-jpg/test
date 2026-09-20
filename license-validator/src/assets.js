@@ -248,8 +248,9 @@ export function featureProblem(key) {
 }
 
 // Tabs that offer LoRAs but no Model dropdown. The MiniMax tabs load one
-// fixed set of weights named in the app's config.py, so an empty `models`
-// list is what they are rather than a tab with nothing to run.
+// fixed set of weights named in the app's
+// ember/pipelines/minimax/constants.py, so an empty `models` list is what
+// they are rather than a tab with nothing to run.
 export const LORA_ONLY_FEATURES = new Set(["minimax_i2v", "minimax_t2v"]);
 
 /**

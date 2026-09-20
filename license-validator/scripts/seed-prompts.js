@@ -157,7 +157,8 @@ export const SEED_PROMPTS = [
       steps: 10,
       cfg: 1.0,
       // A preset label, not "1024x1024" — see RESOLUTION_PRESETS in
-      // config.py. Note the × is U+00D7, not a letter x.
+      // ember/pipelines/krea2/constants.py. Note the × is U+00D7,
+      // not a letter x.
       resolution: "832×1216 (Portrait)",
       sampler: "er_sde",
       seed: 42,

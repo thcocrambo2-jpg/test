@@ -34,8 +34,8 @@
 // branch as finely: scripts/runpod_start.sh falls back to the binary
 // already on the volume for *any* non-200, and lets the seat check that
 // follows deliver the real verdict. A revoked key running a cached build
-// gets licensing.py's message, which is the one worth showing, instead of
-// a download error that says nothing about why.
+// gets the seat check's own message, which is the one worth showing,
+// instead of a download error that says nothing about why.
 //
 // The 403/503 split is the important one. A database outage must never
 // look like a license violation, or an Atlas blip reads to your customers
@@ -535,10 +535,9 @@ const FILENAME_RE = /^[A-Za-z0-9._-]{1,64}$/;
 //                server, and record which machines pull on which key
 //   it does NOT  stop the binary being copied once someone has it
 //
-// The second line is unchanged from the Hugging Face days. What limits who
-// can *run* the app is the seat check above, not where the bytes came
-// from — see the note at the top of licensing.py. Nothing here is
-// load-bearing for that.
+// What limits who can *run* the app is the seat check above, not where
+// the bytes came from — see the note at the top of
+// ember/licensing/seat.py. Nothing here is load-bearing for that.
 //
 // This deliberately does not take a seat. A pod that is downloading has
 // not started yet, and charging it one would make a slow download look

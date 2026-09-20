@@ -135,7 +135,7 @@ export const TELEGRAM_ADMIN_IDS = Object.freeze(
 
 // The deployment's own tag, and half of what a customer needs.
 //
-// A pod builds the licence API URL from KREA2_NODE_TAG (config.py:955-964,
+// A pod builds the licence API URL from KREA2_NODE_TAG (ember/settings.py,
 // validated there as a single DNS label) and exits with code 2 before it
 // does anything if the variable is missing. There is no licence-key entry
 // screen anywhere in the app — the key and the tag are both environment

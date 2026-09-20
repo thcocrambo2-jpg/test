@@ -15,8 +15,9 @@ destination, and a runtime path that resolves inside a onefile extraction.
 The bigger prize is that **neither build host has Node** — see
 docs/architecture/web-ui.md, "Why the React bundle is committed". The
 Linux build runs on a RunPod pod, the Windows build on a Windows box, and
-neither will ever have a toolchain that can turn TSX into JavaScript. Committing the generated module moves that requirement onto
-the one machine that already has Node — this one — and leaves both build
+neither will ever have a toolchain that can turn TSX into JavaScript.
+Committing the generated module moves that requirement onto the one
+machine that already has Node — this one — and leaves both build
 hosts with nothing to do but verify freshness (`scripts/check_webui.py`).
 It also means a fresh clone can run `scripts/dryrun.py` without touching
 npm at all.
@@ -90,8 +91,8 @@ SOURCE_FILES = ("index.html", "package.json", "package-lock.json",
 # depends on what other software the dev box happens to have installed.
 #
 # ember/web/spa.py carries the same table for the `webui/dist/` path it
-# serves in development. Kept separate on purpose — importing it here would pull in
-# fastapi and the whole app package for the sake of one dict.
+# serves in development. Kept separate on purpose — importing it here
+# would pull in fastapi and the whole app package for the sake of one dict.
 MEDIA_TYPES = {
     ".css": "text/css; charset=utf-8",
     ".html": "text/html; charset=utf-8",

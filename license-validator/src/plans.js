@@ -49,9 +49,9 @@ import { featureOrder, normalizeFeatures, sortByRegistry } from "./features.js";
 
 // How long a cached copy of the plans collection is trusted. A plan edit
 // reaches running instances after this plus one heartbeat, where the
-// client logs that a restart is needed (see licensing.py). Short enough
-// that an edit is not mysterious, long enough that the collection is not
-// re-read on every acquire.
+// client logs that a restart is needed (see ember/licensing/seat.py).
+// Short enough that an edit is not mysterious, long enough that the
+// collection is not re-read on every acquire.
 const PLAN_TTL_MS = 60_000;
 
 // On globalThis for the same reason db.js caches its client there: warm

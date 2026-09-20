@@ -8,8 +8,8 @@
 // doesn't work": the delivery message must carry the node tag as well as
 // the licence key, because a pod with a key and no tag exits at startup
 // with code 2 before it prints anything a customer could act on
-// (config.py:955-964 builds the licence API URL from the tag, and there is
-// no key-entry screen anywhere in the app — both are environment
+// (ember/settings.py builds the licence API URL from the tag, and there
+// is no key-entry screen anywhere in the app — both are environment
 // variables). Keeping the strings together is what makes that reviewable
 // in one place instead of spread across three handlers.
 //
@@ -47,7 +47,7 @@ export function stars(amount) {
  * ISO, not a localised long form: this is read by people in several
  * countries and 09/10/2026 means two different days depending on where
  * they are. The rest of the service formats expiry dates the same way,
- * including the message licensing.py shows when a key has run out.
+ * including the message the app shows when a key has run out.
  */
 export function day(value) {
   return value ? new Date(value).toISOString().slice(0, 10) : "—";
@@ -226,10 +226,10 @@ export function renewed({ key, planName, expiresAt, previousExpiry }) {
 /**
  * An upgrade: same key, new tier, and the restart warning.
  *
- * The warning is mandatory. licensing.py notices the plan change on the
- * next heartbeat and logs that a restart is needed, but deliberately does
- * not apply it — tabs are built once at launch and a newly granted tab has
- * no model files on disk. Without this paragraph the customer pays, sees
+ * The warning is mandatory. The app notices the plan change on the next
+ * heartbeat and logs that a restart is needed, but deliberately does not
+ * apply it — a newly granted tab has no model files on disk until a
+ * startup downloads them. Without this paragraph the customer pays, sees
  * nothing change, and opens a support conversation.
  */
 export function upgraded({ key, planName, expiresAt }) {
