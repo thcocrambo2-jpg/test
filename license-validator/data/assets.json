@@ -1,7 +1,7 @@
 {
   "_note": [
     "Seed data for the loras, models and feature_assets collections (npm run seed-assets).",
-    "Also the offline catalogue: POST /v1/catalog answers in this same shape, and the pod reads this file when KREA2_CATALOG_FILE points at it (dry runs and tests).",
+    "Also the offline catalogue: POST /v1/catalog answers in this same shape, and the pod reads this file when EMBER_CATALOG_FILE points at it (dry runs and tests).",
     "ids are what presets and prompts store. Never change or reuse one.",
     "Each feature's lists are what its tab offers, in dropdown order; the first model is the default. An id may appear in any number of features.",
     "A LoRA-only feature (minimax_i2v, minimax_t2v — src/assets.js LORA_ONLY_FEATURES) has an empty models list: its tab runs a fixed graph and offers LoRAs alone."

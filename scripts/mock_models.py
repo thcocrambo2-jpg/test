@@ -1,7 +1,7 @@
 """Create empty placeholder weights for everything the downloader would fetch.
 
-    KREA2_BASE_DIR=tmp2 python scripts/mock_models.py            # create them
-    KREA2_BASE_DIR=tmp2 python scripts/mock_models.py --check    # what would still download?
+    EMBER_BASE_DIR=tmp2 python scripts/mock_models.py            # create them
+    EMBER_BASE_DIR=tmp2 python scripts/mock_models.py --check    # what would still download?
 
 Runs every asset group in downloads.ASSET_GROUPS — whatever the licence
 says — with the network stubbed out, so each "download" is a zero-byte
@@ -13,7 +13,7 @@ fail on an empty file; this is for exercising the app, not the models.
 
 Existing files are never touched, so a real weight that is already in
 place stays a real weight, and re-running only adds what a config change
-introduced. What was created is appended to <KREA2_BASE_DIR>/mock-manifest.txt
+introduced. What was created is appended to <EMBER_BASE_DIR>/mock-manifest.txt
 so the placeholders can be told apart from real downloads later.
 
 It uses the real fetch functions rather than a copy of their path logic,
@@ -24,7 +24,7 @@ run on empty shards.
 
 The Krea models and LoRAs are not in the source: they are the catalogue
 (catalog.py), and the `catalog` asset group fetches whatever its
-features list. Unless KREA2_CATALOG_FILE is already set, this points it
+features list. Unless EMBER_CATALOG_FILE is already set, this points it
 at the seed document, license-validator/data/assets.json — the same ids
 and files the licence server is seeded with — so it never has to ask a
 server which files to fake. Point it at a saved POST /v1/catalog answer
@@ -44,18 +44,18 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(ROOT))
 
-if not os.environ.get("KREA2_BASE_DIR"):
-    sys.exit("Set KREA2_BASE_DIR to the base directory to mock into "
-             "(e.g. KREA2_BASE_DIR=tmp2).")
+if not os.environ.get("EMBER_BASE_DIR"):
+    sys.exit("Set EMBER_BASE_DIR to the base directory to mock into "
+             "(e.g. EMBER_BASE_DIR=tmp2).")
 # Which models and LoRAs the `catalog` group fetches. See the docstring.
-os.environ.setdefault("KREA2_CATALOG_FILE",
+os.environ.setdefault("EMBER_CATALOG_FILE",
                       str(ROOT / "license-validator" / "data" / "assets.json"))
 
 from ember import logs, settings  # noqa: E402
 
 # Importing a module configures nothing and creates nothing any more, so
 # this entry point does it, before the imports below log as they are
-# read: the logger, the tree under KREA2_BASE_DIR, and the line saying
+# read: the logger, the tree under EMBER_BASE_DIR, and the line saying
 # where weights and images go.
 logs.setup()
 settings.ensure_dirs()

@@ -47,7 +47,7 @@
 // itself.
 
 import { collections } from "../db.js";
-import { KREA2_NODE_TAG } from "../config.js";
+import { EMBER_NODE_TAG } from "../config.js";
 import {
   ORDER_STATUS,
   findOrder,
@@ -335,7 +335,7 @@ export async function deliverOrder(order, result = null) {
   } else {
     text = copy.delivered({
       key: license.key,
-      nodeTag: KREA2_NODE_TAG,
+      nodeTag: EMBER_NODE_TAG,
       planName,
       seats: license.seats ?? 1,
       expiresAt: license.expires_at,

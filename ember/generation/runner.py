@@ -78,7 +78,7 @@ def model_settings(feature) -> dict:
 # One worker per lane, which is the same "one at a time" rule the
 # concurrency_id on every click used to state — and the video lane is
 # separate for the same reason it had its own concurrency_id: when
-# KREA2_WAN_PARALLEL gives it a ComfyUI of its own, a five-minute render
+# EMBER_WAN_PARALLEL gives it a ComfyUI of its own, a five-minute render
 # must not sit in front of a picture. Registered here, at import, because
 # the workers only park on a condition variable until something is
 # submitted; nothing touches ComfyUI before the first job runs.
@@ -215,7 +215,7 @@ def _run_wan_jobs(jobs, builder=build_wan_i2v_workflow, comfy_client=None):
 
     `comfy_client` is the instance the clips run on — wan_client unless a
     caller says otherwise. The MiniMax tabs say otherwise: they run on the
-    main instance whatever KREA2_WAN_PARALLEL says, because their int8
+    main instance whatever EMBER_WAN_PARALLEL says, because their int8
     model plus 32B text encoder is ~48 GB of weights and does not fit
     beside a second instance holding VRAM back for Wan. The port and log
     that have to be alive follow the client, since ensure_alive must ask

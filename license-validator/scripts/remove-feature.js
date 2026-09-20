@@ -77,9 +77,8 @@ function die(...lines) {
 
 /**
  * `<prefix>-XXXX-…-last4`: enough to tell two keys apart, not enough to use
- * one. The prefix is whatever the key carries — `EMBER-` on anything issued
- * now, `KREA2-` on keys issued before the rename — so this reads it off the
- * key rather than assuming one.
+ * one. A key carries either an `EMBER-` or a `KREA2-` prefix and both stay
+ * valid, so this reads the prefix off the key rather than assuming one.
  */
 function mask(key) {
   if (typeof key !== "string" || key.length < 8) return "(no key)";

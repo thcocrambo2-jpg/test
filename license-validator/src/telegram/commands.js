@@ -44,7 +44,7 @@
 // on this path it is reached only from payments.js, after money.
 
 import { collections } from "../db.js";
-import { KREA2_NODE_TAG, ORDER_MAX_OPEN_PER_USER } from "../config.js";
+import { EMBER_NODE_TAG, ORDER_MAX_OPEN_PER_USER } from "../config.js";
 import { allFeatures, isFeatureEnabled, sortByRegistry } from "../features.js";
 import { countOpenOrders, createOrder, markInvoiced } from "../orders.js";
 import { BASE_CYCLE, allPlans, billingCycles, starsPrice } from "../plans.js";
@@ -217,8 +217,8 @@ async function replyBuy(chatId, userId) {
  * refund.
  */
 async function startPurchase({ chatId, userId, planId }) {
-  if (!KREA2_NODE_TAG) {
-    console.error("tg warn   refusing to sell: KREA2_NODE_TAG is not set");
+  if (!EMBER_NODE_TAG) {
+    console.error("tg warn   refusing to sell: EMBER_NODE_TAG is not set");
     return sendMessage(chatId, copy.CANNOT_SELL);
   }
 
@@ -285,7 +285,7 @@ async function replyMyKeys(chatId, userId) {
         seats: license.seats ?? 1,
         expiresAt: license.expires_at,
         active: license.active !== false,
-        nodeTag: KREA2_NODE_TAG,
+        nodeTag: EMBER_NODE_TAG,
       }),
     )
     .join("\n\n");

@@ -22,7 +22,7 @@ services:
       context: .
       dockerfile: Dockerfile
 
-    # KREA2_LICENSE_KEY and KREA2_NODE_TAG. Named explicitly rather than
+    # EMBER_LICENSE_KEY and EMBER_NODE_TAG. Named explicitly rather than
     # relying on compose's automatic .env loading: that mechanism only
     # substitutes ${...} inside this file, and would leave the container
     # itself with no licence key.

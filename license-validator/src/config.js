@@ -135,7 +135,7 @@ export const TELEGRAM_ADMIN_IDS = Object.freeze(
 
 // The deployment's own tag, and half of what a customer needs.
 //
-// A pod builds the licence API URL from KREA2_NODE_TAG (ember/settings.py,
+// A pod builds the licence API URL from EMBER_NODE_TAG (ember/settings.py,
 // validated there as a single DNS label) and exits with code 2 before it
 // does anything if the variable is missing. There is no licence-key entry
 // screen anywhere in the app — the key and the tag are both environment
@@ -146,7 +146,11 @@ export const TELEGRAM_ADMIN_IDS = Object.freeze(
 // so there is one tag per deployment rather than one per purpose. The bot
 // refuses to sell at all while it is unset, which is checked before an
 // invoice is sent rather than after the money arrives.
-export const KREA2_NODE_TAG = process.env.KREA2_NODE_TAG || "";
+// Both spellings, because this one is set in a deployment dashboard
+// rather than a file in the repo: a deployment still carrying the old
+// name would otherwise stop selling with nothing in the log to say why.
+export const EMBER_NODE_TAG =
+  process.env.EMBER_NODE_TAG || process.env.KREA2_NODE_TAG || "";
 
 // Guards POST /internal/cron/sweep, which Vercel Cron calls.
 //

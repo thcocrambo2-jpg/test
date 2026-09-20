@@ -12,7 +12,7 @@
 //
 // data/assets.json is the model and LoRA catalogue as the repo knows it,
 // in exactly the shape POST /v1/catalog answers (minus `ok`) — which is
-// also why the pod can read it directly when KREA2_CATALOG_FILE points at
+// also why the pod can read it directly when EMBER_CATALOG_FILE points at
 // it, for dry runs and tests. Seeding it makes the database hold the same
 // thing; from then on the database is what pods get, and small edits (a
 // mirror location, a LoRA switched off) are `npm run assets` or the admin

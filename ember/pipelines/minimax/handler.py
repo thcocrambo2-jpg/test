@@ -69,7 +69,7 @@ def generate_minimax_video(image, prompt, seed, randomize, steps, resolution,
     base_seed = random.randint(0, 2**32 - 1) if randomize else int(seed)
     tag = uuid.uuid4().hex[:8]
     try:
-        # The main instance, whatever KREA2_WAN_PARALLEL says — see
+        # The main instance, whatever EMBER_WAN_PARALLEL says — see
         # _run_wan_jobs on why MiniMax never rides the Wan lane.
         image_name = client.upload_image(_png_bytes(image),
                                          f"minimax_{tag}.png")

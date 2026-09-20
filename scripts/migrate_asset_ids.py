@@ -85,9 +85,9 @@ DEFAULT_ASSETS = ROOT / "license-validator" / "data" / "assets.json"
 COLLECTIONS = ("presets", "prompts")
 
 # prompts.py pulls in settings, which derives BASE_DIR from the
-# environment — a pod path (/workspace/krea2) by default. Somewhere
+# environment — a pod path (/workspace/ember) by default. Somewhere
 # disposable instead, set before the import below.
-os.environ.setdefault("KREA2_BASE_DIR",
+os.environ.setdefault("EMBER_BASE_DIR",
                       tempfile.mkdtemp(prefix="ember-migrate-"))
 sys.path.insert(0, str(ROOT))
 from ember.licensing.prompts import _fingerprint  # noqa: E402

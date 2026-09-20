@@ -6,7 +6,7 @@ Operator tool, not part of the shipped app. The intended run is:
     1. Boot a pod with every feature on. Features come from the license
        key, so this needs an operator key issued with everything granted:
            npm run issue-key -- --name "mirror operator" --features all
-           KREA2_LICENSE_KEY=KREA2-... python3 app.py
+           EMBER_LICENSE_KEY=EMBER-... python3 app.py
        Let it finish downloading, then stop it.
     2. python3 scripts/mirror_to_hf.py --pins-only    # capture pod state
     3. python3 scripts/mirror_to_hf.py --audit        # what has no mirror
@@ -15,7 +15,7 @@ Operator tool, not part of the shipped app. The intended run is:
        python3 scripts/mirror_to_hf.py                # top up + upload
 
 Steps 3-5 read the catalogue the way the pod does — POST /v1/catalog with
-KREA2_LICENSE_KEY and KREA2_NODE_TAG, which the pod already carries — or,
+EMBER_LICENSE_KEY and EMBER_NODE_TAG, which the pod already carries — or,
 with --catalog FILE, from a file in the same shape
 (license-validator/data/assets.json is one). --audit and --dry-run need no
 HF_WRITE_TOKEN and no EMBER_ADMIN_TOKEN, and neither writes anything to
@@ -36,7 +36,7 @@ in this file:
     from its `source` (disk first, never the mirror), uploaded to the
     `loras` repo at loras/<file>, and then the location is written back to
     its record with POST /v1/admin/loras, authorised by EMBER_ADMIN_TOKEN.
-    Without that token (or without KREA2_NODE_TAG) the script prints the
+    Without that token (or without EMBER_NODE_TAG) the script prints the
     `npm run assets` command that records it by hand instead. Adding a
     LoRA is therefore a DB edit followed by a run of this script.
 
@@ -95,10 +95,10 @@ sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 # enforced, not assumed. downloads.py's fetchers try the mirror first, and
 # a LoRA whose record has no `mirror` is exactly the case where the mirror
 # answer would be wrong: at best a copy this run is about to replace, at
-# worst a stale file under the same name. KREA2_NO_MIRROR is mirror.py's
+# worst a stale file under the same name. EMBER_NO_MIRROR is mirror.py's
 # own escape hatch and is read when it is imported, so it is set before
 # anything below imports it.
-os.environ["KREA2_NO_MIRROR"] = "1"
+os.environ["EMBER_NO_MIRROR"] = "1"
 
 from huggingface_hub import HfApi  # noqa: E402
 from huggingface_hub.utils import HfHubHTTPError  # noqa: E402
@@ -108,7 +108,7 @@ from ember.logs import log  # noqa: E402
 
 # Importing a module configures nothing and creates nothing any more, so
 # this entry point does it, before the imports below log as they are
-# read: the logger, the tree under KREA2_BASE_DIR, and the line saying
+# read: the logger, the tree under EMBER_BASE_DIR, and the line saying
 # where weights and images go.
 logs.setup()
 settings.ensure_dirs()
@@ -137,7 +137,7 @@ CATALOG_INSTANCE_ID = "mirror-operator"
 ADMIN_TIMEOUT = 30
 
 # How to record a mirror by hand, from license-validator/, when this script
-# cannot (no EMBER_ADMIN_TOKEN, no KREA2_NODE_TAG, or the request failed).
+# cannot (no EMBER_ADMIN_TOKEN, no EMBER_NODE_TAG, or the request failed).
 ASSETS_COMMAND = ("npm run assets -- --mirror {id} "
                   "--repo {repo} --path {path}")
 
@@ -347,8 +347,8 @@ def load_catalogue(path: Path | None) -> catalog.Catalogue:
     else:
         if not settings.LICENSE_API_URL or not settings.LICENSE_KEY:
             raise SystemExit(
-                "No catalogue to read. Set KREA2_LICENSE_KEY and "
-                "KREA2_NODE_TAG as on a pod, or pass --catalog FILE "
+                "No catalogue to read. Set EMBER_LICENSE_KEY and "
+                "EMBER_NODE_TAG as on a pod, or pass --catalog FILE "
                 "(license-validator/data/assets.json has the same shape).")
         document = catalog._fetch(CATALOG_INSTANCE_ID)
         if document is None:
@@ -558,7 +558,7 @@ def write_records(pending: list[tuple[str, str, str]], dry_run: bool) -> list:
     if not ADMIN_TOKEN:
         why = "EMBER_ADMIN_TOKEN is not set"
     elif not settings.LICENSE_API_URL:
-        why = "KREA2_NODE_TAG is not set, so there is no server to call"
+        why = "EMBER_NODE_TAG is not set, so there is no server to call"
     else:
         why = ""
     if why:

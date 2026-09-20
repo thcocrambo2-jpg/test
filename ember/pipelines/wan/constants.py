@@ -2,7 +2,7 @@
 
 Facts about the two model families and the graph the Video tab builds,
 and nothing read from the environment. The parallel-instance knobs
-(KREA2_WAN_PARALLEL and the VRAM reserves) are environment, so they live
+(EMBER_WAN_PARALLEL and the VRAM reserves) are environment, so they live
 in ember/settings.py.
 
 A data module on purpose: nothing is imported, so the Docker bake stage

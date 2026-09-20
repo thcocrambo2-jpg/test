@@ -16,7 +16,7 @@ itself.
 Set one environment variable on the pod (or on your machine, for a dev
 preview):
 
-    KREA2_SHOWCASE_URL=https://pub-<hash>.r2.dev
+    EMBER_SHOWCASE_URL=https://pub-<hash>.r2.dev
 
 Must be `https://`. Anything else is ignored with a warning. Leave it unset
 and the section still renders in full — every picture becomes a placeholder
@@ -65,7 +65,7 @@ It mirrors the JSON exactly: **feature key → the block's `dir` → filename**.
 ```
 
 To see every path the page currently expects, open Plans & pricing with
-`KREA2_SHOWCASE_URL` unset — each tile prints its own path.
+`EMBER_SHOWCASE_URL` unset — each tile prints its own path.
 
 ## Adding a picture
 

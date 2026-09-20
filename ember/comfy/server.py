@@ -112,7 +112,7 @@ def start_comfyui(port: int = COMFY_PORT, log_path=COMFY_LOG, extra_args=()):
     """Start ComfyUI as a background process (reuses a live server on restart).
 
     `extra_args` lets callers pass flags like --reserve-vram when a second
-    instance (the Wan video server, KREA2_WAN_PARALLEL=1) has to share the
+    instance (the Wan video server, EMBER_WAN_PARALLEL=1) has to share the
     GPU with this one.
     """
     if _server_alive(port=port):

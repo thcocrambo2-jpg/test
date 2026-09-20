@@ -25,7 +25,7 @@ who did not touch that control.
 
 The four Krea tabs' Model and LoRA dropdowns hold catalogue *ids*
 (catalog.py) — the feature's lists as the licence server answers them.
-Unless KREA2_CATALOG_FILE is already set, this points it at the seed
+Unless EMBER_CATALOG_FILE is already set, this points it at the seed
 document, license-validator/data/assets.json, which is what the Krea
 entries in the baseline were written from: the Model default is the
 feature's first model id, Steps and CFG are that record's, and the V2 tabs
@@ -55,10 +55,10 @@ from pathlib import Path
 
 ROOT = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(ROOT))
-os.environ.setdefault("KREA2_BASE_DIR", str(ROOT / ".dryrun"))
+os.environ.setdefault("EMBER_BASE_DIR", str(ROOT / ".dryrun"))
 # The catalogue the baseline's Krea entries were written from. See the
 # docstring.
-os.environ.setdefault("KREA2_CATALOG_FILE",
+os.environ.setdefault("EMBER_CATALOG_FILE",
                       str(ROOT / "license-validator" / "data" / "assets.json"))
 
 BASELINE = Path(__file__).resolve().parent / "parity_baseline.json"
@@ -235,7 +235,7 @@ def main() -> None:
 
     # Importing a module configures nothing and creates nothing any more,
     # so do it here, where the first app import below used to do it as a
-    # side effect: the logger, the tree under KREA2_BASE_DIR, and the line
+    # side effect: the logger, the tree under EMBER_BASE_DIR, and the line
     # saying where weights and images go.
     from ember import logs, settings
     logs.setup()

@@ -331,7 +331,7 @@ def _from_record_mirror(dest: Path, record) -> bool:
     Same posture as from_mirror: never raises, not pinned (the mirror is
     ours and only appended to), and anonymous when the mirror is public —
     mirror.token() decides, so a stale HF_TOKEN cannot turn a public file
-    into a 401. KREA2_NO_MIRROR turns this off along with the manifest.
+    into a 401. EMBER_NO_MIRROR turns this off along with the manifest.
     """
     if not record.mirror or not mirror.MIRROR_ENABLED:
         return False

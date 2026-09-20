@@ -429,7 +429,7 @@ def ensure_torch() -> None:
 # clip is one very long attention sequence, and attention is most of the
 # sampler's time. It is approximate — outputs change slightly — and global
 # to the ComfyUI instance, so every tab gets it, as in the MiniMax template.
-# KREA2_SAGE_ATTENTION=0 turns it off.
+# EMBER_SAGE_ATTENTION=0 turns it off.
 #
 # Nothing here chooses torch. ensure_torch keeps whatever working torch the
 # machine has, and this picks the SageAttention build that torch can load:
@@ -559,7 +559,7 @@ def install_sageattention() -> bool:
     global _sage_ready
     _sage_ready = False
     if not SAGE_ATTENTION:
-        log.info("SageAttention off (KREA2_SAGE_ATTENTION=0)")
+        log.info("SageAttention off (EMBER_SAGE_ATTENTION=0)")
         return False
     if not sys.platform.startswith("linux"):
         log.info("SageAttention skipped — no build is wired up for this "

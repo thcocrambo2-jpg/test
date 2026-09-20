@@ -51,7 +51,7 @@ What is stubbed, and why each one is necessary
   server.
 
 The models and LoRAs come from the catalogue (catalog.py). Unless
-KREA2_CATALOG_FILE is already set, this points it at the seed document,
+EMBER_CATALOG_FILE is already set, this points it at the seed document,
 license-validator/data/assets.json, so the snapshots are built from the
 same ids and files the licence server is seeded with — and never from
 whatever a live server or a cached .catalog.json happens to hold.
@@ -76,19 +76,19 @@ ROOT = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(ROOT))
 
 # Before ensure_dirs() below makes the directory tree: the shipped default
-# is the pod path /workspace/krea2. Share .dryrun with the other scripts
+# is the pod path /workspace/ember. Share .dryrun with the other scripts
 # rather than making a third empty tree.
-os.environ.setdefault("KREA2_BASE_DIR", str(ROOT / ".dryrun"))
+os.environ.setdefault("EMBER_BASE_DIR", str(ROOT / ".dryrun"))
 # The catalogue the Krea tabs read their models and LoRAs from — the seed
 # document, so a snapshot never depends on a server. See the docstring.
-os.environ.setdefault("KREA2_CATALOG_FILE",
+os.environ.setdefault("EMBER_CATALOG_FILE",
                       str(ROOT / "license-validator" / "data" / "assets.json"))
 
 from ember import logs, settings  # noqa: E402
 from ember.logs import log  # noqa: E402
 
 # Importing a module configures nothing and creates nothing any more, so
-# this entry point does it: the logger, the tree under KREA2_BASE_DIR,
+# this entry point does it: the logger, the tree under EMBER_BASE_DIR,
 # and the line saying where weights and images go.
 logs.setup()
 settings.ensure_dirs()

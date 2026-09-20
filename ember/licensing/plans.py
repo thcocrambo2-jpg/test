@@ -300,7 +300,7 @@ def _feature(raw: dict) -> FeatureInfo | None:
 def _fetch() -> Catalogue:
     """One trip to /v1/plans, every failure turned into `error`."""
     if not LICENSE_API_URL:
-        # Empty when KREA2_NODE_TAG is unset or malformed — see settings.py.
+        # Empty when EMBER_NODE_TAG is unset or malformed — see settings.py.
         # A pod in that state never got past licensing.acquire_or_exit(),
         # so in practice this is the offline dry run (`--features ...`).
         return Catalogue(error="This build has no node tag, so it cannot "

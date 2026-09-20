@@ -51,7 +51,7 @@ Credentials come from the environment, alongside the ones build.sh already
 uses (see r2_presign.py, whose SigV4 this borrows rather than repeating):
 
     R2_ACCOUNT_ID, R2_ACCESS_KEY_ID, R2_SECRET_ACCESS_KEY
-    R2_SHOWCASE_BUCKET      the *public* bucket serving KREA2_SHOWCASE_URL
+    R2_SHOWCASE_BUCKET      the *public* bucket serving EMBER_SHOWCASE_URL
 
 Note the write credential and the public URL are two different things. The
 bucket is public to readers; these keys are how you put objects in it, and
@@ -77,7 +77,7 @@ from ember.logs import log                                   # noqa: E402
 
 # Importing a module configures nothing and creates nothing any more, so
 # this entry point does it, before the imports below log as they are
-# read: the logger, the tree under KREA2_BASE_DIR, and the line saying
+# read: the logger, the tree under EMBER_BASE_DIR, and the line saying
 # where weights and images go.
 logs.setup()
 settings.ensure_dirs()
@@ -371,7 +371,7 @@ def _bucket() -> str:
     if not name:
         raise SystemExit(
             f"{BUCKET_ENV} is not set. It is the *public* R2 bucket serving "
-            f"KREA2_SHOWCASE_URL"
+            f"EMBER_SHOWCASE_URL"
             + (f" ({SHOWCASE_BASE_URL})" if SHOWCASE_BASE_URL else "")
             + ".\n  R2_ACCOUNT_ID, R2_ACCESS_KEY_ID and "
               "R2_SECRET_ACCESS_KEY are needed too — the same Object Read & "
@@ -557,7 +557,7 @@ def main() -> int:
               f"{ok - 1} more)" if ok > 1 else
               f"  Live at {SHOWCASE_BASE_URL}/{ready[0][0].path}")
     elif ok:
-        print("  KREA2_SHOWCASE_URL is unset here, so the app would still "
+        print("  EMBER_SHOWCASE_URL is unset here, so the app would still "
               "render placeholders — set it on the pod.")
     print()
     return 1 if failed else 0

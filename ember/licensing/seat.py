@@ -313,18 +313,18 @@ def acquire_or_exit() -> None:
     if not LICENSE_KEY:
         _fail(
             "No license key found.\n"
-            "Set KREA2_LICENSE_KEY in this pod's environment variables to "
+            "Set EMBER_LICENSE_KEY in this pod's environment variables to "
             "the key you were given, then start the app again.",
             2,
         )
 
-    # Empty when KREA2_NODE_TAG is unset or is not a single DNS label — see
+    # Empty when EMBER_NODE_TAG is unset or is not a single DNS label — see
     # settings.py. Both cases are the same fix, and neither is worth spelling
     # out further here: a customer types the value they were handed.
     if not LICENSE_API_URL:
         _fail(
             "This pod is missing its node tag.\n"
-            "Set KREA2_NODE_TAG in this pod's environment variables to the "
+            "Set EMBER_NODE_TAG in this pod's environment variables to the "
             "value issued with your license key, then start the app again.",
             2,
         )

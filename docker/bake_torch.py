@@ -29,7 +29,7 @@ import sys
 from pathlib import Path
 
 BAKE_ROOT = os.environ.get("EMBER_BAKE_ROOT", "/opt/ember")
-os.environ["KREA2_BASE_DIR"] = BAKE_ROOT
+os.environ["EMBER_BASE_DIR"] = BAKE_ROOT
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 

@@ -18,7 +18,7 @@ running pod would put those out of step with each other.
 
 Where the answer comes from, in order:
 
-    KREA2_CATALOG_FILE   a JSON file in the same shape — dry runs and tests
+    EMBER_CATALOG_FILE   a JSON file in the same shape — dry runs and tests
                          (license-validator/data/assets.json is one)
     POST /v1/catalog     the live answer, saved to BASE_DIR/.catalog.json
     .catalog.json        the last live answer, if the server did not answer

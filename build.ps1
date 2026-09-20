@@ -43,7 +43,7 @@
       R2_ACCESS_KEY_ID       R2 API token, Object Read & Write on the bucket
       R2_SECRET_ACCESS_KEY   ... its secret
       R2_BUILDS_BUCKET       krea2-builds
-      KREA2_NODE_TAG         the deployment id — the same tag pods carry.
+      EMBER_NODE_TAG         the deployment id — the same tag pods carry.
                              The API is https://<tag>.vercel.app, assembled
                              here exactly as ember/settings.py assembles
                              it there
@@ -236,8 +236,8 @@ function Invoke-Publish {
     # windows_start.ps1 do it, so a tag that works on a customer machine
     # works here.
     $nodeTag = ''
-    if ($env:KREA2_NODE_TAG) {
-        $nodeTag = ($env:KREA2_NODE_TAG -replace '\s', '').ToLowerInvariant()
+    if ($env:EMBER_NODE_TAG) {
+        $nodeTag = ($env:EMBER_NODE_TAG -replace '\s', '').ToLowerInvariant()
     }
     $apiUrl = ''
     if ($nodeTag -match '^[a-z0-9][a-z0-9-]{6,61}[a-z0-9]$') {
@@ -306,20 +306,20 @@ Object Read & Write on that bucket and set:
     # collapsing them would have you checking a value that is right there
     # and correct.
     if (-not $apiUrl) {
-        if (-not $env:KREA2_NODE_TAG) {
+        if (-not $env:EMBER_NODE_TAG) {
             Stop-Publish @"
-Not publishing: KREA2_NODE_TAG is unset.
+Not publishing: EMBER_NODE_TAG is unset.
 It names the deployment to register this build with — the same tag the
 customers carry. Set it and re-run with -UploadOnly:
 
-    KREA2_NODE_TAG     the deployment id (a single name, no dots or
+    EMBER_NODE_TAG     the deployment id (a single name, no dots or
                        slashes, as it appears in <name>.vercel.app)
 "@
         }
         Stop-Publish @"
-Not publishing: KREA2_NODE_TAG is not a valid deployment id.
+Not publishing: EMBER_NODE_TAG is not a valid deployment id.
 It has to be one name as it appears in <name>.vercel.app — no dots, no
-slashes, no https:// prefix. Got: $env:KREA2_NODE_TAG
+slashes, no https:// prefix. Got: $env:EMBER_NODE_TAG
 "@
     }
 
@@ -534,7 +534,7 @@ except Exception as err:
     being sent a new file:
 
       `$s = "`$env:TEMP\ember-start.ps1"
-      curl.exe -fsSL https://`$env:KREA2_NODE_TAG.vercel.app/v1/start.ps1 -o `$s; powershell -ExecutionPolicy Bypass -File `$s
+      curl.exe -fsSL https://`$env:EMBER_NODE_TAG.vercel.app/v1/start.ps1 -o `$s; powershell -ExecutionPolicy Bypass -File `$s
 
     To roll back, every build stays in the bucket and in the builds
     collection. List them and move the channel — no re-upload, and
@@ -748,7 +748,7 @@ $sharedArgs = @(
     # page falls back to the plan cards alone and logs why.
     #
     # The screenshots it names are deliberately NOT bundled. They are
-    # served from the public R2 bucket in KREA2_SHOWCASE_URL and fetched by
+    # served from the public R2 bucket in EMBER_SHOWCASE_URL and fetched by
     # the customer's browser, which keeps a page of forty pictures out of a
     # onefile binary that is re-extracted on every launch — and means a new
     # screenshot is an upload rather than a release.

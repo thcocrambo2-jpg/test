@@ -353,7 +353,7 @@ class ComfyClient:
 
 client = ComfyClient(COMFY_HOST, COMFY_PORT)
 
-# Video jobs go to their own ComfyUI instance when KREA2_WAN_PARALLEL=1
+# Video jobs go to their own ComfyUI instance when EMBER_WAN_PARALLEL=1
 # (so a quick image render never waits behind a 5-minute video); otherwise
 # they share the main instance's queue.
 wan_client = ComfyClient(COMFY_HOST, WAN_COMFY_PORT) if WAN_PARALLEL else client

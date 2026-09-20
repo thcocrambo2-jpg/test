@@ -56,7 +56,7 @@ RELEASE = "2026.8.3"
 
 # Where it goes. Public, so a customer pod and a customer desktop both pull
 # it anonymously - the same reason mirror_manifest.json sets mirror_public.
-MIRROR_USER = os.environ.get("KREA2_MIRROR_USER", "thcocrambo2")
+MIRROR_USER = os.environ.get("EMBER_MIRROR_USER", "thcocrambo2")
 REPO_NAME = "krea2-tools"
 
 UPSTREAM = ("https://github.com/cloudflare/cloudflared/releases/download/"

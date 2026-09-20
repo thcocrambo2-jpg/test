@@ -110,8 +110,11 @@ RUN python3 /src/bake_torch.py
 # ── Stage 2: the image ────────────────────────────────────────────────────
 FROM python-base AS final
 
-ENV HF_XET_HIGH_PERFORMANCE=1 \
-    KREA2_BASE_DIR=/workspace/krea2
+# EMBER_BASE_DIR is deliberately NOT set here. docker/entrypoint.sh picks
+# the base directory by looking at the volume, and a variable set in the
+# image would always win that test and send an existing /workspace/krea2
+# mount back to the start of a 90 GB download.
+ENV HF_XET_HIGH_PERFORMANCE=1
 
 # `python3` on PATH is not a detail here: compiled with Nuitka the app's
 # sys.executable is the binary itself, so bootstrap.runtime_python() falls

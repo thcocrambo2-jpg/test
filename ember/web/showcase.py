@@ -511,7 +511,7 @@ def _build() -> Showcase | None:
         log.info("Showcase images: %s", SHOWCASE_BASE_URL)
     else:
         log.warning(
-            "KREA2_SHOWCASE_URL is not set — the pricing page's showcase "
+            "EMBER_SHOWCASE_URL is not set — the pricing page's showcase "
             "will render every picture as a placeholder tile naming the "
             "file it wants. Set it to the public R2 bucket URL.",
         )

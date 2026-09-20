@@ -43,24 +43,24 @@ from pathlib import Path
 
 ROOT = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(ROOT))
-os.environ.setdefault("KREA2_BASE_DIR", str(ROOT / ".dryrun"))
+os.environ.setdefault("EMBER_BASE_DIR", str(ROOT / ".dryrun"))
 # The model and LoRA catalogue the Krea tabs read (catalog.py): the seed
 # document, so this never asks a licence server for it. Without a
 # catalogue the Krea tabs would still be gated, but /catalog's per-feature
 # model lists — which the checks below read — would be empty and prove
 # nothing.
-os.environ.setdefault("KREA2_CATALOG_FILE",
+os.environ.setdefault("EMBER_CATALOG_FILE",
                       str(ROOT / "license-validator" / "data" / "assets.json"))
 # No token is set here: the auth gate is open by default, and it is the
 # feature gate that is under test. A request that 401s before it reaches
 # the feature check would make every assertion below pass for the wrong
-# reason, so KREA2_UI_REQUIRE_TOKEN must stay unset.
+# reason, so EMBER_UI_REQUIRE_TOKEN must stay unset.
 
 from ember import logs, settings  # noqa: E402
 from ember.logs import log  # noqa: E402
 
 # Importing a module configures nothing and creates nothing any more, so
-# this entry point does it: the logger, the tree under KREA2_BASE_DIR,
+# this entry point does it: the logger, the tree under EMBER_BASE_DIR,
 # and the line saying where weights and images go.
 logs.setup()
 settings.ensure_dirs()

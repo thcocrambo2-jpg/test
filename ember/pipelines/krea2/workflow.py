@@ -189,7 +189,7 @@ def build_edit_workflow(
       • `target_latent` — the same latent KSampler starts from. The node
         pre-encodes at execution time instead of during the first sampling
         step, so the diffusion model is not evicted mid-run on a GPU that
-        is already sharing VRAM (see KREA2_MAIN_RESERVE_VRAM).
+        is already sharing VRAM (see EMBER_MAIN_RESERVE_VRAM).
 
     `grounding_px` trades edit adherence (lower) against identity fidelity
     (higher); 384-768 is the trained range and above it the model starts

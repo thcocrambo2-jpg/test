@@ -62,7 +62,7 @@ read_key="$${R2_ACCESS_KEY_ID:-}"
 export EMBER_ADMIN_TOKEN="$${ADMIN_TOKEN:-}"
 
 missing=()
-for name in KREA2_NODE_TAG ADMIN_TOKEN; do
+for name in EMBER_NODE_TAG ADMIN_TOKEN; do
     [[ -n "$${!name:-}" ]] || missing+=("$$name")
 done
 if (( $${#missing[@]} )); then
@@ -70,7 +70,7 @@ if (( $${#missing[@]} )); then
     exit 1
 fi
 
-API="https://$$KREA2_NODE_TAG.vercel.app"
+API="https://$$EMBER_NODE_TAG.vercel.app"
 endef
 
 # The extra half that only uploading needs.
@@ -179,7 +179,7 @@ check:
 	    200) echo "  admin api   ok" ;;
 	    401) echo "  admin api   REJECTED - ADMIN_TOKEN does not match the deployment" ;;
 	    404) echo "  admin api   404 - ADMIN_TOKEN is unset on the deployment" ;;
-	    000) echo "  admin api   unreachable - check KREA2_NODE_TAG" ;;
+	    000) echo "  admin api   unreachable - check EMBER_NODE_TAG" ;;
 	    *)   echo "  admin api   HTTP $$code" ;;
 	esac
 	# What each platform's customers would be handed right now. Two builds

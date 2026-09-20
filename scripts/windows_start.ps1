@@ -12,7 +12,7 @@
 
         powershell -ExecutionPolicy Bypass -File ember-start.ps1
 
-    KREA2_LICENSE_KEY and KREA2_NODE_TAG are read as well, so a machine
+    EMBER_LICENSE_KEY and EMBER_NODE_TAG are read as well, so a machine
     that already has those set in its user environment keeps working
     without anyone touching it.
 
@@ -30,7 +30,7 @@
 
     Optional, for when something is wrong:
 
-        KREA2_BASE_DIR      where models and outputs live (default below)
+        EMBER_BASE_DIR      where models and outputs live (default below)
         CIVITAI_TOKEN       only if a CivitAI download starts refusing
                             anonymous
 
@@ -105,11 +105,11 @@ if ([string]::IsNullOrWhiteSpace($BASE)) {
 $BIN_DIR = Join-Path $BASE 'bin'
 $BIN = Join-Path $BIN_DIR $NAME
 
-function Say([string]$Message) { Write-Host "[krea2] $Message" }
+function Say([string]$Message) { Write-Host "[ember] $Message" }
 
 function Die([string]$Message) {
     Write-Host ''
-    Write-Host "[krea2] ERROR: $Message" -ForegroundColor Red
+    Write-Host "[ember] ERROR: $Message" -ForegroundColor Red
     Write-Host ''
     exit 1
 }
@@ -583,7 +583,7 @@ the downloaded app is damaged (checksum does not match).
 # So it is fetched here instead, from the same public Hugging Face mirror
 # the weights come from, pinned to a release and checked against a known
 # sha256. serve.cloudflared_binary() returns early when the file is already
-# at KREA2_BASE_DIR, so putting it there is the entire change: no recompile,
+# at EMBER_BASE_DIR, so putting it there is the entire change: no recompile,
 # no new build published, just this script.
 #
 # EVERY failure below is a note rather than a hard stop. If the mirror is
@@ -643,7 +643,7 @@ if (-not (Test-Path -LiteralPath $CF_BIN)) {
 }
 
 # ── Run ──────────────────────────────────────────────────────────────────
-$env:KREA2_BASE_DIR = $BASE
+$env:EMBER_BASE_DIR = $BASE
 
 Write-Host @"
 

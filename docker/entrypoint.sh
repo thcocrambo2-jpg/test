@@ -6,7 +6,7 @@
 # builds and checksums lives there and is not repeated here.
 #
 #     1. say what this image is made of
-#     2. point $KREA2_BASE_DIR/ComfyUI at the baked checkout
+#     2. point $EMBER_BASE_DIR/ComfyUI at the baked checkout
 #     3. exec /opt/ember/bin/start.sh
 #
 # Two escape hatches, both for the case where the baked tree turns out to
@@ -18,7 +18,7 @@
 #     EMBER_START_SOURCE=api    fetch the current start.sh from the licence
 #                               server instead of using the baked copy, so
 #                               a start-script fix ships without a new
-#                               image. Needs KREA2_NODE_TAG, same as ever.
+#                               image. Needs EMBER_NODE_TAG, same as ever.
 
 set -uo pipefail
 
@@ -67,7 +67,7 @@ fi
 
 mkdir -p "$BASE" || {
     printf '\n[ember-image] ERROR: could not create %s\n' "$BASE" >&2
-    printf '       Mount a volume there, or set KREA2_BASE_DIR.\n\n' >&2
+    printf '       Mount a volume there, or set EMBER_BASE_DIR.\n\n' >&2
     exit 1
 }
 
@@ -132,10 +132,11 @@ fi
 # ── Which start script ───────────────────────────────────────────────────
 START="$BAKED/bin/start.sh"
 if [[ "${EMBER_START_SOURCE:-baked}" == "api" ]]; then
-    if [[ -z "${KREA2_NODE_TAG:-}" ]]; then
-        say "EMBER_START_SOURCE=api needs KREA2_NODE_TAG — using the baked"
+    NODE_TAG="${EMBER_NODE_TAG:-${KREA2_NODE_TAG:-}}"
+    if [[ -z "$NODE_TAG" ]]; then
+        say "EMBER_START_SOURCE=api needs EMBER_NODE_TAG — using the baked"
         say "start script instead."
-    elif curl -fsSL "https://${KREA2_NODE_TAG}.vercel.app/v1/start.sh" \
+    elif curl -fsSL "https://${NODE_TAG}.vercel.app/v1/start.sh" \
             -o /tmp/ember-start.sh; then
         say "using the start script from the licence server"
         START=/tmp/ember-start.sh

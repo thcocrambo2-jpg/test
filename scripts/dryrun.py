@@ -6,7 +6,7 @@ UI — which tabs a license actually grants, how they lay out, what the
 controls do — without a pod, without ~90 GB of downloads and without a
 card that can hold a 35 GB UNet.
 
-    $env:KREA2_LICENSE_KEY="your_license_key";  $env:KREA2_NODE_TAG="your_node_tag"; .\.venv\Scripts\python.exe scripts\dryrun.py
+    $env:EMBER_LICENSE_KEY="your_license_key";  $env:EMBER_NODE_TAG="your_node_tag"; .\.venv\Scripts\python.exe scripts\dryrun.py
 
     python scripts/dryrun.py                        # tabs from your license
     python scripts/dryrun.py --features "krea_t2i,wan_i2v"   # offline, no server
@@ -24,7 +24,7 @@ does NOT show up here until `make webui` regenerates it. The startup line
 says which source it used.
 
 The first form is the one worth using: it calls the real license server
-with KREA2_LICENSE_KEY, so it verifies the whole entitlement path —
+with EMBER_LICENSE_KEY, so it verifies the whole entitlement path —
 key → features array → which tabs get built — against the record you
 actually edited, and it reads the model and LoRA catalogue from the same
 server (POST /v1/catalog), so the Krea dropdowns show what the DB holds.
@@ -32,7 +32,7 @@ It takes a seat for as long as it runs, and gives it back on Ctrl-C.
 --features skips the server entirely and is for working on the UI itself,
 offline or on a key you would rather not spend a seat on; the catalogue
 then comes from license-validator/data/assets.json (the seed document)
-unless KREA2_CATALOG_FILE names another file.
+unless EMBER_CATALOG_FILE names another file.
 
 What is deliberately NOT run: bootstrap (the ComfyUI clone and the pip
 install), downloads.download_everything(), and the ComfyUI server. So
@@ -56,8 +56,8 @@ sys.path.insert(0, str(ROOT))
 
 # Somewhere local to put the (empty) models/output/temp tree that
 # ensure_dirs() below makes — the shipped default is a pod path,
-# /workspace/krea2.
-os.environ.setdefault("KREA2_BASE_DIR", str(ROOT / ".dryrun"))
+# /workspace/ember.
+os.environ.setdefault("EMBER_BASE_DIR", str(ROOT / ".dryrun"))
 
 # The seed catalogue, for the offline form (--features). See main().
 SEED_CATALOG = ROOT / "license-validator" / "data" / "assets.json"
@@ -66,7 +66,7 @@ from ember import logs, settings  # noqa: E402
 from ember.logs import log  # noqa: E402
 
 # Importing a module configures nothing and creates nothing any more, so
-# this entry point does it: the logger, the tree under KREA2_BASE_DIR,
+# this entry point does it: the logger, the tree under EMBER_BASE_DIR,
 # and the line saying where weights and images go.
 logs.setup()
 settings.ensure_dirs()
@@ -151,7 +151,7 @@ def main() -> None:
                     ", ".join(keys))
         features.resolve(keys)
         # No server to ask, so the seed document stands in for the DB —
-        # unless a KREA2_CATALOG_FILE already says which file to read.
+        # unless a EMBER_CATALOG_FILE already says which file to read.
         os.environ.setdefault(catalog.FILE_ENV, str(SEED_CATALOG))
         catalog.load()
     else:
@@ -167,7 +167,7 @@ def main() -> None:
 
     stub_comfy()
 
-    # Nothing to set: the auth gate is open unless KREA2_UI_REQUIRE_TOKEN
+    # Nothing to set: the auth gate is open unless EMBER_UI_REQUIRE_TOKEN
     # says otherwise. It is still why this script refuses to bind anything
     # but loopback — an app that asks for no token should not be reachable
     # from the next desk.

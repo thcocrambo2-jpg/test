@@ -33,7 +33,7 @@
 #   R2_ACCESS_KEY_ID       R2 API token, Object Read & Write on the bucket
 #   R2_SECRET_ACCESS_KEY   ... its secret
 #   R2_BUILDS_BUCKET       krea2-builds
-#   KREA2_NODE_TAG         the deployment id — the same tag pods carry.
+#   EMBER_NODE_TAG         the deployment id — the same tag pods carry.
 #                          The API is https://<tag>.vercel.app, assembled
 #                          here exactly as ember/settings.py assembles it
 #                          there
@@ -130,7 +130,7 @@ START_SCRIPT="scripts/runpod_start.sh"
 #
 # Normalised and validated exactly as ember/settings.py and
 # runpod_start.sh do it, so a tag that works on a pod works here.
-NODE_TAG="${KREA2_NODE_TAG:-}"
+NODE_TAG="${EMBER_NODE_TAG:-}"
 NODE_TAG="${NODE_TAG//[[:space:]]/}"
 NODE_TAG="${NODE_TAG,,}"
 API_URL=""
@@ -213,19 +213,19 @@ export R2_ACCOUNT_ID R2_ACCESS_KEY_ID R2_SECRET_ACCESS_KEY R2_BUILDS_BUCKET
 # something that is not a tag" send you to different places and collapsing
 # them would have you checking a value that is right there and correct.
 if [[ -z "$API_URL" ]]; then
-    if [[ -z "${KREA2_NODE_TAG:-}" ]]; then
+    if [[ -z "${EMBER_NODE_TAG:-}" ]]; then
         publish_unavailable "\
-Not publishing: KREA2_NODE_TAG is unset.
+Not publishing: EMBER_NODE_TAG is unset.
 It names the deployment to register this build with — the same tag the
 pods carry. Export it and re-run with --upload-only:
 
-    KREA2_NODE_TAG     the deployment id (a single name, no dots or
+    EMBER_NODE_TAG     the deployment id (a single name, no dots or
                        slashes, as it appears in <name>.vercel.app)"
     fi
     publish_unavailable "\
-Not publishing: KREA2_NODE_TAG is not a valid deployment id.
+Not publishing: EMBER_NODE_TAG is not a valid deployment id.
 It has to be one name as it appears in <name>.vercel.app — no dots, no
-slashes, no https:// prefix. Got: $KREA2_NODE_TAG"
+slashes, no https:// prefix. Got: $EMBER_NODE_TAG"
 fi
 
 if [[ -z "${EMBER_ADMIN_TOKEN:-}" ]]; then
@@ -398,10 +398,10 @@ cat <<EOF
 
     The RunPod template's container start command. It never changes, so a
     template picks up every future build and every fix to the start script
-    on its next start — \$KREA2_NODE_TAG is expanded on the pod, from the
+    on its next start — \$EMBER_NODE_TAG is expanded on the pod, from the
     same variable the licence check already needs:
 
-      bash -c 'curl -fsSL https://\$KREA2_NODE_TAG.vercel.app/v1/start.sh -o /tmp/ember-start.sh && exec bash /tmp/ember-start.sh'
+      bash -c 'curl -fsSL https://\$EMBER_NODE_TAG.vercel.app/v1/start.sh -o /tmp/ember-start.sh && exec bash /tmp/ember-start.sh'
 
     To roll back, every build stays in the bucket and in the builds
     collection. List them and move the channel — no re-upload, and pods
@@ -647,7 +647,7 @@ echo ">>> Compiling (the first build is slow — every package below is compiled
     `# falls back to the plan cards alone and logs why.` \
     `#` \
     `# The screenshots it names are deliberately NOT bundled. They are served` \
-    `# from the public R2 bucket in KREA2_SHOWCASE_URL and fetched by the` \
+    `# from the public R2 bucket in EMBER_SHOWCASE_URL and fetched by the` \
     `# customer's browser, which keeps a page of forty pictures out of a` \
     `# onefile binary that is re-extracted on every launch — and means a new` \
     `# screenshot is an upload rather than a release.` \

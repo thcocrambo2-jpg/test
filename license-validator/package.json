@@ -3,7 +3,7 @@
   "version": "1.0.0",
   "private": true,
   "type": "module",
-  "description": "Seat-limited license server for the Krea 2 app",
+  "description": "Seat-limited licence server for Ember",
   "scripts": {
     "start": "node server.js",
     "dev": "node --watch server.js",

@@ -8,7 +8,7 @@
 #     EMBER_LICENSE_KEY   the key they were issued
 #     EMBER_NODE_TAG      the deployment id issued with it
 #
-# KREA2_LICENSE_KEY and KREA2_NODE_TAG are read as well, because a RunPod
+# EMBER_LICENSE_KEY and EMBER_NODE_TAG are read as well, because a RunPod
 # template is cloned once and never updated: pods started from templates
 # in the field carry those names.
 #
@@ -27,7 +27,7 @@
 #
 # Optional, for when something is wrong:
 #
-#     KREA2_BASE_DIR      where models and outputs live (default below)
+#     EMBER_BASE_DIR      where models and outputs live (default below)
 #     CIVITAI_TOKEN       only if a CivitAI download starts refusing anonymous
 #
 # Which build a licence gets is decided by the server, so pinning one
@@ -64,8 +64,8 @@ fi
 BIN_DIR="$BASE/bin"
 BIN="$BIN_DIR/$NAME"
 
-say()  { printf '[krea2] %s\n' "$*"; }
-die()  { printf '\n[krea2] ERROR: %s\n\n' "$*" >&2; exit 1; }
+say()  { printf '[ember] %s\n' "$*"; }
+die()  { printf '\n[ember] ERROR: %s\n\n' "$*" >&2; exit 1; }
 
 echo
 say "starting"
@@ -296,7 +296,7 @@ fi
 # So it is fetched here instead, from the same public Hugging Face mirror
 # the weights come from, pinned to a release and checked against a known
 # sha256. serve.cloudflared_binary() returns early when the file is already
-# at KREA2_BASE_DIR, so putting it there is the entire change: no recompile,
+# at EMBER_BASE_DIR, so putting it there is the entire change: no recompile,
 # no new build published, just this script.
 #
 # EVERY failure below is a note rather than a hard stop. If the mirror is
@@ -345,7 +345,7 @@ if [[ ! -f "$CF_BIN" ]]; then
 fi
 
 # ── Run ──────────────────────────────────────────────────────────────────────
-export KREA2_BASE_DIR="$BASE"
+export EMBER_BASE_DIR="$BASE"
 
 cat <<EOF
 

@@ -162,11 +162,10 @@ def _default_base_dir(workspace: Path = WORKSPACE_DIR) -> Path:
 # (EMBER_BASE_DIR=./tmp, natural on a dev box) would otherwise be resolved
 # by each process against its own cwd. ComfyUI runs with cwd=COMFY_DIR
 # (ember/comfy/server.py) and is handed --output-directory as a string, so
-# it would
-# write to <cwd>/tmp/ComfyUI/tmp/output while this process — ensure_dirs()
-# below, the gallery scan, the "saved under ..." status line — all meant
-# <cwd>/tmp/output. Images land somewhere real and the app cannot find
-# them. Absolute here means every consumer reads the same path.
+# it would write to <cwd>/tmp/ComfyUI/tmp/output while this process —
+# ensure_dirs() below, the gallery scan, the "saved under ..." status line
+# — all meant <cwd>/tmp/output. Images land somewhere real and the app
+# cannot find them. Absolute here means every consumer reads the same path.
 #
 # What an unset variable means is decided by what is already on the disk;
 # _default_base_dir() above is the other half of this line.

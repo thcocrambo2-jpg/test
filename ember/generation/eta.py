@@ -277,7 +277,7 @@ def is_cold(base: str, signature: tuple) -> bool:
     """Whether this ComfyUI has to load weights before it can start.
 
     Kept here rather than read from runner._LAST_MODEL_SIG, which only
-    moves when KREA2_KEEP_MODELS_LOADED is off — the load happens either
+    moves when EMBER_KEEP_MODELS_LOADED is off — the load happens either
     way. Marks the signature as loaded as a side effect.
     """
     with _LOCK:

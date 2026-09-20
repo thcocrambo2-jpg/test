@@ -126,7 +126,7 @@ def token() -> str | None:
 def describe() -> str:
     """One line for the startup log."""
     if not MIRROR_ENABLED:
-        return "mirror disabled (KREA2_NO_MIRROR) — upstream only"
+        return "mirror disabled (EMBER_NO_MIRROR) — upstream only"
     if not _MANIFEST:
         return "no manifest — upstream only"
     return (f"mirror {MIRROR_USER} ({'public' if MIRROR_PUBLIC else 'private'})"
