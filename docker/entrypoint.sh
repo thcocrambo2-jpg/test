@@ -23,7 +23,19 @@
 set -uo pipefail
 
 BAKED="/opt/ember"
-BASE="${KREA2_BASE_DIR:-/workspace/krea2}"
+
+# Decided before the mkdir below, which would otherwise create the new
+# directory and make the test answer itself. A volume that already holds
+# /workspace/krea2 and no /workspace/ember keeps using it, so an existing
+# mount does not re-download ~90 GB of weights. Nothing is moved.
+BASE="${EMBER_BASE_DIR:-${KREA2_BASE_DIR:-}}"
+if [[ -z "$BASE" ]]; then
+    if [[ -d /workspace/krea2 && ! -e /workspace/ember ]]; then
+        BASE=/workspace/krea2
+    else
+        BASE=/workspace/ember
+    fi
+fi
 
 say() { printf '[ember-image] %s\n' "$*"; }
 

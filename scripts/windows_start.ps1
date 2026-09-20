@@ -78,18 +78,30 @@ $PSNativeCommandUseErrorActionPreference = $false
 $NAME = 'ember.exe'
 
 # ── Where everything lives ───────────────────────────────────────────────
-# C:\krea2 rather than somewhere under the user profile: this holds ~90 GB
-# of weights, profiles are often on a small system drive, and paths under
-# AppData are long enough to matter to ComfyUI's deeply nested node packs.
-# A standard user can create a directory at the root of C:, so this needs
-# no elevation.
+# The root of C: rather than somewhere under the user profile: this holds
+# ~90 GB of weights, profiles are often on a small system drive, and paths
+# under AppData are long enough to matter to ComfyUI's deeply nested node
+# packs. A standard user can create a directory at the root of C:, so this
+# needs no elevation.
 #
-# ember/settings.py defaults KREA2_BASE_DIR to /workspace/krea2, which on
-# Windows resolves to C:\workspace\krea2 — a pod path that happens to be a
-# legal Windows one. Setting it explicitly here is what stops the app quietly
-# using it.
-$BASE = $env:KREA2_BASE_DIR
-if ([string]::IsNullOrWhiteSpace($BASE)) { $BASE = 'C:\krea2' }
+# ember/settings.py defaults to /workspace/ember, which on Windows resolves
+# to C:\workspace\ember — a pod path that happens to be a legal Windows one.
+# Setting it explicitly here is what stops the app quietly using it, and it
+# is why the default is decided here: this script exports the answer at the
+# end, so by the time Python looks, the variable is always set.
+#
+# A machine that already holds C:\krea2 and no C:\ember keeps using it.
+# Those weights are already downloaded; nothing is moved to reach them.
+$BASE = $env:EMBER_BASE_DIR
+if ([string]::IsNullOrWhiteSpace($BASE)) { $BASE = $env:KREA2_BASE_DIR }
+if ([string]::IsNullOrWhiteSpace($BASE)) {
+    if ((Test-Path -LiteralPath 'C:\krea2' -PathType Container) -and
+        -not (Test-Path -LiteralPath 'C:\ember')) {
+        $BASE = 'C:\krea2'
+    } else {
+        $BASE = 'C:\ember'
+    }
+}
 $BIN_DIR = Join-Path $BASE 'bin'
 $BIN = Join-Path $BIN_DIR $NAME
 

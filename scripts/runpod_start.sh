@@ -47,7 +47,20 @@ NAME="ember"
 # weights downloaded on the first run survive a Stop and the second start
 # takes minutes instead of an hour. Terminate destroys it and pays for the
 # whole download again.
-BASE="${KREA2_BASE_DIR:-/workspace/krea2}"
+#
+# The default has to be decided here rather than left to ember/settings.py,
+# because this script exports the answer below — so by the time Python
+# looks, the variable is always set. A volume that already holds
+# /workspace/krea2 and no /workspace/ember keeps using it: those weights
+# are already paid for, and nothing is moved to reach them.
+BASE="${EMBER_BASE_DIR:-${KREA2_BASE_DIR:-}}"
+if [[ -z "$BASE" ]]; then
+    if [[ -d /workspace/krea2 && ! -e /workspace/ember ]]; then
+        BASE=/workspace/krea2
+    else
+        BASE=/workspace/ember
+    fi
+fi
 BIN_DIR="$BASE/bin"
 BIN="$BIN_DIR/$NAME"
 
