@@ -34,7 +34,7 @@ script converts what is already stored, so nothing in the `presets` and
                      old shape, only where it is 8; a row that is not
                      8 / CFG 1 is reported and its steps left alone.
   • every number and bool is cast to exactly the Python type the pod puts
-    in the blob (handlers._krea_settings / generate_v2). This is not
+    in the blob (krea2.handler._krea_settings / generate_v2). This is not
     cosmetic: the Node server stores a whole float as an int (1.0 comes
     back as 1), and the fingerprint is a JSON hash, where "1" and "1.0"
     are different recipes.
@@ -116,7 +116,7 @@ SEEDED_FINGERPRINTS = frozenset({
     "0f1e2d3c4b5a69788796a5b4c3d2e1f00f1e2d3c4b5a69788796a5b4c3d2e1f0",
 })
 
-# The blob shapes, as the pod builds them (handlers._krea_settings and
+# The blob shapes, as the pod builds them (krea2.handler._krea_settings and
 # generate_v2): key → the Python type it holds. "loras" and "model" are
 # handled separately; a dict value is a nested blob of the same kind.
 # Every key is required and no other key is allowed — a blob with a

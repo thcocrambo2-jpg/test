@@ -11,7 +11,7 @@ from typing import Any, Callable
 
 from ember.licensing import catalog as assets
 from ember import features
-from ember.generation import handlers
+from ember.generation import loras
 
 Key = features.Key
 
@@ -313,7 +313,7 @@ class TabSchema:
 
     # ── the contract ────────────────────────────────────────────────
     key: Key                        # features.Key — what the licence gates
-    handler: Callable               # the generator in handlers.py
+    handler: Callable               # the pipeline's generate_* generator
     lane: str                       # jobqueue lane; video gets its own
     prompt_field: str               # names the queue row
     result_keys: tuple              # what the handler's yield tuple means
@@ -489,7 +489,7 @@ class TabSchema:
         stores falls out of the field list rather than out of a second
         hand-written function. The LoRA rows are appended as
         [enabled, lora id, weight], with the form's "None" stored as null
-        (handlers.stored_lora — the same call the handlers make).
+        (loras.stored_lora — the same call the handlers make).
 
         `test_settings_match_ui()` asserts this equals `_krea_settings`
         for the Krea2 tab. That local check is the whole proof, because
@@ -513,7 +513,7 @@ class TabSchema:
             for index in range(tail.count()):
                 row = [values.get(tail.value_key(index, part.name))
                        for part in tail.parts]
-                rows.append([handlers.stored_lora(v) if part.name == "name"
+                rows.append([loras.stored_lora(v) if part.name == "name"
                              else _cast(part, v)
                              for part, v in zip(tail.parts, row)])
             blob["loras"] = rows

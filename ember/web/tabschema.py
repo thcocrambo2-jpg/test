@@ -86,12 +86,19 @@ import inspect
 from ember.licensing import catalog as assets
 from ember import features
 from ember.generation import handlers
+from ember.generation import runner
 from ember.logs import log
+from ember.pipelines.common import model_defaults, model_file_available
 from ember.pipelines.krea2.constants import (
     RESOLUTION_PRESETS,
     SAMPLERS,
 )
+from ember.pipelines.krea2 import handler as krea2
 from ember.pipelines.krea2_v2.constants import V2_ASPECT_RATIOS
+from ember.pipelines.krea2_v2 import handler as krea2_v2
+from ember.pipelines.krea2_v2.workflow import (
+    model_defaults as v2_model_defaults,
+)
 from ember.pipelines.wan.constants import (
     WAN_5B_DEFAULTS,
     WAN_5B_FPS,
@@ -188,13 +195,13 @@ def _model_rows(feature):
     rows = []
     for model in assets.feature_models(feature):
         if v2:
-            steps, cfg, turbo = handlers.v2_model_defaults(model)
+            steps, cfg, turbo = v2_model_defaults(model)
             defaults = {"steps": steps, "cfg": cfg, "turbo_lora": turbo}
-            info = handlers._v2_model_info_text(model)
+            info = krea2_v2._v2_model_info_text(model)
         else:
-            steps, cfg = handlers.model_defaults(model)
+            steps, cfg = model_defaults(model)
             defaults = {"steps": steps, "cfg": cfg}
-            info = handlers._model_info_text(model)
+            info = runner._model_info_text(model)
         rows.append({
             "id": model.id,
             "name": model.name,
@@ -205,7 +212,7 @@ def _model_rows(feature):
             # The model info line under every Model dropdown, which the
             # React app has no other way to render: whether the weights
             # are on this pod is a fact about this pod's disk.
-            "available": bool(handlers.model_file_available(model)),
+            "available": bool(model_file_available(model)),
             "info": info,
         })
     return rows
@@ -330,7 +337,7 @@ def _assert_signatures() -> None:
 
 
 def _assert_settings() -> None:
-    """schema.settings() == handlers._krea_settings(), for the same values.
+    """schema.settings() == krea2._krea_settings(), for the same values.
 
     This is the entire proof that presets keep working, and it really is
     enough on its own. `presetWire()` in license-validator/src/app.js
@@ -349,7 +356,7 @@ def _assert_settings() -> None:
     values = schema.defaults()
     args = schema.call_args(values)
     named = len(schema.named())
-    expected = handlers._krea_settings(
+    expected = krea2._krea_settings(
         seed=args[2], randomize=args[3], steps=args[4], cfg=args[5],
         resolution=args[6], sampler=args[7], model=args[8],
         batch_count=args[9], lora_slots=args[named:],
@@ -361,7 +368,7 @@ def _assert_settings() -> None:
                 for k in sorted(keys) if actual.get(k) != expected.get(k)]
         raise RuntimeError(
             "tabschema: the Krea 2 settings blob no longer matches "
-            "handlers._krea_settings — every preset on the licence server "
+            "krea2._krea_settings — every preset on the licence server "
             "is stored in this shape.\n" + "\n".join(rows)
         )
 

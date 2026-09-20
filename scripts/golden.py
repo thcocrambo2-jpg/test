@@ -21,7 +21,7 @@ worse. Nothing in the app notices, and no human reading a 5,000-line diff
 notices either.
 
 So take the answer from the code while it is still the truth. The seam is
-`_run_jobs` in ember.generation.handlers, which calls
+`_run_jobs` in ember.generation.runner, which calls
 `builder(filename_prefix=..., **job)`
 and then `client.run(workflow)` — patch `run`, keep the dict it was handed,
 and that dict is the complete statement of what the arguments meant. A
@@ -113,7 +113,7 @@ def stub_comfy() -> None:
 
     Lifted from scripts/dryrun.py and has to stay in step with it:
     ember.comfy.server detects GPUs at import and raises when there are
-    none, while ember.generation.handlers binds `ensure_alive` at import
+    none, while ember.generation.runner binds `ensure_alive` at import
     time so a later patch is not seen.
 
     Note the difference from the other two scripts: theirs returns False,
@@ -142,15 +142,56 @@ def stub_comfy() -> None:
     comfy.ensure_alive = ensure_alive
 
 
-def handler_module():
-    """Where the generate_* functions live.
+def handler_modules() -> tuple:
+    """Every module a patched name can have been copied into, in one place.
 
-    Resolved in one place so that moving the handlers between modules
-    leaves this file and the JSON snapshots untouched, which is the whole
-    point of a pure move.
+    The five pipeline handler modules hold the generate_* functions;
+    ember.generation.handlers, .runner and .loras hold what they share;
+    the workflow modules are here because the availability helpers are
+    defined there and from-imported by the rest. Patching walks all of
+    them, so moving a function between two of them leaves this file and
+    the JSON snapshots untouched — which is the whole point of a pure
+    move.
     """
     from ember.generation import handlers
-    return handlers
+    from ember.generation import loras
+    from ember.generation import runner
+    from ember.pipelines.krea2 import handler as krea2_handler
+    from ember.pipelines.krea2 import workflow as krea2
+    from ember.pipelines.krea2_v2 import handler as krea2_v2_handler
+    from ember.pipelines.krea2_v2 import workflow as krea2_v2
+    from ember.pipelines.krea2_v2_edit import handler as krea2_v2_edit_handler
+    from ember.pipelines.krea2_v2_edit import workflow as krea2_v2_edit
+    from ember.pipelines.minimax import handler as minimax_handler
+    from ember.pipelines.minimax import workflow as minimax
+    from ember.pipelines.wan import handler as wan_handler
+    from ember.pipelines.wan import workflow as wan
+    return (handlers, loras, runner,
+            krea2_handler, krea2_v2_handler, krea2_v2_edit_handler,
+            wan_handler, minimax_handler,
+            krea2, krea2_v2, krea2_v2_edit, wan, minimax)
+
+
+class Namespace:
+    """One attribute lookup across every module handler_modules() names.
+
+    The cases below and `snapshot()` want `default_model`, `KREA_T2I`,
+    `MAX_LORA_SLOTS`, `v2_lora_slots` and each generate_* by name, and
+    those now sit in different modules. Read-only: patching goes to the
+    real modules, never through here, so nothing can be stubbed on a
+    namespace no handler looks at.
+    """
+
+    def __init__(self, modules):
+        self._modules = modules
+
+    def __getattr__(self, name):
+        for module in self._modules:
+            if hasattr(module, name):
+                return getattr(module, name)
+        raise AttributeError(
+            "%s is on none of %s" % (name, [m.__name__ for m in self._modules])
+        )
 
 
 class Capture:
@@ -184,29 +225,44 @@ def _png_bytes(image) -> bytes:
     return buf.getvalue()
 
 
-def patch(module, capture) -> None:
+def _patch_all(users, name, value) -> None:
+    """Set `name` on every module that has one, and insist at least one does.
+
+    A from-import copies the binding, so the only namespace a stub is seen
+    in is the one that reads the name —
+    `from ember.pipelines.krea2.workflow import model_file_available` gives
+    ember.pipelines.krea2.handler a name of its own, and patching the
+    workflow module afterwards would not be seen there. Hence every user,
+    not the definition.
+
+    The assertion is the other half. A patch that lands nowhere does not
+    fail: the snapshots still come out, built by the real function, and
+    `--check` passes while proving nothing. So a name no module carries is
+    a broken patch target, and this says so instead of going quiet.
+    """
+    patched = [user.__name__ for user in users if hasattr(user, name)]
+    if not patched:
+        raise SystemExit(
+            "golden: nothing to patch — %r is on none of %s. A stub that "
+            "lands nowhere leaves --check passing against the real code."
+            % (name, [user.__name__ for user in users])
+        )
+    for user in users:
+        if hasattr(user, name):
+            setattr(user, name, value)
+
+
+def patch(users, capture) -> None:
     """Stub everything that would touch a GPU, a disk or the network.
 
-    Patched on the namespace of every module that *uses* a name rather than
-    on the one that defines it, because a from-import copies the binding:
-    `from ember.pipelines.krea2.workflow import model_file_available` gives
-    ember.generation.handlers a name of its own, and patching the workflow
-    module afterwards would not be seen there. The handler module comes
-    first because that is where every generate_* resolves them; the
-    pipeline modules are here because they share the three availability
-    helpers with it. The same reason scripts/dryrun.py patches
-    `ensure_alive` before handlers is imported.
+    `users` is handler_modules() — every namespace a patched name can have
+    been copied into. See _patch_all for why it is the users and not the
+    definitions, and scripts/dryrun.py for the same reason applied to
+    `ensure_alive`, which it patches before anything imports it.
     """
     from ember.comfy import client
     from ember.licensing import presets
     from ember.licensing import prompts
-    from ember.pipelines.krea2 import workflow as krea2
-    from ember.pipelines.krea2_v2 import workflow as krea2_v2
-    from ember.pipelines.krea2_v2_edit import workflow as krea2_v2_edit
-    from ember.pipelines.minimax import workflow as minimax
-    from ember.pipelines.wan import workflow as wan
-
-    users = (module, krea2, krea2_v2, krea2_v2_edit, wan, minimax)
 
     for name in (
         "model_file_available", "lora_file_available", "edit_lora_available",
@@ -214,22 +270,18 @@ def patch(module, capture) -> None:
         "wan_models_available", "wan_5b_available", "wan_lightning_available",
         "minimax_models_available",
     ):
-        for user in users:
-            if hasattr(user, name):
-                setattr(user, name, lambda *a, **k: True)
+        _patch_all(users, name, lambda *a, **k: True)
 
     for name in ("v2_status", "v2_edit_status"):
-        for user in users:
-            if hasattr(user, name):
-                setattr(user, name, lambda *a, **k: (True, ""))
+        _patch_all(users, name, lambda *a, **k: (True, ""))
 
-    module.comfy_ensure_alive = lambda *a, **k: (True, "")
+    _patch_all(users, "comfy_ensure_alive", lambda *a, **k: (True, ""))
 
     # The per-job filename token. Random by design — that is the whole
     # point of it — and it lands *in* the workflow as filename_prefix, so
     # without this every snapshot would differ on every run. Same reason
     # upload_image is pinned to UPLOADED below.
-    module._run_tag = lambda: "golden00"
+    _patch_all(users, "_run_tag", lambda: "golden00")
 
     # Silent by contract in the app; a POST to the licence server here.
     # Kept rather than discarded: the fourth positional is the settings
@@ -360,7 +412,7 @@ def check_settings(name, args, settings) -> None:
     downloaded, so reaching the `prompts.record` call at all needs the
     stubs this file already installs.
 
-    tabschema asserts the *Krea 2* blob against handlers._krea_settings at
+    tabschema asserts the *Krea 2* blob against krea2._krea_settings at
     import, because that one is a plain function. The V2 blob is built
     inline inside generate_v2, so the only way to see it is to run the
     handler — which is what happens here.
@@ -400,11 +452,12 @@ def check_settings(name, args, settings) -> None:
 
 def snapshot() -> dict:
     """Run every case and collect the workflows each one built."""
-    module = handler_module()
+    modules = handler_modules()
+    module = Namespace(modules)
     result = {}
     for name, args in cases(module).items():
         capture = Capture()
-        patch(module, capture)
+        patch(modules, capture)
         handler = getattr(module, name)
         # Drained, not just started: a generator that is never iterated
         # builds nothing, and the batch counts above are 2 precisely so

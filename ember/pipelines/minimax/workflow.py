@@ -276,7 +276,7 @@ def build_minimax_video_workflow(
     and rides along on CreateVideo's `audio` input.
 
     `loras` is a sequence of (filename, strength) pairs, already resolved
-    (handlers._resolve_lora_slots) — applied in order, ahead of the turbo
+    (loras._resolve_lora_slots) — applied in order, ahead of the turbo
     LoRA, as the template chains them.
     """
     wf = {

@@ -6,7 +6,8 @@ Each builder returns Fields (or a `Repeat` tail) ready to drop into a
 """
 
 from ember.licensing import catalog as assets
-from ember.generation import handlers
+from ember.generation import loras
+from ember.generation import runner
 from ember.pipelines.krea2_v2.constants import (
     V2_SAMPLER_DEFAULTS,
     V2_SAMPLER_MODES,
@@ -17,6 +18,7 @@ from ember.pipelines.krea2_v2.constants import (
     V2_VARIANCE_PRESETS,
     V2_VARIANCE_SCHEDULES,
 )
+from ember.pipelines.krea2_v2 import handler as krea2_v2
 from ember.pipelines.krea2_v2_edit.constants import (
     V2_EDIT_DEFAULT_GROUNDING,
     V2_EDIT_DEFAULT_REF_BOOST,
@@ -36,12 +38,12 @@ def _lora_choices(feature):
     catalogue does not name is not offered, and a listed LoRA that has not
     downloaded still is (its label says so; the handler skips it).
     """
-    return lambda: handlers.lora_choices(feature)
+    return lambda: loras.lora_choices(feature)
 
 
 def _lora_labels(feature):
     """{lora id: name} for the same dropdown, "None" included."""
-    return lambda: handlers.lora_labels(feature)
+    return lambda: loras.lora_labels(feature)
 
 
 def _model_field(feature):
@@ -51,15 +53,15 @@ def _model_field(feature):
     catalogue defines it.
     """
     return Field("model", "Model", "select",
-                 lambda: handlers.default_model(feature),
-                 choices=lambda: handlers.model_choices(feature),
-                 labels=lambda: handlers.model_labels(feature),
+                 lambda: runner.default_model(feature),
+                 choices=lambda: runner.model_choices(feature),
+                 labels=lambda: runner.model_labels(feature),
                  group="core", preset="model", wide=True)
 
 
 def _model_setting(feature, key):
     """The feature's default model's `steps` or `cfg`, read late."""
-    return lambda: handlers.model_settings(feature)[key]
+    return lambda: runner.model_settings(feature)[key]
 
 
 def _blank_slots(count):
@@ -72,12 +74,12 @@ def _stack_slots(feature):
 
     V2 does not repeat a blank row: it has a row for every LoRA in its
     feature's list, in that order, all off and each at its record's
-    default strength (handlers.v2_lora_slots). The tab's Default preset,
+    default strength (krea2_v2.v2_lora_slots). The tab's Default preset,
     applied on load, is what switches the usual ones on.
     """
     return lambda: tuple({"enabled": on, "name": name, "weight": strength}
                          for on, name, strength
-                         in handlers.v2_lora_slots(feature))
+                         in krea2_v2.v2_lora_slots(feature))
 
 
 def _triple_tail(feature, slots, title):
@@ -117,7 +119,7 @@ def _blank_lora_tail(feature):
     than borrowing V2's.
     """
     return _triple_tail(feature,
-                        _blank_slots(handlers.MAX_LORA_SLOTS),
+                        _blank_slots(loras.MAX_LORA_SLOTS),
                         "LoRA stack")
 
 

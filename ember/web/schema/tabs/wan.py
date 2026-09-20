@@ -1,7 +1,7 @@
 """The Wan 2.2 image-to-video tab."""
 
 from ember import features
-from ember.generation import handlers
+from ember.generation import runner
 from ember.pipelines.krea2.constants import SAMPLERS
 from ember.pipelines.wan.constants import (
     WAN_DEFAULT_NEGATIVE,
@@ -11,6 +11,7 @@ from ember.pipelines.wan.constants import (
     WAN_RESOLUTIONS,
     WAN_VARIANT,
 )
+from ember.pipelines.wan.handler import generate_wan_video
 from ember.web.schema.fields import (
     G_PROMPT,
     G_SEED,
@@ -31,8 +32,8 @@ WAN_MODEL_CHOICES = ["14B two-expert (best quality, 16 fps)",
 WAN_MODE_CHOICES = ["Turbo (Lightning, 4 steps)", "Raw (20 steps)"]
 
 WAN_SCHEMA = TabSchema(
-    key=Key.WAN_I2V, handler=handlers.generate_wan_video,
-    lane=handlers.WAN_LANE, prompt_field="prompt",
+    key=Key.WAN_I2V, handler=generate_wan_video,
+    lane=runner.WAN_LANE, prompt_field="prompt",
     result_keys=VIDEO_KEYS, tab_id="video", output="video",
     icon="🎬", blurb="Turn a still into a few seconds of video.",
     category="video", route="/video/wan", submit_label="Animate",
