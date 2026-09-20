@@ -57,8 +57,14 @@ CHECK_DEAD_NAMES = True
 # -- rule 1: links --------------------------------------------------------
 # Every markdown file whose links are load-bearing. webui/README.md is in
 # because it is the one front-end page that links back into docs/.
-LINK_GLOBS = ("README.md", "docs/**/*.md", "license-validator/**/*.md",
-              "webui/README.md")
+#
+# Path.match reads "**" as exactly one component, so "docs/**/*.md"
+# matches docs/running/runpod.md and misses docs/configuration.md. The
+# flat "docs/*.md" is what covers the top-level pages. A pattern with no
+# slash matches the basename at any depth, which is why the bare
+# README.md line also reaches license-validator/, webui/ and assets/.
+LINK_GLOBS = ("README.md", "docs/*.md", "docs/**/*.md",
+              "license-validator/**/*.md")
 
 # A markdown inline link, and the three kinds of target that are not
 # paths: anything with a scheme, a bare anchor, and a protocol-relative
