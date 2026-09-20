@@ -64,7 +64,7 @@ ROOT = Path(__file__).resolve().parent.parent
 # "ember" once the 29 modules have moved, and module discovery, the rule-2
 # scan and the rule-3 scan all follow it. It is the only place in this file
 # that knows the layout.
-MODULE_ROOT = "."
+MODULE_ROOT = "ember"
 
 # Root .py files that are not part of the app. webui_bundle.py is
 # deliberately absent: it is 316 KB of generated base64, but it declares
@@ -78,7 +78,7 @@ NOT_APP_MODULES: frozenset[str] = frozenset()
 
 # Rule 2 — PHASE 1 TURNS THIS ON: every __init__.py under MODULE_ROOT holds
 # nothing but whitespace or a docstring (context.md §5 rule 3).
-CHECK_EMPTY_INITS = False
+CHECK_EMPTY_INITS = True
 
 # Rule 3 — PHASE 2 TURNS THIS ON: settings.py is the only module that reads
 # the environment (context.md §4, tier 1).
