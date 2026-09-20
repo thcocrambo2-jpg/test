@@ -57,6 +57,7 @@ import urllib.parse
 from collections import OrderedDict
 from dataclasses import dataclass
 
+from ember import features
 from ember.licensing import server
 from ember.logs import log
 from ember.settings import LICENSE_API_URL, LICENSE_KEY
@@ -65,8 +66,8 @@ from ember.settings import LICENSE_API_URL, LICENSE_KEY
 # feature keys, and they are also the wire values the server validates
 # against — a tab joins this list only once ui.py knows how to load a
 # prompt back into its controls.
-TAB_KREA2 = "krea_t2i"
-TAB_KREA2_V2 = "krea_v2_t2i"
+TAB_KREA2 = str(features.Key.KREA_T2I)
+TAB_KREA2_V2 = str(features.Key.KREA_V2_T2I)
 
 # How long a fetched page is served without asking again. Same 300s as
 # plans.py, for the same reason: the library changes when an admin

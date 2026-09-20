@@ -46,6 +46,7 @@ import threading
 import time
 from dataclasses import dataclass
 
+from ember import features
 from ember.licensing import server
 from ember.logs import log
 from ember.settings import LICENSE_API_URL, LICENSE_KEY
@@ -61,8 +62,8 @@ from ember.settings import LICENSE_API_URL, LICENSE_KEY
 # and again in that tab's Edit tab, where the same dials exist under the
 # same names. Nothing here changes for that — one row, read by more than
 # one dropdown.
-TAB_KREA2 = "krea_t2i"
-TAB_KREA2_V2 = "krea_v2_t2i"
+TAB_KREA2 = str(features.Key.KREA_T2I)
+TAB_KREA2_V2 = str(features.Key.KREA_V2_T2I)
 TABS = (TAB_KREA2, TAB_KREA2_V2)
 
 # How long a fetched set is served without asking again. The same 300s as
