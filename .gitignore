@@ -7,7 +7,6 @@ dist/
 *.build/
 *.dist/
 *.onefile-build/
-krea2app
 
 # Local environments
 .venv/

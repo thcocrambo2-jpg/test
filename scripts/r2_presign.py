@@ -20,7 +20,7 @@ apart is what makes the read-only half actually read-only.
 
 all come from the environment. Usage:
 
-    r2_presign.py --key builds/<sha256>/krea2app [--method PUT]
+    r2_presign.py --key builds/<sha256>/ember [--method PUT]
                   [--expires 3600]
 """
 
