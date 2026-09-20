@@ -179,11 +179,12 @@ def main() -> None:
     # one bundle for every licence and learns what it may show from
     # /api/v1/session, over the wire, so import order cannot hide a tab.
     #
-    # The gate is `api._mount_tabs()`, which hangs a `require_feature(key)`
-    # dependency on every per-tab route, and `scripts/check_routes.py`,
-    # which fails the build if any of them would answer a licence that
-    # grants nothing. See docs/architecture/licensing-and-features.md,
-    # "The licence gate on the API".
+    # The gate is `ember.web.routes.tabs._mount_tabs()`, which hangs a
+    # `require_feature(key)` dependency on every per-tab route, and
+    # `scripts/check_routes.py`, which fails the build if any of them
+    # would answer a licence that grants nothing. See
+    # docs/architecture/licensing-and-features.md, "The licence gate on
+    # the API".
     from ember.web import serve
 
     # Counted from the catalogue rather than the loras/ folder: a file the

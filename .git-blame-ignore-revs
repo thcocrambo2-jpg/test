@@ -13,3 +13,9 @@ ec5552c12a849735430be4cba16627a602124aae
 
 # Phase 1: point the scripts and bake scripts at the ember package.
 e4e6a0984e290950ba85b188c8bf2563427f46d4
+
+# Phase 4: give the ember/web/routes modules their imports.
+595c4eb88c1a7b998ae497e5c324135dd3c31250
+
+# Phase 4: give the ember/web/schema package its imports.
+3fdfa6dbe1a40eefa069066cf012528dd45c5a1f

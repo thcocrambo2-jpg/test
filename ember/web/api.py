@@ -2,16 +2,19 @@
 
 Everything real happens elsewhere. ember.generation.handlers runs the
 generators, ember.generation.queue runs them one at a time per lane,
-tabschema.py says what a form is and how its values become a positional
-call, gallery_index.py lists and thumbnails the outputs, and
-ember.licensing plus showcase.py talk to the licence server. This module is the layer
-that turns those into routes, and it is deliberately the thinnest thing
-in the repository: the ~2,600 lines it wraps encode VAE size snapping,
-model-swap VRAM release, seat heartbeats, HF mirror pinning and crash
-recovery, and none of that is why the UI looked dated.
+ember.web.tabschema says what a form is and how its values become a
+positional call, gallery_index.py lists and thumbnails the outputs, and
+ember.licensing plus showcase.py talk to the licence server. This module
+is the layer that turns those into routes, and it is deliberately the
+thinnest thing in the repository: the ~2,600 lines it wraps encode VAE
+size snapping, model-swap VRAM release, seat heartbeats, HF mirror
+pinning and crash recovery, and none of that is why the UI looked dated.
 
-Two things here are not thin, because they were invisible before and
-would be gone if nobody wrote them down.
+What is here is the assembly: `create_app()` builds the router, hangs the
+session and catalogue routes on it, and hands it to each module in
+`ember.web.routes` in turn. Each of those owns one area and says in its
+own docstring what it owns — `common` holds what they share, including
+auth and path containment.
 
 The licence gate
 ----------------
@@ -28,9 +31,9 @@ licence that does not include it.
 
 Four layers, and each one alone would be enough on a good day:
 
-  1. every per-tab route is registered inside `_mount_tabs()`, through a
-     loop that attaches `Depends(require_feature(key))`. There is no
-     other way to add one;
+  1. every per-tab route is registered inside `routes.tabs._mount_tabs()`,
+     through a loop that attaches `Depends(require_feature(key))`. There
+     is no other way to add one;
   2. `tabschema.submit()` checks again — that is the funnel every
      generation passes through, so a route registered by accident still
      cannot run one;
@@ -39,25 +42,6 @@ Four layers, and each one alone would be enough on a good day:
   4. `scripts/check_routes.py` imports the app with `features.resolve([])`
      and asserts every `/api/v1/tabs/` path 403s, naming
      `community_prompts` explicitly.
-
-Path containment
-----------------
-`/media` and `/thumbs` are the only way a generated file reaches the
-browser, and they contain themselves to OUTPUT_DIR through
-`gallery_index.safe_path()` — the one implementation, shared with
-`delete()`. A `path_id` is the OUTPUT_DIR-relative posix path, the same
-key `recipes._key()` uses, and **no absolute path ever crosses the wire**.
-
-Auth
-----
-The app is served over a public tunnel URL, so the link cannot be the
-access control. A per-process `secrets.token_urlsafe(32)` is
-printed in the URL **fragment**, and the SPA exchanges it for an
-HttpOnly cookie and strips it with `history.replaceState`.
-
-The fragment is the point. Fragments are never sent to servers, so the
-token stays out of Cloudflare's logs, out of every proxy in between and
-out of `Referer` headers. A query parameter would be in all three.
 """
 
 import secrets

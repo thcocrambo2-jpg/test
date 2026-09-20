@@ -44,6 +44,14 @@ COOKIE = "krea2_key"
 # GPU while the gate is down.
 ALLOW_ANON = not UI_REQUIRE_TOKEN
 
+# The app is served over a public tunnel URL, so the link cannot be the
+# access control. This per-process token is printed in the URL
+# **fragment**, and the SPA exchanges it for the HttpOnly cookie above and
+# strips it with `history.replaceState`.
+#
+# The fragment is the point. Fragments are never sent to servers, so the
+# token stays out of Cloudflare's logs, out of every proxy in between and
+# out of `Referer` headers. A query parameter would be in all three.
 TOKEN = secrets.token_urlsafe(32)
 
 # Uploads land here and are read once, at submit. Under TEMP_DIR because
