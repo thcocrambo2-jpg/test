@@ -111,7 +111,7 @@ source of truth for them.
 | chain | `LoraLoaderModelOnly` (diffusion model only) | `LoraLoader` (model **and** CLIP) |
 
 `MAX_LORA_SLOTS` in
-[`ember/generation/handlers.py`](../../ember/generation/handlers.py)
+[`ember/generation/loras.py`](../../ember/generation/loras.py)
 drives the rows, the handlers and the workflow chain together, so
 changing that one constant is the whole change: the handlers take their
 slots as a variadic tail and the builders already loop over the resolved

@@ -155,7 +155,8 @@ $PY scripts/check_routes.py
 ## check_schema.py
 
 **Guards:** every control, label, default and choice in
-`ember/web/tabschema.py`, against a frozen baseline.
+`ember/web/schema/`, as `ember/web/tabschema.py` assembles it, against a
+frozen baseline.
 
 **The silent failure:** a reworded label. `.recipes.jsonl` on every live
 pod stores `[[label, value], …]` positionally and reads it back by
@@ -194,7 +195,7 @@ and getting it wrong is not an exception: swap `cutoff_step` and
 every picture still arrives, and they are quietly worse. Nothing in the
 app notices, and no human reading a 5,000-line diff notices either.
 
-The seam is `_run_jobs` in `ember/generation/handlers.py`, which calls
+The seam is `_run_jobs` in `ember/generation/runner.py`, which calls
 `builder(filename_prefix=…, **job)` and then `client.run(workflow)` —
 patch `run`, keep the dict it was handed, and that dict is the complete
 statement of what the arguments meant. `--check` names the JSON path a

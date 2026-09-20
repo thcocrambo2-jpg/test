@@ -143,14 +143,19 @@ ember/
     common.py         what every pipeline reads out of the catalogue and off the disk
     <family>/constants.py   facts about that model and its graph
     <family>/workflow.py    the ComfyUI API-format graph builders
+    <family>/handler.py     that family's generate_* generators
   generation/
-    handlers.py       every generate_* generator, and the queue runners
+    runner.py         the lanes, and the loop each job runs through
+    loras.py          the LoRA slots Krea and MiniMax share
+    handlers.py       the feature keys, the preset save, and the output listing
     queue.py          the visible job queue: one worker thread per lane
     eta.py            how long the running job has left
     recipes.py        what each generated file was made with
   web/
-    api.py            the FastAPI routes, the licence gate on each, uploads, the SSE stream
-    tabschema.py      one declarative schema per tab: controls, labels, bounds, submission order
+    api.py            builds the app and calls each route module in turn
+    routes/           one module per area: uploads, media, queue, tabs, licence, events
+    tabschema.py      assembles the tabs, in navigation order
+    schema/           the schema types, the shared field builders, one module per tab
     serve.py          uvicorn plus the Cloudflare quick tunnel
     spa.py            serves the compiled React bundle out of process memory
     webui_bundle.py   generated and committed; every built asset as a gzip bytes literal

@@ -145,7 +145,7 @@ RTX 5050 take very different times over the same graph. It keeps the last
 dropped.
 
 One tracker is made per Generate click, by the executors in
-[`ember/generation/handlers.py`](../../ember/generation/handlers.py), and
+[`ember/generation/runner.py`](../../ember/generation/runner.py), and
 fed the same client events they already consume; it reports through
 `queue.report_eta`. Off the queue's worker threads — the golden snapshots
 and the dry run drive the handlers directly — it is a tracker that does

@@ -127,11 +127,13 @@ The entitlement list is not only a download list; it is enforced on every
 route. The React bundle is one build for every licence and learns what it
 may show from `/api/v1/session` over the wire, so there is nothing about
 import order or rendering that could gate anything. Four layers do it
-instead, in [`ember/web/api.py`](../../ember/web/api.py):
+instead, across [`ember/web/routes/`](../../ember/web/routes/):
 
-1. every per-tab route is registered inside `_mount_tabs()`, through a
-   loop that attaches `Depends(require_feature(key))`. There is no other
-   way to add one;
+1. every per-tab route is registered inside `_mount_tabs()` in
+   [`routes/tabs.py`](../../ember/web/routes/tabs.py), through a loop that
+   attaches `Depends(require_feature(key))` — the dependency itself lives
+   in [`routes/common.py`](../../ember/web/routes/common.py). There is no
+   other way to add one;
 2. `tabschema.submit()` checks again — the funnel every generation passes
    through, so a route registered by accident still cannot run one;
 3. `/api/v1/catalog` and `/api/v1/schema/{tab}` describe only entitled

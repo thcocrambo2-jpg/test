@@ -99,7 +99,7 @@ their order is the only thing saying which slot each belongs to.
 **A tab's recipe is its schema's field list** — that is the trick that
 makes this one implementation rather than ten.
 `TabSchema.recipe_fields()` in
-[`ember/web/tabschema.py`](../../ember/web/tabschema.py) zips that list
+[`ember/web/schema/model.py`](../../ember/web/schema/model.py) zips that list
 against the values the request carried, and restoring writes them back
 through the same list. A tab that grows a control gets it in its recipes
 with no change anywhere.
@@ -143,7 +143,7 @@ restart because it is a file.
 ### How the seed is captured
 
 The executors in
-[`ember/generation/handlers.py`](../../ember/generation/handlers.py) call
+[`ember/generation/runner.py`](../../ember/generation/runner.py) call
 `recipes.stamp(seed=...)` before each prompt, because the executor is the
 only place the real seed is known — a batch of four walks four consecutive
 seeds, and a random tick ignores the box entirely. Since the client's
@@ -151,7 +151,7 @@ output hook fires once per ComfyUI prompt, a batch of four writes four
 recipes differing in exactly the field that matters.
 
 The recipe itself is announced from the *worker* thread: `_recording` in
-[`ember/web/api.py`](../../ember/web/api.py) wraps the tab's handler in a
+[`ember/web/routes/tabs.py`](../../ember/web/routes/tabs.py) wraps the tab's handler in a
 generator that calls `recipes.begin()` and, in a `finally`,
 `recipes.end()`. `recipes.py` keys the open recipe by thread, which is
 what lets the output hook deep inside the client find it without every

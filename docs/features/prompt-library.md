@@ -18,9 +18,11 @@ the collection is `community_prompts` on the licence server.
 
 ## Capture is silent, and deduplicated
 
-`generate_single` and `generate_v2` in
-[`ember/generation/handlers.py`](../../ember/generation/handlers.py) call
-`prompts.record()` with what they were given, right after their
+`generate_single` in
+[`ember/pipelines/krea2/handler.py`](../../ember/pipelines/krea2/handler.py)
+and `generate_v2` in
+[`ember/pipelines/krea2_v2/handler.py`](../../ember/pipelines/krea2_v2/handler.py)
+call `prompts.record()` with what they were given, right after their
 validation guards and before any work. That call cannot slow generation
 down and cannot fail it: it fingerprints the recipe, drops it on a
 bounded queue, and one daemon thread does the HTTP. Every error on that

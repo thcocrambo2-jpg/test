@@ -28,15 +28,15 @@ being imported sideways from a sibling.
 
 ### 2. A `generate_*` handler
 
-In [`ember/generation/handlers.py`](../../ember/generation/handlers.py).
-It takes the form's values as **positional parameters**, builds jobs, and
-hands them to `_run_jobs` with its builder. That seam is also where
+In `ember/pipelines/<name>/handler.py`, beside the `workflow.py` it
+drives. It takes the form's values as **positional parameters**, builds
+jobs, and hands them to `runner._run_jobs` with its builder. That seam is also where
 `golden.py` takes its snapshot.
 
 ### 3. A schema
 
-A `TabSchema` in `SCHEMAS`, in
-[`ember/web/tabschema.py`](../../ember/web/tabschema.py). This is the
+A `TabSchema` in `ember/web/schema/tabs/<name>.py`, added to `SCHEMAS`
+in [`ember/web/tabschema.py`](../../ember/web/tabschema.py). This is the
 hand-written description of the form the React app renders: every
 control, its label, its default and its choices.
 
@@ -143,8 +143,8 @@ and it is seven files plus three artefacts:
 | `ember/weights/downloads.py` | the catalogue download learns to fetch those LoRAs per tab |
 | `ember/licensing/catalog.py` | the LoRA list for a feature with no models |
 | `ember/pipelines/minimax/workflow.py` | the slots chained as `LoraLoaderModelOnly` between the diffusion model and the turbo LoRA |
-| `ember/generation/handlers.py` | the two `generate_minimax_*` handlers take and resolve the slots |
-| `ember/web/tabschema.py` | eight blank LoRA rows over the tab's catalogue list |
+| `ember/pipelines/minimax/handler.py` | the two `generate_minimax_*` handlers take and resolve the slots |
+| `ember/web/schema/tabs/minimax.py` | eight blank LoRA rows over the tab's catalogue list |
 | `scripts/golden.py` | the two cases gain the new arguments |
 | `scripts/golden/generate_minimax_*.json` | regenerated — the chain is visible in the diff |
 | `scripts/parity_baseline.json` | the new controls, 1,000 lines of them |

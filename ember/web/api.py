@@ -1,7 +1,8 @@
 """The HTTP API the React UI talks to. A thin adapter, and nothing else.
 
-Everything real happens elsewhere. ember.generation.handlers runs the
-generators, ember.generation.queue runs them one at a time per lane,
+Everything real happens elsewhere. The generators live next to the graph
+they build, one handler.py per pipeline; ember.generation.runner runs
+them and ember.generation.queue runs them one at a time per lane,
 ember.web.tabschema says what a form is and how its values become a
 positional call, gallery_index.py lists and thumbnails the outputs, and
 ember.licensing plus showcase.py talk to the licence server. This module

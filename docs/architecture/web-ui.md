@@ -9,13 +9,15 @@ The front end is Vite + React 18 + TypeScript in `webui/`. It is **one
 build for every licence** and learns what it may show from
 `/api/v1/session` over the wire, so nothing about it is per-customer — the
 gate is entirely server-side, in
-[`ember/web/api.py`](../../ember/web/api.py). See
+[`ember/web/routes/`](../../ember/web/routes/). See
 [licensing-and-features.md](licensing-and-features.md).
 
 ## Tab order and routing
 
 Every generation tab is one entry in `tabschema.SCHEMAS`
-([`ember/web/tabschema.py`](../../ember/web/tabschema.py)), and the schema
+([`ember/web/tabschema.py`](../../ember/web/tabschema.py)), written in
+that pipeline's module under
+[`ember/web/schema/tabs/`](../../ember/web/schema/tabs/), and the schema
 carries its own `category` and `route`:
 
 ```python
@@ -91,7 +93,8 @@ On the Python side the same invariant is `Field.name` *is* the handler's
 parameter name, and `tabschema._assert_signatures()` enforces it against
 `inspect.signature(handler)` at import. It is the most important
 defensive measure in the web layer: without it, a parameter renamed in
-`handlers.py` and not in the schema is a silent argument shift, and the
+a pipeline's `handler.py` and not in the schema is a silent argument
+shift, and the
 Krea 2 V2 handler takes 31 of them.
 
 **Values are ids; labels are for the eye.** Models and LoRAs come from the

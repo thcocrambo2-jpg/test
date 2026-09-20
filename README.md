@@ -81,8 +81,8 @@ ember/                 the app
   licensing/           seats, the catalogue, plans, presets, prompts, and one HTTP client
   comfy/               installing ComfyUI, running it, and talking to it
   weights/             downloading models, and the Hugging Face mirror
-  pipelines/           one package per model family: constants.py + workflow.py
-  generation/          the job queue, ETAs, recipes, and the generate handlers
+  pipelines/           one package per model family: constants, workflow, handler
+  generation/          the job queue, ETAs, recipes, the lanes and the LoRA slots
   web/                 FastAPI routes, tab schemas, the SPA and the compiled bundle
 webui/                 the React source the bundle is built from
 license-validator/     the licence server (Node, on Vercel)
