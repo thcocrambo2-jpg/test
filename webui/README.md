@@ -1,96 +1,79 @@
 # webui — the React front-end
 
-Vite + React 18 + TypeScript. Replaces the Gradio UI in `ui.py` / `theme.py`.
-Read `../context.md` first; this file only covers what is specific to the
-front-end.
+Vite + React 18 + TypeScript. This file covers the front-end development
+loop only. How the app is routed, themed, served and shipped is in
+[`../docs/architecture/web-ui.md`](../docs/architecture/web-ui.md).
+
+## Running it
+
+There is no mock: the dev server talks to the real Python API through a
+proxy, so start that first.
 
 ```bash
-npm install
-npm run dev        # http://localhost:5173, against the mock API
-npm run build      # → dist/, one JS chunk, no sourcemap
+# bash or PowerShell, from the repo root — the API, with no GPU
+python scripts/dryrun.py --features all --api-only
+```
+
+```bash
+# bash, in webui/
+npm ci
+npm run dev        # http://localhost:5173, proxying /api, /media, /thumbs to :7860
+npm run build      # -> dist/, one JS chunk, no sourcemap
 npm run typecheck
 ```
 
-## Stage
-
-Stage A is done: the spine plus **Krea2 t2i**, the pricing and
-showcase page, the header/footer, the queue panel, the gallery and the theme
-toggle. The other six schema-driven tabs have their schemas derived already
-but render a "Stage B" page instead of a form — deliberately, because a mock
-cannot validate an image upload, SSE through a proxy or video playback, and
-finding out an assumption was wrong six tabs later is
-expensive. Section 2 wires it to the real API first.
+`make webui-dev` is the same `npm run dev`. `/media` and `/thumbs` are
+proxied as well as `/api` because a generated image is served by the
+Python side too, so there is no static directory for Vite to serve them
+from. The proxy also strips buffering off `text/event-stream`, without
+which the SSE queue updates arrive in one lump when the connection closes.
 
 ## Where things are
 
 ```
 src/
-  theme/tokens.css          every colour in the application, and nothing else has any
-  api/types.ts              the wire contract Section 2 has to satisfy
-  api/client.ts             THE seam — the only place that knows about the mock
-  api/http.ts               the real client, written against the same interface
-  mock/                     built to be deleted; see below
-  lib/schema.ts             defaults + the positional-argument builder
-  components/               TwoColumn, SeedRow, LoraStack, SamplerPanel,
-                            VariancePanel, SchemaForm, fields/
-  features/                 shell/, queue/, gallery/, pricing/, tabs/
+  theme/tokens.css   every colour in the application, and nothing else has any
+  api/types.ts       the wire contract
+  api/client.ts      the seam every component imports `api` from
+  api/http.ts        the real client
+  api/queries.ts     the react-query hooks
+  lib/schema.ts      defaults + the positional-argument builder
+  lib/nav.ts         the four nav categories and their order
+  components/        TwoColumn, SeedRow, LoraStack, PresetBar, SamplerPanel,
+                     VariancePanel, SchemaForm, fields/, ui/
+  features/          shell/, queue/, gallery/, library/, pricing/, tabs/, terms/
+  store/             cross-page state: queue.ts, handoff.ts, tabState.ts
 ```
 
-## The mock
+## Two rules that bite
 
-`src/mock/` derives every tab, field, default, range and choice list from
-`../scripts/parity_baseline.json` — the parity contract itself, imported, not
-copied, so the forms cannot drift from `scripts/parity.py --check`.
+**Submission order.** `schema.fields` order is the Python handler's
+positional order, and `toSubmission()` (`lib/schema.ts`) walks that list.
+Index `i` of the result is positional parameter `i`; the LoRA tail is
+appended flat as `(enabled, name, weight)` triples. Getting it wrong
+shifts every argument after the stack.
 
-It is behavioural, not a fixture dump: a submit produces a job that queues,
-runs, emits `{step, total}` progress and finishes with pictures — or fails,
-about one time in seven, so the error surface gets exercised. Put "fail" in a
-prompt to force one.
-
-Everything is behind `VITE_USE_MOCK` and one ternary in `api/client.ts`. No
-component imports anything from `src/mock/`. Section 2 deletes the directory,
-deletes the ternary, and nothing else changes.
-
-`src/mock/tabMeta.ts` is the exception worth knowing about: it holds the
-*presentation* metadata the baseline does not describe — grouping, column,
-conditional visibility. It deliberately contains **no label overrides**, so a
-reworded label in the Python app can never be masked here. In Section 2 it
-becomes `tabschema.py`.
-
-## One thing that is load-bearing
-
-**Submission order.** `schema.fields` is baseline order is the Python
-handler's positional order. `toSubmission()` (`lib/schema.ts`) walks that list;
-rendering regroups freely. Index `i` of the result is positional parameter `i`.
-The LoRA tail is appended flat, as (enabled, name, weight) triples — getting
-that order wrong shifts every argument after the stack (context.md §4.3).
-
-**Values are ids, labels are for the eye.** Models and LoRAs come from the
-licence server's catalogue and are referenced by id everywhere — presets,
-prompt cards, recipes and the form itself. A select or radio `Field`, and the
-LoRA stack's `LoraSpec`, may carry `choiceLabels` (`{value: label}`) next to
-`choices`: the control shows the label and submits the value, and a value
-with no label shows as itself. The `name` part of a LoRA triple is a LoRA id,
-`"None"` for an empty slot. `/catalog` keys `models` by feature key, a tab's
-`modelRegistry` is that key, and a `ModelRow` is matched by `id` — never by
-`name`, which is only its label.
-
-## Colours
-
-Every colour is a custom property on `:root` in `theme/tokens.css`, redefined
-under `[data-theme="dark"]`. Nothing else in `src/` contains a colour literal.
-
-To check:
+**Colours live in one file.** Every colour is a custom property on
+`:root` in `theme/tokens.css`, redefined under `[data-theme="dark"]`.
+Nothing else in `src/` may contain a colour literal:
 
 ```bash
+# bash, in webui/
 grep -rnE "#[0-9a-f]{3,8}\b|rgba?\(" src --include=*.css --include=*.tsx \
   | grep -v src/theme/tokens.css
 ```
 
-## Build settings that are not negotiable
+## Before you commit
 
-`build.sourcemap: false` and `rollupOptions.output.manualChunks: undefined`.
-The bundle is embedded into the Nuitka binary and served from process memory
-(context.md §4.7, §4.8), so code-splitting buys nothing, a runtime `import()`
-of an unregistered chunk is a hard 404, and a sourcemap would ship the source
-tree inside a commercial binary.
+The built bundle is committed as a Python module, so an edit here that
+nobody rebuilt would ship silently. From the repo root:
+
+```bash
+make webui                       # npm ci && npm run build, then regenerate the module
+python scripts/check_webui.py    # must pass
+```
+
+`make webui` is the only target that needs Node. Why the bundle is
+committed at all, and why `build.sourcemap: false` and
+`manualChunks: undefined` are not negotiable, is in
+[`../docs/architecture/web-ui.md`](../docs/architecture/web-ui.md).
