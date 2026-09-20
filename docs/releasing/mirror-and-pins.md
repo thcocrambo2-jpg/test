@@ -75,7 +75,7 @@ not the local disk, decides the work.
 
 ```bash
 # 1. boot a pod with everything on and let it finish downloading (~200 GB)
-KREA2_LICENSE_KEY=<operator key> python3 app.py
+EMBER_LICENSE_KEY=<operator key> python3 app.py
 
 # 2. capture pod state — the revisions everything resolved to
 python3 scripts/mirror_to_hf.py --pins-only
@@ -87,7 +87,7 @@ python3 scripts/mirror_to_hf.py --audit
 python3 scripts/mirror_to_hf.py --dry-run
 
 # 5. top up and upload (~18 GB — only what is at risk of disappearing)
-KREA2_ADMIN_TOKEN=<token> HF_WRITE_TOKEN=<token> python3 scripts/mirror_to_hf.py
+EMBER_ADMIN_TOKEN=<token> HF_WRITE_TOKEN=<token> python3 scripts/mirror_to_hf.py
 ```
 
 Flags: `--dry-run`, `--audit`, `--pins-only`, `--public`,
@@ -95,11 +95,11 @@ Flags: `--dry-run`, `--audit`, `--pins-only`, `--public`,
 `--staging PATH`, `--catalog FILE`.
 
 `--audit` and `--dry-run` need no `HF_WRITE_TOKEN` and no
-`KREA2_ADMIN_TOKEN`, and neither writes anything to the mirror or to the
+`EMBER_ADMIN_TOKEN`, and neither writes anything to the mirror or to the
 database.
 
 Steps 3–5 read the catalogue the way the pod does — `POST /v1/catalog`
-with `KREA2_LICENSE_KEY` and `KREA2_NODE_TAG` — or, with
+with `EMBER_LICENSE_KEY` and `EMBER_NODE_TAG` — or, with
 `--catalog FILE`, from a file in the same shape
 ([`license-validator/data/assets.json`](../../license-validator/data/assets.json)
 is one).
@@ -127,8 +127,8 @@ LoRAs, not catalogue models.
    its `source` (from local disk first, never from the mirror), uploaded
    to the `loras` repo at `loras/<file>`, and the location is written
    back to its record with `POST /v1/admin/loras`, authorised by
-   `KREA2_ADMIN_TOKEN`.
-3. Without that token — or without `KREA2_NODE_TAG` — the script prints
+   `EMBER_ADMIN_TOKEN`.
+3. Without that token — or without `EMBER_NODE_TAG` — the script prints
    the `npm run assets -- --mirror …` command that records it by hand
    instead.
 
@@ -137,7 +137,7 @@ That is the point of a mirror.
 
 ## Turning it off
 
-`KREA2_NO_MIRROR` disables mirror lookups entirely, and `KREA2_MIRROR_USER`
+`EMBER_NO_MIRROR` disables mirror lookups entirely, and `EMBER_MIRROR_USER`
 chooses whose mirror to read. Both are read in
 [`ember/settings.py`](../../ember/settings.py) and documented in
 [configuration](../configuration.md).

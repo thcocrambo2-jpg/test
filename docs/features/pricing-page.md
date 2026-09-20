@@ -71,7 +71,7 @@ preview:
 
 ```bash
 # bash
-export KREA2_SHOWCASE_URL=https://pub-<hash>.r2.dev
+export EMBER_SHOWCASE_URL=https://pub-<hash>.r2.dev
 ```
 
 It must be `https://`; anything else is ignored with a warning at
@@ -146,5 +146,5 @@ and scroll.
 
 - [Licensing and features](../architecture/licensing-and-features.md) — the acquire response,
   `features`, and what a plan is.
-- [Configuration](../configuration.md) — `KREA2_SHOWCASE_URL` and the rest.
+- [Configuration](../configuration.md) — `EMBER_SHOWCASE_URL` and the rest.
 - [Dry run](../running/dry-run.md) — the no-GPU preview.

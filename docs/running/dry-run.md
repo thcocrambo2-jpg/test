@@ -30,13 +30,13 @@ database holds. It takes a seat for as long as it runs and gives it back
 on Ctrl-C. PowerShell:
 
 ```powershell
-$env:KREA2_LICENSE_KEY="<key>"; $env:KREA2_NODE_TAG="<tag>"; python scripts\dryrun.py
+$env:EMBER_LICENSE_KEY="<key>"; $env:EMBER_NODE_TAG="<tag>"; python scripts\dryrun.py
 ```
 
 bash:
 
 ```bash
-KREA2_LICENSE_KEY=<key> KREA2_NODE_TAG=<tag> python3 scripts/dryrun.py
+EMBER_LICENSE_KEY=<key> EMBER_NODE_TAG=<tag> python3 scripts/dryrun.py
 ```
 
 | Flag | Effect |
@@ -72,7 +72,7 @@ cd webui; npm run dev                        # another
 
 Authentication is off, which is exactly why the script refuses to bind
 anything but loopback: an app that asks for no token should not be
-reachable from the next desk. Set `KREA2_UI_REQUIRE_TOKEN=1` to put the
+reachable from the next desk. Set `EMBER_UI_REQUIRE_TOKEN=1` to put the
 gate back — see [Configuration](../configuration.md).
 
 ## Where the catalogue comes from
@@ -83,10 +83,10 @@ is simply reported as not downloaded.
 
 - With a licence key: `POST /v1/catalog` on the licence server.
 - With `--features`: `license-validator/data/assets.json`, the seed
-  document, unless `KREA2_CATALOG_FILE` already names another file. Point
+  document, unless `EMBER_CATALOG_FILE` already names another file. Point
   that at a saved server answer to reproduce exactly what one licence sees.
 
-`KREA2_BASE_DIR` defaults to `.dryrun/` under the repo, so the empty
+`EMBER_BASE_DIR` defaults to `.dryrun/` under the repo, so the empty
 models/output tree lands somewhere local rather than at the pod path.
 
 ## What it deliberately does not do
@@ -103,28 +103,28 @@ fetching anything, `scripts/mock_models.py` writes a zero-byte file at
 exactly the path the real code checks. bash:
 
 ```bash
-KREA2_BASE_DIR=tmp2 python3 scripts/mock_models.py          # create the placeholders
-KREA2_BASE_DIR=tmp2 python3 scripts/mock_models.py --check  # what would a real run still fetch?
+EMBER_BASE_DIR=tmp2 python3 scripts/mock_models.py          # create the placeholders
+EMBER_BASE_DIR=tmp2 python3 scripts/mock_models.py --check  # what would a real run still fetch?
 ```
 
 PowerShell:
 
 ```powershell
-$env:KREA2_BASE_DIR="tmp2"; python scripts\mock_models.py
+$env:EMBER_BASE_DIR="tmp2"; python scripts\mock_models.py
 ```
 
 It runs every asset group in `downloads.ASSET_GROUPS` with the network
 stubbed out, so the next real run logs `✓ (cached)` for all of it. Existing
 files are never touched — a real weight stays a real weight, and a re-run
 only adds what a configuration change introduced. What it created is
-appended to `<KREA2_BASE_DIR>/mock-manifest.txt`, so the placeholders can be
+appended to `<EMBER_BASE_DIR>/mock-manifest.txt`, so the placeholders can be
 told apart later. `--check` installs stubs that fail instead and exits 1 if
 anything would still go to the network, which doubles as "is this base
 directory complete?".
 
 Two things to know before running it:
 
-- **Always pass `KREA2_BASE_DIR` explicitly.** It otherwise defaults to
+- **Always pass `EMBER_BASE_DIR` explicitly.** It otherwise defaults to
   `.dryrun`, and mock weights there change which text encoder
   `pipelines.common.active_text_encoder()` picks, which fails
   `scripts/golden.py --check`.

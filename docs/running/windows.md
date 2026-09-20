@@ -13,9 +13,9 @@ and the app handles all three:
   `runpod/pytorch:1.0.2-cu1281-torch280-ubuntu2404`. Locally nothing
   supplies it, so `setup.ensure_torch()` installs the same versions on the
   first run.
-- **`KREA2_BASE_DIR` has no useful default.** It falls back to the pod path
-  `/workspace/krea2`, which on Windows silently resolves to
-  `C:\workspace\krea2`. Set it.
+- **`EMBER_BASE_DIR` has no useful default.** It falls back to the pod path
+  `/workspace/ember`, which on Windows silently resolves to
+  `C:\workspace\ember`. Set it.
 - **Symlinks need permission.** `setup.link_model_dirs()` symlinks
   ComfyUI's model folders. Turn on Developer Mode (Settings → System → For
   developers) or run from an elevated shell.
@@ -47,16 +47,16 @@ Nuitka build output and is git-ignored, so a `git clean -xdf` would take
 your weights with it). PowerShell:
 
 ```powershell
-$env:KREA2_BASE_DIR    = "C:\krea2"
-$env:KREA2_LICENSE_KEY = "<your key>"
-$env:KREA2_NODE_TAG    = "<your node tag>"
+$env:EMBER_BASE_DIR    = "C:\ember"
+$env:EMBER_LICENSE_KEY = "<your key>"
+$env:EMBER_NODE_TAG    = "<your node tag>"
 $env:HF_TOKEN          = "<hf read token>"   # optional, avoids rate limits
 ```
 
 Those last as long as the terminal. To persist one (PowerShell):
 
 ```powershell
-[Environment]::SetEnvironmentVariable("KREA2_BASE_DIR", "C:\krea2", "User")
+[Environment]::SetEnvironmentVariable("EMBER_BASE_DIR", "C:\ember", "User")
 ```
 
 Never commit a file containing these — the licence key and node tag are
@@ -78,7 +78,7 @@ is idempotent, so an interrupted run resumes rather than restarting.
 
 **The public URL on Windows comes from cloudflared**, exactly as it does on
 a pod — one code path, both platforms. cloudflared is fetched once (~55 MB,
-`cloudflared-windows-amd64.exe`) and cached under `KREA2_BASE_DIR` by
+`cloudflared-windows-amd64.exe`) and cached under `EMBER_BASE_DIR` by
 `scripts/windows_start.ps1`, from the pinned Hugging Face mirror, before
 the app starts. So the usual case never touches github.com, and the app's
 own download of it (`serve.cloudflared_binary()`) stays as the fallback.
@@ -154,7 +154,7 @@ SageAttention 1.0.6 OK on sm_120 — ComfyUI starts with --use-sage-attention
 ```
 
 It is approximate attention and it applies to every tab. If a tab's output
-looks wrong on a card where it did not before, set `KREA2_SAGE_ATTENTION=0`
+looks wrong on a card where it did not before, set `EMBER_SAGE_ATTENTION=0`
 first.
 
 ## Hardware
@@ -174,13 +174,13 @@ the first generation.
 ## What a Windows customer runs
 
 A customer never has a checkout. `scripts/windows_start.ps1` is published
-as `krea2-start.ps1`; it fetches the current build, verifies it, and runs
+as `ember-start.ps1`; it fetches the current build, verifies it, and runs
 it. After setting the two variables (PowerShell):
 
 ```powershell
-$env:KREA2_LICENSE_KEY="<key>"
-$env:KREA2_NODE_TAG="<tag>"
-powershell -ExecutionPolicy Bypass -File krea2-start.ps1
+$env:EMBER_LICENSE_KEY="<key>"
+$env:EMBER_NODE_TAG="<tag>"
+powershell -ExecutionPolicy Bypass -File ember-start.ps1
 ```
 
 The `.exe` is **not** self-contained, by design: the app never imports
@@ -193,7 +193,7 @@ later, by `setup.ensure_torch()`, which launches a real kernel on it.
 There is no credential in the script — the same reasoning as on
 [RunPod](runpod.md#how-a-customer-launches).
 
-`KREA2_BASE_DIR` and `CIVITAI_TOKEN` are the only other variables worth
+`EMBER_BASE_DIR` and `CIVITAI_TOKEN` are the only other variables worth
 setting on a customer machine.
 
 ## Next

@@ -2,10 +2,10 @@
 //
 //   npm run issue-key -- --name "Acme Corp" --plan creator --seats 2
 //   npm run issue-key -- --name "Trial" --plan creator --seats 1 --days 30
-//   npm run issue-key -- --key KREA2-XXXX-XXXX-XXXX --plan studio --update
-//   npm run issue-key -- --key KREA2-XXXX-XXXX-XXXX --features-extra "wan_i2v" --update
-//   npm run issue-key -- --key KREA2-XXXX-XXXX-XXXX --revoke
-//   npm run issue-key -- --key KREA2-XXXX-XXXX-XXXX --admin --update
+//   npm run issue-key -- --key EMBER-XXXX-XXXX-XXXX --plan studio --update
+//   npm run issue-key -- --key EMBER-XXXX-XXXX-XXXX --features-extra "wan_i2v" --update
+//   npm run issue-key -- --key EMBER-XXXX-XXXX-XXXX --revoke
+//   npm run issue-key -- --key EMBER-XXXX-XXXX-XXXX --admin --update
 //
 // ── --admin ────────────────────────────────────────────────────────────
 //
@@ -17,10 +17,14 @@
 // Put it on the keys you generate from yourself, or your own testing fills
 // the review queue you are the one working through.
 //
-// The generated key is what the customer puts in KREA2_LICENSE_KEY on
+// The generated key is what the customer puts in EMBER_LICENSE_KEY on
 // their pod. Keys are stored in plain text so you can match a key to a
 // customer while supporting them; the collection is never exposed to
 // clients, which is the point of this service sitting in front of it.
+//
+// --key takes a key exactly as the customer holds it. Keys are matched
+// whole, so an `EMBER-` and a `KREA2-` key are handled the same way here
+// and everywhere else; only newly generated ones carry the `EMBER-` prefix.
 //
 // ── How a key gets its tabs ────────────────────────────────────────────
 //
@@ -98,7 +102,7 @@ invalidateFeatures();
 const knownFeatures = await featureOrder();
 
 if (opts.revoke || opts.enable) {
-  if (!opts.key) die("--revoke/--enable needs --key KREA2-...");
+  if (!opts.key) die("--revoke/--enable needs --key <licence key>");
   const active = Boolean(opts.enable);
   const result = await orDie(() => updateLicense({ key: opts.key, active }));
   if (!result) die(`no license with key ${opts.key}`);
@@ -113,7 +117,7 @@ if (!opts.name && !opts.key) {
   die(
     'usage: npm run issue-key -- --name "Acme Corp" --plan creator --seats 2',
     '       [--features-extra "wan_i2v"] [--days 30] [--admin|--no-admin]',
-    "       [--update] [--key KREA2-...] [--revoke]",
+    "       [--update] [--key <licence key>] [--revoke]",
     "",
     `plans:    ${known.map((p) => p._id).join(", ") ||
       "(none — run: npm run seed-catalog)"}`,
@@ -273,5 +277,5 @@ if (plan_id === undefined && features === null) {
   );
 }
 console.log("\nGive the customer this, to set on their RunPod pod:");
-console.log(`\n  KREA2_LICENSE_KEY=${key}\n`);
+console.log(`\n  EMBER_LICENSE_KEY=${key}\n`);
 process.exit(0);

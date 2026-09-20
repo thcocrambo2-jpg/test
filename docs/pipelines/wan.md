@@ -50,17 +50,17 @@ and in the zip download.
 ## The parallel instance
 
 By default video jobs share the image tabs' ComfyUI queue, which is safe
-and serial. Start with `KREA2_WAN_PARALLEL=1` to give video its own
+and serial. Start with `EMBER_WAN_PARALLEL=1` to give video its own
 ComfyUI instance on port **8189**, so quick image jobs do not wait behind
 a long render.
 
 Both instances then split the GPU via `--reserve-vram`, from
-`KREA2_MAIN_RESERVE_VRAM` (default 26 GB left for Wan by the image
-instance) and `KREA2_WAN_RESERVE_VRAM` (default 22 GB left for images by
+`EMBER_MAIN_RESERVE_VRAM` (default 26 GB left for Wan by the image
+instance) and `EMBER_WAN_RESERVE_VRAM` (default 22 GB left for images by
 the video instance) — tuned for a 48 GB A40. Note that the two workloads
 also share compute, so each runs slower while they overlap.
 
-`KREA2_WAN_PARALLEL` only buys a second ComfyUI instance when `wan_i2v`
+`EMBER_WAN_PARALLEL` only buys a second ComfyUI instance when `wan_i2v`
 is granted. The parallel knobs are environment, so they live in
 [`ember/settings.py`](../../ember/settings.py) rather than with the model
 facts; see [Configuration](../configuration.md).

@@ -21,7 +21,7 @@ holds no secret and no licensed code. An app release needs no image
 rebuild.
 
 ```
-/entrypoint.sh  ->  /opt/krea2/bin/start.sh  ->  the binary
+/entrypoint.sh  ->  /opt/ember/bin/start.sh  ->  the binary
  (symlinks the       (fetches + verifies       (the app finds
   baked ComfyUI)      the build)                everything present)
 ```
@@ -78,7 +78,7 @@ runs in a throwaway container that can see both (PowerShell):
 docker run --rm `
   -v krea2-data:/workspace `
   -v C:\path\to\your\tmp\models:/seed:ro `
-  alpine sh -c "mkdir -p /workspace/krea2/models && cp -an /seed/. /workspace/krea2/models/"
+  alpine sh -c "mkdir -p /workspace/ember/models && cp -an /seed/. /workspace/ember/models/"
 ```
 
 Run it before the first `docker compose up`, or the app will already be
@@ -97,14 +97,14 @@ catalogue does not list is never offered in a dropdown, so copying one in
 by hand does nothing on its own — add a record for it to the database.
 
 Copy `models/` only. The image has its own ComfyUI at the pinned SHA, and
-the entrypoint leaves a real `$KREA2_BASE_DIR/ComfyUI` directory alone —
+the entrypoint leaves a real `$EMBER_BASE_DIR/ComfyUI` directory alone —
 seeding one there would shadow the baked copy for no benefit.
 
 ## On RunPod
 
 Use the image as the template's container image and leave the start command
 empty. Expose HTTP port `7860`, mount the network volume at `/workspace`,
-and leave `KREA2_LICENSE_KEY` and `KREA2_NODE_TAG` **empty** in the
+and leave `EMBER_LICENSE_KEY` and `EMBER_NODE_TAG` **empty** in the
 template — a template is public, so a key typed into one is a key given to
 everyone (see [RunPod](runpod.md#how-a-customer-launches)). The customer
 fills them in on their own pod.
@@ -138,7 +138,7 @@ asserts the result, and installs the hash-pinned SageAttention wheel. Every
 boot logs it:
 
 ```
-[krea2-image] torch 2.11.0+cu130 (CUDA 13.0) - SageAttention 2.2.0
+[ember-image] torch 2.11.0+cu130 (CUDA 13.0) - SageAttention 2.2.0
 ```
 
 CUDA 13 needs an **R580 or newer driver** on the host, which is why the
@@ -158,12 +158,12 @@ working tree instead, in the same CUDA/ComfyUI environment a customer gets
 (bash):
 
 ```bash
-make image                                             # krea2:latest
-docker compose -f docker-compose.dev.yml up --build    # krea2:dev, then run
+make image                                             # ember:latest
+docker compose -f docker-compose.dev.yml up --build    # ember:dev, then run
 ```
 
 Edit, Ctrl-C, `up` again. The repo is bind-mounted at `/src` and
-`KREA2_DEV_SOURCE=/src` is what makes the entrypoint skip the download and
+`EMBER_DEV_SOURCE=/src` is what makes the entrypoint skip the download and
 `exec python3 app.py`.
 
 It shares the `krea2-data` volume with the production service, so a dev run
@@ -191,21 +191,21 @@ and the GPU.
 bash:
 
 ```bash
-make image                                # -> krea2:latest
-make image-push REGISTRY=ghcr.io/<owner>  # -> ghcr.io/<owner>/krea2:latest
+make image                                # -> ember:latest
+make image-push REGISTRY=ghcr.io/<owner>  # -> ghcr.io/<owner>/ember:latest
 ```
 
 Neither needs credentials from `license-validator/.env`; nothing in the
 image is secret. `.dockerignore` is an allowlist rather than a list of
 exclusions, so a file that is not named in it cannot reach the build
 context at all — that is what keeps `license-validator/.env`, the root
-`.env` and `dist/krea2app` out of a published image.
+`.env` and `dist/ember` out of a published image.
 
 The bake stage is separate from the published image for the same reason. It
 copies individual named files — the thirteen `ember/` modules that
 `docker/bake_nodes.py` and `docker/bake_torch.py` actually import, plus
 `scripts/PINS.json` and `scripts/mirror_manifest.json` — never a directory,
-and only `/opt/krea2` is copied out of it. Adding an import to a bake
+and only `/opt/ember` is copied out of it. Adding an import to a bake
 script means adding its module to both the `COPY` lines and the
 `.dockerignore` allowlist, or the build fails loudly.
 
@@ -219,11 +219,11 @@ boot. See [Mirror and pins](../releasing/mirror-and-pins.md).
 
 | Variable | Effect |
 | --- | --- |
-| `KREA2_USE_BAKED_COMFY=0` | Ignore the baked ComfyUI; the app clones and pip-installs its own, which is the non-Docker behaviour. For a baked tree that turns out to be wrong. |
-| `KREA2_START_SOURCE=api` | Fetch the start script from the licence server instead of using the baked copy, so a fix there applies without a new image. |
-| `KREA2_IMAGE` | A published tag to run instead of a locally built one. |
-| `KREA2_DEV_SOURCE` | Set to `/src` by `docker-compose.dev.yml`; flips the entrypoint to run mounted source. |
-| `KREA2_DEV_IMAGE` | Dev compose only; defaults to `krea2:dev`. |
+| `EMBER_USE_BAKED_COMFY=0` | Ignore the baked ComfyUI; the app clones and pip-installs its own, which is the non-Docker behaviour. For a baked tree that turns out to be wrong. |
+| `EMBER_START_SOURCE=api` | Fetch the start script from the licence server instead of using the baked copy, so a fix there applies without a new image. |
+| `EMBER_IMAGE` | A published tag to run instead of a locally built one. |
+| `EMBER_DEV_SOURCE` | Set to `/src` by `docker-compose.dev.yml`; flips the entrypoint to run mounted source. |
+| `EMBER_DEV_IMAGE` | Dev compose only; defaults to `ember:dev`. |
 
 ## Next
 

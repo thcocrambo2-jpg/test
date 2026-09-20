@@ -75,7 +75,12 @@ function die(...lines) {
   process.exit(1);
 }
 
-/** KREA2-XXXX-…-last4: enough to tell two keys apart, not enough to use one. */
+/**
+ * `<prefix>-XXXX-…-last4`: enough to tell two keys apart, not enough to use
+ * one. The prefix is whatever the key carries — `EMBER-` on anything issued
+ * now, `KREA2-` on keys issued before the rename — so this reads it off the
+ * key rather than assuming one.
+ */
 function mask(key) {
   if (typeof key !== "string" || key.length < 8) return "(no key)";
   return `${key.split("-")[0]}-XXXX-…-${key.slice(-4)}`;

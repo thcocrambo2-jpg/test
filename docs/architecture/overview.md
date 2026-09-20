@@ -79,7 +79,7 @@ so `main()` checks the Krea 2 V2 packs, the MiniMax core node and the
 Krea 2 Edit pack itself rather than letting the first generation fail with
 a bare "node not found".
 
-`KREA2_SKIP_LAUNCH=1` stops after step 7: everything is installed and
+`EMBER_SKIP_LAUNCH=1` stops after step 7: everything is installed and
 running, nothing is served.
 
 ## The processes
@@ -90,11 +90,11 @@ On a running pod:
 | --- | --- | --- |
 | The app | 7860 | uvicorn — the API, the React bundle, the SSE stream |
 | ComfyUI | 8188 | the main instance, driven over HTTP and websocket |
-| ComfyUI (video) | 8189 | a second instance, only with `KREA2_WAN_PARALLEL=1` *and* the Video tab granted |
+| ComfyUI (video) | 8189 | a second instance, only with `EMBER_WAN_PARALLEL=1` *and* the Video tab granted |
 | `cloudflared` | — | a quick tunnel giving the app its public `*.trycloudflare.com` URL |
 
 The second ComfyUI instance is only worth its VRAM reservation when there
-is a Video tab to serve, so `KREA2_WAN_PARALLEL` on its own does not buy
+is a Video tab to serve, so `EMBER_WAN_PARALLEL` on its own does not buy
 one. When it exists, each instance reserves VRAM for the other
 (`--reserve-vram`) so the two can coexist on one GPU; the defaults are
 tuned for a 48 GB A40. The queue then gets a second lane — see

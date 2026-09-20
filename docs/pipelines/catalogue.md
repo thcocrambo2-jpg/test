@@ -57,7 +57,7 @@ Sources, in order:
 
 | Source | When |
 | --- | --- |
-| `KREA2_CATALOG_FILE=<json>` | a file in the same shape, instead of asking the server — what the dry run and the checks use |
+| `EMBER_CATALOG_FILE=<json>` | a file in the same shape, instead of asking the server — what the dry run and the checks use |
 | `POST /v1/catalog` | the live answer, saved to `BASE_DIR/.catalog.json` |
 | `.catalog.json` | the last live answer, when the server does not reply |
 

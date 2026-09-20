@@ -195,10 +195,10 @@ export function delivered({ key, nodeTag, planName, seats, expiresAt }) {
     "Set <b>both</b> of these on the machine you run the app on — it will",
     "not start with only the key:",
     "",
-    "<b>KREA2_LICENSE_KEY</b>",
+    "<b>EMBER_LICENSE_KEY</b>",
     `<code>${escape(key)}</code>`,
     "",
-    "<b>KREA2_NODE_TAG</b>",
+    "<b>EMBER_NODE_TAG</b>",
     `<code>${escape(nodeTag)}</code>`,
     "",
     `<b>${escape(planName)}</b> · ${seats} ${seats === 1 ? "machine" : "machines"} ` +
@@ -216,7 +216,7 @@ export function renewed({ key, planName, expiresAt, previousExpiry }) {
     `<b>${escape(planName)}</b> · runs until ${day(expiresAt)}` +
       (previousExpiry ? ` (was ${day(previousExpiry)})` : ""),
     "",
-    "<b>KREA2_LICENSE_KEY</b>",
+    "<b>EMBER_LICENSE_KEY</b>",
     `<code>${escape(key)}</code>`,
     "",
     "Your key has not changed, so there is nothing to update on your machine.",
@@ -300,9 +300,9 @@ export const NO_KEYS = [
 export function keyBlock({ key, planName, seats, expiresAt, active, nodeTag }) {
   const lines = [
     `<b>${escape(planName)}</b>` + (active ? "" : "  ·  revoked"),
-    "<b>KREA2_LICENSE_KEY</b>",
+    "<b>EMBER_LICENSE_KEY</b>",
     `<code>${escape(key)}</code>`,
-    "<b>KREA2_NODE_TAG</b>",
+    "<b>EMBER_NODE_TAG</b>",
     `<code>${escape(nodeTag)}</code>`,
     `${seats} ${seats === 1 ? "machine" : "machines"} at a time · ` +
       (expiresAt ? `runs until ${day(expiresAt)}` : "no expiry"),

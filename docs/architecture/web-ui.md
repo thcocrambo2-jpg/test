@@ -202,7 +202,7 @@ shell would be a lock whose key is inside the room. It is useless without
 one in any case — every route it calls is gated — so an unauthenticated
 visitor gets a page that immediately says so.
 
-`KREA2_UI_REQUIRE_TOKEN=1` makes the token mandatory rather than
+`EMBER_UI_REQUIRE_TOKEN=1` makes the token mandatory rather than
 advisory.
 
 ## Paths, uploads and media
