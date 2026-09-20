@@ -91,13 +91,20 @@ export class UnknownLicenseError extends ProvisionError {
   }
 }
 
-/** KREA2-XXXX-XXXX-XXXX from a rejection-free alphabet (no O/0/I/1). */
+/**
+ * EMBER-XXXX-XXXX-XXXX from a rejection-free alphabet (no O/0/I/1).
+ *
+ * The prefix is decoration, not a discriminator: a key is looked up by its
+ * whole string, so nothing anywhere reads these five characters to decide
+ * what a key is. That is what lets issued keys carry either prefix
+ * indefinitely without a migration.
+ */
 export function generateKey() {
   const alphabet = "ABCDEFGHJKLMNPQRSTUVWXYZ23456789";
   const bytes = randomBytes(12);
   const chars = [...bytes].map((b) => alphabet[b % alphabet.length]);
   return [
-    "KREA2",
+    "EMBER",
     chars.slice(0, 4).join(""),
     chars.slice(4, 8).join(""),
     chars.slice(8, 12).join(""),
