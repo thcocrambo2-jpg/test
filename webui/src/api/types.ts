@@ -28,9 +28,9 @@ export type FieldType =
  *  says; moving a control is a one-word edit in `tabMeta.ts`. */
 export type FieldColumn = 'left' | 'right'
 
-/** Show this field only when another field holds a given value. Gradio did
- *  this with `.change()` handlers wiring `gr.update(visible=…)`; here it is
- *  declarative and lives with the field it governs. */
+/** Show this field only when another field holds a given value. Declarative,
+ *  and living with the field it governs, so a control's visibility rule is
+ *  read in the same place as the control. */
 export interface FieldCondition {
   field: string
   equals: unknown
@@ -78,8 +78,9 @@ export interface Field {
 /** How a tab's LoRA tail is shaped.
  *
  *  Every stack submits triples (enabled, name, weight), because each row
- *  carries a per-row on/off checkbox (context.md §4.3). Getting the order
- *  wrong shifts every argument after it. The `name` part is a LoRA *id*
+ *  carries a per-row on/off checkbox — see "Submission order is
+ *  load-bearing" in `docs/architecture/web-ui.md`. Getting the order wrong
+ *  shifts every argument after it. The `name` part is a LoRA *id*
  *  from the licence server's catalogue, not a file name, or `"None"` for
  *  an empty slot. */
 export interface LoraSpec {
@@ -87,11 +88,13 @@ export interface LoraSpec {
   count: number
   /** The prefix values are sent under: `lora.0.weight`. */
   key: string
-  /** The stack's heading, verbatim from ui.py (it names the folder). */
+  /** The stack's heading, verbatim from the schema parity baseline (it
+   *  names the folder). */
   title: string
   /** Submission order *within* one slot. `call_args` on the Python side
    *  flattens slots x parts, so this is the thing that must not be
-   *  reordered — see context.md 4.3. */
+   *  reordered — see "Submission order is load-bearing" in
+   *  `docs/architecture/web-ui.md`. */
   parts: string[]
   /** LoRA ids this tab's feature offers, in the catalogue's order, with
    *  `"None"` first. Not a listing of the pod's disk: a LoRA the catalogue
@@ -137,7 +140,8 @@ export interface GroupSpec {
 export interface TabSchema {
   /** Feature key — the same string `features.enabled()` gates on. */
   key: string
-  /** Gradio `elem_id`-ish tab id from the baseline, kept for traceability. */
+  /** Tab id, spelled as the schema parity baseline that
+   *  `scripts/check_schema.py` compares against spells it. */
   tabId: string
   /** Python handler this tab submits to. */
   handler: string
@@ -190,13 +194,13 @@ export interface ModelRow {
   defaults: Record<string, number | boolean | null>
   /** Whether the weights are on this pod's disk. Only the server knows. */
   available: boolean
-  /** The markdown line the Gradio app printed under the dropdown. */
+  /** The markdown line shown under the Model dropdown. */
   info: string
 }
 
 /** Everything the forms need that is not a field: each feature's models, keyed
- *  by feature key, and the per-variant defaults the ~150 lines of `*_changed` handlers in ui.py
- *  were made of. Served whole so React applies them with no round trip. */
+ *  by feature key, and the per-variant defaults a model change applies. Served
+ *  whole so the browser applies them with no round trip. */
 export interface AppCatalog {
   tabs: TabSchema[]
   models: Record<string, ModelRow[]>
@@ -279,7 +283,7 @@ export interface QueueJob {
   error: string | null
   submitted: number
   place: number
-  /** jobqueue's own counter, stamped on this job's last change. The same
+  /** The server queue's own counter, stamped on this job's last change. The same
    *  one `display` carries, so a reader can tell whether the output it
    *  holds for the job is the output the job has now. */
   revision: number
@@ -325,9 +329,9 @@ export type StreamEvent =
 export type JobEvent =
   | { type: 'queued'; position: number }
   | { type: 'status'; text: string }
-  /** Mirrors client.py's {"type":"progress","step","total"} exactly.
-   *  `preview` is the decoded latent frame — unused today (context.md §4.12),
-   *  wired here so turning it on later is a backend-only change. */
+  /** Mirrors `ember/comfy/client.py`'s {"type":"progress","step","total"}
+   *  exactly. `preview` is the decoded latent frame — nothing sends one
+   *  today, and it is wired here so turning it on is a backend-only change. */
   | { type: 'progress'; step: number; total: number; preview?: string }
   | { type: 'done'; images: MediaItem[]; seed?: number }
   | { type: 'error'; message: string }

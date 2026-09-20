@@ -12,9 +12,9 @@ const CURRENCY_SYMBOLS: Record<string, string> = {
   INR: '₹',
 }
 
-/** Money, the way theme.py:_SYMBOLS does it: a symbol where we know one, and
- *  the plain code otherwise ("42 CHF") — correct if less pretty, and better
- *  than guessing a symbol for a currency we do not know. */
+/** Money: a symbol where we know one, and the plain code otherwise
+ *  ("42 CHF") — correct if less pretty, and better than guessing a symbol
+ *  for a currency we do not know. */
 export function money(amount: number, currency: string): string {
   const rounded = Number.isInteger(amount) ? amount : Math.round(amount)
   const grouped = rounded.toLocaleString('en-IN')
@@ -215,10 +215,10 @@ export function useMediaQuery(query: string): boolean {
 
 /** A tab label with its leading emoji removed.
  *
- *  `features.label_for()` returns "🎨 Krea2" — the emoji is part of the
- *  string because a Gradio tab had nowhere else to put one. The schema
- *  carries `icon` separately and every surface here renders the two apart,
- *  so without this the icon appears twice: "🎨 🎨 Krea2".
+ *  `features.label_for()` returns "🎨 Krea2", with the emoji part of the
+ *  string. The schema carries `icon` separately and every surface here
+ *  renders the two apart, so without this the icon appears twice:
+ *  "🎨 🎨 Krea2".
  *
  *  Only a *leading* pictographic run is taken, and only when something is
  *  left after it. The label is the one field an admin edits in Atlas rather

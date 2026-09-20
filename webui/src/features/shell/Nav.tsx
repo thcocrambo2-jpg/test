@@ -18,15 +18,15 @@ interface Item {
 /*
  * Grouped navigation, and a route per tab.
  *
- * Two things the Gradio app could not have: a URL you can bookmark or send to
- * someone (seven `gr.Tab`s share one URL), and a grouping that says which of
- * them make a picture and which of them change one.
+ * Every tab has a URL you can bookmark or send to someone, and the grouping
+ * says which of them make a picture from nothing and which of them change one
+ * you already have.
  *
- * A tab absent from the licence is absent from here. That is the same render
- * gate as `ui.py:5139` — and, as context.md §4.5 records, in FastAPI the
- * render gate stops being the whole story, because a route registered
- * unconditionally is reachable whatever the nav shows. Closing that is
- * Section 2's job; this is only the visible half.
+ * A tab absent from the licence is absent from here — but this render gate is
+ * only the visible half, because a route registered unconditionally would be
+ * reachable whatever the nav shows. The enforcement that counts is
+ * server-side: see "The licence gate on the API" in
+ * `docs/architecture/licensing-and-features.md`.
  */
 export function Nav() {
   const { data: schemas, isLoading } = useSchemas()

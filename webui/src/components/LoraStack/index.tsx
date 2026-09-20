@@ -11,7 +11,8 @@ import s from '@/components/SchemaForm/form.module.css'
  * Every stack submits **triples** (enabled, name, weight), and each row
  * carries a per-row on/off checkbox. Getting that order wrong shifts every
  * argument after the stack, silently, and the pictures come back subtly
- * wrong rather than the request failing. See context.md §4.3.
+ * wrong rather than the request failing. See "Submission order is
+ * load-bearing" in `docs/architecture/web-ui.md`.
  *
  * The `name` in each triple is a LoRA id from the licence server's catalogue
  * and the dropdown shows that LoRA's name (`spec.choiceLabels`). An id is
@@ -39,8 +40,8 @@ export function LoraStack({
     return Boolean(values[`lora.${index}.enabled`])
   })
 
-  // A stack of eight "None" dropdowns is eight rows of nothing, which is what
-  // the Gradio tabs show. Collapsed by default, with the count on the header.
+  // A stack of eight "None" dropdowns is eight rows of nothing, so the tail
+  // is collapsed by default, with the count on the header.
   const nothingToConfigure = spec.count === 0
 
   return (

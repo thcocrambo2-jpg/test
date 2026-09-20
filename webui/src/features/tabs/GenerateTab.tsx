@@ -77,14 +77,12 @@ export function GenerateTab({ schema }: { schema: TabSchema }) {
   /* The button is disabled while the *submission* is in flight, and for no
    * other reason.
    *
-   * It used to be disabled for as long as the active run was live, which
-   * quietly reinstated the behaviour the queue was built to remove:
-   * Gradio's `trigger_mode="once"` left the button dead for the whole
-   * render, so a second idea had to wait for the first to finish and for
-   * somebody to be sitting there to click again. jobqueue exists to end
-   * that — a click only records the work and returns in microseconds, and
-   * a lane runs its jobs one at a time in arrival order. Refusing the
-   * second click is refusing to let anything queue behind the first.
+   * Disabling it for as long as the active run is live would undo the whole
+   * point of the queue: a second idea would have to wait for the first to
+   * finish and for somebody to be sitting there to click again. A click only
+   * records the work and returns in microseconds, and a lane runs its jobs
+   * one at a time in arrival order — so refusing the second click is
+   * refusing to let anything queue behind the first.
    *
    * What remains is the round trip itself: uploads go up before the job is
    * recorded, so on an image tab this is a real wait and a double click
@@ -93,9 +91,9 @@ export function GenerateTab({ schema }: { schema: TabSchema }) {
   const waiting = runs.filter(isLive).length
 
   /* The line under the Model dropdown — variant, its step and CFG defaults,
-   * whether the weights are actually on this pod. The Gradio app had it and
-   * the React one did not; it is a hint rather than a field because
-   * "not downloaded yet" is a fact about the disk, not about the control.
+   * whether the weights are actually on this pod. It is a hint rather than a
+   * field because "not downloaded yet" is a fact about the disk, not about
+   * the control.
    *
    * Looked up by id, which is what the dropdown holds. Its label is the
    * model's name, but a name is not a key: it is free text in the DB, and
@@ -182,12 +180,10 @@ export function GenerateTab({ schema }: { schema: TabSchema }) {
 
   /* Picking a model resets the dials that belong to it.
    *
-   * This is what `krea_model_changed` and `v2_model_changed` did — Gradio
-   * `.change()` wiring over model data compiled into the binary. The models
-   * now come from the licence server's catalogue, and each tab's list
-   * arrives whole in `/catalog` under its feature key, so it happens here
-   * with no round trip, and the same four lines serve every tab with a
-   * Model dropdown. `model` below is the selected model's *id*, and the row
+   * The models come from the licence server's catalogue, and each tab's list
+   * arrives whole in `/catalog` under its feature key, so this happens in the
+   * browser with no round trip, and the same four lines serve every tab with
+   * a Model dropdown. `model` below is the selected model's *id*, and the row
    * is found by id for the reason given at `hints`.
    *
    * Only on an actual *change*, and only one the customer made — which is
@@ -249,8 +245,8 @@ export function GenerateTab({ schema }: { schema: TabSchema }) {
     }
   }, [schema, submitJob, values])
 
-  // The shortcut the footer advertises. It was injected JS in theme.py; here
-  // it is bound while this tab is mounted and unbound when it is not.
+  // The shortcut the footer advertises. Bound while this tab is mounted and
+  // unbound when it is not, so it always runs the tab you are looking at.
   useSubmitHotkey(() => {
     if (!submitting) void submit()
   })

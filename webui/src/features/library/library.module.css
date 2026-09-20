@@ -1,9 +1,8 @@
 /* The prompt library.
  *
- * Gradio's version was twelve fixed gr.Column cards in a grid whose column
- * count is a build-time constant (LIBRARY_CARDS), because a Blocks tree is
- * constructed once at import and cannot grow a component later. Here the grid
- * is auto-fill, so the page uses whatever width it is given. */
+ * The card grid is auto-fill rather than a fixed column count, so the page
+ * uses whatever width it is given and a card is never cut off by a number
+ * chosen at build time. */
 
 .filters {
   display: flex;

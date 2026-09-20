@@ -6,14 +6,14 @@ import s from '@/components/SchemaForm/form.module.css'
 
 /** Seed, "Random seed", Batch count.
  *
- *  This trio is byte-identical on five of the seven tabs in ui.py — the same
- *  three constructor calls with the same arguments, copied. It is one
- *  component here, and the only reason it takes fields rather than hardcoding
- *  labels is that the labels still come from the parity baseline.
+ *  The same trio sits on five of the seven tabs, so it is one component
+ *  rather than five copies. It takes fields rather than hardcoding the labels
+ *  because those labels come from the schema and are compared to the parity
+ *  baseline character for character.
  *
- *  The dice button is the addition: with "Random seed" ticked the number box
- *  is dead weight, and with it unticked there was no way to get a fresh seed
- *  without typing sixteen digits. */
+ *  The dice button earns its place: with "Random seed" ticked the number box
+ *  is dead weight, and with it unticked there is otherwise no way to get a
+ *  fresh seed without typing sixteen digits. */
 export function SeedRow({
   seed,
   randomize,

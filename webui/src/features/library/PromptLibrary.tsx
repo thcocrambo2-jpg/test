@@ -22,8 +22,8 @@ import s from './library.module.css'
  * normal case, not the edge case.
  *
  * A card for a tab this licence does not grant still renders. It just cannot
- * be used, and it says so — which is what the Gradio version did, and is
- * better than pretending the prompt does not exist.
+ * be used, and it says so, which is better than pretending the prompt does
+ * not exist.
  */
 
 const PAGE = 12

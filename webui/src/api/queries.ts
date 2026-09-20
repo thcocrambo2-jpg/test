@@ -46,7 +46,7 @@ const EMPTY_MODELS: ModelRow[] = []
  *
  *  The save happens on the worker thread, wherever the job eventually ran,
  *  so nothing else is in a position to notice that this list went stale —
- *  which is what jobqueue.note_preset_saved and the `presets` stream event
+ *  which is what `queue.note_preset_saved` and the `presets` stream event
  *  exist for. */
 export function usePresets(tab: string | null) {
   const revision = useQueue((state) => (tab ? (state.presetRevision[tab] ?? 0) : 0))

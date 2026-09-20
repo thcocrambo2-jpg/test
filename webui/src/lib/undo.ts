@@ -3,10 +3,8 @@ import { useCallback, useEffect, useRef, useState } from 'react'
 /*
  * Undo/redo history for a controlled textarea.
  *
- * The browser gives a `<textarea>` its own undo stack, and with Gradio no
- * longer re-rendering the box, Ctrl+Z reaches it again. That covers one case
- * of four, which is why this exists — measured against `theme.py`'s injected
- * version (:2881-3037) before that file was deleted:
+ * The browser gives a `<textarea>` its own undo stack, and Ctrl+Z reaches
+ * it. That covers one case of four, which is why this exists:
  *
  *   | capability                          | native | here |
  *   | Ctrl+Z / Ctrl+Shift+Z on a desktop  |  yes   | yes  |
@@ -22,9 +20,10 @@ import { useCallback, useEffect, useRef, useState } from 'react'
  *
  * Row two is not theoretical either. A controlled React textarea rewrites its
  * value on every keystroke, which splits the native stack into one entry per
- * *character* — 200 presses to undo a prompt. `theme.py:2996` called that
- * "worse than no undo at all" and it was right; the same 450 ms coalesce is
- * kept here for the same reason.
+ * *character* — 200 presses to undo a prompt, which is worse than no undo at
+ * all. The 450 ms coalesce below is what keeps one entry to one typing burst.
+ *
+ * The four cases are written up in `docs/features/undo-redo.md`.
  */
 
 // A pause this long, or a word boundary, closes the current entry.

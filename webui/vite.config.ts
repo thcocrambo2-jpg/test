@@ -3,8 +3,9 @@ import react from '@vitejs/plugin-react'
 import { fileURLToPath, URL } from 'node:url'
 
 // One JS chunk, no sourcemap — deliberate, and not a performance oversight.
-// The bundle is later embedded into the Nuitka binary (see context.md §4.7/§4.8)
-// and served out of process memory, so:
+// The build is committed and embedded into the Nuitka binary, then served
+// out of process memory — see "Why the React bundle is committed" in
+// docs/architecture/web-ui.md — so:
 //   * code-splitting buys nothing — there is no CDN, no HTTP cache, no second visit;
 //   * a runtime import() of a chunk the embedder did not register is a hard 404;
 //   * a sourcemap would ship the whole source tree inside a commercial binary.
@@ -20,9 +21,8 @@ export default defineConfig({
     //   conda run -n krea2 python scripts/dryrun.py --features all --api-only
     //
     // /media and /thumbs are proxied as well as /api because a generated
-    // image is served by the Python side too — they replaced Gradio's
-    // allowed_paths, so there is no static directory for Vite to serve them
-    // from.
+    // image is served by the Python side too: there is no static directory
+    // for Vite to serve them from.
     proxy: {
       '/api': {
         target: 'http://127.0.0.1:7860',

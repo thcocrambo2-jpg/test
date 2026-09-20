@@ -5,13 +5,11 @@ import { cx } from '@/lib/util'
 /*
  * The ClownsharKSampler block, and the variance block beside it.
  *
- * Both are duplicated between Krea2 V2 and Krea2 V2 Edit in ui.py, and in
- * both tabs they were built into the *output* column — the only two tabs in
- * the app where Steps, CFG and Sampler are not with the other controls.
- * `tabMeta.ts` puts them back on the left; these two components are what
- * renders them once instead of twice.
+ * Krea2 V2 and Krea2 V2 Edit both carry these two blocks, so one pair of
+ * components renders them rather than a copy per tab, and `tabMeta.ts` keeps
+ * them in the left column with every other control.
  *
- * The fields themselves are ordinary and come from the baseline. What the
+ * The fields themselves are ordinary and come from the schema. What the
  * panels add is order: the things you change land above the things you set
  * once, rather than in signature order.
  */
@@ -50,8 +48,9 @@ export function SamplerPanel({ fields, render }: PanelProps) {
 export function VariancePanel({ fields, render }: PanelProps) {
   // The preset drives the rest, so it goes first and full width; the
   // step-window pair (cutoff_step / total_steps) stays adjacent because
-  // reversing those two is the exact silent regression parity.py was built to
-  // catch (context.md §4.2).
+  // reversing those two is exactly the silent regression
+  // `scripts/check_schema.py` compares against `parity_baseline.json` to
+  // catch — see `docs/development/checks.md`.
   const list = ordered(fields, [
     'variance_preset',
     'fine_tune_variance',

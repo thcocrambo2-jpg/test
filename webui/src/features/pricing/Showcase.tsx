@@ -8,16 +8,11 @@ import s from './pricing.module.css'
 /*
  * The feature showcase, rendered from JSON.
  *
- * `showcase.showcase()` already returns structured dataclasses — Showcase →
- * Section → Block → Media — and `showcase_html` (theme.py:3827) walks that
- * tree emitting several hundred lines of string-concatenated HTML because
- * that is the only thing `gr.HTML` accepts. Here the same tree is rendered by
- * components, and the recursion that `Block.blocks` was designed for (a split
- * putting prose beside a compare; a pair sitting two compares side by side)
- * is a recursive component instead of nested f-strings.
- *
- * The lightbox is a real one. The Gradio version is CSS-only, and the comment
- * at theme.py:1724 says why: `gr.HTML` strips `<script>`.
+ * `showcase.showcase()` returns structured dataclasses — Showcase → Section
+ * → Block → Media — and this renders that tree with components, so the
+ * recursion `Block.blocks` was designed for (a split putting prose beside a
+ * compare; a pair sitting two compares side by side) is a recursive component
+ * rather than nested string building.
  */
 export function ShowcaseSections({ sections }: { sections: ShowcaseSection[] }) {
   const [viewing, setViewing] = useState<ShowcaseMedia | null>(null)

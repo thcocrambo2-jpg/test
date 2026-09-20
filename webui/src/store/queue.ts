@@ -13,30 +13,26 @@ import type {
 /*
  * The job queue.
  *
- * Three of the six UX defects this rewrite exists to fix live in this file:
+ * Three things this store makes possible:
  *
- *   * There is no progress bar today. Status is a string in a textbox polled
- *     once a second, even though client.py:270 has been yielding
- *     {"type":"progress","step","total"} the whole time. `progress` below is
- *     that pair and the bar is determinate as a result. The server parses it
- *     back out of the status line for now — see api._progress_pair, which
+ *   * A determinate progress bar. `ComfyClient.run` yields
+ *     {"type":"progress","step","total"}; `progress` below is that pair, so
+ *     the bar is a real bar and not a status string. The server parses it
+ *     back out of the status line for now — see `api._progress_pair`, which
  *     says plainly that it is a bridge.
  *
- *   * Errors are invisible today. Every failure is a `❌ …` string written
- *     into the same textbox the next poll overwrites. Here an error is a
- *     field on the job, it survives until someone dismisses it, and the job
- *     stays in the list carrying it.
+ *   * Errors that survive. An error is a field on the job, it stays until
+ *     someone dismisses it, and the job stays in the list carrying it.
  *
- *   * The queue itself was never visible. Jobs are addressable by id, so an
- *     alert can be keyed to the run that produced it.
+ *   * A queue you can see. Jobs are addressable by id, so an alert can be
+ *     keyed to the run that produced it.
  *
- * What changed in Section 2: the queue is no longer this store's own idea.
- * It is process-wide on the server, because there is one GPU behind it, and
- * two browser tabs open on the same pod see one queue — which is the truthful
- * picture. So `connect()` opens one SSE stream, the `queue` event *is* the
- * job list, and this store's job is to merge the server's truth with the two
- * things only the browser knows: which run each tab is looking at, and which
- * errors have been dismissed.
+ * The queue is not this store's own idea. It is process-wide on the server,
+ * because there is one GPU behind it, and two browser tabs open on the same
+ * pod see one queue — which is the truthful picture. So `connect()` opens one
+ * SSE stream, the `queue` event *is* the job list, and this store's job is to
+ * merge the server's truth with the two things only the browser knows: which
+ * run each tab is looking at, and which errors have been dismissed.
  */
 
 export type JobStatus = 'queued' | 'running' | 'done' | 'error' | 'cancelled'
@@ -49,8 +45,8 @@ export interface Job {
   /** The last human sentence the backend sent. */
   statusText: string
   progress: { step: number; total: number } | null
-  /** Decoded latent preview, when the backend is sending them
-   *  (context.md §4.12 — available and currently unused). */
+  /** Decoded latent preview, when the backend is sending them. The field is
+   *  wired all the way through; nothing sends one today. */
   preview: string | null
   queuePosition: number | null
   images: MediaItem[]
@@ -64,7 +60,7 @@ export interface Job {
   /** When a running job expects to be done, on this browser's clock (ms),
    *  or null when the server has no estimate. See useEta. */
   etaAt: number | null
-  /** jobqueue's stamp on this job's last change — what makes "is the
+  /** The server queue's stamp on this job's last change — what makes "is the
    *  output I hold for this job the output it has now?" answerable. */
   revision: number
 }
@@ -112,7 +108,7 @@ interface QueueState {
 }
 
 /** Cap the list so a long session does not accumulate hundreds of finished
- *  jobs (and their image URLs) in memory. The server keeps 20 (jobqueue.
+ *  jobs (and their image URLs) in memory. The server keeps 20 (`queue.
  *  HISTORY); this is looser because a job the server has forgotten is still
  *  worth showing in the run picker until the page is reloaded. */
 const MAX_JOBS = 40
@@ -147,7 +143,7 @@ const STATUS: Record<QueueJob['status'], JobStatus> = {
   cancelled: 'cancelled',
 }
 
-/** The server statuses that are over — jobqueue.FINISHED, in the browser's
+/** The server statuses that are over — `queue.FINISHED`, in the browser's
  *  spelling of the wire values. */
 const FINISHED = new Set<QueueJob['status']>(['done', 'failed', 'cancelled'])
 
@@ -192,7 +188,7 @@ function merge(row: QueueJob, previous: Job | undefined): Job {
  *
  *  Keyed by the tab's own `resultKeys`, so the video tab's "videos" arrives
  *  under that name rather than as position 0 — which is the whole reason
- *  jobqueue stopped carrying a status_index int. */
+ *  the server queue stopped carrying a status_index int. */
 function mediaOf(result: DisplayResult): MediaItem[] {
   if (Array.isArray(result.videos)) return result.videos
   if (Array.isArray(result.images)) return result.images
@@ -218,7 +214,7 @@ function mediaOf(result: DisplayResult): MediaItem[] {
  * tab *shows* was never this map's business and is not inferred from it:
  * that is `activeByTab`, which the queue has always stated outright.
  *
- * The revision is jobqueue's own counter for that job — the same integer
+ * The revision is the server queue's own counter for that job — the same integer
  * the queue snapshot carries — which is what makes "is the output I hold
  * for this job the output it has now?" answerable without asking, and
  * what orders two answers about one run that arrive out of order.
@@ -286,7 +282,7 @@ export const useQueue = create<QueueState>((set, get) => {
           /* A job that was already over the first time this browser heard
            * of it is not shown at all.
            *
-           * The server keeps the last 20 finished jobs (jobqueue.HISTORY)
+           * The server keeps the last 20 finished jobs (`queue.HISTORY`)
            * so that a tab can read its gallery back out of them, and sends
            * the lot on connect. But the images live only in this browser —
            * the queue event carries none, and `display` replays exactly one
@@ -460,7 +456,7 @@ export const useQueue = create<QueueState>((set, get) => {
                 }
               } else {
                 /* The server has nothing under that id: the run has aged
-                 * out of jobqueue's twenty-deep history, or it never got
+                 * out of the server queue's twenty-deep history, or it never got
                  * there at all. Marked at the revision the request was
                  * decided under so the next round stops asking — without
                  * this the round would repeat forever, once every 1.5
@@ -629,7 +625,7 @@ export function isLive(job: Job): boolean {
  *  revision each request is being decided under. Newest first.
  *
  *  One question with an exact answer, where this used to be a heuristic.
- *  jobqueue stamps every change to a job with a revision and the queue
+ *  The server stamps every change to a job with a revision and the queue
  *  snapshot carries it; `DISPLAY_SEEN` holds the revision whose output
  *  this browser has actually applied. Different means there is something
  *  to collect. That is a running job on every round as its batch grows, a

@@ -1,4 +1,4 @@
-// The variance block lives beside the sampler block: the two are duplicated
-// together in ui.py, are read together, and share `ordered()`. Kept as its own
-// module path because the suggested structure names both.
+// The variance block lives beside the sampler block: the two always appear
+// together, are read together, and share `ordered()`, so one module renders
+// both. This path exists so each block can be imported under its own name.
 export { VariancePanel } from '@/components/SamplerPanel'
