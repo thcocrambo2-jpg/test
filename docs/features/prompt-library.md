@@ -131,4 +131,4 @@ you have not bought can do is exactly the thing worth seeing.
 
 - [presets](presets.md) — the same settings blob and the same guarding,
   minus the words.
-- `docs/architecture/licensing-and-features.md` — what `is_admin` is not.
+- [Licensing and features](../architecture/licensing-and-features.md) — what `is_admin` is not.

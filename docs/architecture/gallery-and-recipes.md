@@ -119,7 +119,7 @@ Three things are deliberately left out:
 Because `.recipes.jsonl` on live pods is keyed positionally and read back
 by label, **a reworded label or a moved control orphans history
 silently.** That is why `scripts/check_schema.py --choices` guards every
-label; see `docs/development/checks.md`.
+label; see [Checks](../development/checks.md).
 
 ### Where it is kept
 

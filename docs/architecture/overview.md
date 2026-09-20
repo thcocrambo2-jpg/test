@@ -53,7 +53,7 @@ choices offered and the Krea 2 V2 slot count from ever disagreeing. It is
 stdlib-only too, so it also runs ahead of pip. A server that does not
 answer degrades to the last saved copy in `BASE_DIR/.catalog.json`, then
 to an empty catalogue that only the Krea tabs notice. See
-`docs/pipelines/catalogue.md`.
+[Catalogue](../pipelines/catalogue.md).
 
 **Setup before downloads, and PyTorch before ComfyUI.**
 `setup.ensure_torch()` runs before `setup.install_comfyui()` because
@@ -109,7 +109,7 @@ Two services live off the machine:
   or empty answer rather than failing the app.
 - **R2**, which holds the published binaries. The app never talks to it;
   the start scripts fetch the build through the licence API before the app
-  exists. See `docs/releasing/publishing.md`.
+  exists. See [Publishing](../releasing/publishing.md).
 
 Weights come from Hugging Face and CivitAI, through a mirror when one is
 reachable. [`ember/weights/mirror.py`](../../ember/weights/mirror.py)
@@ -171,7 +171,7 @@ without one; a package `__init__` that imported its siblings would drag
 that into the Docker bake stage and into every laptop script.
 `scripts/check_imports.py` enforces it, along with the rule that
 `settings.py` is the only module reading the environment. See
-`docs/development/conventions.md`.
+[Conventions](../development/conventions.md).
 
 ## Where to read next
 

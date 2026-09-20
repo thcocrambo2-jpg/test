@@ -55,4 +55,4 @@ what keeps the keyboard open and the caret in place between taps.
 
 - [presets](presets.md) and [prompt library](prompt-library.md) — the
   programmatic writes row three and four are about.
-- `docs/architecture/web-ui.md` — the front end this hook lives in.
+- [Web UI](../architecture/web-ui.md) — the front end this hook lives in.

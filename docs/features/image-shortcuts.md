@@ -58,7 +58,7 @@ last.
 
 ## Related
 
-- `docs/architecture/gallery-and-recipes.md` — the listing the strip
+- [Gallery and recipes](../architecture/gallery-and-recipes.md) — the listing the strip
   reads.
 - [krea2.md](../pipelines/krea2.md) and [minimax.md](../pipelines/minimax.md)
   — what the tabs do with the image once it is in.

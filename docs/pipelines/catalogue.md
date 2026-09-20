@@ -8,7 +8,7 @@ The Krea diffusion models and the style LoRAs are **not compiled into the
 binary**. They live in the licence-server database, and the pod reads them
 at startup. The database side — the collections, the admin CLI, the
 validation rules — is documented in
-`license-validator/docs/catalogue-data.md`; this page is the pod's half.
+[Catalogue data](../../license-validator/docs/catalogue-data.md); this page is the pod's half.
 
 ## The three collections
 
@@ -145,5 +145,5 @@ and `ember/weights/downloads.py` the transport. Most CivitAI files need
   [prompt library](../features/prompt-library.md) — both store catalogue
   ids, and both check them against what this build offers before applying
   anything.
-- `docs/architecture/licensing-and-features.md` — which features a licence
+- [Licensing and features](../architecture/licensing-and-features.md) — which features a licence
   grants in the first place.

@@ -63,7 +63,7 @@ also share compute, so each runs slower while they overlap.
 `KREA2_WAN_PARALLEL` only buys a second ComfyUI instance when `wan_i2v`
 is granted. The parallel knobs are environment, so they live in
 [`ember/settings.py`](../../ember/settings.py) rather than with the model
-facts; see `docs/configuration.md`.
+facts; see [Configuration](../configuration.md).
 
 ## Disk
 
@@ -75,4 +75,4 @@ ComfyUI itself needs a **≥ 100 GB** disk; a 120 GB volume fits with about
 
 - [minimax.md](minimax.md) — the other video pipeline, which comes back
   with sound and never rides the parallel instance.
-- `docs/architecture/job-queue.md` — the lanes video jobs run in.
+- [Job queue](../architecture/job-queue.md) — the lanes video jobs run in.

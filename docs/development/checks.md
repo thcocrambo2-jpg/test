@@ -295,7 +295,7 @@ changes ago all read exactly like working documentation.
    file name is a dead end.
 2. **Every environment variable is documented.** `ember/settings.py`'s
    docstring table is the list of everything the app reads from the
-   environment, and `docs/configuration.md` is where somebody running the
+   environment, and [Configuration](../configuration.md) is where somebody running the
    app looks one up. The docstring is the source of truth; the rule only
    asks that the page has heard of each name.
 3. **Nothing still names a file that is gone.** A comment that points at

@@ -128,7 +128,7 @@ than raising:
   makes the node pre-encode at execution time instead of during the first
   sampling step, so the diffusion model is not evicted mid-run on a GPU
   that is already sharing VRAM with a second ComfyUI instance (see
-  `KREA2_MAIN_RESERVE_VRAM` in `docs/configuration.md`).
+  `KREA2_MAIN_RESERVE_VRAM` in [Configuration](../configuration.md)).
 
 ### Controls that belong to editing alone
 

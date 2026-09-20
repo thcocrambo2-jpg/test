@@ -93,4 +93,4 @@ grep -iE 'segmentation fault|CUDA' comfyui.log
 
 `Killed process` in `dmesg -T` means the OOM killer. A `Segmentation
 fault` or a CUDA error in the log points at a custom node instead. More in
-`docs/troubleshooting.md`.
+[Troubleshooting](../troubleshooting.md).

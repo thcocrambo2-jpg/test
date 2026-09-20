@@ -144,7 +144,7 @@ and scroll.
 
 ## Related
 
-- `docs/architecture/licensing-and-features.md` — the acquire response,
+- [Licensing and features](../architecture/licensing-and-features.md) — the acquire response,
   `features`, and what a plan is.
-- `docs/configuration.md` — `KREA2_SHOWCASE_URL` and the rest.
-- `docs/running/dry-run.md` — the no-GPU preview.
+- [Configuration](../configuration.md) — `KREA2_SHOWCASE_URL` and the rest.
+- [Dry run](../running/dry-run.md) — the no-GPU preview.

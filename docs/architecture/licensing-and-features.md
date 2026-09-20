@@ -145,5 +145,5 @@ downloaded" anyway. One tab has no weights at all: `community_prompts`
 declares `needs=()`, so for it the four layers are the whole of the gate.
 
 The server lives in `license-validator/` — see its README for issuing keys
-and deploying, and `license-validator/docs/plans-and-entitlements.md` for
+and deploying, and [Plans and entitlements](../../license-validator/docs/plans-and-entitlements.md) for
 how a plan resolves into a feature list.
