@@ -1,11 +1,22 @@
 # license-validator
 
-Seat-limited license server for the Krea 2 app. One customer gets one key;
+Seat-limited licence server for the Krea 2 app. One customer gets one key;
 the key allows N concurrent running instances **and decides which tabs
 they get**. It exists so the Atlas connection string stays on a server
 instead of inside a binary handed to customers — extracting a read-write
 credential from a shipped executable is one `strings` invocation, and the
 damage there is every customer's records, not just one bypassed check.
+
+## The rest of the docs
+
+| Page | What is in it |
+| --- | --- |
+| [Plans and entitlements](docs/plans-and-entitlements.md) | Plans, how a key resolves to a feature list, the feature-key registry |
+| [Endpoints](docs/endpoints.md) | Every route, and the status-code contract |
+| [Catalogue data](docs/catalogue-data.md) | Models, LoRAs, per-tab lists, settings blobs, validation |
+| [Build distribution](docs/build-distribution.md) | R2, channels, per-platform builds, pinning and rollback |
+| [Telegram bot](docs/telegram-bot.md) | Selling licences in Telegram Stars, and unsticking an order |
+| [Data](docs/data.md) | Every collection, field by field, and the indexes |
 
 ## Design
 
@@ -33,398 +44,9 @@ restarts the app on the same pod reclaims its own seat rather than
 spending a second one. The Python side prefers `RUNPOD_POD_ID` for this
 exact reason.
 
-## Plans and entitlements
-
-Which tabs a key grants is the only thing that decides them — the app has
-no environment variable that can switch a tab on, so a customer cannot
-grant themselves Wan's ~49 GB by editing their pod template.
-
-A license names a **plan** rather than a feature list. The server resolves
-it at request time, so editing one plan document moves every customer on
-that tier instead of requiring a bulk update across `licenses`.
-
-```bash
-npm run seed-catalog                                             # once, and after editing plans
-npm run issue-key -- --name "Acme Corp" --plan creator --seats 2
-npm run issue-key -- --key KREA2-XXXX-XXXX-XXXX --plan studio --update
-npm run issue-key -- --key KREA2-XXXX-XXXX-XXXX --features-extra "wan_i2v" --update
-```
-
-### Shipped plans
-
-| Plan | ₹/mo | Grants |
-| --- | --- | --- |
-| `starter` | 599 | krea_t2i, gallery, community_prompts |
-| `creator` | 999 | + krea_v2_t2i, krea_edit, krea_v2_edit |
-| `studio` | 1799 | + wan_i2v, minimax_i2v, minimax_t2v |
-| `admin` | 0 | everything; `is_public: false` |
-
-Three public tiers since 2026-09-07. `pro` was deleted that day (no
-license was on it). `krea_t2i` is turbo-only by its model list (the Raw model is
-not in `feature_assets.krea_t2i` — see [Models and LoRAs](#models-and-loras)),
-which is why V2 — turbo and raw — starts at Creator.
-
-Prices are **documentation, not enforcement.** Nothing here charges anyone;
-`expires_at` is the only lever that actually stops a key working.
-
-`seats` is deliberately not a plan field. Seat count lives on the license
-because it is per-deal negotiable, and resolving it through the plan would
-mean an edit to `studio` retroactively changed how many pods every studio
-customer may run.
-
-### Resolution order
-
-| On the license | Result |
-| --- | --- |
-| `features` is an array | exactly that, plan ignored |
-| `plan_id` is set | `plan.features` + `license.features_extra` |
-| neither | `null` — the app's built-in defaults, with a warning |
-
-Rule 1 is why this needed no migration: every key issued before plans
-existed carries a `features` array and behaves exactly as it did. It is
-also the escape hatch for a deal that fits no tier — but prefer
-`features_extra`, which keeps the customer on a plan and so keeps them
-moving when the plan moves. `--plan` on an `--update` clears any literal
-array and says so, since a leftover one would silently win and make the
-new plan a no-op.
-
-An empty `features: []` is a deliberate "this key starts and does
-nothing", not "no opinion" — it overrides a plan like any other array.
-
-### Rules worth keeping
-
-- **Plans never leave `seatPayload()`.** `/v1/acquire` answers with a flat
-  `features` array exactly as before, so the Python client knows nothing
-  about tiers and needs no rebuild for any of this.
-- **A `plan_id` naming nothing is a 503**, not a downgrade. Falling back to
-  the client's defaults would hand a Studio customer three tabs and look
-  like their fault; granting everything would be worse. 503 is retryable,
-  rides the client's grace window, and puts the reason in the log.
-- **Never delete a plan that has licenses on it.** `seed-catalog` refuses
-  to delete anything and reports orphans; `/v1/admin/plans` shows the
-  license count per plan, which is the number to check before editing one.
-- **The `FEATURES` registry in `src/features.js` is used at issue time
-  only**, never to filter what `/v1/acquire` returns. The app and this
-  service deploy separately, so a key granting a tab that shipped before
-  this list was updated must still work. Typos are caught where they are
-  made instead.
-- **`all` and `none` are expanded when the key is written**, not stored as
-  sentinels. Reading a license then never requires knowing what `all` meant
-  on the day it was issued.
-- **`plan_name` and `expires_at` on the payload are labels.** The app's own
-  header shows the tier and the date next to the brand, and the pricing
-  page marks the tier as "Your plan" — nothing branches on either. Expiry
-  is enforced here, in `licenseProblem()`, on every acquire and every
-  heartbeat, so a client that ignores the date (any build before this field
-  existed) is no less bounded by it. `null` means the key never expires,
-  and the header then shows no date rather than "expires never".
-
-`features` rides on every 200 — acquire, where the client applies it, and
-heartbeat, where a change makes a running instance log that it needs a
-restart. It is deliberately not applied live: tabs are built once at
-launch and a newly granted tab has no weights on disk behind it. Note this
-now applies to **plan** edits too: changing `creator` tells every running Creator
-customer, within a heartbeat, that they should restart.
-
-## Feature keys
-
-Keys are permanent; names are not. A key is written into license documents
-and compiled into every shipped binary, so renaming one silently drops that
-tab for anyone on an older build. `name`, `description` and `category` are
-display-only — fix naming there.
-
-Model-bound tabs use `<model>_<task>`; tabs that are not tied to a model
-keep a plain name.
-
-| Key | Name | Category |
-| --- | --- | --- |
-| `krea_t2i` | Single / Simple Batch | generation |
-| `krea_v2_t2i` | Krea 2 V2 | generation |
-| `krea_edit` | Krea Edit — Instruction | editing |
-| `krea_v2_edit` | Krea2 V2 Edit | editing |
-| `wan_i2v` | Wan 2.2 Video | video |
-| `minimax_i2v` | MiniMax H3 Video (image-to-video, with sound) | video |
-| `minimax_t2v` | MiniMax H3 Text to Video (with sound) | video |
-| `gallery` | Gallery | tools |
-
-Four of these were renamed from `single`, `v2`, `edit` and `wan`
-before any key was issued. There is **no alias
-map** for the old names — nothing needed translating, and a permanent map
-that translates nothing is a trap for whoever reads it next. An old key is
-simply unknown: the client warns and ignores it. If a key ever has to
-change after launch, reissue the affected licenses.
-
-Feature keys and the app's *asset groups* are separate namespaces that
-happen to overlap. A key names a tab; a group names a set of weights
-several tabs share, and `downloads.py` is keyed on the latter — which is
-why `krea_v2_t2i` still needs the group called `v2`. Renaming a tab never
-touches a download.
-
-## Endpoints
-
-| Method | Path | Purpose |
-| --- | --- | --- |
-| `POST` | `/v1/acquire` | Take a seat. `{license_key, instance_id, meta}` |
-| `POST` | `/v1/heartbeat` | Keep it. Re-checks the license every call |
-| `POST` | `/v1/release` | Give it back. Idempotent |
-| `POST` | `/v1/build` | Which build this license gets + a signed R2 URL. `{license_key, instance_id, current_sha}`. Takes no seat |
-| `POST` | `/v1/catalog` | The model and LoRA catalogue the Krea and MiniMax tabs are built from. `{license_key, instance_id}`, licence checked like acquire. Takes no seat |
-| `GET` | `/v1/start.sh` | 302 to a signed URL for the start script. Unauthenticated — the RunPod template fetches it |
-| `GET` | `/v1/plans` | Public catalogue — `is_public` plans, enabled features, enabled billing cycles |
-| `POST` | `/v1/prompts` | A pod submitting one prompt + its settings. Private on arrival, unless `publish` and the license is `is_admin` |
-| `GET` | `/v1/prompts` | Public library — approved prompts only. `?tab=&source=&q=&skip=&limit=` |
-| `GET` | `/health` | Liveness + DB reachability |
-| `GET` | `/v1/admin/licenses` | Every license with live usage and **resolved** features (needs `ADMIN_TOKEN`) |
-| `GET` | `/v1/admin/plans` | Every plan with the number of licenses on it |
-| `GET` | `/v1/admin/sessions` | Recent sessions, `?license_key=` to filter |
-| `GET` | `/v1/admin/prompts` | The library, `?pending=1` for the review queue. Includes `license_key` |
-| `POST` | `/v1/admin/builds` | Register an uploaded build. `build.sh` calls this. Idempotent on `sha256` |
-| `GET` | `/v1/admin/builds` | Every build published, newest first — the list you roll back from |
-| `POST` | `/v1/admin/builds/promote` | Point a channel at a build. `{sha256, channel}` |
-| `POST` | `/v1/admin/prompts/review` | `{id, approve}` — publish or reject one prompt |
-| `POST` | `/v1/admin/prompts` | Author an ⭐ official prompt. Public immediately |
-| `GET` | `/v1/admin/assets` | Every LoRA and model, disabled ones included, each with any validation `problems`, and every feature's lists as stored |
-| `POST` | `/v1/admin/loras` | Create or update one LoRA by `id`. Only the fields sent are changed; creating needs `file` and `source` |
-| `POST` | `/v1/admin/models` | The same, for a model |
-| `POST` | `/v1/admin/feature-assets` | `{feature, models?, loras?}` — replace a feature's ordered lists. Every id must exist |
-| `POST` | `/tg/webhook/:path` | Telegram updates. The path is derived from `TELEGRAM_WEBHOOK_SECRET`, and the `X-Telegram-Bot-Api-Secret-Token` header must match it too. Always answers 200 |
-| `GET` `POST` | `/internal/cron/sweep` | Retry stuck provisioning and delivery. Needs `CRON_SECRET` — **not** `ADMIN_TOKEN` |
-
-`/v1/plans` is unauthenticated on purpose: it is a pricing page's data and
-none of it is secret. Non-public plans are filtered out, so `admin` and any
-tier you are still trialling never appear, and so are features marked
-`enabled: false` — including from the feature lists of the plans that still
-grant them. It also carries the enabled billing cycles and, per plan, the
-price each of them works out to.
-
-`/v1/admin/licenses` reports what the customer *actually gets*, resolved
-the same way `/v1/acquire` resolves it — for a license on a plan that is
-not written on the license at all. A row whose plan is missing reports
-`plan_error` instead of taking down the whole listing.
-
-The two `/v1/prompts` routes are the halves of the prompt library and they
-do not mirror each other. The write is authenticated by the license key and
-stores a row that **no client can read**; the read is unauthenticated,
-serves only `is_public: true`, and projects `license_key` away — so who
-submitted a prompt never leaves this service. Pods write to it silently and
-customers are not told it happens, which is why the write answers `200` for
-everything they could not have known was wrong: a duplicate fingerprint, or
-a license that has hit its 200-pending cap. See the app's README for the
-capture and deduplication rules, and `npm run prompts` for moderation.
-
-The write takes one optional flag, `publish`, which asks for the row to be
-created as a public ⭐ official prompt instead of a pending submission. It
-is honoured **only when the license document has `is_admin: true`** —
-`publish` is a request and the record is the grant. A non-admin sending it
-is not rejected; the flag is ignored and the prompt is stored the ordinary
-way. A published row also gets a freshly generated fingerprint rather than
-the one the pod sent, because deduplicating it against an existing
-community row would silently turn "publish this" into a counter bump.
-
-Every write that stores a settings blob — `POST /v1/prompts`,
-`POST /v1/presets`, `POST /v1/admin/presets` and `POST /v1/admin/prompts` —
-checks its model and LoRA ids against the catalogue and answers `400`
-naming the bad value (see [Settings blobs](#settings-blobs)). That includes
-the silent pod write: a recipe whose ids name nothing is a malformed body,
-not something the pod could not have known.
-
-`npm run seed-prompts` writes one starter prompt of each kind — an ⭐
-official one that is live immediately, and a 👥 community one sitting in
-the review queue so there is something there the first time you look.
-`scripts/seed-prompts.js` carries the field-by-field notes; edit
-`SEED_PROMPTS` and re-run to add more. It is idempotent (keyed on
-`fingerprint`) and **never un-approves**: content is `$set`, moderation
-state is `$setOnInsert`, so a prompt you have already ruled on keeps that
-ruling across seed runs.
-
-## Models and LoRAs
-
-Which models and LoRAs the Krea tabs offer lives here, not in the app.
-Three collections, all keyed by a readable string id:
-
-- `loras` — one record per LoRA file: its name, `file`, where it downloads
-  from (`source`), our own copy (`mirror`), its `default_strength`, and
-  `enabled` / `sort_order`.
-- `models` — one record per model *setting*: `file`, `source`, `mirror`,
-  `variant`, `steps`, `cfg` and the `turbo_lora` its recipe switches on.
-  Two records may share a file.
-- `feature_assets` — per feature key, the ordered model ids and LoRA ids that
-  tab's dropdowns hold. The first model is the tab's default. An id may sit in
-  any number of features.
-
-**Ids are permanent.** Presets and prompts store them, so renaming one
-orphans every preset that names it. Fix a label with `name`, never with
-the id. To retire a record, switch it off.
-
-`POST /v1/catalog` is what a pod reads, once, at startup — after its seat is
-taken and before it downloads anything. It answers in exactly the shape of
-[`data/assets.json`](data/assets.json):
-
-```js
-{ ok: true,
-  loras:  [{ id, name, file, source, mirror, default_strength, trigger }],
-  models: [{ id, name, file, source, mirror, variant, steps, cfg, turbo_lora, trigger }],
-  features: { krea_t2i: { models: ["krea2-turbo-mxfp8"], loras: ["krea2-turbo", ...] }, ... } }
-```
-
-Enabled records only, LoRAs in `sort_order`, and each feature's lists cut
-down to the ids in the same answer, order kept. A stored record that fails
-validation (only a hand edit in Atlas can make one) is skipped and logged,
-never sent — `GET /v1/admin/assets` shows it with its `problems`. It needs a
-valid licence, checked exactly like `/v1/acquire` (`403` on a bad key,
-`503` on a database failure — the pod then falls back to the copy it saved
-last time). Nothing reaches a running pod: an edit is picked up on its next
-start.
-
-The rules every write goes through (`src/assets.js`; the pod applies the
-same ones again on read, in `catalog.py`):
-
-| Field | Rule |
-| --- | --- |
-| id | `^[a-z0-9][a-z0-9-]{0,62}$` |
-| `file` | `^[A-Za-z0-9][A-Za-z0-9._-]{0,199}\.safetensors$` — a bare file name, no directories |
-| `source` | `{kind: "civitai", version: <positive int>}` or `{kind: "hf", repo: "owner/name", path}` |
-| `mirror` | `{repo: "owner/name", path}` or `null` |
-| paths | non-empty, no leading `/`, no `..` segment |
-
-A field outside a record's known set is refused rather than stored, so a
-typo cannot become a setting that silently does nothing. `loras.file` is
-unique.
-
-```bash
-npm run seed-assets                          # data/assets.json → the three collections
-npm run seed-assets -- --dry-run
-npm run assets                               # list everything (--loras | --models | --features)
-npm run assets -- --disable-lora realism-v2  # --enable-lora, --enable-model, --disable-model
-npm run assets -- --feature krea_t2i --add-lora pawg --at 3
-npm run assets -- --feature krea_t2i --remove-lora pawg
-npm run assets -- --feature krea_v2_t2i --add-model krea2-raw-fp8 --at 1   # position 1 = default
-npm run assets -- --mirror realism-v2 --repo owner/name --path loras/x.safetensors
-```
-
-`seed-assets` validates the whole file before writing anything, and is
-idempotent. What a record *is* is `$set`, so editing it in the file and
-re-running updates it; `enabled` and `sort_order` are `$setOnInsert`, so a
-record you switched off stays off. A `mirror: null` in the file leaves a
-stored mirror alone. Feature lists are replaced whole from the file. It
-never deletes.
-
-The mirror script records where it uploaded a LoRA with
-`POST /v1/admin/loras` `{id, mirror: {repo, path}}` — a partial update that
-changes nothing else about the record. Put the same value in
-`data/assets.json`, or the next `seed-assets` run will overwrite it with the
-file's.
-
-### Settings blobs
-
-Presets and prompts store a tab's settings, and every model and LoRA in
-them is **an id**, never a file name or a label:
-
-```js
-// krea_t2i — eight positional slots
-{ model: "krea2-turbo-mxfp8", steps: 10, cfg: 1.0, resolution: "...", sampler: "er_sde",
-  seed: 42, randomize: true, batch_count: 1,
-  loras: [[true, "hmbody-d-e10", 0.8], [false, null, 0.8], ...] }
-
-// krea_v2_t2i — positional too: row i fills the tab's slot i
-{ model: "krea2-turbo-mxfp8", aspect: "...", megapixels: 1.5, multiple: 8, ...,
-  sampler: { ... }, variance: { ... }, sharpen: false, film_grain: false,
-  loras: [[false, "krea2-turbo", 0.6], [true, "filter-bypass-3", 0.93], ...] }
-```
-
-Every LoRA row is a triple `[on, lora id | null, weight]`. An empty slot is
-`null`; the form calls it "None", but that word never reaches storage. The
-server refuses (`400`) a blob whose `model` is not an existing model id or
-whose `loras` holds anything else. Disabled records still count as
-existing — a preset naming one is not wrong, the tab just leaves that slot
-empty while it is off. The rest of the blob belongs to the tabs and is only
-bounded in size.
-
-`seed-presets` and `seed-prompts` apply the same check, so **run
-`seed-assets` first** — against an empty catalogue they refuse every row.
-
-### Status codes are the contract
-
-| Code | `error` | Client behaviour |
-| --- | --- | --- |
-| 200 | — | proceed |
-| 400 | `bad_request` | client bug, no retry |
-| 403 | `invalid_key`, `revoked`, `expired`, `seat_limit` | **stop the app** |
-| 503 | `server_error` | transient — retry at startup, ride the grace window if running |
-
-Keep the 403/503 split intact. Any database failure must surface as 503,
-or an Atlas outage reads to your customers as a license violation; and a
-real violation must never surface as 503, or the client's grace window
-makes it survivable.
-
-Revocation propagates because `/v1/heartbeat` re-reads the license on
-every call — flipping `active` to false stops running instances within
-about a heartbeat, rather than only blocking their next start.
-
-## Build distribution
-
-The app binary lives in a **private** Cloudflare R2 bucket. Pods never
-address it: they send their key to `/v1/build` and get back a signed URL
-that expires in 30 minutes.
-
-Be clear about what that does and does not buy. It stops a lapsed or
-revoked key pulling a **new** build, it lets a build be pinned or rolled
-back per license from the server, and it records which machines pull on
-which key. It does **not** stop a binary someone already has from being
-copied — what limits who can *run* the app is still the seat check, same
-as when the build sat in a public Hugging Face repo.
-
-Objects are content-addressed at `builds/<sha256>/krea2app`, so publishing
-never overwrites and every build stays available. A channel is just a name
-in the `channels` array of one build document, which makes rolling forward
-and rolling back the identical operation:
-
-```bash
-curl -s -H "Authorization: Bearer $KREA2_ADMIN_TOKEN" \
-     https://<deployment>.vercel.app/v1/admin/builds
-
-curl -s -X POST -H "Authorization: Bearer $KREA2_ADMIN_TOKEN" \
-     -H 'Content-Type: application/json' \
-     -d '{"sha256":"<older sha>","channel":"stable"}' \
-     https://<deployment>.vercel.app/v1/admin/builds/promote
-```
-
-Which build a license resolves to, most specific first:
-
-| On the license | Result |
-| --- | --- |
-| `build_sha` is set | exactly that build, channel ignored |
-| `build_channel` is set | whichever build holds that channel |
-| neither | whichever build holds `stable` |
-
-Both fields are absent on an ordinary license, so the default needs no
-edit. Set `build_sha` to hold one customer on a known-good build, or
-`build_channel: "beta"` to put a willing customer on new builds first.
-
-### Two R2 tokens, deliberately
-
-| Where | Scope | Why |
-| --- | --- | --- |
-| this service | Object **Read** | public-facing; only ever signs GETs |
-| `build.sh` | Object **Read & Write** | the only thing that uploads |
-
-Giving the API a write token would mean any path to leaking it is a path
-to replacing the binary every customer downloads. Keeping them apart is
-what makes the read-only half actually read-only.
-
-The builds bucket must also be **separate from the public showcase-images
-bucket**. Public access on R2 is a per-bucket setting, so one bucket
-cannot be both gated and world-readable.
-
-### If the API is down
-
-`scripts/runpod_start.sh` falls back to the binary already on the pod's
-volume for *any* non-200 — unreachable, expired, revoked, rate limited,
-nothing published. A pod that has everything it needs to run is not
-bricked by this service having a bad afternoon, and the seat check that
-follows delivers the real verdict with the message worth reading. A pod
-with no cached binary and a failed call stops, and prints the server's
-message when there is one.
+`HEARTBEAT_SECONDS` (default 60) rides on the acquire response, so the
+cadence every deployed binary uses can be slowed from here without
+reshipping anything.
 
 ## Setup
 
@@ -466,12 +88,12 @@ the plan you just assigned.
 resolved, since the literal array would win and the plan would do nothing.
 
 **Re-run `npm run seed-catalog` after editing `DEFAULT_PLANS`** in
-`src/plans.js`. It is an upsert and never deletes. Note the direction: once
-seeded, the *collection* is what `/v1/acquire` reads, so a price or feature
-list can be changed in Atlas without a redeploy — and a hand edit there is
-reverted by the next seed run unless `DEFAULT_PLANS` is updated to match.
-The same goes for the billing cycles in `DEFAULT_BILLING` — see
-`plans/__billing` under [Data](#data).
+[`src/plans.js`](src/plans.js). It is an upsert and never deletes. Note the
+direction: once seeded, the *collection* is what `/v1/acquire` reads, so a
+price or feature list can be changed in Atlas without a redeploy — and a
+hand edit there is reverted by the next seed run unless `DEFAULT_PLANS` is
+updated to match. The same goes for the billing cycles in
+`DEFAULT_BILLING` — see [`plans/__billing`](docs/data.md).
 
 ## Deploying to Vercel
 
@@ -483,17 +105,22 @@ vercel --prod
 
 Set `MONGODB_URI`, `MONGODB_DB`, `ADMIN_TOKEN` and the four `R2_*`
 variables in Project Settings → Environment Variables, then redeploy.
-`vercel.json` rewrites every path to `api/index.js`, which exports the
-same Express app `server.js` runs locally.
+[`vercel.json`](vercel.json) rewrites every path to `api/index.js`, which
+exports the same Express app `server.js` runs locally, and registers the
+[sweep cron](docs/telegram-bot.md). Every variable this service reads is
+declared in [`src/config.js`](src/config.js).
 
 `GET /health` reports both halves of "can a pod start right now":
 
 ```json
-{ "db": "connected", "r2": "configured", "stable_build": "<sha256>" }
+{ "db": "connected", "r2": "configured",
+  "stable_build": "<sha256>",
+  "stable_builds": { "linux": "<sha256>", "windows": "<sha256>" } }
 ```
 
 `r2: "unset"` means the credentials are missing and every `/v1/build` will
-answer 503. `stable_build: null` means nothing has been published yet.
+answer 503. A `null` under `stable_builds` means nothing has been published
+for that platform yet; `stable_build` is the Linux one.
 
 Three things to know:
 
@@ -514,11 +141,11 @@ it only changes if you rename or delete the project.
 
 The client does not hold that URL. It reads the subdomain alone from
 `KREA2_NODE_TAG` on the pod and rebuilds `https://<tag>.vercel.app` itself
-(`config.py`), so hand the customer the bare label — no scheme, no
-`.vercel.app` — alongside their key. The label must be plain
-`[a-z0-9-]`, 8–63 characters; anything with a dot or slash in it is
-rejected at startup rather than used, which is what keeps the tag from
-repointing the licence check at a server the customer controls.
+([`../ember/settings.py`](../ember/settings.py)), so hand the customer the
+bare label — no scheme, no `.vercel.app` — alongside their key. The label
+must be plain `[a-z0-9-]`, 8–63 characters; anything with a dot or slash in
+it is rejected at startup rather than used, which is what keeps the tag
+from repointing the licence check at a server the customer controls.
 
 Renaming the Vercel project therefore means reissuing the tag to every
 pod, not just redeploying.
@@ -527,324 +154,9 @@ pod, not just redeploying.
 
 Wide open, and largely moot: the app calls this server-side from Python,
 so no `Origin` header is sent and CORS never applies to the real traffic.
-It is enabled for anything browser-side you add later. Pinning an origin
-would not work anyway — the Gradio share URL is regenerated on every run.
-
-## Telegram bot
-
-Licences are also sold directly in Telegram, paid in Telegram Stars. It is
-the same deployment, the same database and the same licence documents — a
-key bought in the bot is byte-indistinguishable from one issued with
-`npm run issue-key`, which is why nothing on the pod side knows the bot
-exists.
-
-```text
-customer → Telegram → POST /tg/webhook/<path> → orders.js → provision.js → Mongo
-                      secret_token header        state       the only
-                      + random path              machine     licence writer
-```
-
-Set `TELEGRAM_BOT_TOKEN` and `TELEGRAM_WEBHOOK_SECRET`, then register:
-
-```bash
-npm run set-webhook -- --url https://<node-tag>.vercel.app
-npm run set-webhook -- --show     # what Telegram thinks, and its last error
-npm run set-webhook -- --delete
-```
-
-**With either variable unset the whole bot answers 404**, exactly as
-`/v1/admin/*` does without an `ADMIN_TOKEN`. Deploying this code to a
-service that is not selling anything changes nothing.
-
-### What a customer can do
-
-`/start` · `/plans` · `/buy` · `/mykeys` · `/renew` · `/help`
-
-Prices come from `price_stars_monthly` on the plan documents, read through
-the same `allPlans()` the pricing page uses. **A plan with no Stars price
-cannot be bought**, which is what keeps `admin`, `admin-minimal`,
-`test-krea1-only` and `customer-admin` off the shelf without a second list
-of what is for sale. `price_stars_monthly` is deliberately absent from
-`/v1/plans`.
-
-Tapping a tier means one of three things, decided by what the customer
-already holds:
-
-| They hold | They tap | What happens |
-| --- | --- | --- |
-| nothing | any tier | a new key, term starts today |
-| Creator | Creator | **renew** — the term is added to what is left |
-| Creator | Studio | **upgrade** — plan changes, term restarts today |
-
-A revoked licence counts as no licence, so a payment can never quietly
-reinstate somebody who was cut off.
-
-### The delivery message carries two values
-
-`KREA2_LICENSE_KEY` **and** `KREA2_NODE_TAG`. A pod with the key and no tag
-exits with code 2 before it prints anything (`config.py:955-964` builds the
-licence API URL from the tag), and there is no key-entry screen anywhere in
-the app — both are environment variables. The bot refuses to sell at all
-while `KREA2_NODE_TAG` is unset, checked before the invoice rather than
-after the money.
-
-### When something goes wrong
-
-The webhook **always answers 200**. Telegram retries any non-2xx for 24
-hours, which is the right thing before a payment and the wrong thing after
-one, so failures live in the order's status and the log instead.
-
-The charge is recorded before any licence work begins, so a purchase cannot
-be lost. Anything left unfinished is picked up by the sweep — one cron every
-fifteen minutes, calling the same code the webhook does:
-
-```bash
-npm run orders                                # the 20 most recent
-npm run orders -- --status FAILED_PROVISION
-npm run orders -- --show    <order-id>
-npm run orders -- --retry   <order-id>        # provision + deliver
-npm run orders -- --deliver <order-id>        # re-send the message only
-npm run orders -- --sweep                     # one pass, right now
-```
-
-`--retry` calls the same `fulfillOrder()` the webhook calls, so it cannot
-double-issue: every transition is conditional and matches nothing the second
-time.
-
-> **The sweep runs once a day, at 03:00 UTC.** Hobby projects allow only
-> one cron run per day, and a shorter schedule is rejected at deploy time.
-> That is survivable because the sweep is recovery and not the happy path —
-> the webhook provisions and delivers within a second of the payment, and
-> the sweep only exists for the invocation that died mid-flight. What it
-> does mean is that an order the webhook failed to finish can sit for up to
-> a day, so when something is known to be stuck, do not wait for it:
->
->     npm run orders -- --status FAILED_PROVISION
->     npm run orders -- --sweep
->
-> Both run from a laptop, need no deployment, and do exactly what the cron
-> would have done.
-
-## Data
-
-`licenses`
-
-```js
-{ key: "KREA2-XXXX-XXXX-XXXX", name: "Acme Corp", seats: 2,
-  active: true, expires_at: ISODate | null,
-  plan_id: "creator" | null,          // the normal route
-  features: [...] | null,             // literal override; wins over plan_id
-  features_extra: ["wan_i2v"] | null, // granted on top of the plan
-  is_admin: false,                    // a role, not an entitlement
-  created_at: ISODate }
-```
-
-`is_admin` grants **no tab and no capability** — what a license can run is
-`features` and nothing else, so marking one admin cannot change what it
-generates. It decides exactly one thing: an ordinary pod captures every new
-prompt into the library silently, an admin pod captures nothing and
-publishes only what its operator ticks the checkbox for. Put it on the keys
-you generate from yourself (`--admin`), or your own testing fills the
-review queue you are the one working through.
-
-`plans` — `_id` is the plan key
-
-```js
-{ _id: "creator", name: "Creator", description: "...",
-  price_monthly: 999, currency: "INR",
-  discounts: { yearly: 25 },          // optional; overrides the cycle rate
-  features: ["krea_t2i", ...], is_public: true, sort_order: 20 }
-```
-
-`price_monthly` is the **only** price stored. What a quarter or a year
-costs is derived from it and the discount on the billing document below, so
-there is no second figure to forget to update — see `cyclePrice()` in
-`src/plans.js`.
-
-`plans/__billing` — the billing cycles, as one lookup document in the same
-collection. `__`-prefixed ids are filtered out of `allPlans()`, so it is
-never mistaken for a tier by `/v1/plans` or by a license's `plan_id`.
-
-```js
-{ _id: "__billing", kind: "billing",
-  cycles: [
-    { id: "monthly",   label: "Monthly",   months: 1,  enabled: true,  discount_percent: 0 },
-    { id: "quarterly", label: "Quarterly", months: 3,  enabled: false, discount_percent: 10 },
-    { id: "yearly",    label: "Yearly",    months: 12, enabled: false, discount_percent: 20 },
-  ] }
-```
-
-`enabled` is the launch switch: `/v1/plans` sends only the cycles that are
-on, and the pricing page renders a tab per cycle it is sent — so switching
-quarterly or yearly on is **one boolean in Atlas**, live within a minute,
-with no redeploy and no new app build. With everything but monthly off
-there is no tab bar at all. Monthly is forced on however the document is
-edited; a catalogue with no base cycle has no price to show for anything.
-
-Like the plans, it is upserted from the code on every seed run, so a toggle
-flipped in Atlas is reverted by the next one unless `DEFAULT_BILLING` is
-updated to match. Nothing bills anyone from this document — what a customer
-pays is arranged by hand and how long their key lasts is `expires_at` on
-the license — so it is display config, and gets no more protection than a
-price does.
-
-`features` — `_id` is the feature key. Seeded from the code registry for
-reading alongside the plans in Atlas; `src/features.js` stays the source of
-truth and is what `/v1/plans` serves.
-
-```js
-{ _id: "wan_i2v", name: "Wan 2.2 Video",
-  description: "...", category: "video", sort_order: 90,
-  enabled: true }
-```
-
-`enabled: false` withdraws a feature **from the catalogue only**: it is
-dropped from `/v1/plans` and from every plan's feature list on it, so a tab
-that is built but not launched stops being something the pricing page
-promises. It never filters `/v1/acquire` — entitlements are what a customer
-already paid for, and a flag about what a page advertises must not take a
-working tab away from a running pod. Withdrawing a feature from the people
-who have it means editing the plans that grant it. An absent field means
-enabled.
-
-There is deliberately **no `features_cache` on the license.** Denormalising
-the resolved list would turn one plan edit into a fan-out write across
-every license on that tier, and a half-failed fan-out leaves licenses
-silently disagreeing with the plan they claim — the exact failure the
-indirection exists to remove. There are a handful of plans, so the whole
-collection is cached in module scope for 60s instead: a cold start pays one
-small query, warm invocations pay nothing.
-
-`sessions`
-
-```js
-{ license_key: "KREA2-...", instance_id: "<RUNPOD_POD_ID or uuid>",
-  last_seen: ISODate, created_at: ISODate,
-  meta: { ip, pod_id, hostname, version, gpu, seen_at } }
-```
-
-`prompts` — the prompt library
-
-```js
-{ fingerprint: "<64-char sha256>",   // unique; the deduplication key
-  tab: "krea_t2i" | "krea_v2_t2i",
-  source: "community" | "admin",
-  is_public: false,                  // approval flips this; the read filters on it
-  reviewed_at: null,                 // null = still in the queue
-  title: null,                       // admin prompts only
-  prompt: "...", negative: "...",
-  settings: { ... },                 // the whole replay blob; models and LoRAs by id
-  license_key: "KREA2-...",          // never projected to any client
-  seen_count: 3,                     // how many pods sent this same recipe
-  created_at: ISODate, updated_at: ISODate }
-```
-
-`fingerprint` is computed by the pod over the prompt and every setting
-*except* the seed, the randomize toggle and the batch count — see the app's
-README for why. It is the one client-chosen unique key in this database,
-which is why the write validates it is really 64 hex characters: anything
-else would be a row that can never be deduplicated against.
-
-`settings` is interpreted here in exactly one respect: its `model` and its
-`loras` rows are catalogue ids, and a write whose ids name nothing is
-refused — see [Settings blobs](#settings-blobs). The rest of the shape
-belongs to the app's tabs and changes with them, so validating it would
-couple this service to a UI it should know nothing about. It is bounded
-(8 KB) rather than checked, and the client guards every value against what
-its own build offers before applying any of it.
-
-`loras` — `_id` is the LoRA id
-
-```js
-{ _id: "realism-engine-v3-1", name: "Realism Engine v3.1",
-  file: "realism_engine_krea2_v3.1.safetensors",       // unique
-  source: { kind: "civitai", version: 3109006 },        // or { kind: "hf", repo, path }
-  mirror: { repo: "owner/name", path: "loras/..." } | null,
-  default_strength: 0.6, trigger: "",
-  enabled: true, sort_order: 50,
-  created_at: ISODate, updated_at: ISODate }
-```
-
-`models` — `_id` is the model id
-
-```js
-{ _id: "krea2-raw-fp8", name: "Krea 2 Raw fp8",
-  file: "krea2_raw_fp8_scaled.safetensors",             // NOT unique
-  source: { kind: "hf", repo: "Comfy-Org/Krea-2", path: "diffusion_models/..." },
-  mirror: null, variant: "turbo" | "raw", steps: 20, cfg: 2.5,
-  turbo_lora: { lora: "krea2-turbo", strength: 0.6 } | null,
-  trigger: "", enabled: true,
-  created_at: ISODate, updated_at: ISODate }
-```
-
-`feature_assets` — `_id` is the feature key
-
-```js
-{ _id: "krea_v2_t2i",
-  models: ["krea2-turbo-mxfp8", "krea2-raw-fp8"],       // first = the tab's default
-  loras: ["krea2-turbo", "filter-bypass-3", ...],       // dropdown order
-  created_at: ISODate, updated_at: ISODate }
-```
-
-`npm run remove-feature` deletes a feature's `feature_assets` document along
-with its catalogue row; the `loras` and `models` records are shared and
-stay.
-
-`orders` — one document per purchase attempt, and the only reason a payment
-webhook can be received twice without selling anything twice.
-
-```js
-{ _id: "b3f1c8e2-...",              // uuid, and IS the invoice payload
-  telegram_user_id: 987654321, telegram_chat_id: 987654321,
-  intent: "new" | "renew" | "upgrade",
-  plan_id: "creator", cycle: "monthly", months: 1,
-  amount_stars: 850,                // what was quoted, at invoice time
-  paid_amount: 850,                 // what Telegram says was charged
-  currency: "XTR", seats: 1,
-  status: "CREATED" | "INVOICED" | "PAID" | "PROVISIONED" |
-          "DELIVERED" | "FAILED_PROVISION" | "EXPIRED_UNPAID",
-  telegram_payment_charge_id: "...",// absent until paid — sparse index
-  license_key: "KREA2-...",         // absent until provisioned
-  provision_attempts: 0, last_error: null,
-  created_at, updated_at, invoiced_at, paid_at, provisioned_at,
-  delivered_at }
-```
-
-`amount_stars` and `paid_amount` are stored separately and compared before
-provisioning — a mismatch is `FAILED_PROVISION` with no licence written.
-Every status change is one conditional update naming the status it must come
-from, so a replayed webhook matches nothing.
-
-`telegram_users` — who has talked to the bot. `_id` is the Telegram user id
-itself, so every write is a plain upsert. Deliberately thin; nothing on the
-licensing path reads it.
-
-```js
-{ _id: 987654321, username: "acme_ops", first_name: "Ravi",
-  language_code: "en", is_blocked: false,
-  first_seen_at, last_seen_at }
-```
-
-`licenses` gains one optional field, `telegram_user_id`, on keys sold through
-the bot. It is a label for `/mykeys` and renewal, never an input: nothing in
-`licenseProblem()`, `resolveEntitlement()` or `/v1/build` branches on it, and
-`seatPayload()` never sends it. A CLI-issued key has none and is exactly as
-valid.
-
-Indexes: unique `key`; `plan_id`; unique `(license_key, instance_id)`;
-`(license_key, last_seen)`; TTL on `last_seen`; unique `fingerprint`;
-`(is_public, tab, created_at)`; `(reviewed_at, created_at)`;
-`(license_key, reviewed_at)`; sparse `telegram_user_id` on `licenses`;
-and on `orders` a **unique sparse** `telegram_payment_charge_id` (two
-orders cannot record one charge), `(telegram_user_id, created_at)`,
-`(status, updated_at)` for the sweep and a sparse `license_key`; on
-`loras` a **unique** `file` and `(enabled, sort_order)`. `plans`,
-`features`, `telegram_users`, `models` and `feature_assets` are keyed by
-their `_id` and need nothing beyond it — `models.file` is deliberately not
-unique.
-
-`created_at` on a session row is never overwritten, so the gap between it
-and `last_seen` is how long that instance has been up.
+It is enabled for anything browser-side you add later. There is no origin
+worth pinning anyway — each pod serves the app's own web UI from a tunnel
+URL that is regenerated on every run.
 
 ## Known limits
 
@@ -852,14 +164,14 @@ and `last_seen` is how long that instance has been up.
   the same millisecond can both pass the check. At these seat counts the
   window is negligible and the worst case is one extra seat — not worth a
   locking scheme.
-- **Prompt submissions are trusted as far as their license key.** Any pod
+- **Prompt submissions are trusted as far as their licence key.** Any pod
   with a valid key can write to the library, and the fingerprint it sends
   is not recomputed here. The worst case is a duplicate row or a junk one,
-  which is what the 200-pending cap per license and the approval step are
+  which is what the 200-pending cap per licence and the approval step are
   for — nothing a customer submits is visible to anyone until you approve
   it.
 - **This stops casual sharing, not a determined customer.** The check runs
   on a machine they control. Patching the binary defeats it, and that is a
-  deliberate non-goal. Pair it with a license agreement, and treat
+  deliberate non-goal. Pair it with a licence agreement, and treat
   `/v1/admin/licenses` as the real value: a 2-seat key with 40 distinct
   instance ids in a week is a conversation you can have with evidence.
