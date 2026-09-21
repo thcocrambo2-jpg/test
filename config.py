@@ -100,10 +100,10 @@ WORKING_DIR = BASE_DIR  # generated images + logs
 COMFY_DIR = TEMP_DIR / "ComfyUI"
 MODELS_DIR = TEMP_DIR / "models"
 OUTPUT_DIR = WORKING_DIR / "output"
-COMFY_LOG = WORKING_DIR / "comfyui.log"
+COMFY_LOG = WORKING_DIR / "comfyui_tmp.log"
 
 COMFY_HOST = "127.0.0.1"
-COMFY_PORT = 8188
+COMFY_PORT = 8190
 
 # Unload the previous models when a job needs different base weights.
 # ComfyUI keeps what it loaded until memory pressure evicts it, so without
@@ -419,8 +419,8 @@ WAN_DEFAULT_NEGATIVE = (
 # effect when the "wan_i2v" feature is on: app.py checks both before paying
 # for a second instance.
 WAN_PARALLEL = bool(os.environ.get("KREA2_WAN_PARALLEL"))
-WAN_COMFY_PORT = 8189
-WAN_COMFY_LOG = WORKING_DIR / "comfyui_wan.log"
+WAN_COMFY_PORT = 8191
+WAN_COMFY_LOG = WORKING_DIR / "comfyui_wan_tmp.log"
 KREA_RESERVE_VRAM_GB = float(os.environ.get("KREA2_MAIN_RESERVE_VRAM", 26))
 WAN_RESERVE_VRAM_GB = float(os.environ.get("KREA2_WAN_RESERVE_VRAM", 22))
 
