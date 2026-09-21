@@ -161,7 +161,7 @@ def announce(url: str, token: str) -> None:
     print("=" * 60 + "\n", flush=True)
 
 
-def serve(port: int = 7860, host: str = "0.0.0.0", tunnel: bool = True,
+def serve(port: int = 7861, host: str = "0.0.0.0", tunnel: bool = True,
           reload: bool = False) -> None:
     """Run the app until Ctrl-C."""
     import uvicorn
@@ -213,7 +213,7 @@ def _wait_for(server, timeout: float = 30.0) -> None:
 
 def main() -> None:
     parser = argparse.ArgumentParser(description="Run the Ember web app.")
-    parser.add_argument("--port", type=int, default=7860)
+    parser.add_argument("--port", type=int, default=7861)
     parser.add_argument("--host", default="0.0.0.0")
     parser.add_argument(
         "--no-tunnel", action="store_true",
