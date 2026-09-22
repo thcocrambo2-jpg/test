@@ -21,6 +21,7 @@ from ember import features
 from ember.web import gallery_index
 from ember.generation import queue as jobqueue
 from ember.generation import recipes
+from ember.generation import sources
 from ember.web import tabschema
 from ember.settings import TEMP_DIR, UI_REQUIRE_TOKEN
 
@@ -180,6 +181,38 @@ def _resolve_uploads(schema, raw: dict) -> dict:
         if field.kind == "image":
             values[field.name] = _pil(value) if value else None
     return values
+
+
+def _keep_sources(schema, raw: dict) -> dict:
+    """{field name: kept source name} for every image a submission carries.
+
+    What lets "Load these settings" put the picture back: the upload is
+    temporary, so each one is copied into the source store (sources.py)
+    and the recipe records the copy's name in that field's slot. Called
+    after `_resolve_uploads`, which has already refused an id that is not
+    there. A field whose image could not be kept is simply absent, and its
+    recipe row stays None, which is what every recipe held before.
+    """
+    kept = {}
+    for field in schema.named():
+        value = raw.get(field.name)
+        if field.kind != "image" or not value:
+            continue
+        path = _upload_path(value)
+        try:
+            with Image.open(path) as image:
+                fmt = image.format
+        except Exception:                        # noqa: BLE001
+            continue
+        name = sources.keep(path, fmt)
+        if name:
+            kept[field.name] = name
+    return kept
+
+
+def _source_url(name: str) -> str:
+    """Where the browser fetches a kept source image back from."""
+    return "%s/sources/%s" % (PREFIX, quote(name))
 
 
 # ─────────────────────────────────────────────────────────── media

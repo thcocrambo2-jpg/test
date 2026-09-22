@@ -12,6 +12,7 @@ from typing import Any, Callable
 from ember.licensing import catalog as assets
 from ember import features
 from ember.generation import loras
+from ember.generation import sources
 
 Key = features.Key
 
@@ -219,7 +220,12 @@ class Field:
         """
         kind = self.kind
         if kind == "image":
-            return False, None               # never stored — see _UNRECORDED
+            # The name its source was kept under, if it was and still is
+            # (sources.py). A recipe from before that holds None, and a
+            # source swept since is gone; both leave the drop zone alone.
+            if sources.path(value) is None:
+                return False, None
+            return True, value
         if kind == "bool":
             return True, bool(value)
         if kind in ("text", "textarea"):
@@ -414,7 +420,7 @@ class TabSchema:
 
     # ── 3. recipe labels ────────────────────────────────────────────
 
-    def recipe_fields(self, values: dict) -> list:
+    def recipe_fields(self, values: dict, kept: dict | None = None) -> list:
         """[[label, value], ...] in submission order — ui._recipe_fields.
 
         Byte-compatible with what is already on pods' disks, which is the
@@ -425,13 +431,16 @@ class TabSchema:
           * a control that is not a *setting* — the publish and preset
             tickboxes, `ui._RECIPE_SKIP` — is stored as None, so loading a
             recipe cannot silently re-arm a publish;
-          * an uploaded file is stored as None too (`ui._UNRECORDED`), and
-            the panel says so rather than restoring nine tenths of a
-            recipe in silence.
+          * an uploaded file is stored as the name `kept` gives it — the
+            copy sources.py keeps so a recipe can hand the picture back —
+            or as None when there is no copy, as it always used to be.
         """
+        kept = kept or {}
         rows = []
         for f in self.named():
             value = values.get(f.name)
+            if f.kind == "image":
+                value = kept.get(f.name)
             keep = f.record and isinstance(value, (str, int, float, bool))
             rows.append([f.label, value if keep else None])
         tail = self.tail()

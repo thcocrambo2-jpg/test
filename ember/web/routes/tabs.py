@@ -14,7 +14,7 @@ from ember.generation import recipes
 from ember.web import tabschema
 from ember.web.routes.common import (
     require_auth, require_feature, _display_json, _queue_json,
-    _resolve_uploads,
+    _resolve_uploads, _keep_sources, _source_url,
 )
 
 
@@ -105,6 +105,11 @@ def _mount_tab(api: APIRouter, schema) -> None:
             # untick Random seed and run. Restoring the value costs nothing
             # while the tick is on, since the control ignores it.
             values = schema.restore_recipe(stored.get("fields") or [])
+            # An image field restores as the name its source was kept
+            # under (sources.py); the browser wants somewhere to fetch it.
+            for field in schema.named():
+                if field.kind == "image" and field.name in values:
+                    values[field.name] = _source_url(values[field.name])
             if stored.get("seed") is not None and schema.field("seed"):
                 values["seed"] = stored["seed"]
             return {"values": values, "applied": stored.get("tab_label")}
@@ -154,6 +159,7 @@ def _mount_tab(api: APIRouter, schema) -> None:
         try:
             resolved = _resolve_uploads(schema, raw)
             args, values = schema.submit(resolved)
+            kept = _keep_sources(schema, raw)
         except tabschema.Invalid as exc:
             # str(exc) is "steps: must be at most 60" — the field name is
             # half the message, and a form that cannot say which control
@@ -165,7 +171,7 @@ def _mount_tab(api: APIRouter, schema) -> None:
         view = jobqueue.submit(
             lane=schema.lane, tab=key, tab_label=schema.title(),
             title=_job_title(schema, values),
-            fn=_recording(schema, values), args=args,
+            fn=_recording(schema, values, kept), args=args,
             result_keys=schema.result_keys,
         )
         ahead = max(0, view.place - 1)
@@ -202,7 +208,7 @@ def _job_title(schema, values) -> str:
     return text[:59] + "…" if len(text) > 60 else text
 
 
-def _recording(schema, values):
+def _recording(schema, values, kept=None):
     """The handler, wrapped so whatever it writes is filed under a recipe.
 
     The wrapper exists to move one line onto the *worker* thread. The
@@ -215,8 +221,12 @@ def _recording(schema, values):
     own progress reporting exactly as it was, and the `finally` runs on a
     cancelled job too, since closing a generator raises GeneratorExit at
     its current yield.
+
+    `kept` is `_keep_sources`' answer: the name each image field's upload
+    was kept under, recorded in that field's slot so the recipe can hand
+    the picture back.
     """
-    fields = schema.recipe_fields(values)
+    fields = schema.recipe_fields(values, kept)
     key = str(schema.key)
     tab_id = schema.tab_id
     label = schema.title()

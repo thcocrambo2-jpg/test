@@ -151,6 +151,7 @@ ember/
     queue.py          the visible job queue: one worker thread per lane
     eta.py            how long the running job has left
     recipes.py        what each generated file was made with
+    sources.py        the source images those recipes hand back
   web/
     api.py            builds the app and calls each route module in turn
     routes/           one module per area: uploads, media, queue, tabs, licence, events

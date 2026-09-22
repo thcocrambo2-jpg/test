@@ -128,17 +128,18 @@ against the values the request carried, and restoring writes them back
 through the same list. A tab that grows a control gets it in its recipes
 with no change anywhere.
 
-Three things are deliberately left out:
+Two things are deliberately left out:
 
-- **Uploaded files** — a source image. Storing those would turn a few
-  hundred bytes a picture into a second copy of the input; the panel says
-  how many a recipe needed so you know to pick them again.
 - **The publish and save-preset boxes.** They are per-run decisions rather
   than settings, so putting them in a recipe would mean loading one
   silently re-arms a publish. Both are stored as `None`.
 - **Empty LoRA slots**, from the *panel* only. They are recorded — a slot
   has to restore whole — but a dropdown reading "None" beside a weight of
   0.8 is a row of noise.
+
+**Uploaded files** — the source image of an edit or an image-to-video run
+— are not stored *in* the recipe, but they do come back. See
+[Source images](#source-images) below.
 
 Because `.recipes.jsonl` on live pods is keyed positionally and read back
 by label, **a reworded label or a moved control orphans history
@@ -163,6 +164,35 @@ restart because it is a file.
   mounting it somewhere else on the next pod, does not orphan everything
   in it.
 - **Bounded** at `MAX_RECIPES` (5000), oldest dropped on compaction.
+
+### Source images
+
+An upload is a temporary file, swept after six hours
+([`routes/uploads.py`](../../ember/web/routes/uploads.py)), so it is long
+gone by the time anybody loads the recipe of what it made. So at submit,
+`_keep_sources` in
+[`routes/common.py`](../../ember/web/routes/common.py) copies each one
+into [`ember/generation/sources.py`](../../ember/generation/sources.py)'s
+store, and the recipe records the copy's name in that image field's slot.
+
+- **Kept at `<output>/.sources/<sha256>.<ext>`**, named after the file's
+  own bytes. The ordinary case is one source used many times — a batch of
+  four, or twenty tweaked re-runs over one photo — and that is still one
+  file. The bytes are kept as uploaded, not re-encoded. Dotted, so the
+  gallery and the Zip skip it, for the same reason as the recipe store.
+- **Restored as a URL.** `restore()` accepts a name only if the file is
+  still there; the apply route turns it into `/api/v1/sources/<name>`,
+  and the Lightbox fetches that into a `File` before the handoff, because
+  an image field holds a `File` and nothing else. A recipe from before
+  this, or one whose source has gone, leaves the drop zone empty.
+- **Served only by name shape.** `/sources/{name}` resolves nothing but a
+  64-character hex digest with a `.png`, `.jpg` or `.webp` suffix, which
+  cannot name anything outside the store.
+- **Swept with the recipes.** Whenever the recipe store compacts — a
+  delete, or the `MAX_RECIPES` cap — every source that no remaining
+  recipe names goes too. A source kept for a run still in the queue has
+  no recipe yet, so anything used in the last `GRACE` (a day) is left
+  alone; `keep()` touches the file on every reuse.
 
 ### How the seed is captured
 

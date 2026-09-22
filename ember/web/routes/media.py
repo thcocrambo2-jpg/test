@@ -1,5 +1,6 @@
 """Everything a generated file can be asked for: bytes, thumbnail, page,
-deletion, and the settings it was made with.
+deletion, and the settings it was made with — including, through
+`/sources`, the picture a run was given.
 
 `/media` and `/thumbs` are the only way a generated file reaches the
 browser, and they contain themselves to OUTPUT_DIR through
@@ -17,6 +18,7 @@ from fastapi.responses import FileResponse
 from ember import features
 from ember.web import gallery_index
 from ember.generation import recipes
+from ember.generation import sources
 from ember.web import tabschema
 from ember.web.routes.common import (
     require_auth, require_feature, _media_list,
@@ -69,6 +71,21 @@ def register(api: APIRouter) -> None:
         which is thumb_for()'s whole no-backfill policy.
         """
         return _send(path_id, thumb=True)
+
+    @api.get("/sources/{name}", dependencies=[Depends(require_auth)])
+    def source(name: str):
+        """A picture some run was given, kept so its recipe can return it.
+
+        sources.path() is the containment: it resolves only names of the
+        one shape sources.py writes, a hex digest and an image suffix, so
+        nothing else on the disk can be asked for through here. Named by
+        its own bytes, so it can be cached as hard as anything.
+        """
+        target = sources.path(name)
+        if target is None:
+            raise HTTPException(404, "No such file.")
+        return FileResponse(target, media_type=_media_type(target.name),
+                            headers={"Cache-Control": "private, max-age=86400"})
 
     def _send(path_id: str, thumb: bool = False):
         try:

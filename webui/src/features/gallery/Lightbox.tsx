@@ -3,7 +3,7 @@ import { createPortal } from 'react-dom'
 import { useNavigate } from 'react-router-dom'
 import { api } from '@/api/client'
 import { useSchemas } from '@/api/queries'
-import type { MediaItem } from '@/api/types'
+import type { MediaItem, TabSchema } from '@/api/types'
 import { Button, Pill, useToast } from '@/components/ui'
 import { useHandoff } from '@/store/handoff'
 import { cx, fileName, relativeTime, saveFile, useCopy } from '@/lib/util'
@@ -498,6 +498,39 @@ export function Lightbox({
   )
 }
 
+/** A recipe's image fields, fetched back into the Files the form holds.
+ *
+ *  The server hands each one back as the URL of the copy it kept when the
+ *  run was submitted (sources.py). An image field holds a File and nothing
+ *  else — see `fileFromMedia` in RecentStrip for why — so the URL is turned
+ *  into one here, before the handoff, rather than teaching the form a
+ *  second kind of value. A source that will not come back is dropped: the
+ *  drop zone stays empty, which is what every recipe did before. */
+async function withSources(
+  schema: TabSchema,
+  values: Record<string, unknown>,
+): Promise<Record<string, unknown>> {
+  const out = { ...values }
+  await Promise.all(
+    schema.fields
+      .filter((field) => field.type === 'image' && typeof values[field.name] === 'string')
+      .map(async (field) => {
+        const url = values[field.name] as string
+        try {
+          const response = await fetch(url)
+          if (!response.ok) throw new Error(response.statusText)
+          const blob = await response.blob()
+          out[field.name] = new File([blob], fileName(url), {
+            type: blob.type || 'image/png',
+          })
+        } catch {
+          delete out[field.name]
+        }
+      }),
+  )
+  return out
+}
+
 /** "Load these settings" for one generated file.
  *
  *  Every finished prompt files a recipe under the path it wrote (recipes.py),
@@ -538,7 +571,7 @@ function useReuse(item: MediaItem | undefined) {
         toast('No recipe on file for that one.')
         return false
       }
-      offer(schema.key, values)
+      offer(schema.key, await withSources(schema, values))
       navigate(schema.route)
       /* Names the seed, because the form does not: the box now holds the
        * number this picture ran on and the control above it says, quite

@@ -54,6 +54,7 @@ import threading
 import time
 from pathlib import Path
 
+from ember.generation import sources
 from ember.logs import log
 from ember.settings import OUTPUT_DIR
 
@@ -150,7 +151,8 @@ def _compact() -> None:
 
     Also where MAX_RECIPES is enforced, because this is the only moment
     the whole file is being written anyway. Newest kept, by the time each
-    recipe was recorded.
+    recipe was recorded. And so where the source images only the dropped
+    recipes named go too — see sources.py.
     """
     global _LINES
     rows = sorted((_RECIPES or {}).values(),
@@ -169,6 +171,7 @@ def _compact() -> None:
     _RECIPES.update({row["key"]: row for row in rows})
     _LINES = len(rows)
     log.info("Recipes: compacted to %d", _LINES)
+    sources.sweep(rows)
 
 
 # ── the current job ───────────────────────────────────────────────────────
