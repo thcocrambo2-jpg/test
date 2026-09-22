@@ -54,7 +54,16 @@ export function Gallery() {
   const [cursor, setCursor] = useTabState<string | null>('gallery.cursor', null)
   const [stack, setStack] = useTabState<string[]>('gallery.stack', NO_STACK)
   const [density, setDensity] = useTabState<Density>('gallery.density', 'comfortable')
-  const [lightbox, setLightbox] = useState<number | null>(null)
+  /* Which file the lightbox is showing, by id and not by position.
+   *
+   * An index would be a position into a list that moves under it: the
+   * listing is newest first, so a file finishing while you are looking at
+   * one slides every index along by one and you are silently looking at a
+   * different picture. That is what used to make an open lightbox hold the
+   * refresh off — and holding it off is why the strip along the bottom did
+   * not grow as a batch landed. An id names one file for as long as it
+   * exists, so the list is free to move. */
+  const [openId, setOpenId] = useState<string | null>(null)
   const { data, isLoading, error } = useGallery(cursor)
   const queryClient = useQueryClient()
   const toast = useToast()
@@ -83,6 +92,40 @@ export function Gallery() {
 
   const items = data?.items
   const selecting = selected.size > 0
+  /* What the lightbox has been shown, kept for as long as it is open.
+   *
+   * A page holds 50 files and new ones arrive at the front, so a refresh
+   * pushes the last one off the end — and being at the end of the page is
+   * not a reason for the picture you are looking at to disappear. Anything
+   * that has dropped out of the fresh page is carried along behind it,
+   * which also keeps the neighbours the arrows move through intact.
+   *
+   * A ref rather than state: it is written from what has just been
+   * rendered, and re-rendering because of it would be a loop. */
+  const held = useRef<MediaItem[]>([])
+  /* The fresh page, followed by whatever has since fallen off the end of
+   * it. Newest first either way, because files only ever arrive at the
+   * front and only ever leave from the back. */
+  const viewing = useMemo(() => {
+    if (openId === null) return items ?? []
+    if (!items) return held.current
+    const fresh = new Set(items.map((item) => item.id))
+    return [...items, ...held.current.filter((item) => !fresh.has(item.id))]
+  }, [items, openId])
+  const viewIndex = openId === null ? -1 : viewing.findIndex((item) => item.id === openId)
+
+  useEffect(() => {
+    held.current = openId === null ? [] : viewing
+  }, [openId, viewing])
+
+  /* The file being looked at has gone — deleted from another browser, or
+   * from this one before the lightbox was told to close. Nothing can be
+   * rendered for it, so stop claiming it is open. Gated on `items`,
+   * because "the page has not arrived yet" is not the same answer. */
+  useEffect(() => {
+    if (openId !== null && items && viewIndex < 0) setOpenId(null)
+  }, [openId, items, viewIndex])
+
   const [gridEl, setGridEl] = useState<HTMLDivElement | null>(null)
   const columnCount = useColumnCount(gridEl, COLUMN[density].width, COLUMN[density].fewest)
   const columns = useMemo(() => packColumns(items ?? [], columnCount), [items, columnCount])
@@ -132,12 +175,8 @@ export function Gallery() {
    * the files the stream tells it about, and this watches that number.
    *
    * Refreshing is not always the kind thing to do, though, so there are
-   * three states it waits out rather than yanking the list:
+   * two states it waits out rather than yanking the list:
    *
-   *   * the lightbox is open — the list *is* its `items` and the position
-   *     into it is an index, so one new file at the front silently changes
-   *     which picture you are looking at. This is the one that would be a
-   *     bug rather than a rudeness.
    *   * something is selected — ids survive a refetch, but a grid
    *     reflowing under a half-made selection is its own small hostility.
    *   * you have paged back — `cursor` is an offset into the whole
@@ -147,11 +186,21 @@ export function Gallery() {
    *
    * In those, the count is held and offered as a button. Everywhere else —
    * the ordinary case, page one, nothing selected — the picture simply
-   * appears, which is what a gallery left open during a batch is for. */
+   * appears, which is what a gallery left open during a batch is for.
+   *
+   * An open lightbox used to be a third, and the strip along its bottom
+   * paid for it: a clip finishing while you watched another one did not
+   * join the strip until you had closed the viewer and let the held
+   * refresh through. It was on the list because the position into the list
+   * was an index. It is an id now — see `openId` — so a list that moves
+   * moves the picture along with it, and the strip fills as the batch
+   * lands. The count is still offered as a button, but the button is in
+   * the toolbar underneath a full-screen overlay, which is the other half
+   * of why holding here was the wrong thing to do. */
   const mediaRevision = useQueue((state) => state.mediaRevision)
   const counted = useRef(mediaRevision)
   const [pending, setPending] = useState(0)
-  const holding = lightbox !== null || selected.size > 0 || cursor !== null
+  const holding = selected.size > 0 || cursor !== null
 
   useEffect(() => {
     const delta = mediaRevision - counted.current
@@ -170,7 +219,7 @@ export function Gallery() {
    *  first. */
   function showNew() {
     setPending(0)
-    setLightbox(null)
+    setOpenId(null)
     setSelected(new Set())
     anchor.current = null
     setStack([])
@@ -189,7 +238,7 @@ export function Gallery() {
     if (!confirmed) return
     await api.deleteMedia(item.id)
     await queryClient.invalidateQueries({ queryKey: ['gallery'] })
-    setLightbox(null)
+    setOpenId(null)
     toast('Deleted')
   }
 
@@ -246,7 +295,7 @@ export function Gallery() {
       await queryClient.invalidateQueries({ queryKey: ['gallery'] })
       setSelected(new Set())
       anchor.current = null
-      setLightbox(null)
+      setOpenId(null)
       // Partial success is a normal outcome here, so it gets said out loud
       // rather than rounded up to "Deleted".
       toast(
@@ -354,7 +403,7 @@ export function Gallery() {
                     selected={selected.has(item.id)}
                     anySelected={selecting}
                     onSelect={(range) => toggle(index, range)}
-                    onOpen={() => setLightbox(index)}
+                    onOpen={() => setOpenId(item.id)}
                   />
                 )
               })}
@@ -392,12 +441,12 @@ export function Gallery() {
         </div>
       )}
 
-      {lightbox !== null && data && (
+      {viewIndex >= 0 && (
         <Lightbox
-          items={data.items}
-          index={lightbox}
-          onIndex={setLightbox}
-          onClose={() => setLightbox(null)}
+          items={viewing}
+          index={viewIndex}
+          onIndex={(next) => setOpenId(viewing[next]?.id ?? null)}
+          onClose={() => setOpenId(null)}
           onDelete={(item) => void remove(item)}
         />
       )}
@@ -432,8 +481,8 @@ function useColumnCount(el: HTMLElement | null, minWidth: number, fewest: number
  *  the shortest column keeps newest-first reading left to right, row by
  *  row, give or take the shapes. Heights are in column widths, which is all
  *  the comparison needs; the tile's own bar overlays the picture and adds
- *  nothing. Returns indices into `items`, which is what selection and the
- *  lightbox key on. */
+ *  nothing. Returns indices into `items`, which is what selection keys on;
+ *  the lightbox keys on an id. */
 function packColumns(items: MediaItem[], count: number) {
   const columns: number[][] = Array.from({ length: count }, () => [])
   const heights = new Array<number>(count).fill(0)
