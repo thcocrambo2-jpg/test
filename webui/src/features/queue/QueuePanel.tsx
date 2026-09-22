@@ -156,14 +156,31 @@ function JobRow({ job, onNavigate }: { job: Job; onNavigate: () => void }) {
            * picker on the tab shows the whole batch, and clicking anywhere
            * on this row goes there with this run selected. The thumbnail,
            * not the original: three full-resolution PNGs to draw 34px
-           * squares was the other thing wrong with this row. */
+           * squares was the other thing wrong with this row.
+           *
+           * A clip usually has no thumbnail yet when its run finishes —
+           * ffmpeg is still pulling the frame on gallery_index's pool — and
+           * a finished job's output is never restated, so this row never
+           * hears of the thumbnail once it lands. The fallback is then the
+           * .mp4 itself, which an <img> cannot draw; it gets the same
+           * <video> the gallery grid uses for the same case. */
           job.images.length > 0 && (
             <span className={s.jobThumbs}>
-              <img
-                src={job.images[0].thumbUrl ?? job.images[0].url}
-                alt=""
-                className={s.jobThumb}
-              />
+              {job.images[0].kind === 'video' && !job.images[0].thumbUrl ? (
+                <video
+                  src={`${job.images[0].url}#t=0.1`}
+                  preload="metadata"
+                  muted
+                  playsInline
+                  className={s.jobThumb}
+                />
+              ) : (
+                <img
+                  src={job.images[0].thumbUrl ?? job.images[0].url}
+                  alt=""
+                  className={s.jobThumb}
+                />
+              )}
               {job.images.length > 1 && (
                 <span className={s.jobMore}>+{job.images.length - 1}</span>
               )}
