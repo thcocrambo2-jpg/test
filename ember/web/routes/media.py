@@ -81,14 +81,33 @@ def register(api: APIRouter) -> None:
             raise HTTPException(404, "No such file.")
         if not target.exists():
             raise HTTPException(404, "No such file.")
+        # Asked of the original, before the thumbnail swap below: /thumbs
+        # falls back to the original for anything not encoded yet, so that
+        # is the file whose state decides whether this answer is keepable.
+        # A real thumbnail is written aside and renamed into place, so it
+        # is never half a file in its own right.
+        finished = gallery_index.settled(target)
         if thumb:
             target = Path(gallery_index.thumb_for(str(target)))
         media_type = _media_type(target.name)
-        # Generated files never change under a name — ComfyUI counts up —
-        # so they are safe to cache hard. The zip is the one thing that
+        # A finished generated file never changes under a name — ComfyUI
+        # counts up, and _run_tag puts each job in a namespace of its own —
+        # so it is safe to cache hard. The zip is the one other thing that
         # would not be, and it is not indexed, so it cannot be served here.
+        #
+        # An unfinished one is the opposite of safe. ComfyUI writes a video
+        # in place under its final name for the length of the encode, and
+        # mp4's `+faststart` then rewrites the whole file to move the moov
+        # atom to the front — so a request that lands in that window is
+        # answered with bytes that are not a playable clip and are about to
+        # be replaced. Handed max-age, a browser keeps them for a day and
+        # will not revalidate, so one unlucky fetch leaves a clip that
+        # never plays — not in the gallery, not in a fresh tab on the URL
+        # itself — until the cache expires. no-store is the whole fix:
+        # whatever it got, it asks again.
+        cache = "private, max-age=86400" if finished else "no-store"
         return FileResponse(target, media_type=media_type,
-                            headers={"Cache-Control": "private, max-age=86400"})
+                            headers={"Cache-Control": cache})
 
     # ── gallery ─────────────────────────────────────────────────────
 

@@ -49,6 +49,30 @@ since the last look reuses its cached file list for the price of one
 `stat()`. After a generation exactly one directory has changed, so a
 refresh costs one `scandir` rather than a walk of the whole tree.
 
+**Only finished files are listed.** ComfyUI writes a video *in place*,
+under its final name, for the whole encode: `SaveVideo` hands `av.open()`
+the real path, so the `.mp4` sits in the output folder from its first byte,
+and mp4's `+faststart` then reopens the finished file and rewrites it end
+to end to move the `moov` atom to the front. Nothing about the file says
+which of those it is in the middle of. So the index shows a file once
+either `note_new` has vouched for it — which every generated file goes
+through the moment its prompt finishes, so a clip waits for nothing — or
+nothing has touched it for `_WRITE_SETTLE`, which is what covers the files
+this process did not write: a previous run's, and anything copied in by
+hand. The test is applied when a listing is read rather than when a
+directory is scanned, because "still being written" is a state a file grows
+out of and a cached directory listing would otherwise hold a clip back
+until something else landed beside it.
+
+`/media` asks the same question, through `settled()`, and it is the half
+that matters most: a finished file is served `max-age=86400` because it
+never changes under its name, but an unfinished one is served `no-store`.
+Handed a year's worth of `max-age`, a browser that fetched a half-written
+clip keeps those unplayable bytes for a day without ever revalidating —
+so one unlucky request, from a gallery that happened to be open while the
+clip encoded, left a video that would not play in any tab until the cache
+expired.
+
 **Thumbnails** are written once, just after a workflow finishes, on a
 background thread. A full-resolution PNG is several MB down a link to a
 browser that is usually nowhere near the pod; a 512px WebP is 30–60 KB, so

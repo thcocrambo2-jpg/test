@@ -73,6 +73,41 @@ _FFMPEG_TIMEOUT = 30
 # directory was just written to, and only until it settles.
 _SETTLE_NS = 2_000_000_000
 
+# How long a file whose completion nobody vouched for has to sit untouched
+# before the index will show it.
+#
+# ComfyUI writes a video *in place*, under its final name, for the whole
+# encode: SaveVideo hands av.open() the real path, so the .mp4 is in the
+# output folder from its first byte and is not playable until the last —
+# mp4 is written with `+faststart`, which reopens the finished file and
+# rewrites it end to end to move the moov atom to the front. A clip listed
+# and served in that window is a file whose bytes are about to change
+# completely, and /media tells browsers to keep what they got for a day.
+#
+# So a file is shown when either:
+#
+#   * something wrote it and said so — note_new's paths, below, which is
+#     every file this app generates and the reason the wait costs a
+#     generated clip nothing; or
+#   * nothing has touched it for this long. That is what covers the files
+#     this process did not write: anything from a previous run, and
+#     anything copied into the output folder by hand.
+#
+# Thirty seconds because it only ever delays a file nobody announced, and
+# an encode that has stalled mid-write for half a minute is not something
+# to guess about.
+_WRITE_SETTLE = 30.0
+
+# Relative keys note_new has vouched for, each with the time it did.
+#
+# Pruned to the settle window on every call, because an entry older than
+# that has stopped meaning anything: the file's own mtime is by then at
+# least that old too — it finished before it was announced — so the age
+# test above lets it through on its own. That bounds this to the files
+# finished in the last half minute rather than every file a long-lived pod
+# has ever made.
+_CONFIRMED: dict[str, float] = {}
+
 
 class _Dir:
     """One directory's cached contents, valid while its mtime is unchanged."""
@@ -90,7 +125,8 @@ class _Dir:
 # thumbnail workers never take it — encoding must not block a page load.
 _LOCK = threading.RLock()
 _DIRS: dict[str, _Dir] = {}
-_ORDER: list[str] | None = None     # every media path, newest first
+# every (media path, mtime), newest first
+_ORDER: list[tuple[str, float]] | None = None
 
 
 def _rescan() -> None:
@@ -146,15 +182,74 @@ def _rescan() -> None:
         del _DIRS[gone]
         dirty = True
     if dirty:
-        _ORDER = [path for path, _ in
-                  sorted(files, key=lambda item: item[1], reverse=True)]
+        _ORDER = sorted(files, key=lambda item: item[1], reverse=True)
+
+
+def _rel_key(path: str) -> str:
+    """`path` as _CONFIRMED spells it: relative to OUTPUT_DIR, forward slashes.
+
+    The same key key_for() produces, by string surgery rather than by
+    resolving: this is asked once per young file per listing, and the whole
+    point of the directory cache is that a listing costs no per-file
+    syscalls. Both spellings agree on everything under OUTPUT_DIR, which is
+    the only place either is used — _rescan walks down from OUTPUT_DIR
+    itself, so every path it holds is already inside it.
+    """
+    return os.path.relpath(path, OUTPUT_DIR).replace(os.sep, "/")
+
+
+def _finished(path: str, mtime: float, now: float) -> bool:
+    """Whether `path` is a file nothing is still writing. Caller holds _LOCK.
+
+    The cheap half first: a file nothing has touched for _WRITE_SETTLE is
+    its own proof, and on a folder of a thousand clips that is every one of
+    them bar the few made in the last half minute.
+    """
+    if now - mtime > _WRITE_SETTLE:
+        return True
+    return _rel_key(path) in _CONFIRMED
+
+
+def settled(path) -> bool:
+    """Whether `path` has finished being written, as far as this can tell.
+
+    The question /media has to ask before it promises a browser that the
+    bytes it is about to send are worth keeping for a day. Takes its own
+    stat, because its caller is holding a resolved path and not a listing.
+
+    A file that is not there at all is not finished — the caller is about
+    to 404 it anyway, and "cache this hard" is the wrong answer to give
+    about a path with nothing behind it.
+    """
+    try:
+        mtime = os.stat(path).st_mtime
+    except OSError:
+        return False
+    now = time.time()
+    if now - mtime > _WRITE_SETTLE:
+        return True
+    key = key_for(path)
+    if key is None:                  # outside the tree; nothing vouches for it
+        return False
+    with _LOCK:
+        return key in _CONFIRMED
 
 
 def list_media() -> list[str]:
-    """Every generated image and video under OUTPUT_DIR, newest first."""
+    """Every *finished* generated image and video under OUTPUT_DIR, newest first.
+
+    The filter is applied here rather than in _rescan so that a file held
+    back cannot be baked into a cached directory listing: _DIRS is keyed on
+    a directory's mtime, and a clip excluded while it was being written
+    would then stay excluded for as long as nothing else was written beside
+    it — which for a hand-copied file is forever. Held back is a state a
+    file grows out of, so the test belongs on the read path.
+    """
     with _LOCK:
         _rescan()
-        return list(_ORDER or ())
+        now = time.time()
+        return [path for path, mtime in (_ORDER or ())
+                if _finished(path, mtime, now)]
 
 
 def list_images(limit: int | None = None) -> list[str]:
@@ -169,6 +264,13 @@ def note_new(paths) -> None:
     Registered against client.on_output, so it runs for every finished
     prompt regardless of which tab asked for it.
 
+    It is also the one thing that can say a generated file is *finished*.
+    ComfyUI writes in place under the final name, so the index cannot tell
+    a clip that is done from one that is three frames in by looking at it —
+    see _WRITE_SETTLE. This is called once the prompt has finished writing,
+    so what it names is complete, and saying so here is what keeps a clip
+    off the settle wait its own encode would otherwise put it through.
+
     Dropping the containing directories rather than patching their cached
     entry lists is deliberate: the next listing re-reads exactly the
     directories that changed and nothing else, which is both the cheapest
@@ -180,7 +282,18 @@ def note_new(paths) -> None:
     """
     global _ORDER
     paths = [str(p) for p in paths]
+    now = time.time()
     with _LOCK:
+        # Vouched for before the cache is dropped, so the very next listing
+        # — which is the one the browser makes the instant the run's
+        # "finished" event lands — already shows them.
+        for path in paths:
+            key = key_for(path)
+            if key is not None:
+                _CONFIRMED[key] = now
+        for stale in [k for k, when in _CONFIRMED.items()
+                      if now - when > _WRITE_SETTLE]:
+            del _CONFIRMED[stale]
         for directory in {os.path.dirname(p) for p in paths}:
             _DIRS.pop(directory, None)
         _ORDER = None
