@@ -1119,11 +1119,14 @@ app.get(
 // one-field edit rather than a delete: it stops being offered, and the pods
 // already holding it in a dropdown lose it on their next read.
 
-// The same list the prompt library uses, and necessarily so: applying a
-// preset means writing values into a specific set of form controls, which
-// is exactly what replaying a prompt does. A tab joins both lists in the
-// commit that teaches the client to load it.
-const PRESET_TABS = PROMPT_TABS;
+// The prompt library's list, and necessarily so: applying a preset means
+// writing values into a specific set of form controls, which is exactly
+// what replaying a prompt does. A tab joins both lists in the commit that
+// teaches the client to load it.
+//
+// Plus MiniMax, which has presets and no prompt library: one list shared
+// by both MiniMax tabs, filed under the image tab's key.
+const PRESET_TABS = [...PROMPT_TABS, "minimax_i2v"];
 
 const MAX_PRESET_NAME_CHARS = 60;
 const MAX_PRESET_DESCRIPTION_CHARS = 200;
@@ -1260,7 +1263,7 @@ app.post(
         message: "Only an admin license can save presets.",
       });
     }
-    const bad = await checkSettings(parsed.value.settings);
+    const bad = await checkSettings(parsed.value.settings, parsed.value.tab);
     if (bad) return badRequest(res, bad);
 
     const now = new Date();
@@ -1347,7 +1350,7 @@ app.post(
   wrap(async (req, res) => {
     const parsed = presetBody(req.body || {});
     if (parsed.error) return badRequest(res, parsed.error);
-    const bad = await checkSettings(parsed.value.settings);
+    const bad = await checkSettings(parsed.value.settings, parsed.value.tab);
     if (bad) return badRequest(res, bad);
 
     const { presets } = await collections();

@@ -43,7 +43,7 @@ import { ObjectId } from "mongodb";
 import { collections, ensureIndexes } from "../src/db.js";
 import { checkSettings } from "../src/assets.js";
 
-const PRESET_TABS = ["krea_t2i", "krea_v2_t2i"];
+const PRESET_TABS = ["krea_t2i", "krea_v2_t2i", "minimax_i2v"];
 
 function args(argv) {
   const out = {};
@@ -154,7 +154,7 @@ if (opts.add) {
   }
   // Models and LoRAs by catalogue id, LoRA rows as [on, id or null,
   // weight] — the same check POST /v1/admin/presets makes.
-  const bad = await checkSettings(settings);
+  const bad = await checkSettings(settings, opts.tab);
   if (bad) die(bad, "(npm run assets lists the ids)");
 
   const now = new Date();

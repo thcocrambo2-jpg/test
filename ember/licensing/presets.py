@@ -51,20 +51,28 @@ from ember.licensing import server
 from ember.logs import log
 from ember.settings import LICENSE_API_URL, LICENSE_KEY
 
-# Tabs a preset can be written for. The same two the prompt library
-# replays into, and necessarily so: applying a preset means writing values
-# into a specific set of form controls, which is exactly what replaying a
-# prompt does. A tab joins this list in the commit that teaches its schema
-# to load settings back into it.
+# Tabs a preset can be written for. The Krea two are the two the prompt
+# library replays into, and necessarily so: applying a preset means writing
+# values into a specific set of form controls, which is exactly what
+# replaying a prompt does. A tab joins this list in the commit that teaches
+# its schema to load settings back into it.
 #
 # Written for, not applied to: which panels *offer* a tab's presets is the
-# front end's business, and it offers each of these two in its generation
+# front end's business, and it offers each Krea one in its generation
 # tab and again in that tab's Edit tab, where the same dials exist under
 # the same names. Nothing here changes for that — one row, read by more than
 # one dropdown.
+#
+# MiniMax is one list for its two tabs, filed under the image tab's key.
+# 🎥 MiniMax I2V and 🎞️ MiniMax T2V run one model over one LoRA list, so a
+# stack that works on one works on the other — and unlike the Edit tabs,
+# both are generation tabs, so both read it *and* save to it. There is no
+# prompt library behind it: presets are the only settings blob these tabs
+# write.
 TAB_KREA2 = str(features.Key.KREA_T2I)
 TAB_KREA2_V2 = str(features.Key.KREA_V2_T2I)
-TABS = (TAB_KREA2, TAB_KREA2_V2)
+TAB_MINIMAX = str(features.Key.MINIMAX_I2V)
+TABS = (TAB_KREA2, TAB_KREA2_V2, TAB_MINIMAX)
 
 # How long a fetched set is served without asking again. The same 300s as
 # plans.py and prompts.py: presets change when we save one, which is not

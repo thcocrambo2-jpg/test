@@ -1,7 +1,7 @@
 # Settings presets
 
-The **⚙️ Preset** dropdown on the 🎨 Krea2 and 🔶 Krea2 V2 tabs, and what
-the two Edit tabs do with it. For someone using the tabs, for the admin
+The **⚙️ Preset** dropdown on the 🎨 Krea2 and 🔶 Krea2 V2 tabs, what
+the two Edit tabs do with it, and the one list the two MiniMax tabs share. For someone using the tabs, for the admin
 who writes presets, and for someone changing how they apply.
 
 Picking a preset writes every control below it — model, steps, CFG,
@@ -13,7 +13,7 @@ blob, same guarding, minus the words.
 Presets live on the licence server, so changing one changes it for every
 customer without shipping a binary. The pod's side is
 [`ember/licensing/presets.py`](../../ember/licensing/presets.py), whose
-`TABS` is the two generation tabs — `krea_t2i` and `krea_v2_t2i`.
+`TABS` is `krea_t2i`, `krea_v2_t2i` and `minimax_i2v`.
 
 ## The Edit tabs read the same list
 
@@ -48,6 +48,17 @@ the generation tabs.
 Saving is unchanged: the `💾 Save these settings as a preset` tickbox is
 a generation-tab control, so an Edit tab reads presets and never writes
 one.
+
+## The MiniMax tabs share one list
+
+🎥 MiniMax I2V and 🎞️ MiniMax T2V run one model over one LoRA list, so
+they share one preset list, filed under `minimax_i2v`. Both are
+generation tabs, so both read it and both have the save tickbox (without
+the publish one — there is no prompt library behind them). A MiniMax
+preset has **no `model`**: the licence server's `MODELLESS_TABS` accepts
+a blob without one for this tab, and refuses one that has one. A preset
+saved from T2V carries an aspect ratio that I2V skips. See
+[minimax.md](../pipelines/minimax.md#presets).
 
 ## Only an admin can write one
 

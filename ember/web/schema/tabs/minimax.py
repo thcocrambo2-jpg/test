@@ -3,6 +3,7 @@
 from ember import features
 from ember.generation import handlers
 from ember.generation import runner
+from ember.licensing import presets
 from ember.pipelines.krea2.constants import SAMPLERS
 from ember.pipelines.minimax.constants import (
     MINIMAX_ASPECT_RATIOS,
@@ -21,10 +22,13 @@ from ember.pipelines.minimax.handler import (
 )
 from ember.web.schema.fields import (
     G_PROMPT,
+    G_SAVE_PRESET,
     G_SEED,
+    MINIMAX_PRESET_NOTE,
     VIDEO_KEYS,
     _batch_field,
     _blank_lora_tail,
+    _preset_save_fields,
     _seed_fields,
 )
 from ember.web.schema.model import Field, Group, TabSchema
@@ -40,7 +44,10 @@ Key = features.Key
 # No negative prompt and no CFG, because the model is guidance-distilled
 # like Flux; the prompt carries the sound as well as the motion, since
 # every clip comes back with a soundtrack. The LoRA stack is each tab's
-# own catalogue list, eight blank rows like Krea2's; there are no presets.
+# own catalogue list, eight blank rows like Krea2's. The two tabs share one
+# preset list (presets.TAB_MINIMAX), read and saved from either — the text
+# tab's presets carry an aspect ratio the image tab has no control for,
+# which the image tab simply skips.
 # Both carry the Auto prompt panel, which writes the Prompt box from a
 # short idea before the click — see ember/pipelines/minimax/autoprompt.py.
 MINIMAX_I2V_SCHEMA = TabSchema(
@@ -50,10 +57,12 @@ MINIMAX_I2V_SCHEMA = TabSchema(
     icon="🎥", blurb="Turn a still into a clip that comes with its own "
                     "sound.",
     category="video", route="/video/minimax", submit_label="Animate",
-    autoprompt=True,
+    autoprompt=True, preset_tab=presets.TAB_MINIMAX,
+    preset_note=MINIMAX_PRESET_NOTE,
     groups=(Group("inputs", "Start frame", column="right"), G_PROMPT,
             Group("core", "Output", dense=True),
-            Group("sampling", "Sampling", dense=True), G_SEED),
+            Group("sampling", "Sampling", dense=True), G_SEED,
+            G_SAVE_PRESET),
     fields=(
         Field("image", "Start image (paste with Ctrl+V)", "image", None,
               group="inputs", column="right"),
@@ -63,19 +72,22 @@ MINIMAX_I2V_SCHEMA = TabSchema(
                           "window, a kettle starting to whistle"),
         *_seed_fields(),
         Field("steps", "Steps", "slider", MINIMAX_DEFAULTS["steps"],
-              lo=1, hi=40, step=1, group="sampling",
+              lo=1, hi=40, step=1, group="sampling", preset="steps",
               hint="The turbo LoRA is tuned for 8."),
         Field("resolution", "Resolution (keeps the source aspect)",
               "radio", MINIMAX_DEFAULT_RESOLUTION,
-              choices=list(MINIMAX_RESOLUTIONS), group="core", wide=True),
+              choices=list(MINIMAX_RESOLUTIONS), group="core",
+              preset="resolution", wide=True),
         Field("seconds", "Duration (seconds)", "slider",
               MINIMAX_DEFAULT_SECONDS, lo=MINIMAX_MIN_SECONDS,
               hi=MINIMAX_MAX_SECONDS, step=1.0, group="sampling",
-              wide=True,
+              preset="seconds", wide=True,
               hint="Snapped to the model's frame grid at 24 fps."),
         Field("sampler", "Sampler", "select", MINIMAX_DEFAULTS["sampler"],
-              choices=SAMPLERS + ["uni_pc"], group="sampling", wide=True),
+              choices=SAMPLERS + ["uni_pc"], group="sampling",
+              preset="sampler", wide=True),
         _batch_field(hi=10),
+        *_preset_save_fields(),
         Field("lora_slots", "LoRA stack", "repeat",
               repeat=_blank_lora_tail(handlers.MINIMAX_I2V)),
     ),
@@ -88,9 +100,11 @@ MINIMAX_T2V_SCHEMA = TabSchema(
     icon="🎞️", blurb="A clip with sound, from words alone.",
     category="video", route="/video/minimax-t2v",
     submit_label="Generate",
-    autoprompt=True,
+    autoprompt=True, preset_tab=presets.TAB_MINIMAX,
+    preset_note=MINIMAX_PRESET_NOTE,
     groups=(G_PROMPT, Group("core", "Output", dense=True),
-            Group("sampling", "Sampling", dense=True), G_SEED),
+            Group("sampling", "Sampling", dense=True), G_SEED,
+            G_SAVE_PRESET),
     fields=(
         Field("prompt", "Prompt (the scene, the motion, and the sound)",
               "textarea", "", lines=5, group="prompt",
@@ -99,22 +113,25 @@ MINIMAX_T2V_SCHEMA = TabSchema(
                           "slow push-in"),
         Field("aspect", "Aspect ratio", "select", MINIMAX_DEFAULT_ASPECT,
               choices=list(MINIMAX_ASPECT_RATIOS), group="core",
-              wide=True),
+              preset="aspect", wide=True),
         *_seed_fields(),
         Field("steps", "Steps", "slider", MINIMAX_DEFAULTS["steps"],
-              lo=1, hi=40, step=1, group="sampling",
+              lo=1, hi=40, step=1, group="sampling", preset="steps",
               hint="The turbo LoRA is tuned for 8."),
         Field("resolution", "Resolution", "radio",
               MINIMAX_DEFAULT_RESOLUTION,
-              choices=MINIMAX_T2V_RESOLUTIONS, group="core", wide=True),
+              choices=MINIMAX_T2V_RESOLUTIONS, group="core",
+              preset="resolution", wide=True),
         Field("seconds", "Duration (seconds)", "slider",
               MINIMAX_DEFAULT_SECONDS, lo=MINIMAX_MIN_SECONDS,
               hi=MINIMAX_MAX_SECONDS, step=1.0, group="sampling",
-              wide=True,
+              preset="seconds", wide=True,
               hint="Snapped to the model's frame grid at 24 fps."),
         Field("sampler", "Sampler", "select", MINIMAX_DEFAULTS["sampler"],
-              choices=SAMPLERS + ["uni_pc"], group="sampling", wide=True),
+              choices=SAMPLERS + ["uni_pc"], group="sampling",
+              preset="sampler", wide=True),
         _batch_field(hi=10),
+        *_preset_save_fields(),
         Field("lora_slots", "LoRA stack", "repeat",
               repeat=_blank_lora_tail(handlers.MINIMAX_T2V)),
     ),

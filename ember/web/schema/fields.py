@@ -166,6 +166,14 @@ def _save_fields():
               False, group="save", record=False),
         Field("publish_title", "Card title (optional)", "text", "", lines=1,
               group="save", record=False, show_if=("publish", True)),
+        *_preset_save_fields(),
+    )
+
+
+def _preset_save_fields():
+    """Save-preset alone — the MiniMax tabs, which have no prompt library
+    to publish to. Same `record=False`, for the same reason."""
+    return (
         Field("save_preset", "💾 Save these settings as a preset", "bool",
               False, group="save", record=False),
         Field("preset_name", "Preset name", "text", "", lines=1,
@@ -289,6 +297,8 @@ G_PROMPT = Group("prompt", "Prompt")
 G_SEED = Group("seed", "Seed & batch", renderer="seed")
 G_SAVE = Group("save", "Publish & presets", collapsible=True,
                default_open=False)
+G_SAVE_PRESET = Group("save", "Presets", collapsible=True,
+                      default_open=False)
 G_SAMPLER = Group("sampler", "Sampler", renderer="sampler", collapsible=True)
 G_VARIANCE = Group("variance", "Variance", renderer="variance",
                    collapsible=True, default_open=False)
@@ -308,6 +318,10 @@ _CFG_NOTE = "Above 1 turns the negative prompt on."
 GEN_PRESET_NOTE = "Loads every setting below. Your prompt is left alone."
 EDIT_PRESET_NOTE = ("The {} tab's presets, minus the dials an edit does not "
                     "have. Your image and instruction are left alone.")
+# One list for both MiniMax tabs: each skips the one dial the other has
+# (Aspect ratio lives on the text tab only).
+MINIMAX_PRESET_NOTE = ("Shared by both MiniMax tabs. Loads every setting "
+                       "below. Your prompt and image are left alone.")
 
 # What every image tab's handler yields, in order. `_freeze` zips these
 # onto the tuple, so jobqueue stops carrying a status_index int and the

@@ -4,9 +4,14 @@ import random
 import uuid
 
 from ember.comfy.client import client
-from ember.generation.handlers import MINIMAX_I2V, MINIMAX_T2V
-from ember.generation.loras import _resolve_lora_slots, _skipped_note
+from ember.generation.handlers import MINIMAX_I2V, MINIMAX_T2V, _save_preset
+from ember.generation.loras import (
+    _resolve_lora_slots,
+    _skipped_note,
+    stored_lora,
+)
 from ember.generation.runner import _png_bytes, _run_tag, _run_wan_jobs
+from ember.licensing import presets
 from ember.pipelines.minimax.constants import MINIMAX_FPS
 from ember.pipelines.minimax.workflow import (
     aspect_size as minimax_aspect_size,
@@ -27,6 +32,33 @@ def _minimax_note() -> str | None:
     return ("❌ The MiniMax H3 weights are not downloaded yet (missing: %s) — "
             "restart the app so the download step can fetch them."
             % ", ".join(minimax_missing()))
+
+
+def _minimax_settings(seed, randomize, steps, resolution, seconds, sampler,
+                      batch_count, lora_slots, aspect=None) -> dict:
+    """The MiniMax tabs' controls as a preset stores them.
+
+    The UI values, LoRA ids and all — the same shape as _krea_settings,
+    minus the model (these tabs have no Model control) and plus the clip
+    length. `aspect` only on the text tab, the one control the two tabs do
+    not share; the image tab skips it when it applies a preset.
+    scripts/golden.py checks this against tabschema's settings().
+    """
+    settings = {
+        "steps": int(steps),
+        "resolution": resolution,
+        "seconds": int(round(float(seconds))),
+        "sampler": sampler,
+        "seed": int(seed or 0),
+        "randomize": bool(randomize),
+        "batch_count": int(batch_count),
+        "loras": [[bool(on), stored_lora(name), float(weight)]
+                  for on, name, weight
+                  in zip(lora_slots[::3], lora_slots[1::3], lora_slots[2::3])],
+    }
+    if aspect is not None:
+        settings["aspect"] = aspect
+    return settings
 
 
 def _minimax_jobs(*, prompt, base_seed, steps, width, height, seconds,
@@ -50,7 +82,8 @@ def _minimax_jobs(*, prompt, base_seed, steps, width, height, seconds,
 
 
 def generate_minimax_video(image, prompt, seed, randomize, steps, resolution,
-                           seconds, sampler, batch_count, *lora_slots):
+                           seconds, sampler, batch_count, save_preset,
+                           preset_name, *lora_slots):
     """MiniMax I2V tab: animate an uploaded image into a clip with sound."""
     if image is None:
         yield [], None, "❌ Upload an image first.", 0
@@ -59,6 +92,10 @@ def generate_minimax_video(image, prompt, seed, randomize, steps, resolution,
     if note:
         yield [], None, note, 0
         return
+    notice = _save_preset(presets.TAB_MINIMAX, save_preset, preset_name,
+                          _minimax_settings(seed, randomize, steps, resolution,
+                                            seconds, sampler, batch_count,
+                                            lora_slots))
     image = image.convert("RGB")
     width, height = minimax_resolve_size(*image.size, resolution)
     if minimax_matches_image(resolution):
@@ -74,10 +111,11 @@ def generate_minimax_video(image, prompt, seed, randomize, steps, resolution,
         image_name = client.upload_image(_png_bytes(image),
                                          f"minimax_{tag}.png")
     except Exception as exc:
-        yield [], None, f"❌ Uploading the image to ComfyUI failed: {exc}", 0
+        yield [], None, (notice + "❌ Uploading the image to ComfyUI "
+                         f"failed: {exc}"), 0
         return
     loras, skipped = _resolve_lora_slots(MINIMAX_I2V, lora_slots)
-    notice = _skipped_note(skipped)
+    notice += _skipped_note(skipped)
     jobs = _minimax_jobs(prompt=prompt, base_seed=base_seed, steps=steps,
                          width=width, height=height, seconds=seconds,
                          sampler=sampler, batch_count=batch_count,
@@ -89,7 +127,8 @@ def generate_minimax_video(image, prompt, seed, randomize, steps, resolution,
 
 
 def generate_minimax_t2v(prompt, aspect, seed, randomize, steps, resolution,
-                         seconds, sampler, batch_count, *lora_slots):
+                         seconds, sampler, batch_count, save_preset,
+                         preset_name, *lora_slots):
     """MiniMax T2V tab: a clip with sound from the prompt alone."""
     if not (prompt or "").strip():
         yield [], None, ("❌ Write a prompt first — there is no image for "
@@ -99,10 +138,14 @@ def generate_minimax_t2v(prompt, aspect, seed, randomize, steps, resolution,
     if note:
         yield [], None, note, 0
         return
+    notice = _save_preset(presets.TAB_MINIMAX, save_preset, preset_name,
+                          _minimax_settings(seed, randomize, steps, resolution,
+                                            seconds, sampler, batch_count,
+                                            lora_slots, aspect=aspect))
     width, height = minimax_aspect_size(aspect, resolution)
     base_seed = random.randint(0, 2**32 - 1) if randomize else int(seed)
     loras, skipped = _resolve_lora_slots(MINIMAX_T2V, lora_slots)
-    notice = _skipped_note(skipped)
+    notice += _skipped_note(skipped)
     jobs = _minimax_jobs(prompt=prompt, base_seed=base_seed, steps=steps,
                          width=width, height=height, seconds=seconds,
                          sampler=sampler, batch_count=batch_count,

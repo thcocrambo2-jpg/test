@@ -119,6 +119,7 @@
     "handlers.MINIMAX_T2V": "'minimax_t2v'",
     "presets.TAB_KREA2": "'krea_t2i'",
     "presets.TAB_KREA2_V2": "'krea_v2_t2i'",
+    "presets.TAB_MINIMAX": "'minimax_i2v'",
     "prompts.TAB_KREA2": "'krea_t2i'",
     "prompts.TAB_KREA2_V2": "'krea_v2_t2i'"
   },

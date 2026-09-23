@@ -297,12 +297,20 @@ export function idListProblems(list, known, what) {
 // disabled LoRA still exists and may come back; a preset naming it is not
 // wrong, it just has one slot the tab will leave empty for now.
 
+// Preset tabs with no Model control. The MiniMax tabs run fixed weights
+// that are not catalogue models (their feature's `models` is empty), so
+// their blob carries no `model` at all — and one that does is refused,
+// since nothing on the tab could apply it.
+export const MODELLESS_TABS = ["minimax_i2v"];
+
 /**
  * What is wrong with a settings blob's model and LoRA rows, or null.
  *
- * `ids` is `{models: Set, loras: Set}` — see assetIds().
+ * `ids` is `{models: Set, loras: Set}` — see assetIds(). `tab` is the
+ * preset tab the blob is for, when there is one (a prompt has none).
  *
- *   settings.model   required, an existing model id
+ *   settings.model   required, an existing model id — absent on a
+ *                    MODELLESS_TABS tab
  *   settings.loras   optional; when present an array of rows, each exactly
  *                    [on: boolean, lora id | null, weight: number]
  *
@@ -310,10 +318,14 @@ export function idListProblems(list, known, what) {
  * never reaches storage — a "None" here means a client sent the form
  * value through untranslated, and is refused like any other bad id.
  */
-export function settingsProblem(settings, ids) {
+export function settingsProblem(settings, ids, tab = null) {
   if (!isObject(settings)) return "settings must be an object.";
   const { model, loras } = settings;
-  if (typeof model !== "string" || !ids.models.has(model)) {
+  if (MODELLESS_TABS.includes(tab)) {
+    if (model !== undefined) {
+      return `settings.model: the ${tab} tab has no model to set.`;
+    }
+  } else if (typeof model !== "string" || !ids.models.has(model)) {
     return `settings.model ${show(model)} is not a model id.`;
   }
   if (loras === undefined) return null;
@@ -348,8 +360,8 @@ export async function assetIds() {
 }
 
 /** settingsProblem() against the collections as they are now. */
-export async function checkSettings(settings) {
-  return settingsProblem(settings, await assetIds());
+export async function checkSettings(settings, tab = null) {
+  return settingsProblem(settings, await assetIds(), tab);
 }
 
 // ── The /v1/catalog answer ─────────────────────────────────────────────

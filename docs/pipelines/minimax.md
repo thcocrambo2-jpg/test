@@ -75,10 +75,11 @@ always last.
 The template also routes CLIP through its loader, but a character LoRA
 carries no text-encoder weights, so a model-only chain is the same graph.
 
-On screen the stack is **eight blank rows, all off**, like 🎨 Krea2's —
-not one row per LoRA the way the V2 tabs do it. Each row's dropdown
-offers the LoRAs the catalogue lists for that tab's feature, and nothing
-is switched on by default. Slots left at `None` drop out of the chain.
+On screen the stack is **eight blank rows**, like 🎨 Krea2's — not one
+row per LoRA the way the V2 tabs do it. Each row's dropdown offers the
+LoRAs the catalogue lists for that tab's feature. The rows are built
+off; the tabs' `Default` preset, applied on load, is what switches the
+usual ones on. Slots left at `None` drop out of the chain.
 
 These are the only tabs whose catalogue entry lists **LoRAs and no
 models**: their weights are fixed in `constants.py`, so there is no Model
@@ -90,7 +91,23 @@ CivitAI `source`, so the mirror is tried first at the pinned revision and
 CivitAI is the fallback at the same revision. Most CivitAI downloads need
 `CIVITAI_TOKEN`.
 
-There are no presets on these tabs.
+## Presets
+
+Both tabs share **one preset list**, filed on the licence server under
+`minimax_i2v` (`presets.TAB_MINIMAX`). The two tabs run one model over one
+LoRA list, so a stack that works on one works on the other — the way
+✨ Krea2 Edit reads 🎨 Krea2's presets. Unlike the Edit tabs, both are
+generation tabs, so both read the list *and* can save to it (admin only).
+
+A preset carries steps, resolution, duration, sampler, seed, batch count
+and the LoRA stack — no `model`, since these tabs have none. One saved
+from 🎞️ MiniMax T2V also carries its aspect ratio, which 🎥 MiniMax I2V
+skips (the image sets its shape). Its Match image resolution is likewise
+left alone on T2V, which does not offer it.
+
+The `Default` preset switches on `hmnsfw-aio-v2-5`, `vgna`, `hmbrst`,
+`hmpenis-v2-0` and `humanmotion-v1-0` at 0.5. See
+[presets](../features/presets.md).
 
 ## What the tabs expose
 

@@ -290,8 +290,14 @@ def patch(users, capture) -> None:
     def record(tab, prompt, negative, settings, **_kwargs):
         capture.settings = settings
 
+    # The MiniMax tabs keep no prompt library, so their blob is only ever
+    # seen by a preset save — captured the same way, for the same check.
+    def save(tab, name, settings):
+        capture.settings = settings
+        return True, "stubbed"
+
     prompts.record = record
-    presets.save = lambda *a, **k: (True, "stubbed")
+    presets.save = save
 
     for comfy_client in (client.client, client.wan_client):
         comfy_client.run = capture.run
@@ -410,7 +416,7 @@ def cases(module) -> dict:
         "generate_minimax_video": (
             image, "the tide comes in and the gulls cry",
             7890123, False, 9, "Native 768p (short edge 768, slower)", 7,
-            "dpmpp_2m", 2,
+            "dpmpp_2m", 2, True, "Golden",
         ) + minimax_triples({0: (True, "hmnsfw-aio-v2-5"),
                              1: (False, "vgna"),
                              2: (True, "hmmisdog")}),
@@ -418,7 +424,7 @@ def cases(module) -> dict:
         "generate_minimax_t2v": (
             "a kettle comes to the boil and whistles", "16:9 (Widescreen)",
             8901234, False, 11, "Standard (0.7 MP — the template default)", 6,
-            "euler_ancestral", 2,
+            "euler_ancestral", 2, True, "Golden",
         ) + minimax_triples({0: (False, "hmbrst"),
                              1: (True, "hmcshot-v1-0")}),
     }
@@ -436,7 +442,8 @@ def check_settings(name, args, settings) -> None:
     tabschema asserts the *Krea 2* blob against krea2._krea_settings at
     import, because that one is a plain function. The V2 blob is built
     inline inside generate_v2, so the only way to see it is to run the
-    handler — which is what happens here.
+    handler — which is what happens here. The two MiniMax cases tick the
+    save-preset box, so their blob (_minimax_settings) is checked too.
 
     The inversion in the middle is worth reading twice. `Field.name` is
     the handler parameter name and `fields` is submission order, so

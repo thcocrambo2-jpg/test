@@ -124,6 +124,7 @@ SOURCES = [
 QUALIFIED = {
     "presets.TAB_KREA2": ("ember.licensing.presets", "TAB_KREA2"),
     "presets.TAB_KREA2_V2": ("ember.licensing.presets", "TAB_KREA2_V2"),
+    "presets.TAB_MINIMAX": ("ember.licensing.presets", "TAB_MINIMAX"),
     "prompts.TAB_KREA2": ("ember.licensing.prompts", "TAB_KREA2"),
     "prompts.TAB_KREA2_V2": ("ember.licensing.prompts", "TAB_KREA2_V2"),
     "handlers.KREA_T2I": ("ember.generation.handlers", "KREA_T2I"),
