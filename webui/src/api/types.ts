@@ -169,6 +169,52 @@ export interface TabSchema {
    *  model control. It is what lets the browser reproduce
    *  krea_model_changed and its three siblings locally. */
   modelRegistry: string | null
+  /** Whether the tab carries the Auto prompt panel, which writes the prompt
+   *  field from a short idea. The MiniMax tabs only. */
+  autoprompt: boolean
+}
+
+// ------------------------------------------------------------ auto prompt
+
+/** One model the Auto prompt panel offers. */
+export interface AutoPromptModel {
+  id: string
+  label: string
+  free: boolean
+}
+
+/** What the panel needs before it writes anything. */
+export interface AutoPromptConfig {
+  models: AutoPromptModel[]
+  defaultModel: string
+  /** `OPENROUTER_API_KEY` from the machine the app runs on, or '' when it
+   *  is not set. What the key box arrives filled in with. */
+  podKey: string
+}
+
+/** One prompt being written, as the server reports it.
+ *
+ *  `waiting` is the free model refusing as busy: `retryIn` counts down to
+ *  the next call, of `maxCalls` in all. */
+export interface AutoPromptTask {
+  id: string
+  state: 'writing' | 'waiting' | 'done' | 'error' | 'cancelled'
+  model: string
+  modelLabel: string
+  call: number
+  maxCalls: number
+  retryIn: number | null
+  elapsed: number
+  prompt: string
+  error: string
+}
+
+/** What starts one: the form bag for the canvas and the image, and the rest
+ *  from the panel. An empty `key` means the machine's own. */
+export interface AutoPromptRequest {
+  idea: string
+  model: string
+  key: string
 }
 
 /** One model a tab offers, flattened for the browser.
@@ -536,6 +582,19 @@ export interface ApiClient {
   applySettings(tabKey: string, settings: Record<string, unknown>): Promise<Record<string, unknown>>
   getPrompts(query: PromptQuery): Promise<PromptPage>
   getRecipe(pathId: string): Promise<{ recipe: StoredRecipe | null; canLoad?: boolean }>
+  getAutoPromptConfig(tabKey: string): Promise<AutoPromptConfig>
+  /** Begin writing a prompt for this tab. Answers at once; the writing
+   *  happens on the server and is followed with `getAutoPrompt`. */
+  startAutoPrompt(
+    schema: TabSchema,
+    values: SubmitValues,
+    request: AutoPromptRequest,
+  ): Promise<AutoPromptTask>
+  /** Everything the model would be sent, as one text to copy into some other
+   *  chat LLM. Nothing is called. */
+  getAutoPromptText(schema: TabSchema, values: SubmitValues, idea: string): Promise<string>
+  getAutoPrompt(tabKey: string, taskId: string): Promise<AutoPromptTask>
+  cancelAutoPrompt(tabKey: string, taskId: string): Promise<AutoPromptTask>
   /** One SSE connection for the whole app. Returns an unsubscribe. */
   subscribe(onEvent: (event: StreamEvent) => void): () => void
 }

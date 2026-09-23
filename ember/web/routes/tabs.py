@@ -12,6 +12,7 @@ from ember.generation import queue as jobqueue
 from ember.licensing import presets
 from ember.generation import recipes
 from ember.web import tabschema
+from ember.web.routes import autoprompt
 from ember.web.routes.common import (
     require_auth, require_feature, _display_json, _queue_json,
     _resolve_uploads, _keep_sources, _source_url,
@@ -38,9 +39,15 @@ def _mount_tabs(api: APIRouter) -> None:
 
 
 def _mount_tab(api: APIRouter, schema) -> None:
-    """One tab's three routes, closed over its schema."""
+    """One tab's routes, closed over its schema.
+
+    Four for every tab, and Auto prompt's for a tab that sets it, which
+    takes the same gate — see routes/autoprompt.py.
+    """
     gate = [Depends(require_auth), Depends(require_feature(schema.key))]
     key = str(schema.key)
+    if schema.autoprompt:
+        autoprompt.mount(api, schema, gate)
 
     @api.get("/schema/" + key, dependencies=gate, name="schema_" + key)
     def get_schema():

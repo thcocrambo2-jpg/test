@@ -41,6 +41,8 @@ Key = features.Key
 # like Flux; the prompt carries the sound as well as the motion, since
 # every clip comes back with a soundtrack. The LoRA stack is each tab's
 # own catalogue list, eight blank rows like Krea2's; there are no presets.
+# Both carry the Auto prompt panel, which writes the Prompt box from a
+# short idea before the click — see ember/pipelines/minimax/autoprompt.py.
 MINIMAX_I2V_SCHEMA = TabSchema(
     key=Key.MINIMAX_I2V, handler=generate_minimax_video,
     lane=runner.COMFY_LANE, prompt_field="prompt",
@@ -48,6 +50,7 @@ MINIMAX_I2V_SCHEMA = TabSchema(
     icon="🎥", blurb="Turn a still into a clip that comes with its own "
                     "sound.",
     category="video", route="/video/minimax", submit_label="Animate",
+    autoprompt=True,
     groups=(Group("inputs", "Start frame", column="right"), G_PROMPT,
             Group("core", "Output", dense=True),
             Group("sampling", "Sampling", dense=True), G_SEED),
@@ -85,6 +88,7 @@ MINIMAX_T2V_SCHEMA = TabSchema(
     icon="🎞️", blurb="A clip with sound, from words alone.",
     category="video", route="/video/minimax-t2v",
     submit_label="Generate",
+    autoprompt=True,
     groups=(G_PROMPT, Group("core", "Output", dense=True),
             Group("sampling", "Sampling", dense=True), G_SEED),
     fields=(

@@ -68,6 +68,7 @@ running the deployment, or a **developer** working on a checkout.
 | `RUNPOD_POD_HOSTNAME` | set by RunPod | The fallback when the pod id is not set. Off a pod, the seat falls back to the hostname and finally to a random id. | automatic |
 | `HF_TOKEN` | unset | Hugging Face **read** token. Only needed for gated upstream repos — the mirrors are public, so a healthy pod pulls anonymously. | customer |
 | `CIVITAI_TOKEN` | unset | CivitAI API token. Only used when a download falls through to CivitAI, i.e. when the mirror could not serve it. | customer |
+| `OPENROUTER_API_KEY` | unset | OpenRouter key for **Auto prompt** on 🎥 MiniMax I2V and 🎞️ MiniMax T2V. When set, the tab's key box arrives filled in with it; unset, the customer pastes one. Anyone who can open the UI can read it there, so set it only on a pod whose UI is not shared. | customer |
 
 ### The validation worth knowing about
 

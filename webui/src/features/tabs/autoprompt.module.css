@@ -1,0 +1,175 @@
+/* The MiniMax tabs' Auto prompt panel. A group card like the form's own,
+   with the accent on its border so it reads as the thing that writes the
+   Prompt group below it. */
+
+.panel {
+  border: 1px solid var(--c-accent-line);
+  border-radius: var(--r-lg);
+  background: var(--c-panel);
+  padding: var(--s-3) var(--s-4);
+}
+
+.off {
+  border-color: var(--c-border);
+}
+
+.head {
+  display: flex;
+  align-items: flex-start;
+  gap: var(--s-3);
+  cursor: pointer;
+  user-select: none;
+}
+
+.head > input {
+  margin-top: 2px;
+}
+
+.title {
+  display: block;
+  font-size: var(--t-sm);
+  font-weight: var(--fw-semibold);
+  color: var(--c-text);
+}
+
+.blurb {
+  display: block;
+  font-size: var(--t-2xs);
+  color: var(--c-text-faint);
+  line-height: var(--lh-snug);
+}
+
+.body {
+  display: grid;
+  gap: var(--s-4);
+  margin-top: var(--s-3);
+  padding-top: var(--s-3);
+  border-top: 1px dashed var(--c-border);
+}
+
+.settings {
+  display: grid;
+  gap: var(--s-4);
+  padding: var(--s-3);
+  background: var(--c-bg-sunken);
+  border: 1px solid var(--c-border);
+  border-radius: var(--r-md);
+}
+
+/* FREE / PAID, on the Model label's row. */
+.badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 2px var(--s-2);
+  border: 1px solid transparent;
+  border-radius: var(--r-full);
+  font-size: var(--t-2xs);
+  font-weight: var(--fw-bold);
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  line-height: var(--lh-tight);
+}
+
+.badge::before {
+  content: '';
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: currentColor;
+}
+
+.free {
+  color: var(--c-success);
+  background: var(--c-success-soft);
+  border-color: var(--c-success-line);
+}
+
+.paid {
+  color: var(--c-accent);
+  background: var(--c-accent-soft);
+  border-color: var(--c-accent-line);
+}
+
+.keyRow {
+  position: relative;
+}
+
+.keyInput {
+  width: 100%;
+  padding-right: 56px;
+}
+
+.show {
+  position: absolute;
+  right: var(--s-2);
+  top: 50%;
+  transform: translateY(-50%);
+  background: none;
+  border: none;
+  color: var(--c-text-muted);
+  font-size: var(--t-xs);
+  cursor: pointer;
+}
+
+.show:hover {
+  color: var(--c-text);
+}
+
+.actions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--s-3);
+}
+
+.status {
+  display: flex;
+  align-items: flex-start;
+  gap: var(--s-2);
+  padding: var(--s-2) var(--s-3);
+  border: 1px solid var(--c-border);
+  border-radius: var(--r-md);
+  background: var(--c-bg-sunken);
+  font-size: var(--t-xs);
+  line-height: var(--lh-snug);
+}
+
+.statusText {
+  flex: 1;
+  min-width: 0;
+}
+
+.info {
+  border-color: var(--c-info-line);
+  background: var(--c-info-soft);
+}
+
+.warn {
+  border-color: var(--c-warning-line);
+  background: var(--c-warning-soft);
+}
+
+.ok {
+  border-color: var(--c-success-line);
+  background: var(--c-success-soft);
+}
+
+.err {
+  border-color: var(--c-error-line);
+  background: var(--c-error-soft);
+}
+
+.dismiss {
+  background: none;
+  border: none;
+  color: var(--c-text-muted);
+  cursor: pointer;
+  font-size: var(--t-xs);
+  line-height: 1;
+  padding: 2px;
+}
+
+.dismiss:hover {
+  color: var(--c-text);
+}

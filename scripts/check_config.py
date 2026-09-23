@@ -36,8 +36,8 @@ Determinism
 Half of settings.py is derived from the environment, so collecting it in
 this process would record this machine. Instead the values come from a
 **subprocess** with a built environment: every `EMBER_*`, `KREA2_*`,
-`HF_TOKEN`, `CIVITAI_TOKEN` and `RUNPOD_*` variable is dropped, and four
-are set to fixed values (see `_child_env`). `LICENSE_API_URL`,
+`HF_TOKEN`, `CIVITAI_TOKEN`, `OPENROUTER_API_KEY` and `RUNPOD_*` variable
+is dropped, and four are set to fixed values (see `_child_env`). `LICENSE_API_URL`,
 `LICENSE_KEY`, `SHOWCASE_BASE_URL`, the tokens and every path under
 `BASE_DIR` are then the same on any machine — and the two directories
 that still differ, the temp base dir and the repo root, are written back
@@ -168,8 +168,10 @@ _PREFIXES = ("EMBER_", "KREA2_")
 # Anything that could reach one of these values. The two prefixes cover
 # the base dir, the swap and attention flags, the Wan reserves, the
 # licence key, tag and grace, and the showcase URL; the rest are the two
-# download credentials and the RunPod ids ember/licensing/seat.py reads.
-_WIPE = _PREFIXES + ("RUNPOD_", "HF_TOKEN", "CIVITAI_TOKEN")
+# download credentials, the OpenRouter key and the RunPod ids
+# ember/licensing/seat.py reads.
+_WIPE = _PREFIXES + ("RUNPOD_", "HF_TOKEN", "CIVITAI_TOKEN",
+                     "OPENROUTER_API_KEY")
 
 # The child's stdout also carries whatever a module decides to print when
 # it is imported, so the payload says where it starts and ends rather than

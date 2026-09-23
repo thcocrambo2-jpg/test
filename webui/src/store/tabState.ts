@@ -71,3 +71,18 @@ export function useTabState<T>(key: string, initial: T): [T, TabStateSetter<T>] 
 
   return [stored === undefined ? initial : stored, set]
 }
+
+/** One slot read from outside React, or `initial` when nothing is stored.
+ *
+ *  For work that finishes after the component that started it may have gone:
+ *  Auto prompt writes a prompt a minute or more after it was asked for, and by
+ *  then the tab may be one somebody has navigated away from. */
+export function readTabState<T>(key: string, initial: T): T {
+  const held = useStore.getState().bags[key] as T | undefined
+  return held === undefined ? initial : held
+}
+
+/** `readTabState`'s twin: a functional update from outside React. */
+export function writeTabState<T>(key: string, initial: T, next: (previous: T) => T): void {
+  useStore.getState().put(key, next(readTabState(key, initial)))
+}

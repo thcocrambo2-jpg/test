@@ -24,6 +24,18 @@ export function useSchema(key: string | undefined): TabSchema | undefined {
   return data?.find((tab) => tab.key === key)
 }
 
+/** What a tab's Auto prompt panel offers, and the machine's key if it has
+ *  one. Static for a session like the catalogue: both are fixed when the
+ *  process starts. Only asked for once the panel is switched on. */
+export function useAutoPromptConfig(tabKey: string, enabled: boolean) {
+  return useQuery({
+    queryKey: ['autoprompt', tabKey],
+    queryFn: () => api.getAutoPromptConfig(tabKey),
+    enabled,
+    ...FOREVER,
+  })
+}
+
 /** Each feature's models and their per-variant defaults. Static for a
  *  session: the pod reads the licence server's catalogue once at start
  *  (catalog.py) and freezes it for the life of the process, because a list

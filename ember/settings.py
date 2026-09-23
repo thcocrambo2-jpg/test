@@ -32,6 +32,7 @@ Every environment variable the app reads, in one place:
     RUNPOD_POD_ID               a stable instance id for the licence seat
     RUNPOD_POD_HOSTNAME         the fallback when the pod id is not set
     HF_TOKEN, CIVITAI_TOKEN     download credentials
+    OPENROUTER_API_KEY          the key MiniMax's Auto prompt writes with
 
 Each EMBER_ variable above also answers to its KREA2_ spelling, and
 EMBER_ wins when both are set. Pods and RunPod templates in the field
@@ -40,8 +41,8 @@ needed every one of them edited by hand would take a working pod down;
 reading both means nobody has to touch anything to keep running.
 `main()` names the legacy variables a run is relying on, once, so an
 operator knows what to change when they are ready. The two RunPod ids
-and the two download credentials are somebody else's names and have one
-spelling each.
+the two download credentials and the OpenRouter key are somebody else's
+names and have one spelling each.
 """
 
 import os
@@ -256,6 +257,11 @@ HF_TOKEN = os.environ.get("HF_TOKEN") or None
 # Only needed when a download falls through to CivitAI — i.e. when the
 # mirror could not serve it. A healthy mirrored pod never uses this.
 CIVITAI_TOKEN = os.environ.get("CIVITAI_TOKEN") or None
+# The key 🎥 MiniMax I2V's and 🎞️ MiniMax T2V's Auto prompt writes with.
+# OpenRouter's own name for it, which is what the ComfyUI workflows the
+# feature came from read, so a pod already set up for those needs nothing
+# new. Optional: the tab takes a pasted key when this is unset.
+OPENROUTER_API_KEY = (os.environ.get("OPENROUTER_API_KEY") or "").strip() or None
 
 # ── Showcase images ───────────────────────────────────────────────────────────
 # Where the pricing page's screenshots are served from — a public Cloudflare

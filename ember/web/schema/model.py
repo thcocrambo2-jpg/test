@@ -343,6 +343,11 @@ class TabSchema:
     # krea_model_changed and its three siblings did: pick a model, get its
     # step and CFG defaults and its trigger words, with no round trip.
     model_registry: str | None = None
+    # The MiniMax tabs' Auto prompt panel, which writes the Prompt box from
+    # a short idea (ember/pipelines/minimax/autoprompt.py). A flag and not
+    # a Field because it is not a handler argument: what it produces is the
+    # prompt, which already is one.
+    autoprompt: bool = False
 
     # ── derived ─────────────────────────────────────────────────────
 
@@ -382,6 +387,7 @@ class TabSchema:
             "presetTab": self.preset_tab,
             "presetNote": self.preset_note,
             "modelRegistry": self.model_registry,
+            "autoprompt": self.autoprompt,
             "fields": [f.to_json() for f in self.named()],
             "groups": [g.to_json() for g in self.groups],
             "lora": _tail_json(tail),

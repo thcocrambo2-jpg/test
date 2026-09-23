@@ -10,6 +10,7 @@ import { useActiveJob, useJobsForTab, useQueue, isLive } from '@/store/queue'
 import { useHandoff } from '@/store/handoff'
 import { useTabState } from '@/store/tabState'
 import { useSubmitHotkey } from '@/lib/util'
+import { AutoPromptPanel } from './AutoPrompt'
 import { OutputPanel } from './OutputPanel'
 import s from '@/components/SchemaForm/form.module.css'
 
@@ -268,6 +269,12 @@ export function GenerateTab({ schema }: { schema: TabSchema }) {
             * is open on the next. The values live per tab in `tabState`
             * and survive the remount; what it clears is the chrome around
             * them, which is the part that should clear. */}
+          {/* Above the form, so it sits over the Prompt group it writes into.
+            * Keyed for the reason SchemaForm is: its local chrome (the key's
+            * Show toggle) belongs to one tab. */}
+          {schema.autoprompt && (
+            <AutoPromptPanel key={schema.key} schema={schema} values={values} />
+          )}
           <SchemaForm
             key={schema.key}
             schema={schema}

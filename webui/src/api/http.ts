@@ -1,6 +1,8 @@
 import type {
   ApiClient,
   AppCatalog,
+  AutoPromptConfig,
+  AutoPromptTask,
   Catalogue,
   DisplayResult,
   GalleryPage,
@@ -172,6 +174,38 @@ export const httpClient: ApiClient = {
       values: resolved,
     })
   },
+
+  getAutoPromptConfig: (tabKey) =>
+    get<AutoPromptConfig>(`/tabs/${encodeURIComponent(tabKey)}/autoprompt`),
+
+  /* The image goes up the way Generate sends it, as an upload id, so the
+   * server reads it with the same code and sizes the canvas the same way. */
+  async startAutoPrompt(schema, values, request) {
+    const resolved = await resolveUploads(schema, values)
+    return send<AutoPromptTask>(`/tabs/${encodeURIComponent(schema.key)}/autoprompt`, {
+      values: resolved,
+      ...request,
+    })
+  },
+
+  async getAutoPromptText(schema, values, idea) {
+    const resolved = await resolveUploads(schema, values)
+    const body = await send<{ text: string }>(
+      `/tabs/${encodeURIComponent(schema.key)}/autoprompt/text`,
+      { values: resolved, idea },
+    )
+    return body.text
+  },
+
+  getAutoPrompt: (tabKey, taskId) =>
+    get<AutoPromptTask>(
+      `/tabs/${encodeURIComponent(tabKey)}/autoprompt/${encodeURIComponent(taskId)}`,
+    ),
+
+  cancelAutoPrompt: (tabKey, taskId) =>
+    send<AutoPromptTask>(
+      `/tabs/${encodeURIComponent(tabKey)}/autoprompt/${encodeURIComponent(taskId)}/cancel`,
+    ),
 
   async cancel(jobId: string) {
     await send<unknown>(`/jobs/${encodeURIComponent(jobId)}/cancel`)

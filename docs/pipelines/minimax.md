@@ -121,6 +121,60 @@ frames and 15 s is 362, which is the trained range.
 Clips are saved as MP4 under `output/minimax/` and appear in the Gallery
 like Wan's.
 
+## Auto prompt
+
+Both tabs carry an **Auto prompt** panel above the Prompt group: tick it,
+type a short idea, press **Write prompt**, and an LLM on OpenRouter writes
+the full prompt into the Prompt box — numbered shots with timestamps,
+camera and lens, expressions, the soundscape and the music. It only
+writes; the clip is still made by the tab's own button, after the prompt
+has been read and edited. Tick **Generate when ready** and the prompt is
+queued the moment it arrives instead.
+
+**Copy LLM prompt** puts the exact text Write prompt would send — the
+system prompt, then the size block and the idea — on the clipboard
+without calling anything, for somebody who would rather ask their own
+chat LLM and paste the answer back. On I2V they attach the start image
+themselves; the text cannot carry it.
+
+It is the template's "Auto Prompt" workflows, taken out of ComfyUI. The
+template runs an OpenRouter node in a subgraph ahead of the text encoder;
+here the app makes the same call itself, in
+[`ember/pipelines/minimax/autoprompt.py`](../../ember/pipelines/minimax/autoprompt.py),
+so the graph is still the "Custom Prompt" one and nothing about a render
+changes. The request is the node's: its system prompt word for word,
+`Duration / Width / Height` then the idea, the start image on I2V,
+temperature 1, 4096 tokens. Width and height are the canvas the clip will
+really render at, from the same `resolve_size`/`aspect_size` the handler
+calls.
+
+Two models, chosen per tab:
+
+| Model | | |
+| --- | --- | --- |
+| Qwen 3.8 27B (`qwen/qwen3.8-27b:free`) | **free**, the default | Shared by every free user on OpenRouter, so it refuses as busy (HTTP 429) for a while before it answers. |
+| Gemini 3 Flash (`google/gemini-3-flash-preview`) | paid, about $0.002 a prompt | The template's model. Answers in seconds. |
+
+Both need an OpenRouter key; a free model just does not charge it. The
+key box arrives filled in with `OPENROUTER_API_KEY` when the pod has it
+set (see [configuration](../configuration.md)), and a pasted key wins
+over it for as long as the page is open. Nothing is kept in the browser.
+
+**Why it is a background task.** In testing, every free call was refused
+two to eight times, a minute apart, before one got through, and the call
+itself then took 40 seconds to 5 minutes. A request held open that long
+does not survive a Cloudflare tunnel, so `POST
+/api/v1/tabs/<tab>/autoprompt` answers at once with a task id, a thread
+does the calling and retrying — up to 10 calls, 60 s apart, 360 s each —
+and the page polls `GET …/autoprompt/<id>` once a second. The panel shows
+the countdown to the next try. The polling lives in a store outside the
+panel (`webui/src/store/autoprompt.ts`), so looking at another tab while
+it waits loses nothing: the prompt still lands in the right tab, and
+Generate when ready still queues it.
+
+The routes are mounted from `routes/tabs.py`'s per-tab loop, behind the
+same gate as the tab's others, so a licence without the tab gets a 403.
+
 ## This feature moved the ComfyUI pin
 
 The MiniMax nodes ship in ComfyUI **v0.34.0**, so `scripts/PINS.json`
