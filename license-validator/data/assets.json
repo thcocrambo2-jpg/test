@@ -477,6 +477,127 @@
       "trigger": "",
       "enabled": true,
       "sort_order": 280
+    },
+    {
+      "id": "hmpenis-v2-0",
+      "name": "HMPenis v2.0",
+      "file": "PenisV2_minimax-h3_epoch60.safetensors",
+      "source": {
+        "kind": "civitai",
+        "version": 3247473
+      },
+      "mirror": {
+        "repo": "thcocrambo2/krea2-loras",
+        "path": "loras/PenisV2_minimax-h3_epoch60.safetensors"
+      },
+      "default_strength": 1.0,
+      "trigger": "penis",
+      "enabled": true,
+      "sort_order": 290
+    },
+    {
+      "id": "brstplay-v1-0",
+      "name": "Breast Play & Jiggle v1.0",
+      "file": "breastplayjiggle_h3_v1.safetensors",
+      "source": {
+        "kind": "civitai",
+        "version": 3225638
+      },
+      "mirror": {
+        "repo": "thcocrambo2/krea2-loras",
+        "path": "loras/breastplayjiggle_h3_v1.safetensors"
+      },
+      "default_strength": 1.0,
+      "trigger": "",
+      "enabled": true,
+      "sort_order": 300
+    },
+    {
+      "id": "humanmotion-v1-0",
+      "name": "Better Human Motion v1.0",
+      "file": "mvmt_h3_lora_v1_500.safetensors",
+      "source": {
+        "kind": "civitai",
+        "version": 3256084
+      },
+      "mirror": {
+        "repo": "thcocrambo2/krea2-loras",
+        "path": "loras/mvmt_h3_lora_v1_500.safetensors"
+      },
+      "default_strength": 1.0,
+      "trigger": "",
+      "enabled": true,
+      "sort_order": 310
+    },
+    {
+      "id": "fingering-v1",
+      "name": "Fingering v1",
+      "file": "MinimaxH3-Fingering_000002000.safetensors",
+      "source": {
+        "kind": "civitai",
+        "version": 3264127
+      },
+      "mirror": null,
+      "default_strength": 1.0,
+      "trigger": "",
+      "enabled": true,
+      "sort_order": 320
+    },
+    {
+      "id": "perfect-fingering-v1-0",
+      "name": "Perfect Fingering v1.0",
+      "file": "MMH3_Perfect_fingering_v1_000002000.safetensors",
+      "source": {
+        "kind": "civitai",
+        "version": 3323149
+      },
+      "mirror": null,
+      "default_strength": 1.0,
+      "trigger": "",
+      "enabled": true,
+      "sort_order": 330
+    },
+    {
+      "id": "mysticxxx-mmh3-v4",
+      "name": "Mystic XXX MMH3 v4.0",
+      "file": "MysticXXX_MMH3-V4.safetensors",
+      "source": {
+        "kind": "civitai",
+        "version": 3266628
+      },
+      "mirror": null,
+      "default_strength": 1.0,
+      "trigger": "",
+      "enabled": true,
+      "sort_order": 340
+    },
+    {
+      "id": "private-style-v1-1",
+      "name": "Private Magazine Style v1.1",
+      "file": "Private_Style_v11.safetensors",
+      "source": {
+        "kind": "civitai",
+        "version": 3214549
+      },
+      "mirror": null,
+      "default_strength": 1.0,
+      "trigger": "",
+      "enabled": true,
+      "sort_order": 350
+    },
+    {
+      "id": "knp-v4-3-exp",
+      "name": "Krea 2 NSFW v4.3 EXP",
+      "file": "KNP_000003000.safetensors",
+      "source": {
+        "kind": "civitai",
+        "version": 3147117
+      },
+      "mirror": null,
+      "default_strength": 1.0,
+      "trigger": "",
+      "enabled": true,
+      "sort_order": 360
     }
   ],
   "models": [
@@ -546,7 +667,9 @@
         "nicegirls",
         "realism-v1",
         "desi-realism-v1",
-        "pawg"
+        "pawg",
+        "private-style-v1-1",
+        "knp-v4-3-exp"
       ]
     },
     "krea_edit": {
@@ -576,7 +699,9 @@
         "nicegirls",
         "realism-v1",
         "desi-realism-v1",
-        "pawg"
+        "pawg",
+        "private-style-v1-1",
+        "knp-v4-3-exp"
       ]
     },
     "krea_v2_t2i": {
@@ -607,7 +732,9 @@
         "nicegirls",
         "realism-v1",
         "desi-realism-v1",
-        "pawg"
+        "pawg",
+        "private-style-v1-1",
+        "knp-v4-3-exp"
       ]
     },
     "krea_v2_edit": {
@@ -638,7 +765,9 @@
         "nicegirls",
         "realism-v1",
         "desi-realism-v1",
-        "pawg"
+        "pawg",
+        "private-style-v1-1",
+        "knp-v4-3-exp"
       ]
     },
     "minimax_i2v": {
@@ -648,7 +777,13 @@
         "vgna",
         "hmcshot-v1-0",
         "hmbrst",
-        "hmmisdog"
+        "hmmisdog",
+        "hmpenis-v2-0",
+        "brstplay-v1-0",
+        "humanmotion-v1-0",
+        "fingering-v1",
+        "perfect-fingering-v1-0",
+        "mysticxxx-mmh3-v4"
       ]
     },
     "minimax_t2v": {
@@ -658,7 +793,13 @@
         "vgna",
         "hmcshot-v1-0",
         "hmbrst",
-        "hmmisdog"
+        "hmmisdog",
+        "hmpenis-v2-0",
+        "brstplay-v1-0",
+        "humanmotion-v1-0",
+        "fingering-v1",
+        "perfect-fingering-v1-0",
+        "mysticxxx-mmh3-v4"
       ]
     }
   }
