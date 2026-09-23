@@ -40,8 +40,8 @@
 ARG BASE_IMAGE=nvidia/cuda:13.0.3-cudnn-runtime-ubuntu24.04
 
 
-# ── Stage 0: Python and the system libraries both stages need ─────────────
-# One stage so the clone stage and the image itself resolve `python3` and
+# ── Stage 0: Python and the system libraries every stage needs ────────────
+# One stage so the bake stages and the image itself resolve `python3` and
 # `git` the same way, and share these layers.
 #
 # A venv rather than the system interpreter because Ubuntu 24.04 marks it
@@ -70,13 +70,22 @@ RUN apt-get update && \
     python3 -c "import sys; print('python', sys.version)"
 
 
-# ── Stage 1: clone ────────────────────────────────────────────────────────
+# ── Stage 1: the bake scripts and what they import ────────────────────────
 # Separate purely so the app's source does not reach the published image.
 # bake_nodes.py needs ember/settings.py, ember/comfy/setup.py and
 # ember/weights/mirror.py to resolve the pins, and those are exactly the
 # files build.sh compiles into a binary rather than shipping. They stay in
-# this stage; only /opt/ember is copied out.
-FROM python-base AS nodes
+# the two stages built on this one; only their outputs are copied out.
+#
+# Those files change far more often than anything the image is made of —
+# a new setting in settings.py is enough — so both bakes rerun on most
+# builds. That is cheap as long as what they write is byte-for-byte the
+# same: BuildKit keys a COPY --from on the content copied, so an identical
+# output leaves every layer below it cached, and a push has nothing new
+# to upload. Neither bake may write anything that varies between runs (a
+# timestamp, a log file) into what the final stage copies; the build date
+# is stamped in the last layer instead.
+FROM python-base AS bake-src
 
 # huggingface_hub for the mirror tarball path in bootstrap.node_pack_from_mirror;
 # hf_xet because without it a Xet-backed download falls back to single-stream
@@ -97,17 +106,23 @@ COPY ember/pipelines/krea2/__init__.py ember/pipelines/krea2/constants.py \
      /src/ember/pipelines/krea2/
 COPY ember/pipelines/krea2_v2/__init__.py \
      ember/pipelines/krea2_v2/constants.py /src/ember/pipelines/krea2_v2/
-COPY docker/bake_nodes.py /src/bake_nodes.py
+COPY docker/bake_nodes.py docker/bake_torch.py /src/
 
+
+# ── Stage 2: the torch stack ──────────────────────────────────────────────
+# Its own stage, written somewhere of its own, so the final stage can
+# install torch before it copies the ComfyUI tree in. A pin bump then
+# rebuilds the ComfyUI layers and leaves the 5 GB torch layer alone.
+FROM bake-src AS torch-spec
+RUN EMBER_BAKE_ROOT=/opt/torch-spec python3 /src/bake_torch.py
+
+
+# ── Stage 3: clone ComfyUI and the node packs ─────────────────────────────
+FROM bake-src AS nodes
 RUN python3 /src/bake_nodes.py
 
-# After the clone rather than inside it, so a change to the torch pins
-# reuses the cached ComfyUI and node packs.
-COPY docker/bake_torch.py /src/bake_torch.py
-RUN python3 /src/bake_torch.py
 
-
-# ── Stage 2: the image ────────────────────────────────────────────────────
+# ── Stage 4: the image ────────────────────────────────────────────────────
 FROM python-base AS final
 
 # EMBER_BASE_DIR is deliberately NOT set here. docker/entrypoint.sh picks
@@ -133,15 +148,21 @@ RUN python3 -c "import sys, pip; \
     sys.exit(0 if sys.version_info[:2] == (3, 12) else \
              'python 3.12 is what the wheels here are built for')"
 
-COPY --from=nodes /opt/ember /opt/ember
+# Everything from here to the ComfyUI copy depends only on the torch pins,
+# so it stays cached through pin bumps and app changes alike. That is ~5 GB
+# of wheels — torch's own nvidia-* CUDA libraries are most of it — that a
+# rebuild would otherwise download again and a push upload again.
+COPY --from=torch-spec /opt/torch-spec/torch-stack.txt \
+     /opt/torch-spec/sage-wheel.txt /opt/ember/
+COPY --from=torch-spec /opt/torch-spec/baked.json /opt/ember/torch.json
 
 # Template v8's torch (2.11.0+cu130), over the base image's, before anything
-# that installs against it. Asserted against baked.json, so a wheel index
-# that quietly served a different build fails here rather than as a
-# SageAttention kernel that will not load on a customer's pod.
+# that installs against it. Asserted against what bake_torch chose, so a
+# wheel index that quietly served a different build fails here rather than
+# as a SageAttention kernel that will not load on a customer's pod.
 RUN python3 -m pip install --no-cache-dir -r /opt/ember/torch-stack.txt && \
     python3 -c "import json, sys, torch; \
-    want = json.load(open('/opt/ember/baked.json'))['torch']['version']; \
+    want = json.load(open('/opt/ember/torch.json'))['torch']['version']; \
     print('torch', torch.__version__, 'CUDA', torch.version.cuda); \
     sys.exit(0 if torch.__version__ == want else 'torch %s is not the %s bake_torch chose' % (torch.__version__, want))"
 
@@ -159,6 +180,19 @@ open('/opt/ember/torch-constraints.txt', 'w').write(''.join( \
                  ('torchaudio', torchaudio))))" && \
     cat /opt/ember/torch-constraints.txt
 
+# SageAttention 2.2.0 for that torch, hash-pinned, from the file bake_torch
+# wrote. Only installed here: there is no GPU at build time, so the kernel
+# probe runs at boot in bootstrap.install_sageattention, which finds it
+# present and only has to prove it runs before ComfyUI gets
+# --use-sage-attention. --no-deps, so nothing ComfyUI installs below
+# affects it, and it can sit above the ComfyUI copy with the rest of torch.
+RUN python3 -m pip install --no-cache-dir --no-deps \
+        -r /opt/ember/sage-wheel.txt && \
+    python3 -c "import importlib.metadata as m; \
+        print('sageattention', m.version('sageattention'))"
+
+COPY --from=nodes /opt/ember /opt/ember
+
 RUN python3 -m pip install --no-cache-dir \
         -r /opt/ember/ComfyUI/requirements.txt \
         --constraint /opt/ember/torch-constraints.txt
@@ -175,16 +209,6 @@ RUN set -eu; \
             --constraint /opt/ember/torch-constraints.txt; \
     done
 
-# SageAttention 2.2.0 for that torch, hash-pinned, from the file bake_torch
-# wrote. Only installed here: there is no GPU at build time, so the kernel
-# probe runs at boot in bootstrap.install_sageattention, which finds it
-# present and only has to prove it runs before ComfyUI gets
-# --use-sage-attention.
-RUN python3 -m pip install --no-cache-dir --no-deps \
-        -r /opt/ember/sage-wheel.txt && \
-    python3 -c "import importlib.metadata as m; \
-        print('sageattention', m.version('sageattention'))"
-
 # The node packs' compiled dependency: RES4LYF and the post-processing pack
 # import cv2, and it can install cleanly and still fail to import on an ABI
 # or numpy mismatch, which ComfyUI reports much later as a missing node
@@ -198,7 +222,20 @@ RUN python3 -c "import cv2; \
 # fetched, verified and run stays in that one file.
 COPY scripts/runpod_start.sh /opt/ember/bin/start.sh
 COPY docker/entrypoint.sh /entrypoint.sh
-RUN chmod +x /opt/ember/bin/start.sh /entrypoint.sh
+
+# Then the manifest the entrypoint prints: the nodes bake's record plus the
+# torch one, and the build date, which neither bake may write (see stage
+# 1). Stamped last and cached like any other layer, so it is when this
+# image's contents last changed — a rebuild that changed nothing keeps
+# the date, the digest and a push with nothing to upload.
+RUN chmod +x /opt/ember/bin/start.sh /entrypoint.sh && \
+    python3 -c "import json, datetime; \
+    d = json.load(open('/opt/ember/baked.json')); \
+    d.update(json.load(open('/opt/ember/torch.json'))); \
+    d['built_at'] = datetime.datetime.now(datetime.timezone.utc) \
+        .isoformat(timespec='seconds'); \
+    open('/opt/ember/baked.json', 'w').write( \
+        json.dumps(d, indent=2, sort_keys=True) + '\n')"
 
 # The app's web UI. ComfyUI listens on 127.0.0.1 (ember/comfy/server.py)
 # and is not exposed.

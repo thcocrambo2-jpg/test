@@ -32,7 +32,6 @@ import os
 import shutil
 import subprocess
 import sys
-from datetime import datetime, timezone
 from pathlib import Path
 
 # Set before importing settings: BASE_DIR is read at import time, and
@@ -102,8 +101,10 @@ def strip_git(path: Path) -> None:
 
 
 def main() -> int:
+    # No build date: this output has to be byte-identical when the pins
+    # are, or every layer the Dockerfile builds on it rebuilds and is
+    # pushed again. The final stage stamps built_at instead.
     baked: dict[str, object] = {
-        "built_at": datetime.now(timezone.utc).isoformat(timespec="seconds"),
         "bake_root": BAKE_ROOT,
         "custom_nodes": {},
     }

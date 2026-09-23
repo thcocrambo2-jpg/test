@@ -40,7 +40,7 @@ fi
 say() { printf '[ember-image] %s\n' "$*"; }
 
 echo
-# What is actually in here, from the manifest bake_nodes.py wrote — so a
+# What is actually in here, from the manifest the image build wrote — so a
 # container's contents are answerable from its own log rather than from
 # remembering which tag was deployed.
 if [[ -f "$BAKED/baked.json" ]]; then

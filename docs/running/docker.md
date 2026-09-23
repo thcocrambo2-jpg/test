@@ -215,6 +215,17 @@ mirror-tarball helpers at build time, so bumping a pin is the only edit
 needed to move the image. Every container prints what it was built from on
 boot. See [Mirror and pins](../releasing/mirror-and-pins.md).
 
+A rebuild only rebuilds, and a push only uploads, what actually changed.
+Torch and SageAttention (~5 GB, most of it torch's `nvidia-*` CUDA wheels)
+are installed before the ComfyUI tree is copied in, so only a change to
+`docker/bake_torch.py`'s pins touches them; a pin bump rebuilds the
+ComfyUI and node-pack layers above them (~2 GB); an app change that only
+touches the bake stage's `ember/` files reruns the bakes, gets
+byte-identical output and leaves every layer cached. That last case
+depends on the bakes writing nothing that varies between runs — which is
+why `built_at` in `baked.json` is stamped by the final layer rather than
+by `bake_nodes.py`.
+
 ## Escape hatches
 
 | Variable | Effect |

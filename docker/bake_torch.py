@@ -1,12 +1,16 @@
 """Write the image's PyTorch stack and SageAttention build, at build time.
 
-Runs in the Dockerfile's first stage, after bake_nodes.py, and writes two
-pip requirement files for the final stage to install:
+Runs in the Dockerfile's torch-spec stage, with EMBER_BAKE_ROOT set to
+/opt/torch-spec, and writes two pip requirement files for the final stage
+to install:
 
-    /opt/ember/torch-stack.txt   the torch trio and its wheel index
-    /opt/ember/sage-wheel.txt    the SageAttention for that torch
+    torch-stack.txt   the torch trio and its wheel index
+    sage-wheel.txt    the SageAttention for that torch
 
-and records both in baked.json, which the entrypoint prints on every boot.
+and records both in baked.json, which the final stage merges into the
+manifest the entrypoint prints on every boot. Nothing here may vary
+between runs: the final stage installs torch from these files, and a
+byte of difference would rebuild and re-push that 5 GB layer.
 
 The stack is fixed: exactly what MiniMax template v8
 (hearmeman/comfyui-minimax-template:v8) runs — torch 2.11.0, torchvision
@@ -15,8 +19,9 @@ configuration rather than a menu of them, so there is one image to test.
 CUDA 13 needs an R580+ driver on the host; the RunPod template's CUDA
 filter set to 13.0 is what guarantees one, as it does for the template.
 
-A separate script from bake_nodes.py, and a separate RUN after it, so a
-change here reuses the cached ComfyUI clone. The torchvision pairing and
+A separate script from bake_nodes.py, in a separate stage, so the final
+stage can install torch before the ComfyUI tree arrives and a pin bump
+leaves the torch layer cached. The torchvision pairing and
 the SageAttention come from bootstrap — TORCHVISION_FOR_TORCH and
 sage_requirement — for the same reason bake_nodes takes its pins from
 there: the image and the app must not disagree about which SageAttention
@@ -39,7 +44,7 @@ from ember.logs import log                                   # noqa: E402
 
 # Importing configures no logging, so this script asks for it itself. It
 # makes no directories: the only one it writes into is BAKE_ROOT, which
-# main() creates, and bake_nodes.py has already swept the rest away.
+# main() creates.
 logs.setup()
 
 TORCH_VERSION = "2.11.0"
