@@ -295,7 +295,9 @@ export function Segmented<T extends string>({
   ariaLabel,
 }: {
   value: T
-  options: { value: T; label: ReactNode }[]
+  /** `title` names a segment whose label is only a mark: it is the tooltip
+   *  and what a screen reader announces. */
+  options: { value: T; label: ReactNode; title?: string }[]
   onChange: (next: T) => void
   ariaLabel?: string
 }) {
@@ -307,6 +309,8 @@ export function Segmented<T extends string>({
           type="button"
           role="tab"
           aria-selected={option.value === value}
+          title={option.title}
+          aria-label={option.title}
           className={cx(s.segment, option.value === value && s.segmentActive)}
           onClick={() => onChange(option.value)}
         >

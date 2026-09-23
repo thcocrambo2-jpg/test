@@ -737,3 +737,51 @@
   grid-template-columns: repeat(auto-fill, minmax(220px, 1fr));
   gap: var(--s-3);
 }
+
+/* The bar's right half: the filter, then the tile size. Never wrapped
+   between the two: one row of controls is the point. */
+.barRight {
+  display: flex;
+  align-items: center;
+  gap: var(--s-2);
+}
+
+/* Every segment centred on its mark, so the icon-only tile sizes stand as
+   tall as the filter's icon-and-word segments beside them. */
+.barRight button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 28px;
+}
+
+/* A filter segment's mark and word, on one line and centred on each other. */
+.filterLabel {
+  display: inline-flex;
+  align-items: center;
+}
+
+/* A phone. The count takes a short line of its own and the two controls
+   share the full width under it, the filter stretched to fill what the tile
+   sizes leave, so neither is left hanging on a line by itself. */
+@media (max-width: 720px) {
+  .bar {
+    gap: var(--s-2);
+    margin-bottom: var(--s-3);
+  }
+
+  .barLeft,
+  .barRight {
+    width: 100%;
+  }
+
+  .barRight > :first-child {
+    flex: 1 1 auto;
+    min-width: 0;
+  }
+
+  .barRight > :first-child button {
+    flex: 1 1 0;
+    padding-inline: var(--s-2);
+  }
+}

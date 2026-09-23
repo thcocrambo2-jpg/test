@@ -258,6 +258,11 @@ def list_images(limit: int | None = None) -> list[str]:
     return stills if limit is None else stills[:limit]
 
 
+def list_videos() -> list[str]:
+    """The generated clips, newest first, for the gallery's Videos filter."""
+    return [p for p in list_media() if p.lower().endswith(VIDEO_EXT)]
+
+
 def note_new(paths) -> None:
     """A workflow just wrote these files — index them and thumbnail them.
 

@@ -65,6 +65,71 @@ export function PlayIcon() {
   )
 }
 
+/* The filter's marks, each beside its word in the toolbar. */
+
+/** A stack of sheets, for "everything". Not a grid of squares: that is
+ *  what the tile-size control beside it draws. */
+export function AllIcon() {
+  return (
+    <svg className={s.btnIcon} viewBox="0 0 24 24" aria-hidden="true">
+      <path d="m12 3 9 5-9 5-9-5z" />
+      <path d="m3 12 9 5 9-5" />
+      <path d="m3 16 9 5 9-5" />
+    </svg>
+  )
+}
+
+/** A frame with a hill and a sun. */
+export function ImageIcon() {
+  return (
+    <svg className={s.btnIcon} viewBox="0 0 24 24" aria-hidden="true">
+      <rect x="3" y="5" width="18" height="14" rx="2" />
+      <circle cx="9" cy="10" r="1.6" />
+      <path d="m21 16-5-5-9 8" />
+    </svg>
+  )
+}
+
+/** A camera body with its lens cone. */
+export function VideoIcon() {
+  return (
+    <svg className={s.btnIcon} viewBox="0 0 24 24" aria-hidden="true">
+      <rect x="3" y="6" width="13" height="12" rx="2" />
+      <path d="m16 10 5-3v10l-5-3" />
+    </svg>
+  )
+}
+
+/* The tile sizes, drawn as the grid each one gives: nine small tiles, four
+ * middling ones, one big one. The whole segment, so no trailing margin. */
+
+export function CompactIcon() {
+  return (
+    <svg className={cx(s.btnIcon, s.btnIconAlone)} viewBox="0 0 24 24" aria-hidden="true">
+      <path d="M4 4h4v4H4zM10 4h4v4h-4zM16 4h4v4h-4zM4 10h4v4H4zM10 10h4v4h-4zM16 10h4v4h-4zM4 16h4v4H4zM10 16h4v4h-4zM16 16h4v4h-4z" />
+    </svg>
+  )
+}
+
+export function ComfortableIcon() {
+  return (
+    <svg className={cx(s.btnIcon, s.btnIconAlone)} viewBox="0 0 24 24" aria-hidden="true">
+      <rect x="4" y="4" width="7" height="7" rx="1.5" />
+      <rect x="13" y="4" width="7" height="7" rx="1.5" />
+      <rect x="4" y="13" width="7" height="7" rx="1.5" />
+      <rect x="13" y="13" width="7" height="7" rx="1.5" />
+    </svg>
+  )
+}
+
+export function LargeIcon() {
+  return (
+    <svg className={cx(s.btnIcon, s.btnIconAlone)} viewBox="0 0 24 24" aria-hidden="true">
+      <rect x="4" y="4" width="16" height="16" rx="2" />
+    </svg>
+  )
+}
+
 /* The view tools. All of these are the whole button, so none carries the
  * labelled icons' trailing margin. */
 

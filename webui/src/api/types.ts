@@ -293,6 +293,8 @@ export interface Session {
 
 // --------------------------------------------------------------- jobs
 
+export type MediaKind = 'image' | 'video'
+
 export interface MediaItem {
   id: string
   url: string
@@ -301,7 +303,7 @@ export interface MediaItem {
   path: string
   width: number
   height: number
-  kind: 'image' | 'video'
+  kind: MediaKind
   createdAt: string
   seed?: number
   prompt?: string
@@ -551,8 +553,8 @@ export interface ApiClient {
   /** One page of the listing. `kind` narrows it: 'image' lists stills
    *  only, which is what the reuse strip under an upload field wants — a
    *  page of the whole listing taken on a video tab is mostly clips, and
-   *  an image input cannot take one. */
-  getGallery(cursor: string | null, kind?: 'image'): Promise<GalleryPage>
+   *  an image input cannot take one. Both kinds are the gallery's filter. */
+  getGallery(cursor: string | null, kind?: MediaKind): Promise<GalleryPage>
   deleteMedia(id: string): Promise<void>
   submit(schema: TabSchema, values: SubmitValues): Promise<SubmitResult>
   cancel(jobId: string): Promise<void>

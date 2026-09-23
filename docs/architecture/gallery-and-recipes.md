@@ -12,6 +12,11 @@ The Gallery is **a reflowing masonry of tiles, plus a lightbox over it**.
   widths and a floor of 1 / 2 / 3 columns. "How many at once" is a
   preference, not a constant, so it reflows at every width down to a
   phone.
+- **The filter** — All / Images / Videos — narrows the listing on the
+  server (`GET /api/v1/gallery?kind=image|video`), not the page in hand:
+  the cursor is an offset into the listing, so hiding clips from a loaded
+  page would leave gaps that Older skips past. Changing it starts the
+  listing from the top.
 - **The lightbox** is the picture, large, over a dimmed page. **Left** and
   **Right** walk the list, **Esc** closes it, and a filmstrip scrolls the
   active thumbnail into view. Walking past the loaded page pulls the next
@@ -25,7 +30,7 @@ The Gallery is **a reflowing masonry of tiles, plus a lightbox over it**.
   manager does — and deleted in one request through
   `POST /api/v1/gallery/delete`.
 
-Where you were and how you had it looking — the cursor and the density —
+Where you were and how you had it looking — the cursor, the filter and the density —
 live in per-tab state, because the page unmounts the instant you glance at
 a generate tab and paging to the fourth screen is work. The lightbox
 deliberately is not among them: arriving on a page to find a full-screen

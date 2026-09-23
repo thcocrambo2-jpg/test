@@ -2,7 +2,7 @@ import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } fr
 import { useQueryClient } from '@tanstack/react-query'
 import { api } from '@/api/client'
 import { useGallery } from '@/api/queries'
-import type { MediaItem } from '@/api/types'
+import type { MediaItem, MediaKind } from '@/api/types'
 import {
   Alert,
   Button,
@@ -15,11 +15,29 @@ import {
 import { cx, fileName, relativeTime, saveFile, useCopy } from '@/lib/util'
 import { useQueue } from '@/store/queue'
 import { useTabState } from '@/store/tabState'
-import { DownloadIcon, PlayIcon, TrashIcon } from './icons'
+import {
+  AllIcon,
+  ComfortableIcon,
+  CompactIcon,
+  DownloadIcon,
+  ImageIcon,
+  LargeIcon,
+  PlayIcon,
+  TrashIcon,
+  VideoIcon,
+} from './icons'
 import { Lightbox } from './Lightbox'
 import s from './gallery.module.css'
 
 type Density = 'comfortable' | 'compact' | 'large'
+type Filter = 'all' | MediaKind
+
+/** What the count and the empty state call the files under each filter. */
+const NOUN: Record<Filter, [one: string, many: string]> = {
+  all: ['file', 'files'],
+  image: ['image', 'images'],
+  video: ['video', 'videos'],
+}
 
 /** The narrowest a column may get, in px, and the fewest columns there may
  *  be. The grid fits as many as it can and shares the leftover width between
@@ -54,6 +72,12 @@ export function Gallery() {
   const [cursor, setCursor] = useTabState<string | null>('gallery.cursor', null)
   const [stack, setStack] = useTabState<string[]>('gallery.stack', NO_STACK)
   const [density, setDensity] = useTabState<Density>('gallery.density', 'comfortable')
+  /* Stills, clips or both. Asked of the server rather than applied to the
+   * page: the cursor is an offset into the listing, so hiding the clips from
+   * a page of fifty would leave a handful of pictures and an Older button
+   * that skips past the rest. A narrowed listing is a different list, so
+   * changing the filter starts it from the top. */
+  const [filter, setFilterState] = useTabState<Filter>('gallery.filter', 'all')
   /* Which file the lightbox is showing, by id and not by position.
    *
    * An index would be a position into a list that moves under it: the
@@ -64,7 +88,7 @@ export function Gallery() {
    * not grow as a batch landed. An id names one file for as long as it
    * exists, so the list is free to move. */
   const [openId, setOpenId] = useState<string | null>(null)
-  const { data, isLoading, error } = useGallery(cursor)
+  const { data, isLoading, error } = useGallery(cursor, filter === 'all' ? undefined : filter)
   const queryClient = useQueryClient()
   const toast = useToast()
   const confirm = useConfirm()
@@ -227,6 +251,16 @@ export function Gallery() {
     void queryClient.invalidateQueries({ queryKey: ['gallery'] })
   }
 
+  function setFilter(next: Filter) {
+    if (next === filter) return
+    setFilterState(next)
+    setOpenId(null)
+    setSelected(new Set())
+    anchor.current = null
+    setStack([])
+    setCursor(null)
+  }
+
   /** Delete one file, from the lightbox. */
   async function remove(item: MediaItem) {
     const confirmed = await confirm({
@@ -356,7 +390,7 @@ export function Gallery() {
             </div>
           ) : (
             <span className={s.count}>
-              {data ? `${data.total} file${data.total === 1 ? '' : 's'}` : ' '}
+              {data ? `${data.total} ${NOUN[filter][data.total === 1 ? 0 : 1]}` : ' '}
             </span>
           )}
           {pending > 0 && (
@@ -370,16 +404,55 @@ export function Gallery() {
             </button>
           )}
         </div>
-        <Segmented
-          value={density}
-          ariaLabel="Tile size"
-          onChange={setDensity}
-          options={[
-            { value: 'compact', label: 'Compact' },
-            { value: 'comfortable', label: 'Comfortable' },
-            { value: 'large', label: 'Large' },
-          ]}
-        />
+        <div className={s.barRight}>
+          <Segmented
+            value={filter}
+            ariaLabel="Show"
+            onChange={setFilter}
+            options={[
+              {
+                value: 'all',
+                label: (
+                  <span className={s.filterLabel}>
+                    <AllIcon />
+                    All
+                  </span>
+                ),
+              },
+              {
+                value: 'image',
+                label: (
+                  <span className={s.filterLabel}>
+                    <ImageIcon />
+                    Images
+                  </span>
+                ),
+              },
+              {
+                value: 'video',
+                label: (
+                  <span className={s.filterLabel}>
+                    <VideoIcon />
+                    Videos
+                  </span>
+                ),
+              },
+            ]}
+          />
+          <Segmented
+            value={density}
+            ariaLabel="Tile size"
+            onChange={setDensity}
+            /* Marks, not words: the grid each size gives is the clearest
+               name for it, and three words beside the filter's three would
+               not fit a phone's width on one row. */
+            options={[
+              { value: 'compact', label: <CompactIcon />, title: 'Compact' },
+              { value: 'comfortable', label: <ComfortableIcon />, title: 'Comfortable' },
+              { value: 'large', label: <LargeIcon />, title: 'Large' },
+            ]}
+          />
+        </div>
       </div>
 
       {error && <Alert tone="error">{(error as Error).message}</Alert>}
@@ -410,10 +483,20 @@ export function Gallery() {
             </div>
           ))}
         </div>
-      ) : (
+      ) : filter === 'all' ? (
         <EmptyState icon="🖼️" title="Nothing here yet">
           Everything you generate lands here automatically, newest first.
         </EmptyState>
+      ) : (
+        <EmptyState
+          icon={filter === 'video' ? '🎬' : '🖼️'}
+          title={`No ${NOUN[filter][1]} yet`}
+          action={
+            <Button size="sm" onClick={() => setFilter('all')}>
+              Show everything
+            </Button>
+          }
+        />
       )}
 
       {data && (data.nextCursor || stack.length > 0) && (

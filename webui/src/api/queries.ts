@@ -1,7 +1,7 @@
 import { useEffect, useRef } from 'react'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
 import { api } from './client'
-import type { ModelRow, TabSchema } from './types'
+import type { MediaKind, ModelRow, TabSchema } from './types'
 import { useQueue } from '@/store/queue'
 
 /** Server state. The schema, session, catalogue and showcase are all
@@ -89,7 +89,7 @@ export function useShowcase() {
  *  page are two different lists with two different cursors. Both sit under
  *  `['gallery', …]`, so the `invalidateQueries({ queryKey: ['gallery'] })`
  *  every delete already does still reaches both. */
-export function useGallery(cursor: string | null, kind?: 'image') {
+export function useGallery(cursor: string | null, kind?: MediaKind) {
   return useQuery({
     queryKey: ['gallery', kind ?? 'all', cursor],
     queryFn: () => api.getGallery(cursor, kind),

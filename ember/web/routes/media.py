@@ -137,7 +137,8 @@ def register(api: APIRouter) -> None:
         """One page of the listing, newest first.
 
         `kind=image` narrows it to stills, which is what the reuse strip
-        under every upload field asks for. It is not a filter the caller
+        under every upload field asks for; `kind=image` and `kind=video`
+        are also the gallery's own filter. It is not a filter the caller
         could apply to the answer itself: the cursor is an offset into the
         listing, so dropping the clips out of a page taken on a video tab
         leaves a handful of pictures and no way to ask for more — and a
@@ -147,9 +148,10 @@ def register(api: APIRouter) -> None:
         "everything": handing videos to a caller that asked for stills is
         the one wrong answer this route can give.
         """
-        if kind not in ("", "image"):
-            raise HTTPException(400, "kind must be 'image', or left off.")
+        if kind not in ("", "image", "video"):
+            raise HTTPException(400, "kind must be 'image', 'video', or left off.")
         paths = (gallery_index.list_images() if kind == "image"
+                 else gallery_index.list_videos() if kind == "video"
                  else gallery_index.list_media())
         start = int(cursor) if cursor.isdigit() else 0
         page = paths[start:start + limit]
