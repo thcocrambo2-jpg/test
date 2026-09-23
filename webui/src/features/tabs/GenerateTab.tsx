@@ -270,10 +270,12 @@ export function GenerateTab({ schema }: { schema: TabSchema }) {
             * and survive the remount; what it clears is the chrome around
             * them, which is the part that should clear. */}
           {/* Above the form, so it sits over the Prompt group it writes into.
-            * Keyed for the reason SchemaForm is: its local chrome (the key's
-            * Show toggle) belongs to one tab. */}
+            * Keyed for the reason SchemaForm is — its local chrome belongs to
+            * one tab — but not with the same key: they are siblings, and two
+            * siblings sharing `schema.key` let React match the I2V panel to
+            * the T2V page on a switch, props and all. */}
           {schema.autoprompt && (
-            <AutoPromptPanel key={schema.key} schema={schema} values={values} />
+            <AutoPromptPanel key={`autoprompt.${schema.key}`} schema={schema} values={values} />
           )}
           <SchemaForm
             key={schema.key}
