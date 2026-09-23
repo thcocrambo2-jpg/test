@@ -21,6 +21,7 @@ import {
   ZoomOutIcon,
 } from './icons'
 import { useImageView } from './useImageView'
+import { useSwipe } from './useSwipe'
 import s from './gallery.module.css'
 
 /*
@@ -147,6 +148,12 @@ export function Lightbox({
       document.body.style.overflow = previous
     }
   }, [index, items.length, onClose, onIndex])
+
+  const swipe = useSwipe({
+    enabled: !view.zoomed,
+    onPrev: () => index > 0 && onIndex(index - 1),
+    onNext: () => index < items.length - 1 && onIndex(index + 1),
+  })
 
   // Scroll the active thumb into view by asking the DOM where it is, rather
   // than by computing a pixel offset from a thumb width we would then have to
@@ -275,35 +282,42 @@ export function Lightbox({
         </div>
       </header>
 
-      <div className={s.lightboxStage} onClick={onClose}>
+      <div
+        className={s.lightboxStage}
+        onClick={onClose}
+        onClickCapture={swipe.onClickCapture}
+        onTouchStart={swipe.onTouchStart}
+        onTouchEnd={swipe.onTouchEnd}
+        onTouchCancel={swipe.onTouchCancel}
+      >
         {/* The ends of the stage, as prev and next.
          *
          * Nothing is drawn — see `.edge` in the stylesheet for why, and for
-         * why they are not offered over a video. They stop propagation
-         * because the stage they sit in closes the dialog on a click, which
-         * is the behaviour the middle of the stage keeps.
+         * why they sit *under* a video rather than over it. They stop
+         * propagation because the stage they sit in closes the dialog on a
+         * click, which is the behaviour the middle of the stage keeps.
          *
          * Absent at the ends of the strip rather than present and inert: a
          * pointer cursor over a button that does nothing is a worse answer
          * than the backdrop underneath, which at least closes. */}
-        {item.kind !== 'video' && !view.zoomed && index > 0 && (
+        {!view.zoomed && index > 0 && (
           <button
             type="button"
-            className={cx(s.edge, s.edgeLeft)}
-            aria-label="Previous image"
-            title="Previous image"
+            className={cx(s.edge, s.edgeLeft, item.kind === 'video' && s.edgeUnder)}
+            aria-label="Previous"
+            title="Previous"
             onClick={(event) => {
               event.stopPropagation()
               onIndex(index - 1)
             }}
           />
         )}
-        {item.kind !== 'video' && !view.zoomed && index < items.length - 1 && (
+        {!view.zoomed && index < items.length - 1 && (
           <button
             type="button"
-            className={cx(s.edge, s.edgeRight)}
-            aria-label="Next image"
-            title="Next image"
+            className={cx(s.edge, s.edgeRight, item.kind === 'video' && s.edgeUnder)}
+            aria-label="Next"
+            title="Next"
             onClick={(event) => {
               event.stopPropagation()
               onIndex(index + 1)
@@ -312,7 +326,7 @@ export function Lightbox({
         )}
         {item.kind === 'video' ? (
           <video
-            className={s.lightboxImage}
+            className={cx(s.lightboxImage, s.stageVideo)}
             src={item.url}
             controls
             autoPlay

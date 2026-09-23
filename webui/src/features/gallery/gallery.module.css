@@ -333,6 +333,11 @@
   padding: 0 var(--s-4);
   min-height: 0;
   overflow: hidden;
+  /* Sideways drags are the lightbox's own — a swipe to the next file, see
+     useSwipe. Left to the browser, one over a clip (the picture's frame
+     already says `none`) has nothing to scroll and becomes the browser's
+     swipe-back, which leaves the app. */
+  touch-action: pan-y pinch-zoom;
 }
 
 .lightboxImage {
@@ -561,8 +566,11 @@
    still closes, as it always did. 20% of a 1530px desktop would be 306px of
    unclickable picture on each side, so it stops at 240px.
 
-   Not rendered over video. `<video controls>` puts play at the left end of
-   its bar and fullscreen at the right, and both sit under these. */
+   Under a video, not over it (`.edgeUnder`). `<video controls>` puts play
+   at the left end of its bar and fullscreen at the right, and a zone on top
+   would swallow both. Beneath it, the video keeps every click that lands on
+   it and the zones take the bare stage either side — which is where a click
+   beside a clip used to fall through to the stage and close the dialog. */
 .edge {
   position: absolute;
   top: 0;
@@ -591,6 +599,17 @@
 
 .edgeRight {
   right: 0;
+}
+
+.edgeUnder {
+  z-index: 0;
+}
+
+/* Lifted over `.edgeUnder`, so the clip and its controls win wherever the
+   two overlap. */
+.stageVideo {
+  position: relative;
+  z-index: 1;
 }
 
 /* The filmstrip. Laid out by the DOM: one flex row that scrolls, with the
