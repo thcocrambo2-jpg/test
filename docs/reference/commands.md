@@ -128,7 +128,12 @@ app reads, plus the operator and build-time ones.
 
 ### 2.1 Windows — a Python 3.12 environment
 
-**PS**, with conda:
+Two envs, kept apart on purpose: `krea2` to **run** the app, `krea2build`
+to **build** it. Running the app reinstalls packages into its env on
+every start, so never build from `krea2` — see
+[building the Windows binary](../releasing/build-windows.md#the-build-environment-is-krea2build).
+
+**PS**, to run the app:
 
 ```powershell
 conda create -n krea2 python=3.12 -y
@@ -136,11 +141,19 @@ conda activate krea2          # if nothing happens: conda init powershell
 pip install -r requirements.txt
 ```
 
-Or without conda:
+**PS**, to build — with conda:
 
 ```powershell
-py -3.12 -m venv .venv312
-.\.venv312\Scripts\python.exe -m pip install -r requirements.txt
+conda create -n krea2build python=3.12 -y
+& "$env:USERPROFILE\miniconda3\envs\krea2build\python.exe" -m pip install -r requirements.txt nuitka zstandard
+```
+
+Or without conda, from a uv-managed CPython 3.12 (there is no `py`
+launcher on this machine):
+
+```powershell
+& (uv python find 3.12) -m venv .venv312
+.\.venv312\Scripts\python.exe -m pip install -r requirements.txt nuitka zstandard
 ```
 
 ### 2.2 WSL — for building and publishing
@@ -152,17 +165,21 @@ wsl --list --verbose          # * marks the default
 wsl --set-default Ubuntu-24.04
 ```
 
-**WSL**:
+**WSL** — the build env is `~/venv-krea2build`, which already exists on
+this machine. To create it on a fresh Ubuntu:
 
 ```bash
 sudo apt update && sudo apt install -y python3-venv git
-python3 -m venv ~/build-venv && source ~/build-venv/bin/activate
-pip install -r requirements.txt
+python3 -m venv ~/venv-krea2build
+~/venv-krea2build/bin/python -m pip install -r requirements.txt nuitka zstandard
 ```
 
 A venv is required: Ubuntu 24.04 enforces PEP 668 and installing into the
 system Python fails with `externally-managed-environment`. The RunPod
-image disables this, which is why the pod does not need one.
+image disables this, which is why the pod does not need one. Build from
+the repo checkout, never from the stale `~/krea2build`, and run the
+checks in
+[before you build](../releasing/build-linux.md#before-you-build) first.
 
 ### 2.3 Node — only for the front end and the licence server
 

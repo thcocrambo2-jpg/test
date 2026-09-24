@@ -64,6 +64,57 @@ so the first build is the slow one. If you add a dependency that works
 under `python3 app.py` but fails in the binary, the usual cause is
 package *data* files: add `--include-package-data=<pkg>` in `build.sh`.
 
+## Before you build
+
+`build.sh` installs `nuitka` and `zstandard` if they are missing, but it
+only *imports* the app's own requirements, and runs
+`pip install -r requirements.txt` only when that import fails. An
+interpreter that imports everything but holds the wrong versions is used
+exactly as it is, so **the pins in `requirements.txt` are not enforced by
+the build**. Check them yourself, against the interpreter the build will
+use (`python3` on the pod, `~/venv-krea2build/bin/python` in WSL):
+
+```bash
+PY=~/venv-krea2build/bin/python     # or python3 on the pod
+$PY --version                                      # 1. must say 3.12.x
+$PY -m pip install --dry-run -r requirements.txt   # 2. no "Would install" lines
+$PY -m nuitka --version                            # 3. Nuitka is importable
+git status --short                                 # 4. clean, or you know why not
+```
+
+1. **Python 3.12** — what the pod image ships and the app is tested
+   against.
+2. **`--dry-run` wants to install nothing.** Any `Would install …` line
+   means the env has drifted from `requirements.txt`. Run the same command
+   without `--dry-run`, then check again. This matters on the pod too:
+   its `python3` is also the interpreter ComfyUI and its node packs
+   install into, on every start.
+3. **Nuitka runs.** Where it is missing `build.sh` will install it; a
+   failure here on an env that already has it is a broken env.
+4. **The tree is clean.** The build stamps its commit into the binary,
+   and "(uncommitted changes)" marks one nobody can reproduce from git.
+   Under WSL on `/mnt/c` the stamp is always there, because CRLF checkouts
+   make every text file look modified to Linux git; check real
+   cleanliness with `git diff --ignore-cr-at-eol HEAD --stat` instead,
+   which prints nothing on a clean tree.
+
+**Why the env has to match `requirements.txt`.** Nuitka compiles in
+whatever version of each package the build interpreter has, so the build
+env *is* the dependency resolution for every customer who runs the
+binary. On 2026-09-24 a Linux build published to `stable` crashed on pods
+with `ModuleNotFoundError: huggingface_hub.utils._headers`. From
+huggingface_hub 1.32 the `utils` package loads its submodules lazily
+through `importlib`, which Nuitka's import graph cannot follow, and the
+build env had resolved 1.32 while `requirements.txt` said nothing to stop
+it. The fix (commit `d321bac`) names the whole package with
+`--include-package=huggingface_hub` and pins `huggingface_hub<1.32` — but
+a pin only helps in an env that honours it, and the build does not check.
+
+Everything else a build must agree about is checked by `make check-args`,
+and both `make compile` and `make release` depend on it — so the Linux
+build refuses to run while any of it is out of step. See
+[the checks](../development/checks.md) for what each one guards.
+
 ## Building on the pod
 
 **POD** (bash):
@@ -93,7 +144,7 @@ The flags:
 Point it at a specific interpreter with `PYTHON=`:
 
 ```bash
-PYTHON=~/build-venv/bin/python3 ./build.sh --no-publish
+PYTHON=~/venv-krea2build/bin/python bash build.sh --no-publish   # WSL
 ```
 
 Via make — **WSL or POD**, and it runs the pre-flight checks first:
@@ -101,6 +152,19 @@ Via make — **WSL or POD**, and it runs the pre-flight checks first:
 ```bash
 make compile        # check-args, then ./build.sh --no-publish
 ```
+
+**Known issue: `check-args` ignores `PYTHON`.** Its recipe calls
+`python3` by name, not `$(PYTHON)`, so in WSL it runs Ubuntu 24.04's
+system Python — which PEP 668 keeps free of the app's packages — and
+dies with `ModuleNotFoundError: No module named 'fastapi'` before the
+build starts. Until the Makefile is fixed, put the venv first on `PATH`
+as well — **WSL**:
+
+```bash
+PYTHON=$HOME/venv-krea2build/bin/python PATH=$HOME/venv-krea2build/bin:$PATH make compile
+```
+
+The pod is unaffected: its `python3` is the one with the packages.
 
 ### Smoke-testing it
 
@@ -144,21 +208,33 @@ default) or make it the default once:
 wsl --set-default Ubuntu-24.04
 ```
 
-**WSL** (bash):
+The build env in WSL is the venv **`~/venv-krea2build`** — Python 3.12,
+Nuitka, `zstandard` and `requirements.txt`, nothing else. On this machine
+it already exists; run the [checks above](#before-you-build) against it
+and build from the repo checkout — **WSL** (bash):
+
+```bash
+cd /mnt/c/Adarsh/Personal/Learn/DSA/cp/test/test
+PYTHON=$HOME/venv-krea2build/bin/python bash build.sh --no-publish
+```
+
+**Never build in `~/krea2build`.** It is a stale copy of the tree, not a
+git checkout, with an old `dist/krea2app` binary in it. A build there compiles code nobody can trace back to a commit.
+
+To create the venv on a fresh Ubuntu — **WSL**:
 
 ```bash
 sudo apt update && sudo apt install -y python3-venv git
-git clone <this repo> && cd test
-python3 -m venv ~/build-venv && source ~/build-venv/bin/activate
-pip install -r requirements.txt
-./build.sh
+python3 -m venv ~/venv-krea2build
+~/venv-krea2build/bin/python -m pip install -r requirements.txt nuitka zstandard
 ```
 
 Use a venv: Ubuntu 24.04 enforces PEP 668, so installing into the system
 Python fails with `externally-managed-environment`. The RunPod image
 disables this, which is why the pod does not need one. `build.sh` uses
-whichever `python3` is active, so an activated venv is picked up
-automatically, and it prefixes `sudo` when not running as root.
+`$PYTHON` if set, otherwise whichever `python3` is first on `PATH` — so
+an activated venv is also picked up — and it prefixes `sudo` when not
+running as root.
 
 ### Building under `/mnt/c/…` needs one extra setting
 
@@ -228,10 +304,3 @@ downloading is only for redistribution. Whoever receives it needs
 `chmod +x ember` first, since the executable bit does not survive most
 transfers. For a Windows customer you do not transcode this file, you
 build [the other one](build-windows.md).
-
-## Before you build
-
-Everything a build must agree about is checked by `make check-args`, and
-both `make compile` and `make release` depend on it — so the Linux build
-refuses to run while any of it is out of step. See
-[the checks](../development/checks.md) for what each one guards.

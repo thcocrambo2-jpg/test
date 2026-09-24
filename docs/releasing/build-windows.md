@@ -37,12 +37,21 @@ $env:R2_ACCOUNT_ID = "..."; $env:R2_ACCESS_KEY_ID = "..."   # etc.
 See [publishing](publishing.md) for what each one is and where the real
 values live.
 
+Before any of these, point `$env:PYTHON` at the build environment and
+run the [checks below](#before-you-build).
+
 ## What the build machine needs
 
-`build.ps1` installs `nuitka`, `zstandard` and the app's own requirements
-itself, into whichever environment you point it at — the same way
-`build.sh` does on a pod. What it cannot install is a C compiler, and the
-rule there is not the one you would guess:
+`build.ps1` installs `nuitka` and `zstandard` into whichever environment
+you point it at if they are missing — the same way `build.sh` does on a
+pod. The app's own requirements are a different story: the script only
+tries to *import* them, and runs `pip install -r requirements.txt` only
+when that import fails. An environment that imports everything but holds
+the wrong versions is used exactly as it is, so **the pins in
+`requirements.txt` are not enforced by the build** — that is what the
+[dry-run check](#before-you-build) is for. What the script cannot install
+at all is a C compiler, and the rule there is not the one you would
+guess:
 
 | Build interpreter | Compiler |
 | --- | --- |
@@ -59,30 +68,94 @@ up front and refuses immediately, naming both ways out.
 and 3.12 is what the pod builds on and what the app is tested against —
 so the two artifacts differ in as few ways as possible.
 
-The `krea2` conda environment described in
-[running on Windows](../running/windows.md) is already that: Python 3.12
-with the app's dependencies installed, which is exactly what Nuitka needs
-to compile them in. Point the build at it — **PS**:
+### The build environment is `krea2build`
+
+The build environment is the conda env **`krea2build`**, at
+`%USERPROFILE%\miniconda3\envs\krea2build`: Python 3.12, Nuitka,
+`zstandard`, and `requirements.txt` satisfied, and nothing else. Point the
+build at it — **PS**:
 
 ```powershell
-$env:PYTHON = "$env:USERPROFILE\miniconda3\envs\krea2\python.exe"
+$env:PYTHON = "$env:USERPROFILE\miniconda3\envs\krea2build\python.exe"
 .\build.ps1
 ```
 
-Or from scratch, without conda — **PS**:
-
-```powershell
-py -3.12 -m venv .venv312
-.\.venv312\Scripts\python.exe -m pip install -r requirements.txt
-$env:PYTHON = "$PWD\.venv312\Scripts\python.exe"
-.\build.ps1
-```
+**Not `krea2`.** The `krea2` env from
+[running on Windows](../running/windows.md) is where the app *runs*, and
+running the app changes it: `install_comfyui()` in
+`ember/comfy/setup.py` installs ComfyUI's requirements and ours in one
+resolver pass, and ComfyUI's requirements are unpinned and move. So every
+start can leave different versions behind, and a build from that env
+compiles in whatever the last start happened to resolve rather than what
+`requirements.txt` says. A build env is only useful if nothing but you
+installs into it.
 
 `$env:PYTHON` is how you point the script at an interpreter other than
 whatever `python` resolves to, exactly as `PYTHON=` does for `build.sh`.
 Note that it is the **build** interpreter only — it decides what gets
 compiled in, and has nothing to do with the Python 3.12 the customer's
 machine needs for ComfyUI.
+
+### Creating it from scratch
+
+With conda — **PS**:
+
+```powershell
+conda create -n krea2build python=3.12 -y
+$py = "$env:USERPROFILE\miniconda3\envs\krea2build\python.exe"
+& $py -m pip install -r requirements.txt nuitka zstandard
+```
+
+Without conda, from a uv-managed CPython 3.12 — **PS**:
+
+```powershell
+uv python install 3.12                  # if uv python find finds none
+& (uv python find 3.12) -m venv .venv312
+.\.venv312\Scripts\python.exe -m pip install -r requirements.txt nuitka zstandard
+$env:PYTHON = "$PWD\.venv312\Scripts\python.exe"
+```
+
+Call the interpreter by path, as both recipes do, rather than
+`conda activate` and a bare `pip`: which `pip` a shell finds is exactly
+the kind of thing that quietly lands packages in the wrong env. And
+don't use `py -3.12`: the `py` launcher only exists if python.org's
+installer put it there, and on this machine it did not.
+
+## Before you build
+
+Four checks, all seconds long, all run against the interpreter the build
+will use — **PS**:
+
+```powershell
+$py = $env:PYTHON                       # krea2build, set as above
+& $py --version                          # 1. must say 3.12.x
+& $py -m pip install --dry-run -r requirements.txt   # 2. no "Would install" lines
+& $py -m nuitka --version                # 3. Nuitka is importable
+git status --short                       # 4. clean, or you know why not
+```
+
+1. **Python 3.12**, for the compiler reason in the table above.
+2. **`--dry-run` wants to install nothing.** Any `Would install …` line
+   means the env has drifted from `requirements.txt`. Run the same command
+   without `--dry-run` into the build env, then check again.
+3. **Nuitka runs.** `build.ps1` would install it anyway, but a failure
+   here is a broken env, and it is better found now than mid-build.
+4. **The tree is clean.** The build stamps its commit into the binary,
+   and a tree with uncommitted work produces a binary nobody can
+   reproduce from git.
+
+**Why the env has to match `requirements.txt`.** Nuitka compiles in
+whatever version of each package the build interpreter has, so the build
+env *is* the dependency resolution for every customer who runs the
+binary. On 2026-09-24 a Linux build published to `stable` crashed on pods
+with `ModuleNotFoundError: huggingface_hub.utils._headers`. From
+huggingface_hub 1.32 the `utils` package loads its submodules lazily
+through `importlib`, which Nuitka's import graph cannot follow, and the
+build env had resolved 1.32 while `requirements.txt` said nothing to stop
+it. The fix (commit `d321bac`) names the whole package with
+`--include-package=huggingface_hub` and pins `huggingface_hub<1.32` — but
+a pin only helps in an env that honours it, and as described above, the
+build scripts do not check.
 
 ## What the machine running it still needs
 
