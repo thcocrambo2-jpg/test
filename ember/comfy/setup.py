@@ -11,6 +11,7 @@ Last, the SageAttention build that torch can load, where the GPU runs it
 """
 
 import json
+import re
 import shutil
 import subprocess
 import sys
@@ -301,6 +302,38 @@ def torch_constraints_file() -> Path | None:
         return None
 
 
+def _arch_supported(arch: str, arch_list: list) -> bool:
+    """Whether a torch built for `arch_list` has kernels that run on `arch`.
+
+    Not a membership test: a wheel ships SASS for a handful of arches and
+    leans on CUDA's compatibility rules for the rest. SASS built for sm_XY
+    runs on any sm_XZ with Z >= Y (same major), and PTX (compute_XY) is
+    JIT-compiled for anything at XY or newer. So the cu128 wheel, which
+    lists sm_86 and sm_90 but not sm_89, is correct on an RTX 40xx - while
+    sm_100 SASS still does not run on an sm_120 Blackwell card, which is
+    the failure this check exists to catch.
+    """
+    m = re.fullmatch(r"sm_(\d+)(\d)", arch)
+    if not m:
+        return arch in arch_list
+    have = (int(m.group(1)), int(m.group(2)))
+    for entry in arch_list:
+        e = re.fullmatch(r"(sm|compute)_(\d+)(\d)([a-z]?)", entry)
+        if not e:
+            continue
+        kind, built = e.group(1), (int(e.group(2)), int(e.group(3)))
+        if e.group(4):
+            # sm_90a and friends are arch-specific and forward-compatible
+            # with nothing, not even the next minor.
+            if built == have:
+                return True
+        elif kind == "sm" and built[0] == have[0] and built[1] <= have[1]:
+            return True
+        elif kind == "compute" and built <= have:
+            return True
+    return False
+
+
 def _describe(info: dict) -> str:
     return (f"torch {info.get('torch')} (CUDA {info.get('cuda')}) on "
             f"{info.get('device')} [{info.get('arch')}]")
@@ -366,7 +399,7 @@ def ensure_torch() -> None:
             "the driver (nvidia-smi) and that a GPU is attached."
         )
     arch, arch_list = info.get("arch"), info.get("arch_list") or []
-    if arch and arch not in arch_list:
+    if arch and not _arch_supported(arch, arch_list):
         raise RuntimeError(
             f"This torch has no kernels for {info.get('device')} ({arch}). It "
             f"was built for: {', '.join(arch_list)}.\nBlackwell cards need a "
