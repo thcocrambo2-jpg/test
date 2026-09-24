@@ -8,6 +8,7 @@ import { Alert, Button, Card, EmptyState, Pill, Segmented, Skeleton, useToast } 
 import { TextField } from '@/components/fields'
 import { useHandoff } from '@/store/handoff'
 import { useTabState } from '@/store/tabState'
+import { useCopy } from '@/lib/util'
 import s from './library.module.css'
 
 /*
@@ -143,6 +144,7 @@ function PromptTile({ card }: { card: PromptCard }) {
   const offer = useHandoff((state) => state.offer)
   const toast = useToast()
   const [busy, setBusy] = useState(false)
+  const { copied, copy } = useCopy()
 
   const target: TabSchema | undefined = useMemo(
     () => schemas?.find((schema) => schema.key === card.tab),
@@ -175,13 +177,29 @@ function PromptTile({ card }: { card: PromptCard }) {
       title={card.title || 'Untitled'}
       subtitle={card.source === 'admin' ? '⭐ Official' : '👥 Community'}
       actions={
-        target ? (
-          <Button size="sm" variant="primary" loading={busy} onClick={() => void use()}>
-            Use
+        <div className={s.actions}>
+          {/* The prompt text alone — no settings, no tab switch. Offered
+            * whether or not this licence has the card's tab. */}
+          <Button
+            size="sm"
+            variant="ghost"
+            title="Copy the prompt text"
+            onClick={() =>
+              void copy(card.prompt).then((landed) => {
+                if (!landed) toast('Could not copy the prompt')
+              })
+            }
+          >
+            {copied ? 'Copied' : 'Copy'}
           </Button>
-        ) : (
-          <Pill title="This tab is not part of this licence">not licensed</Pill>
-        )
+          {target ? (
+            <Button size="sm" variant="primary" loading={busy} onClick={() => void use()}>
+              Use
+            </Button>
+          ) : (
+            <Pill title="This tab is not part of this licence">not licensed</Pill>
+          )}
+        </div>
       }
     >
       <p className={s.prompt}>{card.prompt}</p>
