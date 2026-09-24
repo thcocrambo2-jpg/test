@@ -16,7 +16,12 @@ uvicorn>=0.30
 python-multipart
 websocket-client>=1.6
 requests
-huggingface_hub
+# Floor: transformers 5.x (installed in the same resolver pass as
+# ComfyUI's requirements) needs >=1.5. Ceiling: 1.32 made
+# huggingface_hub.utils lazy, which Nuitka cannot follow; build.sh names
+# the package explicitly so a newer one still compiles in, and this keeps
+# every build host on the same shape until that is verified.
+huggingface_hub>=1.5,<1.32
 # Xet transfer for the Hub. Not optional in practice: without it every
 # download of a Xet-backed repo falls back to single-stream HTTP, which
 # turns a model fetch that takes seconds into one that takes many minutes.

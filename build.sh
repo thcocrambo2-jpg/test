@@ -664,6 +664,17 @@ echo ">>> Compiling (the first build is slow — every package below is compiled
     --include-data-files=scripts/mirror_manifest.json=mirror_manifest.json \
     --include-data-files=scripts/PINS.json=PINS.json \
     \
+    `# huggingface_hub itself, and the same failure as uvicorn below.` \
+    `# From 1.32 its utils package is a lazy facade: the submodules are named` \
+    `# as STRINGS in _SUBMOD_ATTRS and loaded by importlib on first attribute` \
+    `# access, so the import graph stops at huggingface_hub.utils. Without` \
+    `# this flag the binary compiles and starts, then the first download dies` \
+    `# on ModuleNotFoundError: huggingface_hub.utils._headers. Builds against` \
+    `# 1.31 and earlier happened to work, which is why it looked like a` \
+    `# platform problem rather than a version one. The pin in` \
+    `# requirements.txt keeps builds on one shape; this flag is the fix.` \
+    --include-package=huggingface_hub \
+    \
     `# huggingface_hub imports hf_xet inside a try/except and only when a` \
     `# repo is Xet-backed, so the import graph does not reach it and the` \
     `# binary silently ships without it. The cost is not subtle: every` \
