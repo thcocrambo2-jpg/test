@@ -1,7 +1,9 @@
 # Prompt undo / redo
 
-Every prompt box carries a pair of small **undo / redo** buttons under
+Every prompt box carries small **undo / redo / clear** buttons under
 it, plus Ctrl+Z and Ctrl+Y (or Ctrl+Shift+Z) while the box has focus.
+Clear is an ordinary entry in the same history, so one undo brings the
+cleared prompt back.
 For someone using the app, and for anyone tempted to delete this and let
 the browser do it.
 

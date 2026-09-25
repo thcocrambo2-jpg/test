@@ -37,6 +37,7 @@ export type UndoHistory = {
   onKeyDown: (event: React.KeyboardEvent<HTMLTextAreaElement>) => void
   undo: () => void
   redo: () => void
+  clear: () => void
   canUndo: boolean
   canRedo: boolean
 }
@@ -116,6 +117,20 @@ export function useUndoHistory(
     [setValue],
   )
 
+  // Always its own entry, never folded into the typing burst before it, so
+  // one undo brings back exactly what the clear threw away.
+  const clear = useCallback(() => {
+    if (stack.current[at.current] === '') return
+    stack.current.length = at.current + 1
+    stack.current.push('')
+    if (stack.current.length > DEPTH) stack.current.shift()
+    at.current = stack.current.length - 1
+    typedAt.current = 0
+    applying.current = true
+    setValue('')
+    bump((n) => n + 1)
+  }, [setValue])
+
   const onKeyDown = useCallback(
     (event: React.KeyboardEvent<HTMLTextAreaElement>) => {
       if (!(event.ctrlKey || event.metaKey) || event.altKey) return
@@ -137,6 +152,7 @@ export function useUndoHistory(
     onKeyDown,
     undo: () => step(-1),
     redo: () => step(1),
+    clear,
     canUndo: at.current > 0,
     canRedo: at.current < stack.current.length - 1,
   }

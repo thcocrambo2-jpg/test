@@ -187,6 +187,22 @@ export function TextAreaField({
             <path d="M20 9h-8a6 6 0 0 0 0 12h3" />
           </svg>
         </button>
+        {/* Goes through the history like any other edit, so a clear is one
+          * undo away from being taken back. */}
+        <button
+          type="button"
+          className={s.undoBtn}
+          title="Clear"
+          aria-label="Clear"
+          disabled={characters === 0}
+          onPointerDown={(event) => event.preventDefault()}
+          onClick={history.clear}
+        >
+          <svg viewBox="0 0 24 24" aria-hidden="true">
+            <path d="M18 6 6 18" />
+            <path d="m6 6 12 12" />
+          </svg>
+        </button>
       </div>
         </>
       )}

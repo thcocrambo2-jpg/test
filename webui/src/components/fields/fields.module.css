@@ -416,7 +416,7 @@
 }
 
 /* ------------------------------------------------------------------ undo
- * The two buttons under every prompt box. They exist for the keyboard that
+ * The undo / redo / clear buttons under every prompt box. They exist for the keyboard that
  * has no Ctrl key — see `lib/undo.ts`, which measured what the native stack
  * does and does not cover. Small and quiet: this is a recovery control, not
  * something to draw the eye on a form with thirty other things on it.
