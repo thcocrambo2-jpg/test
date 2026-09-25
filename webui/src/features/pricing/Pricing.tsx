@@ -2,6 +2,7 @@ import { useMemo, useState } from 'react'
 import { useCatalogue, useShowcase } from '@/api/queries'
 import type { Catalogue, Plan } from '@/api/types'
 import { Alert, Button, Modal, Pill, Segmented, Skeleton } from '@/components/ui'
+import { packColumns, useColumnCount } from '@/lib/masonry'
 import { cx, money } from '@/lib/util'
 import { useTabState } from '@/store/tabState'
 import { ShowcaseSections } from './Showcase'
@@ -38,6 +39,25 @@ export function Pricing() {
     const discounted = [...cycles].sort((a, b) => b.discount_percent - a.discount_percent)[0]
     return discounted?.id ?? cycles[0]?.id ?? 'monthly'
   }, [cycle, cycles])
+
+  /* The plan cards, as a masonry like the Gallery's.
+   *
+   * A row of equal-height cards makes every tier as tall as the one with
+   * the longest feature list, so a three-line Starter card carries a screen
+   * of blank panel under its button. Columns let each card end where its
+   * list does. Dealt by `packColumns` rather than CSS `column-count`, so
+   * the tiers still read cheapest-first left to right instead of down the
+   * first column. Hooks sit above the early returns below, as they must. */
+  const plans = useMemo(
+    () => [...(catalogue?.plans ?? [])].sort((a, b) => a.sort_order - b.sort_order),
+    [catalogue],
+  )
+  const [plansEl, setPlansEl] = useState<HTMLDivElement | null>(null)
+  const columnCount = useColumnCount(plansEl, PLAN_WIDTH, 1)
+  const columns = useMemo(
+    () => packColumns(plans, columnCount, planHeight),
+    [plans, columnCount],
+  )
 
   if (isLoading) return <PricingSkeleton />
 
@@ -92,18 +112,23 @@ export function Pricing() {
           )}
         </div>
 
-        <div className={s.plans}>
-          {[...catalogue.plans]
-            .sort((a, b) => a.sort_order - b.sort_order)
-            .map((plan) => (
-              <PlanCard
-                key={plan.id}
-                plan={plan}
-                cycle={active}
-                catalogue={catalogue}
-                onContact={() => setContact(true)}
-              />
-            ))}
+        <div className={s.plans} ref={setPlansEl}>
+          {columns.map((column, at) => (
+            <div key={at} className={s.planColumn}>
+              {column.map((index) => {
+                const plan = plans[index]
+                return (
+                  <PlanCard
+                    key={plan.id}
+                    plan={plan}
+                    cycle={active}
+                    catalogue={catalogue}
+                    onContact={() => setContact(true)}
+                  />
+                )
+              })}
+            </div>
+          ))}
         </div>
       </section>
 
@@ -143,6 +168,17 @@ export function Pricing() {
       </Modal>
     </div>
   )
+}
+
+/** The narrowest a plan column may get, in px. One column on a phone,
+ *  and as many as fit beside each other above that. */
+const PLAN_WIDTH = 280
+
+/** A card's height in feature rows, near enough to pick the shortest
+ *  column. The name, price and button cost about six rows whatever the
+ *  plan; a feature with a description wraps onto a second, smaller line. */
+function planHeight(plan: Plan) {
+  return 6 + plan.features.length * 1.4
 }
 
 function PlanCard({
@@ -249,7 +285,7 @@ function PricingSkeleton() {
         <Skeleton width="min(560px, 90%)" height={44} />
         <Skeleton width="min(680px, 95%)" height={54} />
       </div>
-      <div className={s.plans}>
+      <div className={s.plansSkeleton}>
         {[0, 1, 2].map((index) => (
           <Skeleton key={index} height={420} radius="var(--r-xl)" />
         ))}

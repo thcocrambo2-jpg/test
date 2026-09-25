@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { useQueryClient } from '@tanstack/react-query'
 import { api } from '@/api/client'
 import { useGallery } from '@/api/queries'
@@ -12,6 +12,7 @@ import {
   useConfirm,
   useToast,
 } from '@/components/ui'
+import { packColumns, useColumnCount } from '@/lib/masonry'
 import { cx, fileName, relativeTime, saveFile, useCopy } from '@/lib/util'
 import { useQueue } from '@/store/queue'
 import { useTabState } from '@/store/tabState'
@@ -152,7 +153,13 @@ export function Gallery() {
 
   const [gridEl, setGridEl] = useState<HTMLDivElement | null>(null)
   const columnCount = useColumnCount(gridEl, COLUMN[density].width, COLUMN[density].fewest)
-  const columns = useMemo(() => packColumns(items ?? [], columnCount), [items, columnCount])
+  // Heights are in column widths, which is all the comparison needs; the
+  // tile's own bar overlays the picture and adds nothing. Indices, not ids,
+  // because selection keys on the index; the lightbox keys on an id.
+  const columns = useMemo(
+    () => packColumns(items ?? [], columnCount, tileHeight),
+    [items, columnCount],
+  )
 
   /** Toggle one tile, or — with Shift — add everything between it and the
    *  last one touched. The range is what makes this worth having over
@@ -537,47 +544,10 @@ export function Gallery() {
   )
 }
 
-/** How many columns of at least `minWidth` fit in the grid, kept current as
- *  it resizes. Measured before paint so the first frame is already laid out;
- *  the gap is read from the stylesheet so the two cannot disagree. */
-function useColumnCount(el: HTMLElement | null, minWidth: number, fewest: number) {
-  const [count, setCount] = useState(fewest)
-  useLayoutEffect(() => {
-    if (!el) return
-    const measure = () => {
-      const gap = parseFloat(getComputedStyle(el).columnGap) || 0
-      setCount(Math.max(fewest, Math.floor((el.clientWidth + gap) / (minWidth + gap))))
-    }
-    measure()
-    const observer = new ResizeObserver(measure)
-    observer.observe(el)
-    return () => observer.disconnect()
-  }, [el, minWidth, fewest])
-  return count
-}
-
-/** Deal items into columns, each into whichever is shortest so far.
- *
- *  Plain CSS masonry (`column-count`) fills one column top to bottom before
- *  starting the next, so the second-newest file lands under the first and
- *  the one at the top of column two is from the middle of the page. Going to
- *  the shortest column keeps newest-first reading left to right, row by
- *  row, give or take the shapes. Heights are in column widths, which is all
- *  the comparison needs; the tile's own bar overlays the picture and adds
- *  nothing. Returns indices into `items`, which is what selection keys on;
- *  the lightbox keys on an id. */
-function packColumns(items: MediaItem[], count: number) {
-  const columns: number[][] = Array.from({ length: count }, () => [])
-  const heights = new Array<number>(count).fill(0)
-  items.forEach((item, index) => {
-    let shortest = 0
-    for (let at = 1; at < count; at += 1) {
-      if (heights[at] < heights[shortest] - 1e-6) shortest = at
-    }
-    columns[shortest].push(index)
-    heights[shortest] += item.width > 0 && item.height > 0 ? item.height / item.width : 1
-  })
-  return columns
+/** A tile's height in column widths. A file with no recorded size is drawn
+ *  square, so it is packed as one. */
+function tileHeight(item: MediaItem) {
+  return item.width > 0 && item.height > 0 ? item.height / item.width : 1
 }
 
 function Tile({

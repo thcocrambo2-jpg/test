@@ -93,11 +93,31 @@
   letter-spacing: -0.024em;
 }
 
+/* Masonry, the Gallery's way: equal-width columns, each a stack of cards
+   at their own height. The column count and which card goes where come from
+   Pricing.tsx (lib/masonry.ts), so this only lays them out. `flex-start`
+   is the point of it — stretched, every column would be as tall as the
+   longest again and the cards would be back to trailing blank panel. */
 .plans {
+  display: flex;
+  align-items: flex-start;
+  gap: var(--s-4);
+}
+
+.planColumn {
+  flex: 1 1 0;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: var(--s-4);
+}
+
+/* The skeleton has no plans to deal, so it is a plain grid of the same
+   minimum width. */
+.plansSkeleton {
   display: grid;
   grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
   gap: var(--s-4);
-  align-items: stretch;
 }
 
 .plan {
