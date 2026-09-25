@@ -13,7 +13,7 @@ Python is the `krea2` conda environment.
 **Git Bash**:
 
 ```bash
-PY=/c/Users/Adarsh/miniconda3/envs/krea2/python.exe
+PY=$HOME/miniconda3/envs/krea2/python.exe
 ```
 
 **PS** (PowerShell):

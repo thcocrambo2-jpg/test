@@ -214,7 +214,7 @@ it already exists; run the [checks above](#before-you-build) against it
 and build from the repo checkout — **WSL** (bash):
 
 ```bash
-cd /mnt/c/Adarsh/Personal/Learn/DSA/cp/test/test
+cd /mnt/c/path/to/repo    # the Windows checkout, as seen from WSL
 PYTHON=$HOME/venv-krea2build/bin/python bash build.sh --no-publish
 ```
 

@@ -112,8 +112,8 @@ and uses `source`, arrays and `${!indirect}` — it will not run under
 PowerShell or dash. The Windows build has no make target; it is
 `.\build.ps1`.
 
-Repo root on this machine: `C:\Adarsh\Personal\Learn\DSA\cp\test\test`
-(as `/mnt/c/Adarsh/Personal/Learn/DSA/cp/test/test` from WSL).
+From WSL, a Windows checkout at `C:\path\to\repo` is
+`/mnt/c/path/to/repo`.
 
 ---
 
@@ -283,7 +283,7 @@ What the showcase is and how the page decides what to render is in
 them):
 
 ```powershell
-$env:EMBER_BASE_DIR = "C:\Adarsh\Personal\Learn\DSA\cp\test\test\tmp"
+$env:EMBER_BASE_DIR = "$PWD\tmp"                     # run from the repo root
 python scripts\r2_upload_showcase.py --scaffold      # tree + dummy images
 python scripts\r2_upload_showcase.py --list          # every path the page requests
 python scripts\r2_upload_showcase.py --dry-run
