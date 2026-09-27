@@ -101,6 +101,23 @@ Flags: `--dry-run`, `--audit`, `--pins-only`, `--public`,
 `EMBER_ADMIN_TOKEN`, and neither writes anything to the mirror or to the
 database.
 
+An HF repo already in `PINS.json` keeps its pin even when upstream has
+moved on, because pods downloaded at that revision; the log names the
+newer one, and moving a pin is an edit to `PINS.json`. Only a repo with
+no pin yet gets upstream's current revision. A pack's pin follows the
+checkout it is packed from, and a pin a run cannot see, such as a pack
+whose feature was off or one set by hand, is carried forward.
+
+### Topping up a few files
+
+A new manifest item or node pack doesn't need the ~220 GB pod.
+`--only assets --only nodes` leaves out the `loras` repo, so no catalogue
+LoRA is uploaded and no database record is written. With a fresh
+`EMBER_BASE_DIR`, the run packs only what you clone into its
+`ComfyUI/custom_nodes/`: each pack at its `PINS.json` sha, submodules
+included. It needs only `huggingface_hub` and `requests`. Commit the `tarball` name the run adds
+to `PINS.json`: pods use a pack's tarball only once its pin names it.
+
 Steps 3–5 read the catalogue the way the pod does — `POST /v1/catalog`
 with `EMBER_LICENSE_KEY` and `EMBER_NODE_TAG` — or, with
 `--catalog FILE`, from a file in the same shape

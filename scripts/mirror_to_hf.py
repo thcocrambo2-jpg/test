@@ -665,32 +665,40 @@ def _pack_reproducible(src: Path, arcname: str, dest: Path) -> None:
     tmp.rename(dest)
 
 
-def pack_nodes(manifest: dict, staging: Path) -> tuple[list[Item], dict]:
+def load_pins() -> dict:
+    """The PINS.json already on record, or {} if there is none.
+
+    PINS.json is rebuilt from scratch every run, so anything a given pod
+    cannot re-derive silently vanishes from it. That is how three packs
+    lost their pins — their features were off on the boot run, so their
+    directories did not exist — and losing a pin does more than unpin:
+    node_pack_from_mirror looks the tarball up BY PIN, so a pack with no
+    pin never uses the mirror copy that is sitting right there, and
+    bootstrap falls back to cloning HEAD unpinned. So the previous file is
+    carried forward, and a run overwrites only what it can actually prove.
+    """
+    if not PINS_PATH.exists():
+        return {}
+    try:
+        return json.loads(PINS_PATH.read_text(encoding="utf-8"))
+    except Exception as exc:
+        log.warning("existing %s is unreadable (%s) — starting from "
+                    "scratch, so unbuilt packs will lose their pins.",
+                    PINS_PATH, exc)
+        return {}
+
+
+def pack_nodes(manifest: dict, staging: Path,
+               previous: dict) -> tuple[list[Item], dict]:
     """Tar every custom-node pack and record the SHA it was taken at.
 
     A GitHub fork does not protect you here — a fork cloned at HEAD breaks
     exactly as fast as the original. The tarball plus the recorded SHA is
-    what actually pins the app.
+    what actually pins the app. `previous` is load_pins().
     """
     staging.mkdir(parents=True, exist_ok=True)
     custom_nodes = COMFY_DIR / "custom_nodes"
     items, pins = [], {}
-    # PINS.json is rebuilt from scratch every run, so anything a given pod
-    # cannot re-derive silently vanishes from it. That is how three packs
-    # lost their pins — their features were off on the boot run, so their
-    # directories did not exist — and losing a pin does more than unpin:
-    # node_pack_from_mirror looks the tarball up BY PIN, so a pack with no
-    # pin never uses the mirror copy that is sitting right there, and
-    # bootstrap falls back to cloning HEAD unpinned. Carry the previous
-    # file forward and overwrite only what this run can actually prove.
-    previous = {}
-    if PINS_PATH.exists():
-        try:
-            previous = json.loads(PINS_PATH.read_text(encoding="utf-8"))
-        except Exception as exc:
-            log.warning("existing %s is unreadable (%s) — starting from "
-                        "scratch, so unbuilt packs will lose their pins.",
-                        PINS_PATH, exc)
 
     for pack in manifest.get("node_packs", []):
         dirname = pack["dir"]
@@ -755,28 +763,49 @@ def pack_nodes(manifest: dict, staging: Path) -> tuple[list[Item], dict]:
 
 
 # ── Pins ──────────────────────────────────────────────────────────────────────
-def add_upstream_revisions(api: HfApi, manifest: dict, pins: dict) -> None:
-    """Record the current revision of the repos we deliberately do NOT mirror.
+def add_upstream_revisions(api: HfApi, manifest: dict, pins: dict,
+                           previous: dict) -> None:
+    """Pin the HF repos we deliberately do NOT mirror.
 
     Those ~205 GB are always fetched from upstream, so a revision is the
     only thing between you and a maintainer replacing weights under a
     filename you already ship. It also keeps the mirror and its upstream
     fallback honest: both must resolve to the same revision, or the
     fallback silently serves different weights than the mirror.
+
+    A repo that already has a pin keeps it. Pods download at the pin, so
+    the pin is what the pod actually resolved to; recording upstream's
+    current head instead would name weights no pod has, and move every
+    later download with it. Only a repo with no pin yet is pinned to
+    upstream's current revision. A pin moves by editing PINS.json on
+    purpose. Everything else on record — packs pack_nodes did not see,
+    pins set by hand for repos pin_upstream does not list — is carried
+    forward, so a pin leaves PINS.json only by an edit too.
     """
     pins["_note"] = ("SHAs/revisions captured at mirror time. Feed these to "
                      "ember/comfy/setup.py clones and "
                      "hf_hub_download(revision=...). "
                      "The mirror and the upstream fallback MUST resolve to "
                      "the same revision.")
+    for key, value in previous.items():
+        if not key.startswith("_") and key not in pins:
+            pins[key] = value
     for repo_id, kind in manifest.get("pin_upstream", {}).items():
         if kind == "git":
             continue        # captured from the local checkout by pack_nodes
         try:
-            info = api.model_info(repo_id)
-            pins[repo_id] = {"kind": kind, "sha": info.sha}
+            head = api.model_info(repo_id).sha
         except Exception as exc:
+            head = None
             log.warning("Could not read revision of %s: %s", repo_id, exc)
+        kept = pins.get(repo_id)
+        if isinstance(kept, dict) and kept.get("sha"):
+            if head and head != kept["sha"]:
+                log.info("%s: upstream is at %s — keeping the pin %s (edit "
+                         "PINS.json to move it)", repo_id, head[:8],
+                         kept["sha"][:8])
+        elif head:
+            pins[repo_id] = {"kind": kind, "sha": head}
 
 
 def write_pins(pins: dict) -> Path:
@@ -802,9 +831,10 @@ def capture_pins_only(manifest: dict, staging: Path) -> int:
     live only in the git checkouts on the running pod, so capturing them
     must not be able to fail over an HF credential.
     """
-    _, pins = pack_nodes(manifest, staging)
+    previous = load_pins()
+    _, pins = pack_nodes(manifest, staging, previous)
     try:
-        add_upstream_revisions(HfApi(), manifest, pins)   # public repos
+        add_upstream_revisions(HfApi(), manifest, pins, previous)  # public repos
     except Exception as exc:
         log.warning("Could not reach Hugging Face for upstream revisions "
                     "(%s) — node-pack SHAs are still captured.", exc)
@@ -941,7 +971,8 @@ def parse_args():
                          "license-validator/data/assets.json) instead of "
                          "POST /v1/catalog")
     ap.add_argument("--pins-only", action="store_true",
-                    help="capture node-pack SHAs + upstream revisions to "
+                    help="capture node-pack SHAs + the revision of any "
+                         "upstream repo not pinned yet to "
                          "scripts/PINS.json and exit. Needs no HF token. "
                          "Run this before destroying the pod.")
     ap.add_argument("--public", action="store_true",
@@ -1033,7 +1064,8 @@ def main() -> int:
     items = build_plan(manifest, args)
     add_catalogue_loras(items, cat, repos, user,
                         upstream_only_repos(manifest))
-    node_items, pins = pack_nodes(manifest, args.staging)
+    previous = load_pins()
+    node_items, pins = pack_nodes(manifest, args.staging, previous)
     items += node_items
     if args.only:
         items = [i for i in items if i.repo_key in args.only]
@@ -1095,7 +1127,7 @@ def main() -> int:
         dry_run=False)
 
     # ── Manifests ────────────────────────────────────────────────────────
-    add_upstream_revisions(api, manifest, pins)
+    add_upstream_revisions(api, manifest, pins, previous)
     write_pins(pins)
     try:
         ensure_repos(api, user, repos, ["nodes"], not args.public)
