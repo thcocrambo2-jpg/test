@@ -43,20 +43,21 @@ fine for these two. A missing or malformed list is not its business —
 list goes through it: `POST /v1/admin/feature-assets`, `npm run assets`
 and `npm run seed-assets`.
 
-## A feature with no LoRAs yet
+## Z-Image's lists
 
-The opposite case needs nothing. `zimage_t2i` lists one model and an
-empty `loras` list: `idListProblems()` accepts an empty list, and only
-`models` has the at-least-one rule. Its model record is
+`zimage_t2i` lists one model and LoRAs of its own. Its model record is
 `z-image-turbo-bf16` — `z_image_turbo_bf16.safetensors` from
 `Comfy-Org/z_image_turbo` (`split_files/diffusion_models/…`), no mirror,
 variant `turbo`, 12 steps, CFG 1, no turbo LoRA, no trigger. The Krea
-LoRAs do not load on Z-Image, so none are listed; a Z-Image LoRA joins
+LoRAs do not load on Z-Image, so none are shared; a Z-Image LoRA joins
 the list once its record exists:
 
 ```bash
 npm run assets -- --feature zimage_t2i --add-lora <id>
 ```
+
+An empty `loras` list is valid too: `idListProblems()` accepts it, and
+only `models` has the at-least-one rule.
 
 ## What a pod reads
 

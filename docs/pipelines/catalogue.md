@@ -27,10 +27,10 @@ Seven features have a `feature_assets` entry: `krea_t2i`, `krea_edit`,
 `krea_v2_t2i`, `krea_v2_edit`, `zimage_t2i`, `minimax_i2v` and
 `minimax_t2v`.
 
-`zimage_t2i` lists one model, `z-image-turbo-bf16`, and no LoRAs yet: the
-Krea LoRAs do not load on Z-Image, so its list starts empty and its stack
-offers `None` alone until Z-Image LoRAs are added. An empty `loras` list
-is valid on every feature; the at-least-one rule is for `models` only.
+`zimage_t2i` lists one model, `z-image-turbo-bf16`, and LoRAs trained
+for Z-Image; the Krea LoRAs do not load on it, so none are shared. An
+empty `loras` list is valid on every feature; the at-least-one rule is
+for `models` only.
 
 ## Tabs with LoRAs and no models
 

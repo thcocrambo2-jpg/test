@@ -5,7 +5,7 @@
     "ids are what presets and prompts store. Never change or reuse one.",
     "Each feature's lists are what its tab offers, in dropdown order; the first model is the default. An id may appear in any number of features.",
     "A LoRA-only feature (minimax_i2v, minimax_t2v — src/assets.js LORA_ONLY_FEATURES) has an empty models list: its tab runs a fixed graph and offers LoRAs alone.",
-    "An empty loras list is allowed (zimage_t2i): the tab's LoRA stack then offers \"None\" alone until LoRAs are added to the list."
+    "An empty loras list is allowed: the tab's LoRA stack then offers \"None\" alone until LoRAs are added to the list."
   ],
   "loras": [
     {
@@ -599,6 +599,118 @@
       "trigger": "",
       "enabled": true,
       "sort_order": 360
+    },
+    {
+      "id": "yukes-body-v1-0",
+      "name": "Yuke's Body v1.0",
+      "file": "yuke-body-4750.safetensors",
+      "source": {
+        "kind": "civitai",
+        "version": 2523882
+      },
+      "mirror": null,
+      "default_strength": 1.0,
+      "trigger": "yuke's body",
+      "enabled": true,
+      "sort_order": 370
+    },
+    {
+      "id": "mysticxxx-zit-v7",
+      "name": "Mystic XXX ZIT v7.0",
+      "file": "Mystic-XXX-ZIT-V7.safetensors",
+      "source": {
+        "kind": "civitai",
+        "version": 2855359
+      },
+      "mirror": null,
+      "default_strength": 0.6,
+      "trigger": "",
+      "enabled": true,
+      "sort_order": 380
+    },
+    {
+      "id": "nsfw-doggy-zit-v1-0",
+      "name": "NSFW Doggy v1.0",
+      "file": "Nsfw_Doggystyle_facing_the_camera.safetensors",
+      "source": {
+        "kind": "civitai",
+        "version": 2500045
+      },
+      "mirror": null,
+      "default_strength": 0.6,
+      "trigger": "Nsfw Doggystyle facing the camera, a naked woman is crawling. a man fucks her from behind.",
+      "enabled": true,
+      "sort_order": 390
+    },
+    {
+      "id": "deepthroat-zit-v1-0",
+      "name": "Deepthroat v1.0",
+      "file": "Nsfw_Deepthroat_tongue_out.safetensors",
+      "source": {
+        "kind": "civitai",
+        "version": 2575072
+      },
+      "mirror": null,
+      "default_strength": 0.6,
+      "trigger": "Nsfw_Deepthroat_tongue_out, she deepthroats a cock, tongue out",
+      "enabled": true,
+      "sort_order": 400
+    },
+    {
+      "id": "realistic-nsfw-zit-v3-1",
+      "name": "Realistic NSFW v3.1",
+      "file": "big_lora_v3_turbo_002308000.safetensors",
+      "source": {
+        "kind": "civitai",
+        "version": 2875896
+      },
+      "mirror": null,
+      "default_strength": 0.6,
+      "trigger": "1girl, breasts, nipples, solo, brown hair, underwear, sitting, bed, panties, large breasts, pink footwear, looking at viewer, lips, high heels, indoors, knees together feet apart, pillow, long hair, on bed, brown eyes, realistic",
+      "enabled": true,
+      "sort_order": 410
+    },
+    {
+      "id": "turbo-nsfw-zit-v3",
+      "name": "Turbo NSFW v3",
+      "file": "ZITnsfwLoRAv3.safetensors",
+      "source": {
+        "kind": "civitai",
+        "version": 2898951
+      },
+      "mirror": null,
+      "default_strength": 0.6,
+      "trigger": "",
+      "enabled": true,
+      "sort_order": 420
+    },
+    {
+      "id": "nicegirls-zit-asian",
+      "name": "Nice Girls UltraReal (Asian edition)",
+      "file": "NIceAsians_Zimage.safetensors",
+      "source": {
+        "kind": "civitai",
+        "version": 2526600
+      },
+      "mirror": null,
+      "default_strength": 0.6,
+      "trigger": "",
+      "enabled": true,
+      "sort_order": 430
+    },
+    {
+      "id": "penis-zit-v3",
+      "name": "Penis v3.0",
+      "file": "Penis_Z-Image_V3.safetensors",
+      "source": {
+        "kind": "civitai",
+        "version": 2636013
+      },
+      "mirror": null,
+      "default_strength": 0.6,
+      "trigger": "Penis",
+      "enabled": true,
+      "sort_order": 440
     }
   ],
   "models": [
@@ -792,7 +904,16 @@
       "models": [
         "z-image-turbo-bf16"
       ],
-      "loras": []
+      "loras": [
+        "yukes-body-v1-0",
+        "mysticxxx-zit-v7",
+        "nsfw-doggy-zit-v1-0",
+        "deepthroat-zit-v1-0",
+        "realistic-nsfw-zit-v3-1",
+        "turbo-nsfw-zit-v3",
+        "nicegirls-zit-asian",
+        "penis-zit-v3"
+      ]
     },
     "minimax_i2v": {
       "models": [],

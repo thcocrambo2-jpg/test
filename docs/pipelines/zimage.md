@@ -122,6 +122,11 @@ node's inputs at the pinned commit:
 workflow was saved, and it is required at the pin. 1 is its default and
 what the older pack did.
 
+With the tick on, ComfyUI's progress bar shows three passes per image:
+the render, then 4xLSDIR counting one step per 512-px tile (12 at
+1080×1920), then one 8-step pass per tile of the 1.5× image (four at
+that size).
+
 The tick is off by default. Off, the graph has no trace of the pass — it
 is the Turbo workflow and nothing else. On, the tab first checks that
 ComfyUI is answering and that the `UltimateSDUpscale` node is registered,
@@ -174,9 +179,9 @@ Eight blank rows, all off, like 🎨 Krea2's, chained as
 `LoraLoaderModelOnly` nodes between the diffusion model and the sampler —
 where the template's four bypassed placeholders sit. The upscale pass
 samples with the same patched model. Each row offers the catalogue's
-list for `zimage_t2i`, which is **empty for now**: Krea LoRAs do not load
-on Z-Image, so none are shared, and the rows offer `None` until Z-Image
-LoRAs are added to the list in the database.
+list for `zimage_t2i`, which holds Z-Image LoRAs only: Krea LoRAs do not
+load on Z-Image, so none are shared. The tab does not insert a LoRA's
+trigger words, so type them into the prompt.
 
 ## Presets
 
@@ -188,6 +193,5 @@ the LoRA stack. See [presets](../features/presets.md).
 
 ## Related
 
-- [catalogue.md](catalogue.md) — the model record and the empty LoRA
-  list.
+- [catalogue.md](catalogue.md) — the model record and the LoRA list.
 - [krea2.md](krea2.md) — the tab whose form this one copies.

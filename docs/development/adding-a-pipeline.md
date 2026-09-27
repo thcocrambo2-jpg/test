@@ -111,7 +111,7 @@ the list is its default. The database side is in
 [catalogue data](../../license-validator/docs/catalogue-data.md).
 
 A tab with a model and **no LoRAs yet** needs nothing: an empty `loras`
-list is valid on every feature, and `zimage_t2i` starts that way.
+list is valid on every feature.
 
 ### 7. A showcase entry
 
