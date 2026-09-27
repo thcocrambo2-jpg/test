@@ -39,7 +39,7 @@
 //
 // `name` vs `tab_label`: the pricing page wants prose that says what a tab
 // is ("MiniMax Text to Video"), the tab strip wants something short enough
-// to sit in a row of nine ("MiniMax T2V"). They were separate strings
+// to sit in a row of ten ("MiniMax T2V"). They were separate strings
 // in separate repos before this collection existed; keeping both fields
 // means unifying the source without flattening the two registers into one
 // awkward compromise. tab_label is optional — the client falls back to
@@ -93,6 +93,22 @@ export const FEATURES = [
     category: "generation",
     sort_order: 20,
     enabled: true,
+  },
+  // On no plan yet, and off here for that reason: `enabled: false` keeps it
+  // out of /v1/plans and the bot's plan list, and — since the flag never
+  // touches an entitlement — a key granted it through `features_extra`
+  // still gets the tab and its label. Flip it on when a plan grants it, or
+  // /v1/plans drops it from that plan's list.
+  {
+    key: "zimage_t2i",
+    name: "Z-Image Turbo",
+    tab_label: "⚡ Z-Image",
+    description: "Fast, realistic images from a text prompt",
+    category: "generation",
+    // 25, after Krea2 V2 (20), so it reads with the other text-to-image
+    // tabs.
+    sort_order: 25,
+    enabled: false,
   },
   {
     key: "gallery",

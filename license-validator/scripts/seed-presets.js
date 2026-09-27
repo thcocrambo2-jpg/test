@@ -38,8 +38,11 @@
 //   minimax_i2v   flat, and **no `model`** — shared by both MiniMax tabs.
 //                 `seconds` is the clip length; `aspect` only lands on the
 //                 text tab. Eight LoRA slots, like krea_t2i.
+//   zimage_t2i    flat, like krea_t2i, plus `multiplier` (a number) and
+//                 `upscale` (a bool). `resolution` is a Z-Image preset
+//                 label. Eight LoRA slots. No preset is seeded for it.
 //
-// All three store `loras` the same way: [on, lora id, weight] triples, with
+// All four store `loras` the same way: [on, lora id, weight] triples, with
 // `null` for an empty slot (the form shows it as "None"; that word never
 // reaches storage).
 //
@@ -57,7 +60,7 @@ import { assetIds, settingsProblem } from "../src/assets.js";
 
 const dryRun = process.argv.includes("--dry-run");
 
-const PRESET_TABS = ["krea_t2i", "krea_v2_t2i", "minimax_i2v"];
+const PRESET_TABS = ["krea_t2i", "krea_v2_t2i", "minimax_i2v", "zimage_t2i"];
 
 // Model and LoRA values are catalogue ids (data/assets.json). Edit here and
 // re-run to change what a fresh session opens on.

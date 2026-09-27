@@ -43,7 +43,7 @@ import { ObjectId } from "mongodb";
 import { collections, ensureIndexes } from "../src/db.js";
 import { checkSettings } from "../src/assets.js";
 
-const PRESET_TABS = ["krea_t2i", "krea_v2_t2i", "minimax_i2v"];
+const PRESET_TABS = ["krea_t2i", "krea_v2_t2i", "minimax_i2v", "zimage_t2i"];
 
 function args(argv) {
   const out = {};

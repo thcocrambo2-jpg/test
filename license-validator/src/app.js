@@ -1124,9 +1124,10 @@ app.get(
 // what replaying a prompt does. A tab joins both lists in the commit that
 // teaches the client to load it.
 //
-// Plus MiniMax, which has presets and no prompt library: one list shared
-// by both MiniMax tabs, filed under the image tab's key.
-const PRESET_TABS = [...PROMPT_TABS, "minimax_i2v"];
+// Plus MiniMax and Z-Image, which have presets and no prompt library:
+// one list shared by both MiniMax tabs, filed under the image tab's key,
+// and Z-Image's own.
+const PRESET_TABS = [...PROMPT_TABS, "minimax_i2v", "zimage_t2i"];
 
 const MAX_PRESET_NAME_CHARS = 60;
 const MAX_PRESET_DESCRIPTION_CHARS = 200;
