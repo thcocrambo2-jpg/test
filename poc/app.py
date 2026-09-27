@@ -57,6 +57,31 @@ def pip(*args):
     run([sys.executable, "-m", "pip", "install", *args])
 
 
+def pip_node_requirements(req):
+    """A custom node's broken requirement shouldn't stop the whole setup.
+
+    Some packages (e.g. pixeloe) carry dependency markers that crash pip on
+    kernel versions like '6.8.0-101-generic', so fall back to one package at a
+    time, then --no-deps, and just warn about anything that still fails.
+    """
+    try:
+        pip("-r", req)
+        return
+    except subprocess.CalledProcessError:
+        print(f"! {req} failed as a whole, installing its packages one by one", flush=True)
+    for line in req.read_text().splitlines():
+        pkg = line.split("#")[0].strip()
+        if not pkg or pkg.startswith("-"):
+            continue
+        try:
+            pip(pkg)
+        except subprocess.CalledProcessError:
+            try:
+                pip("--no-deps", pkg)
+            except subprocess.CalledProcessError:
+                print(f"! could not install {pkg} (from {req.parent.name}), continuing", flush=True)
+
+
 def install():
     if not COMFY.exists():
         run(["git", "clone", "--depth", "1", "https://github.com/comfyanonymous/ComfyUI", COMFY])
@@ -73,7 +98,7 @@ def install():
             run(["git", "clone", "--depth", "1", "--recursive", url, dest])
         req = dest / "requirements.txt"
         if req.exists():
-            pip("-r", req)
+            pip_node_requirements(req)
 
     # Workflows show up in the ComfyUI sidebar from user/default/workflows.
     shutil.copytree(WORKFLOWS, COMFY / "user" / "default" / "workflows", dirs_exist_ok=True)
