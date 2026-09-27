@@ -4607,6 +4607,486 @@
         }
       ]
     },
+    "zimage_t2i": {
+      "tab_id": "zimage",
+      "controls": [
+        {
+          "type": "Textbox",
+          "label": "Prompt",
+          "value": "A candid smartphone photo of a woman reading in a sunlit caf\u00e9, natural skin texture, soft window light",
+          "lines": 5,
+          "placeholder": null,
+          "interactive": null,
+          "visible": true,
+          "elem_id": null
+        },
+        {
+          "type": "Textbox",
+          "label": "Negative prompt",
+          "value": "cinematic, glossy finish, shallow depth of field, cinematic bokeh, uncanny anatomy, frame-perfect symmetry, blurred background, fat, low resolution, big ears, vertical lines, lines glitch",
+          "lines": 3,
+          "placeholder": null,
+          "interactive": null,
+          "visible": true,
+          "elem_id": null
+        },
+        {
+          "type": "Number",
+          "label": "Seed",
+          "value": 42,
+          "minimum": 0,
+          "maximum": null,
+          "step": 1,
+          "placeholder": null,
+          "interactive": null,
+          "visible": true,
+          "elem_id": null
+        },
+        {
+          "type": "Checkbox",
+          "label": "\ud83c\udfb2 Random seed",
+          "value": true,
+          "interactive": null,
+          "visible": true,
+          "elem_id": null
+        },
+        {
+          "type": "Slider",
+          "label": "Steps",
+          "value": 12,
+          "minimum": 1,
+          "maximum": 60,
+          "step": 1,
+          "interactive": null,
+          "visible": true,
+          "elem_id": null
+        },
+        {
+          "type": "Slider",
+          "label": "CFG",
+          "value": 1.0,
+          "minimum": 0.5,
+          "maximum": 8.0,
+          "step": 0.1,
+          "interactive": null,
+          "visible": true,
+          "elem_id": null
+        },
+        {
+          "type": "Dropdown",
+          "label": "Resolution",
+          "value": "1080\u00d71920 (1080p portrait)",
+          "interactive": null,
+          "visible": true,
+          "multiselect": null,
+          "elem_id": null,
+          "choices": [
+            [
+              "1328\u00d71328 (1:1)",
+              "1328\u00d71328 (1:1)"
+            ],
+            [
+              "1664\u00d7928 (16:9)",
+              "1664\u00d7928 (16:9)"
+            ],
+            [
+              "928\u00d71664 (9:16)",
+              "928\u00d71664 (9:16)"
+            ],
+            [
+              "1472\u00d71140 (4:3)",
+              "1472\u00d71140 (4:3)"
+            ],
+            [
+              "1140\u00d71472 (3:4)",
+              "1140\u00d71472 (3:4)"
+            ],
+            [
+              "1584\u00d71056 (3:2)",
+              "1584\u00d71056 (3:2)"
+            ],
+            [
+              "1056\u00d71584 (2:3)",
+              "1056\u00d71584 (2:3)"
+            ],
+            [
+              "1920\u00d71080 (1080p)",
+              "1920\u00d71080 (1080p)"
+            ],
+            [
+              "1080\u00d71920 (1080p portrait)",
+              "1080\u00d71920 (1080p portrait)"
+            ]
+          ]
+        },
+        {
+          "type": "Slider",
+          "label": "Resolution multiplier",
+          "value": 1.0,
+          "minimum": 0.5,
+          "maximum": 2.0,
+          "step": 0.05,
+          "interactive": null,
+          "visible": true,
+          "elem_id": null
+        },
+        {
+          "type": "Dropdown",
+          "label": "Sampler",
+          "value": "er_sde",
+          "interactive": null,
+          "visible": true,
+          "multiselect": null,
+          "elem_id": null,
+          "choices": [
+            [
+              "er_sde",
+              "er_sde"
+            ],
+            [
+              "euler",
+              "euler"
+            ],
+            [
+              "euler_ancestral",
+              "euler_ancestral"
+            ],
+            [
+              "dpmpp_2m",
+              "dpmpp_2m"
+            ],
+            [
+              "res_multistep",
+              "res_multistep"
+            ]
+          ]
+        },
+        {
+          "type": "Dropdown",
+          "label": "Model",
+          "value": "z-image-turbo-bf16",
+          "interactive": null,
+          "visible": true,
+          "multiselect": null,
+          "elem_id": null,
+          "choices": [
+            [
+              "Z-Image Turbo bf16",
+              "z-image-turbo-bf16"
+            ]
+          ]
+        },
+        {
+          "type": "Checkbox",
+          "label": "Upscale 1.5x (UltimateSDUpscale + 4xLSDIR)",
+          "value": false,
+          "interactive": null,
+          "visible": true,
+          "elem_id": null
+        },
+        {
+          "type": "Slider",
+          "label": "Batch count",
+          "value": 1,
+          "minimum": 1,
+          "maximum": 20,
+          "step": 1,
+          "interactive": null,
+          "visible": true,
+          "elem_id": null
+        },
+        {
+          "type": "Checkbox",
+          "label": "\ud83d\udcbe Save these settings as a preset",
+          "value": false,
+          "interactive": null,
+          "visible": true,
+          "elem_id": null
+        },
+        {
+          "type": "Textbox",
+          "label": "Preset name",
+          "value": null,
+          "lines": 1,
+          "placeholder": null,
+          "interactive": null,
+          "visible": true,
+          "elem_id": null
+        },
+        {
+          "type": "Checkbox",
+          "label": "On",
+          "value": false,
+          "interactive": null,
+          "visible": true,
+          "elem_id": null
+        },
+        {
+          "type": "Dropdown",
+          "label": "LoRA 1",
+          "value": "None",
+          "interactive": null,
+          "visible": true,
+          "multiselect": null,
+          "elem_id": null,
+          "choices": [
+            [
+              "None",
+              "None"
+            ]
+          ]
+        },
+        {
+          "type": "Slider",
+          "label": "Strength",
+          "value": 1.0,
+          "minimum": 0.0,
+          "maximum": 2.0,
+          "step": 0.01,
+          "interactive": null,
+          "visible": true,
+          "elem_id": null
+        },
+        {
+          "type": "Checkbox",
+          "label": "On",
+          "value": false,
+          "interactive": null,
+          "visible": true,
+          "elem_id": null
+        },
+        {
+          "type": "Dropdown",
+          "label": "LoRA 2",
+          "value": "None",
+          "interactive": null,
+          "visible": true,
+          "multiselect": null,
+          "elem_id": null,
+          "choices": [
+            [
+              "None",
+              "None"
+            ]
+          ]
+        },
+        {
+          "type": "Slider",
+          "label": "Strength",
+          "value": 1.0,
+          "minimum": 0.0,
+          "maximum": 2.0,
+          "step": 0.01,
+          "interactive": null,
+          "visible": true,
+          "elem_id": null
+        },
+        {
+          "type": "Checkbox",
+          "label": "On",
+          "value": false,
+          "interactive": null,
+          "visible": true,
+          "elem_id": null
+        },
+        {
+          "type": "Dropdown",
+          "label": "LoRA 3",
+          "value": "None",
+          "interactive": null,
+          "visible": true,
+          "multiselect": null,
+          "elem_id": null,
+          "choices": [
+            [
+              "None",
+              "None"
+            ]
+          ]
+        },
+        {
+          "type": "Slider",
+          "label": "Strength",
+          "value": 1.0,
+          "minimum": 0.0,
+          "maximum": 2.0,
+          "step": 0.01,
+          "interactive": null,
+          "visible": true,
+          "elem_id": null
+        },
+        {
+          "type": "Checkbox",
+          "label": "On",
+          "value": false,
+          "interactive": null,
+          "visible": true,
+          "elem_id": null
+        },
+        {
+          "type": "Dropdown",
+          "label": "LoRA 4",
+          "value": "None",
+          "interactive": null,
+          "visible": true,
+          "multiselect": null,
+          "elem_id": null,
+          "choices": [
+            [
+              "None",
+              "None"
+            ]
+          ]
+        },
+        {
+          "type": "Slider",
+          "label": "Strength",
+          "value": 1.0,
+          "minimum": 0.0,
+          "maximum": 2.0,
+          "step": 0.01,
+          "interactive": null,
+          "visible": true,
+          "elem_id": null
+        },
+        {
+          "type": "Checkbox",
+          "label": "On",
+          "value": false,
+          "interactive": null,
+          "visible": true,
+          "elem_id": null
+        },
+        {
+          "type": "Dropdown",
+          "label": "LoRA 5",
+          "value": "None",
+          "interactive": null,
+          "visible": true,
+          "multiselect": null,
+          "elem_id": null,
+          "choices": [
+            [
+              "None",
+              "None"
+            ]
+          ]
+        },
+        {
+          "type": "Slider",
+          "label": "Strength",
+          "value": 1.0,
+          "minimum": 0.0,
+          "maximum": 2.0,
+          "step": 0.01,
+          "interactive": null,
+          "visible": true,
+          "elem_id": null
+        },
+        {
+          "type": "Checkbox",
+          "label": "On",
+          "value": false,
+          "interactive": null,
+          "visible": true,
+          "elem_id": null
+        },
+        {
+          "type": "Dropdown",
+          "label": "LoRA 6",
+          "value": "None",
+          "interactive": null,
+          "visible": true,
+          "multiselect": null,
+          "elem_id": null,
+          "choices": [
+            [
+              "None",
+              "None"
+            ]
+          ]
+        },
+        {
+          "type": "Slider",
+          "label": "Strength",
+          "value": 1.0,
+          "minimum": 0.0,
+          "maximum": 2.0,
+          "step": 0.01,
+          "interactive": null,
+          "visible": true,
+          "elem_id": null
+        },
+        {
+          "type": "Checkbox",
+          "label": "On",
+          "value": false,
+          "interactive": null,
+          "visible": true,
+          "elem_id": null
+        },
+        {
+          "type": "Dropdown",
+          "label": "LoRA 7",
+          "value": "None",
+          "interactive": null,
+          "visible": true,
+          "multiselect": null,
+          "elem_id": null,
+          "choices": [
+            [
+              "None",
+              "None"
+            ]
+          ]
+        },
+        {
+          "type": "Slider",
+          "label": "Strength",
+          "value": 1.0,
+          "minimum": 0.0,
+          "maximum": 2.0,
+          "step": 0.01,
+          "interactive": null,
+          "visible": true,
+          "elem_id": null
+        },
+        {
+          "type": "Checkbox",
+          "label": "On",
+          "value": false,
+          "interactive": null,
+          "visible": true,
+          "elem_id": null
+        },
+        {
+          "type": "Dropdown",
+          "label": "LoRA 8",
+          "value": "None",
+          "interactive": null,
+          "visible": true,
+          "multiselect": null,
+          "elem_id": null,
+          "choices": [
+            [
+              "None",
+              "None"
+            ]
+          ]
+        },
+        {
+          "type": "Slider",
+          "label": "Strength",
+          "value": 1.0,
+          "minimum": 0.0,
+          "maximum": 2.0,
+          "step": 0.01,
+          "interactive": null,
+          "visible": true,
+          "elem_id": null
+        }
+      ]
+    },
     "krea_edit": {
       "tab_id": "edit",
       "controls": [
@@ -10553,6 +11033,26 @@
         "batch_count",
         "publish",
         "publish_title",
+        "save_preset",
+        "preset_name"
+      ],
+      "varargs": "lora_slots",
+      "keyword_only": []
+    },
+    "generate_zimage": {
+      "positional": [
+        "prompt",
+        "negative",
+        "seed",
+        "randomize",
+        "steps",
+        "cfg",
+        "resolution",
+        "multiplier",
+        "sampler",
+        "model",
+        "upscale",
+        "batch_count",
         "save_preset",
         "preset_name"
       ],

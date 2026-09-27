@@ -1,0 +1,314 @@
+[
+  {
+    "clip": {
+      "class_type": "CLIPLoader",
+      "inputs": {
+        "clip_name": "qwen_3_4b.safetensors",
+        "device": "default",
+        "type": "qwen_image"
+      }
+    },
+    "decode": {
+      "class_type": "VAEDecode",
+      "inputs": {
+        "samples": [
+          "sampler",
+          0
+        ],
+        "vae": [
+          "vae",
+          0
+        ]
+      }
+    },
+    "latent": {
+      "class_type": "EmptyLatentImage",
+      "inputs": {
+        "batch_size": 1,
+        "height": 1728,
+        "width": 972
+      }
+    },
+    "negative": {
+      "class_type": "CLIPTextEncode",
+      "inputs": {
+        "clip": [
+          "clip",
+          0
+        ],
+        "text": ""
+      }
+    },
+    "positive": {
+      "class_type": "CLIPTextEncode",
+      "inputs": {
+        "clip": [
+          "clip",
+          0
+        ],
+        "text": "a lighthouse in a storm, 35mm"
+      }
+    },
+    "sampler": {
+      "class_type": "KSampler",
+      "inputs": {
+        "cfg": 1.6,
+        "denoise": 1.0,
+        "latent_image": [
+          "latent",
+          0
+        ],
+        "model": [
+          "unet",
+          0
+        ],
+        "negative": [
+          "negative",
+          0
+        ],
+        "positive": [
+          "positive",
+          0
+        ],
+        "sampler_name": "dpmpp_2m",
+        "scheduler": "simple",
+        "seed": 9123456,
+        "steps": 13
+      }
+    },
+    "save": {
+      "class_type": "SaveImage",
+      "inputs": {
+        "filename_prefix": "ZImage_golden00",
+        "images": [
+          "upscale",
+          0
+        ]
+      }
+    },
+    "unet": {
+      "class_type": "UNETLoader",
+      "inputs": {
+        "unet_name": "z_image_turbo_bf16.safetensors",
+        "weight_dtype": "default"
+      }
+    },
+    "upscale": {
+      "class_type": "UltimateSDUpscale",
+      "inputs": {
+        "batch_size": 1,
+        "cfg": 1.0,
+        "denoise": 0.18,
+        "force_uniform_tiles": true,
+        "image": [
+          "decode",
+          0
+        ],
+        "mask_blur": 8,
+        "mode_type": "Chess",
+        "model": [
+          "unet",
+          0
+        ],
+        "negative": [
+          "negative",
+          0
+        ],
+        "positive": [
+          "positive",
+          0
+        ],
+        "sampler_name": "er_sde",
+        "scheduler": "simple",
+        "seam_fix_denoise": 1.0,
+        "seam_fix_mask_blur": 8,
+        "seam_fix_mode": "None",
+        "seam_fix_padding": 16,
+        "seam_fix_width": 64,
+        "seed": 9123456,
+        "steps": 8,
+        "tile_height": 1728,
+        "tile_padding": 32,
+        "tile_width": 972,
+        "tiled_decode": false,
+        "upscale_by": 1.5,
+        "upscale_model": [
+          "upscale_model",
+          0
+        ],
+        "vae": [
+          "vae",
+          0
+        ]
+      }
+    },
+    "upscale_model": {
+      "class_type": "UpscaleModelLoader",
+      "inputs": {
+        "model_name": "4xLSDIR.pth"
+      }
+    },
+    "vae": {
+      "class_type": "VAELoader",
+      "inputs": {
+        "vae_name": "ae.safetensors"
+      }
+    }
+  },
+  {
+    "clip": {
+      "class_type": "CLIPLoader",
+      "inputs": {
+        "clip_name": "qwen_3_4b.safetensors",
+        "device": "default",
+        "type": "qwen_image"
+      }
+    },
+    "decode": {
+      "class_type": "VAEDecode",
+      "inputs": {
+        "samples": [
+          "sampler",
+          0
+        ],
+        "vae": [
+          "vae",
+          0
+        ]
+      }
+    },
+    "latent": {
+      "class_type": "EmptyLatentImage",
+      "inputs": {
+        "batch_size": 1,
+        "height": 1728,
+        "width": 972
+      }
+    },
+    "negative": {
+      "class_type": "CLIPTextEncode",
+      "inputs": {
+        "clip": [
+          "clip",
+          0
+        ],
+        "text": ""
+      }
+    },
+    "positive": {
+      "class_type": "CLIPTextEncode",
+      "inputs": {
+        "clip": [
+          "clip",
+          0
+        ],
+        "text": "a lighthouse in a storm, 35mm"
+      }
+    },
+    "sampler": {
+      "class_type": "KSampler",
+      "inputs": {
+        "cfg": 1.6,
+        "denoise": 1.0,
+        "latent_image": [
+          "latent",
+          0
+        ],
+        "model": [
+          "unet",
+          0
+        ],
+        "negative": [
+          "negative",
+          0
+        ],
+        "positive": [
+          "positive",
+          0
+        ],
+        "sampler_name": "dpmpp_2m",
+        "scheduler": "simple",
+        "seed": 9123457,
+        "steps": 13
+      }
+    },
+    "save": {
+      "class_type": "SaveImage",
+      "inputs": {
+        "filename_prefix": "ZImage_golden00",
+        "images": [
+          "upscale",
+          0
+        ]
+      }
+    },
+    "unet": {
+      "class_type": "UNETLoader",
+      "inputs": {
+        "unet_name": "z_image_turbo_bf16.safetensors",
+        "weight_dtype": "default"
+      }
+    },
+    "upscale": {
+      "class_type": "UltimateSDUpscale",
+      "inputs": {
+        "batch_size": 1,
+        "cfg": 1.0,
+        "denoise": 0.18,
+        "force_uniform_tiles": true,
+        "image": [
+          "decode",
+          0
+        ],
+        "mask_blur": 8,
+        "mode_type": "Chess",
+        "model": [
+          "unet",
+          0
+        ],
+        "negative": [
+          "negative",
+          0
+        ],
+        "positive": [
+          "positive",
+          0
+        ],
+        "sampler_name": "er_sde",
+        "scheduler": "simple",
+        "seam_fix_denoise": 1.0,
+        "seam_fix_mask_blur": 8,
+        "seam_fix_mode": "None",
+        "seam_fix_padding": 16,
+        "seam_fix_width": 64,
+        "seed": 9123457,
+        "steps": 8,
+        "tile_height": 1728,
+        "tile_padding": 32,
+        "tile_width": 972,
+        "tiled_decode": false,
+        "upscale_by": 1.5,
+        "upscale_model": [
+          "upscale_model",
+          0
+        ],
+        "vae": [
+          "vae",
+          0
+        ]
+      }
+    },
+    "upscale_model": {
+      "class_type": "UpscaleModelLoader",
+      "inputs": {
+        "model_name": "4xLSDIR.pth"
+      }
+    },
+    "vae": {
+      "class_type": "VAELoader",
+      "inputs": {
+        "vae_name": "ae.safetensors"
+      }
+    }
+  }
+]

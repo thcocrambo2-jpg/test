@@ -145,7 +145,7 @@ def stub_comfy() -> None:
 def handler_modules() -> tuple:
     """Every module a patched name can have been copied into, in one place.
 
-    The five pipeline handler modules hold the generate_* functions;
+    The six pipeline handler modules hold the generate_* functions;
     ember.generation.handlers, .runner and .loras hold what they share;
     the workflow modules are here because the availability helpers are
     defined there and from-imported by the rest. Patching walks all of
@@ -166,10 +166,12 @@ def handler_modules() -> tuple:
     from ember.pipelines.minimax import workflow as minimax
     from ember.pipelines.wan import handler as wan_handler
     from ember.pipelines.wan import workflow as wan
+    from ember.pipelines.zimage import handler as zimage_handler
+    from ember.pipelines.zimage import workflow as zimage
     return (handlers, loras, runner,
             krea2_handler, krea2_v2_handler, krea2_v2_edit_handler,
-            wan_handler, minimax_handler,
-            krea2, krea2_v2, krea2_v2_edit, wan, minimax)
+            wan_handler, minimax_handler, zimage_handler,
+            krea2, krea2_v2, krea2_v2_edit, wan, minimax, zimage)
 
 
 class Namespace:
@@ -275,6 +277,12 @@ def patch(users, capture) -> None:
     for name in ("v2_status", "v2_edit_status"):
         _patch_all(users, name, lambda *a, **k: (True, ""))
 
+    # Z-Image's fixed-file check answers with what is missing, so nothing
+    # missing is an empty list rather than True. Its Upscale tick also asks
+    # ComfyUI whether the UltimateSDUpscale node is registered.
+    _patch_all(users, "zimage_missing", lambda *a, **k: [])
+    _patch_all(users, "node_registered", lambda *a, **k: True)
+
     _patch_all(users, "comfy_ensure_alive", lambda *a, **k: (True, ""))
 
     # The per-job filename token. Random by design — that is the whole
@@ -326,6 +334,7 @@ def cases(module) -> dict:
     edit_model = module.default_model(module.KREA_EDIT)
     v2_model = module.default_model(module.KREA_V2_T2I)
     v2_edit_model = module.default_model(module.KREA_V2_EDIT)
+    zimage_model = module.default_model(module.ZIMAGE_T2I)
     image = _image()
 
     # Krea2: eight blank slots. The first three name LoRAs — two on, one
@@ -357,6 +366,13 @@ def cases(module) -> dict:
             v for i in range(module.MAX_LORA_SLOTS)
             for v in (*named.get(i, (False, "None")),
                       round(0.55 + i / 100, 2)))
+    # Z-Image: eight blank slots over its own list, which is empty in the
+    # seed catalogue. The first row ticks a Krea LoRA, which this tab does
+    # not offer, so the snapshots show it is skipped rather than chained.
+    zimage_triples = tuple(
+        v for i in range(module.MAX_LORA_SLOTS)
+        for v in (*({0: (True, "hmbody-d-e10")}.get(i, (False, "None"))),
+                  round(0.65 + i / 100, 2)))
     # V2: one row per LoRA in the feature's list, as the form has them.
     # Rows 1-4 on (filter bypass, enhancer, realism v2, realism engine
     # v3.1), every other row off but still naming its LoRA.
@@ -427,7 +443,30 @@ def cases(module) -> dict:
             "euler_ancestral", 2, True, "Golden",
         ) + minimax_triples({0: (False, "hmbrst"),
                              1: (True, "hmcshot-v1-0")}),
+
+        # Z-Image, the Upscale tick off: the template's Turbo graph and
+        # nothing else. 1472×1140 at 1.15 is 1692.8×1311.0, which the
+        # SimpleMath+ rounding puts at 1693×1311.
+        "generate_zimage": (
+            "a lighthouse in a storm, 35mm", "blurry, watermark",
+            9012345, False, 11, 1.4, "1472×1140 (4:3)", 1.15, "euler",
+            zimage_model, False, 2, True, "Golden",
+        ) + zimage_triples,
+
+        # And on: the same graph plus 4xLSDIR and UltimateSDUpscale, tiled
+        # at the base size (1080×1920 at 0.9 is 972×1728) on the job's seed.
+        "generate_zimage_upscale": (
+            "a lighthouse in a storm, 35mm", "",
+            9123456, False, 13, 1.6, "1080×1920 (1080p portrait)", 0.9,
+            "dpmpp_2m", zimage_model, True, 2, False, "",
+        ) + zimage_triples,
     }
+
+
+# Cases that call a handler under another name, because one handler has
+# more than one graph worth freezing. Every other case is named after its
+# handler.
+CASE_HANDLERS = {"generate_zimage_upscale": "generate_zimage"}
 
 
 def check_settings(name, args, settings) -> None:
@@ -442,8 +481,9 @@ def check_settings(name, args, settings) -> None:
     tabschema asserts the *Krea 2* blob against krea2._krea_settings at
     import, because that one is a plain function. The V2 blob is built
     inline inside generate_v2, so the only way to see it is to run the
-    handler — which is what happens here. The two MiniMax cases tick the
-    save-preset box, so their blob (_minimax_settings) is checked too.
+    handler — which is what happens here. The two MiniMax cases and the
+    first Z-Image case tick the save-preset box, so their blobs
+    (_minimax_settings, _zimage_settings) are checked too.
 
     The inversion in the middle is worth reading twice. `Field.name` is
     the handler parameter name and `fields` is submission order, so
@@ -486,7 +526,7 @@ def snapshot() -> dict:
     for name, args in cases(module).items():
         capture = Capture()
         patch(modules, capture)
-        handler = getattr(module, name)
+        handler = getattr(module, CASE_HANDLERS.get(name, name))
         # Drained, not just started: a generator that is never iterated
         # builds nothing, and the batch counts above are 2 precisely so
         # that stopping early would show up as a missing workflow.
@@ -500,7 +540,7 @@ def snapshot() -> dict:
                 "Last status: %s"
                 % (name, statuses[-1] if statuses else "(nothing)")
             )
-        check_settings(name, args, capture.settings)
+        check_settings(handler.__name__, args, capture.settings)
         result[name] = capture.workflows
     return result
 
