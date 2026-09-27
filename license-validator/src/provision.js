@@ -238,6 +238,33 @@ function seatCount(value) {
   return Number.isFinite(parsed) && parsed > 0 ? parsed : 1;
 }
 
+/**
+ * What a release channel may be called. One rule for a build being
+ * promoted to a channel (app.js) and a licence being put on one (here), so
+ * a licence cannot name a channel no build could ever hold.
+ */
+export const CHANNEL_RE = /^[a-z0-9][a-z0-9_-]{0,31}$/;
+
+/**
+ * A licence's `build_channel`, or null for stable.
+ *
+ * Stable is the field's absence, not the string: that is what every
+ * licence issued before the field existed looks like, and `/v1/build`
+ * already reads a missing field as stable. Storing "stable" as well would
+ * give the default two spellings in the collection.
+ */
+function buildChannel(value) {
+  if (value == null) return null;
+  const name = String(value).trim();
+  if (name === "stable") return null;
+  if (!CHANNEL_RE.test(name)) {
+    throw new ProvisionError(
+      `build channel must be a short lowercase name, got ${JSON.stringify(value)}`,
+    );
+  }
+  return name;
+}
+
 // ── Reads ───────────────────────────────────────────────────────────────
 
 export async function findLicense(key) {
@@ -262,6 +289,8 @@ export async function findLicense(key) {
  * one, so a CLI-issued key carries no trace of a bot it was not sold by.
  * It is a label for `/mykeys` and renewal reminders, never an input to
  * anything on the licensing path, and `seatPayload()` must never send it.
+ * `build_channel` is written the same way, only when it is not stable —
+ * see buildChannel.
  */
 export async function createLicense({
   key = null,
@@ -274,6 +303,7 @@ export async function createLicense({
   features_extra = null,
   is_admin = false,
   telegram_user_id = null,
+  build_channel = null,
 }) {
   if (plan_id != null && features != null) {
     throw new ProvisionError(
@@ -281,6 +311,7 @@ export async function createLicense({
         "array wins, so the plan would have no effect",
     );
   }
+  const channel = buildChannel(build_channel);
   const resolvedPlan = plan_id == null ? null : await requirePlan(plan_id);
 
   const now = new Date();
@@ -297,6 +328,7 @@ export async function createLicense({
     created_at: now,
   };
   if (telegram_user_id != null) doc.telegram_user_id = telegram_user_id;
+  if (channel != null) doc.build_channel = channel;
 
   const { licenses } = await collections();
   await licenses.insertOne(doc);
@@ -325,6 +357,9 @@ export async function createLicense({
  *
  * `expires_at` (an absolute date, or null for never) and `extend` are
  * mutually exclusive: one sets the term, the other moves it.
+ *
+ * `build_channel` null or "stable" removes the field rather than setting
+ * it — see buildChannel.
  */
 export async function updateLicense({
   key = null,
@@ -338,6 +373,7 @@ export async function updateLicense({
   expires_at,
   extend,
   telegram_user_id,
+  build_channel,
 }) {
   // Matching on `name` exists because `issue-key.js --update --name "Acme"`
   // has always been allowed. It is not unique and it is not how anything
@@ -357,8 +393,13 @@ export async function updateLicense({
     );
   }
 
+  // Before anything is read, so a bad channel name writes nothing.
+  const channel =
+    build_channel === undefined ? undefined : buildChannel(build_channel);
+
   const { licenses } = await collections();
   const set = { updated_at: new Date() };
+  const unset = {};
 
   if (seats !== undefined) set.seats = seatCount(seats);
   if (active !== undefined) set.active = Boolean(active);
@@ -367,6 +408,8 @@ export async function updateLicense({
   if (features_extra !== undefined) set.features_extra = features_extra;
   if (telegram_user_id !== undefined) set.telegram_user_id = telegram_user_id;
   if (expires_at !== undefined) set.expires_at = expires_at;
+  if (channel === null) unset.build_channel = "";
+  else if (channel !== undefined) set.build_channel = channel;
 
   // Last, so `features: null` cannot be undone by the assignment above.
   if (plan_id !== undefined) {
@@ -385,11 +428,11 @@ export async function updateLicense({
     set.expires_at = extendedExpiry(current, extend);
   }
 
-  return licenses.findOneAndUpdate(
-    filter,
-    { $set: set },
-    { returnDocument: "after" },
-  );
+  const update = { $set: set };
+  if (Object.keys(unset).length) update.$unset = unset;
+  return licenses.findOneAndUpdate(filter, update, {
+    returnDocument: "after",
+  });
 }
 
 /**

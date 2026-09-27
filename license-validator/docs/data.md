@@ -26,8 +26,9 @@ from yourself (`--admin`), or your own testing fills the review queue you
 are the one working through.
 
 Two optional fields pin builds: `build_sha` and `build_channel`, both
-absent on an ordinary licence — see
-[Build distribution](build-distribution.md).
+absent on an ordinary licence. Absent `build_channel` is stable, and
+`issue-key --build-channel stable` removes the field rather than writing
+the string — see [Build distribution](build-distribution.md).
 
 ## `plans` — `_id` is the plan key
 

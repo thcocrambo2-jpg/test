@@ -65,6 +65,21 @@ Both fields are absent on an ordinary licence, so the default needs no
 edit. Set `build_sha` to hold one customer on a known-good build, or
 `build_channel: "beta"` to put a willing customer on new builds first.
 
+`issue-key` sets the channel; `build_sha` has no flag and is edited in
+Atlas.
+
+```bash
+npm run issue-key -- --key EMBER-XXXX-XXXX-XXXX --build-channel test --update
+npm run issue-key -- --key EMBER-XXXX-XXXX-XXXX --no-build-channel --update
+```
+
+`--no-build-channel` and `--build-channel stable` both remove the field
+rather than writing `"stable"`, so stable keeps one spelling: absent. A
+channel name follows the same rule as a promote (lowercase, digits, `-`
+and `_`, up to 32 characters), and `issue-key` warns when no build holds
+the channel yet — such a key gets `no_build` on a machine with nothing
+cached. A pod picks up a channel change on its next start.
+
 ## The download cap
 
 `BUILD_DOWNLOADS_PER_HOUR` (20 by default) caps presigned URLs per licence

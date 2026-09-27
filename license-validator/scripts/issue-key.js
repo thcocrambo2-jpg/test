@@ -6,6 +6,16 @@
 //   npm run issue-key -- --key EMBER-XXXX-XXXX-XXXX --features-extra "wan_i2v" --update
 //   npm run issue-key -- --key EMBER-XXXX-XXXX-XXXX --revoke
 //   npm run issue-key -- --key EMBER-XXXX-XXXX-XXXX --admin --update
+//   npm run issue-key -- --key EMBER-XXXX-XXXX-XXXX --build-channel test --update
+//   npm run issue-key -- --key EMBER-XXXX-XXXX-XXXX --no-build-channel --update
+//
+// ── --build-channel ────────────────────────────────────────────────────
+//
+// Which release channel the key downloads its app build from — a key on
+// `test` gets whichever build was last published or promoted to `test`.
+// --no-build-channel and --build-channel stable are the same thing: both
+// remove the field, which is what every other key has and means stable.
+// The pod picks a new build up on its next start, not while running.
 //
 // ── --admin ────────────────────────────────────────────────────────────
 //
@@ -91,7 +101,7 @@ async function orDie(operation) {
 }
 
 const opts = args(process.argv.slice(2));
-const { plans } = await collections();
+const { plans, builds } = await collections();
 await ensureIndexes();
 invalidatePlans(); // a long-lived shell should not print a stale plan
 invalidateFeatures();
@@ -117,6 +127,7 @@ if (!opts.name && !opts.key) {
   die(
     'usage: npm run issue-key -- --name "Acme Corp" --plan creator --seats 2',
     '       [--features-extra "wan_i2v"] [--days 30] [--admin|--no-admin]',
+    "       [--build-channel test|--no-build-channel]",
     "       [--update] [--key <licence key>] [--revoke]",
     "",
     `plans:    ${known.map((p) => p._id).join(", ") ||
@@ -170,6 +181,19 @@ const features_extra =
     ? null
     : parseOrDie(opts["features-extra"], "--features-extra");
 
+if (opts["build-channel"] !== undefined && opts["no-build-channel"]) {
+  die("--build-channel and --no-build-channel together are ambiguous.");
+}
+if (opts["build-channel"] === true) {
+  die("--build-channel needs a value, e.g. --build-channel test");
+}
+// undefined leaves the field alone on an --update, like every other flag
+// here. null — and "stable", which provision.js folds into null — puts the
+// key back on stable. The name itself is checked by provision.js.
+let build_channel;
+if (opts["build-channel"] !== undefined) build_channel = opts["build-channel"];
+if (opts["no-build-channel"]) build_channel = null;
+
 /** Print what the customer will actually get, resolved the way the server does. */
 async function report(license) {
   invalidatePlans();
@@ -186,6 +210,27 @@ async function report(license) {
   console.log(`  plan       ${resolved.plan_name || plan_id || "(none)"}`);
   console.log(`  features   ${label}`);
   console.log(`  from       ${resolved.source}`);
+}
+
+/** Print which build the key downloads, the way /v1/build resolves it. */
+async function reportBuild(license) {
+  if (license.build_sha) {
+    console.log(
+      `  build      pinned to ${license.build_sha.slice(0, 12)} ` +
+        "(build_sha wins over any channel)",
+    );
+    return;
+  }
+  const channel = license.build_channel || "stable";
+  console.log(`  build      channel ${channel}`);
+  // A channel no build holds is a key that cannot start on a fresh machine:
+  // /v1/build answers no_build until something is published or promoted to it.
+  if (!(await builds.countDocuments({ channels: channel }))) {
+    console.log(
+      `\n  WARNING  no build is on channel "${channel}" yet — this key gets ` +
+        "\n           no_build until one is published or promoted to it.",
+    );
+  }
 }
 
 // ── Update ─────────────────────────────────────────────────────────────
@@ -214,7 +259,9 @@ if (opts.update) {
     updateLicense({
       key: opts.key ?? null,
       match_name: opts.name ?? null,
-      seats,
+      // Only when asked, like everything below: the create default of 1
+      // would otherwise quietly shrink a multi-seat key on any update.
+      seats: opts.seats === undefined ? undefined : seats,
       active: true,
       is_admin,
       // Each only when asked: an --update that is really about seats must
@@ -222,6 +269,7 @@ if (opts.update) {
       features: features === null ? undefined : features,
       features_extra: features_extra === null ? undefined : features_extra,
       plan_id,
+      build_channel,
       // Extends what is left rather than resetting it — the whole point of
       // the delegation. Twelve days remaining plus a 30-day renewal is 42
       // days, not 30.
@@ -235,9 +283,10 @@ if (opts.update) {
       (result.is_admin === true ? "  (admin)" : ""),
   );
   await report(result);
+  await reportBuild(result);
   console.log(
-    "\nA running instance keeps the features it started with — the " +
-      "customer must restart the app to pick this up.",
+    "\nA running instance keeps the features and build it started with — " +
+      "the customer must restart the app to pick this up.",
   );
   process.exit(0);
 }
@@ -257,6 +306,7 @@ const doc = await orDie(() =>
     features,
     features_extra,
     is_admin: Boolean(opts.admin),
+    build_channel: build_channel ?? null,
   }),
 );
 const key = doc.key;
@@ -270,6 +320,7 @@ await report(doc);
 console.log(
   `  expires    ${doc.expires_at ? doc.expires_at.toISOString() : "never"}`,
 );
+await reportBuild(doc);
 if (plan_id === undefined && features === null) {
   console.log(
     "\n  WARNING  no --plan and no --features: this key falls back to the " +

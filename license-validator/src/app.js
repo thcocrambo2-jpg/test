@@ -93,6 +93,7 @@ import telegramRouter from "./telegram/router.js";
 import { createHash, timingSafeEqual } from "node:crypto";
 import { CRON_SECRET } from "./config.js";
 import { sweep } from "./sweep.js";
+import { CHANNEL_RE } from "./provision.js";
 
 const app = express();
 
@@ -2035,8 +2036,9 @@ app.post(
 //
 // Registering is idempotent — the sha256 is the _id, so re-running
 // --upload-only against an artifact that is already published updates the
-// metadata and re-promotes rather than failing.
-const CHANNEL_RE = /^[a-z0-9][a-z0-9_-]{0,31}$/;
+// metadata and re-promotes rather than failing. A channel name follows
+// CHANNEL_RE from provision.js, the same rule a licence's build_channel
+// follows.
 
 /**
  * Point `channel` at one build, taking it off whichever build holds it

@@ -75,14 +75,21 @@ npm run issue-key -- --name "Trial" --plan studio --seats 1 --days 30
 npm run issue-key -- --name "Acme Corp" --seats 3 --update      # seats only
 npm run issue-key -- --key EMBER-XXXX-XXXX-XXXX --plan creator --update
 npm run issue-key -- --key EMBER-XXXX-XXXX-XXXX --features-extra "wan_i2v" --update
+npm run issue-key -- --key EMBER-XXXX-XXXX-XXXX --build-channel test --update
+npm run issue-key -- --key EMBER-XXXX-XXXX-XXXX --no-build-channel --update   # back to stable
 npm run issue-key -- --key EMBER-XXXX-XXXX-XXXX --revoke
 ```
 
-`--update` only touches `features`, `features_extra` and `plan_id` when the
-matching flag is passed, so an update about seats cannot silently wipe an
-entitlement. The exception is `--plan`, which clears a literal `features`
-array and prints that it did — leaving one would let it keep overriding
-the plan you just assigned.
+`--update` only touches `seats`, `features`, `features_extra`, `plan_id`
+and `build_channel` when the matching flag is passed, so an update about
+seats cannot silently wipe an entitlement, and one about anything else
+leaves the seat count alone. The exception is `--plan`, which clears a
+literal `features` array and prints that it did — leaving one would let it
+keep overriding the plan you just assigned.
+
+`--build-channel stable` and `--no-build-channel` do the same thing: both
+remove the field, which is what stable is. See
+[Build distribution](docs/build-distribution.md).
 
 `--plan` and `--features` together are rejected rather than silently
 resolved, since the literal array would win and the plan would do nothing.
