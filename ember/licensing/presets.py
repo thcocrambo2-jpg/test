@@ -69,10 +69,14 @@ from ember.settings import LICENSE_API_URL, LICENSE_KEY
 # both are generation tabs, so both read it *and* save to it. There is no
 # prompt library behind it: presets are the only settings blob these tabs
 # write.
+#
+# Z-Image is a list of its own, saved and read by its one tab. Like
+# MiniMax it has no prompt library behind it.
 TAB_KREA2 = str(features.Key.KREA_T2I)
 TAB_KREA2_V2 = str(features.Key.KREA_V2_T2I)
 TAB_MINIMAX = str(features.Key.MINIMAX_I2V)
-TABS = (TAB_KREA2, TAB_KREA2_V2, TAB_MINIMAX)
+TAB_ZIMAGE = str(features.Key.ZIMAGE_T2I)
+TABS = (TAB_KREA2, TAB_KREA2_V2, TAB_MINIMAX, TAB_ZIMAGE)
 
 # How long a fetched set is served without asking again. The same 300s as
 # plans.py and prompts.py: presets change when we save one, which is not

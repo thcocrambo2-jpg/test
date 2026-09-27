@@ -7,7 +7,7 @@
 # A deny-list is one forgotten line away from shipping one of them; a file
 # that is not listed below cannot reach the build context at all.
 #
-# The Dockerfile also copies the thirteen ember/ files the bake stage
+# The Dockerfile also copies the fifteen ember/ files the bake stage
 # imports into a throwaway build stage rather than the final image, so none
 # of the app's source is published either — see the stage comment there.
 
@@ -32,6 +32,8 @@
 !ember/pipelines/krea2/constants.py
 !ember/pipelines/krea2_v2/__init__.py
 !ember/pipelines/krea2_v2/constants.py
+!ember/pipelines/zimage/__init__.py
+!ember/pipelines/zimage/constants.py
 
 # The start script, copied in verbatim: the same file build.sh publishes
 # to R2 and a RunPod template downloads from /v1/start.sh.

@@ -62,8 +62,8 @@ module.
 
 Ids and labels
 --------------
-The Krea tabs' Model and LoRA dropdowns, and the MiniMax tabs' LoRA
-dropdowns, carry catalogue *ids* as their values — what presets, prompts
+The Krea and Z-Image tabs' Model and LoRA dropdowns, and the MiniMax
+tabs' LoRA dropdowns, carry catalogue *ids* as their values — what presets, prompts
 and the handlers all speak — and the record's name as what the user
 reads. A Field whose values are ids has `labels`, and `to_json()` ships
 them as `choiceLabels` next to `choices`; every other Field's value is its
@@ -119,11 +119,12 @@ from ember.web.schema.tabs.minimax import (
     MINIMAX_T2V_SCHEMA,
 )
 from ember.web.schema.tabs.wan import WAN_MODEL_CHOICES, WAN_SCHEMA
+from ember.web.schema.tabs.zimage import ZIMAGE_SCHEMA
 
 Key = features.Key
 
 
-# ═══════════════════════════════════════════════════ the seven tabs
+# ════════════════════════════════════════════════════ the eight tabs
 # Order is the order they appear in the navigation, which is ui.TAB_ORDER's
 # order with the two bespoke tabs (Gallery, Prompt Library) taken out —
 # those have no form and so no schema.
@@ -131,6 +132,7 @@ Key = features.Key
 SCHEMAS = (
     KREA2_SCHEMA,
     KREA2_V2_SCHEMA,
+    ZIMAGE_SCHEMA,
     KREA2_EDIT_SCHEMA,
     KREA2_V2_EDIT_SCHEMA,
     WAN_SCHEMA,

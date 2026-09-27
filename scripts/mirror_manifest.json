@@ -60,6 +60,17 @@
       }
     },
     {
+      "repo": "assets",
+      "local": "upscale_models/4xLSDIR.pth",
+      "path_in_repo": "upscale_models/4xLSDIR.pth",
+      "source": {
+        "kind": "hf",
+        "repo": "Hearmeman/comfyui-template-assets",
+        "path": "upscale_models/4xLSDIR.pth"
+      },
+      "note": "Z-Image's Upscale 1.5x pass"
+    },
+    {
       "repo": "loras",
       "local": "diffusion_models/Krea2_FinePornV2_FP8.safetensors",
       "path_in_repo": "diffusion_models/Krea2_FinePornV2_FP8.safetensors",
@@ -92,6 +103,11 @@
       "dir": "comfyui-krea2edit",
       "repo": "nodes",
       "url": "https://github.com/lbouaraba/comfyui-krea2edit"
+    },
+    {
+      "dir": "ComfyUI_UltimateSDUpscale",
+      "repo": "nodes",
+      "url": "https://github.com/ssitu/ComfyUI_UltimateSDUpscale"
     }
   ],
   "pin_upstream": {
@@ -100,6 +116,8 @@
     "conradlocke/krea2-identity-edit": "hf",
     "wangkanai/wan21-vae": "hf",
     "huihui-ai/Huihui-Qwen3-VL-4B-Instruct-abliterated": "hf",
+    "Comfy-Org/z_image_turbo": "hf",
+    "Hearmeman/comfyui-template-assets": "hf",
     "https://github.com/comfyanonymous/ComfyUI.git": "git"
   }
 }

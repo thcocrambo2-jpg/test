@@ -20,7 +20,7 @@ from ember.pipelines.krea2.constants import (
     EDIT_LORA_FILE,
     VAE_FILE,
 )
-from ember.pipelines.common import active_text_encoder
+from ember.pipelines.common import active_text_encoder, chain_loras
 
 
 def _model_nodes(loras, unet_file: str) -> tuple[dict, list, list, list]:
@@ -61,14 +61,7 @@ def _model_nodes(loras, unet_file: str) -> tuple[dict, list, list, list]:
         }
         clip_ref, vae_ref = ["clip_gpu1", 0], ["vae_gpu1", 0]
 
-    for i, (lora_file, weight) in enumerate(loras):
-        node = f"lora{i}"
-        wf[node] = {
-            "class_type": "LoraLoaderModelOnly",
-            "inputs": {"lora_name": lora_file, "strength_model": float(weight),
-                       "model": model_ref},
-        }
-        model_ref = [node, 0]
+    model_ref = chain_loras(wf, model_ref, loras)
     return wf, model_ref, clip_ref, vae_ref
 
 

@@ -1,6 +1,6 @@
 """The blocks the tab definitions are built from.
 
-Seven forms, the same handful of control clusters in a different order.
+Eight forms, the same handful of control clusters in a different order.
 Each builder returns Fields (or a `Repeat` tail) ready to drop into a
 `TabSchema.fields` tuple, in submission order.
 """
@@ -27,9 +27,9 @@ from ember.web.schema.model import Field, Group, Repeat
 
 
 # ══════════════════════════════════════════════════════ shared pieces
-# Written once and referenced from every tab that has them. The seven
+# Written once and referenced from every tab that has them. The eight
 # forms are the same handful of blocks in a different order, which is
-# a fact seven hand-written layouts could state only by repeating it.
+# a fact eight hand-written layouts could state only by repeating it.
 
 def _lora_choices(feature):
     """The feature's LoRA ids (plus "None"), read late — see `_resolve`.
@@ -47,7 +47,8 @@ def _lora_labels(feature):
 
 
 def _model_field(feature):
-    """The Model dropdown of a Krea tab: its feature's model ids, named.
+    """The Model dropdown of a Krea or Z-Image tab: its feature's model
+    ids, named.
 
     The first model in the feature's list is the default, as the
     catalogue defines it.
@@ -111,12 +112,12 @@ def _triple_tail(feature, slots, title):
 
 
 def _blank_lora_tail(feature):
-    """The Krea2 / Krea2 Edit / MiniMax stack: eight blank rows, all off,
-    over the feature's list.
+    """The Krea2 / Krea2 Edit / Z-Image / MiniMax stack: eight blank rows,
+    all off, over the feature's list.
 
-    Model-only (`LoraLoaderModelOnly`, in the krea2 and minimax pipelines),
-    where the V2 stack is model *and* CLIP, so the title stays plain rather
-    than borrowing V2's.
+    Model-only (`LoraLoaderModelOnly`, in the krea2, zimage and minimax
+    pipelines), where the V2 stack is model *and* CLIP, so the title stays
+    plain rather than borrowing V2's.
     """
     return _triple_tail(feature,
                         _blank_slots(loras.MAX_LORA_SLOTS),
@@ -124,13 +125,13 @@ def _blank_lora_tail(feature):
 
 
 def _seed_fields(default=42):
-    """Seed and the random tick — byte-identical on seven tabs.
+    """Seed and the random tick — byte-identical on eight tabs.
 
     Batch count is deliberately *not* here even though it renders in the
     same row (`group="seed"`). It sits at a different place in every
     signature — last, after the model — and `fields` is submission order,
     so grouping it with its neighbours on screen would have shifted two
-    arguments on seven tabs. Which is exactly what _assert_signatures()
+    arguments on eight tabs. Which is exactly what _assert_signatures()
     caught the first time this file was written, and the reason that
     check is worth its weight.
 
@@ -171,8 +172,9 @@ def _save_fields():
 
 
 def _preset_save_fields():
-    """Save-preset alone — the MiniMax tabs, which have no prompt library
-    to publish to. Same `record=False`, for the same reason."""
+    """Save-preset alone — the MiniMax and Z-Image tabs, which have no
+    prompt library to publish to. Same `record=False`, for the same
+    reason."""
     return (
         Field("save_preset", "💾 Save these settings as a preset", "bool",
               False, group="save", record=False),

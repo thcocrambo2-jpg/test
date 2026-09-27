@@ -15,12 +15,12 @@ import { OutputPanel } from './OutputPanel'
 import s from '@/components/SchemaForm/form.module.css'
 
 /*
- * Seven of the nine tabs. All of them.
+ * Eight of the ten tabs. All of them.
  *
  * There is no per-tab code anywhere in this app any more. Krea2 was built
  * first on purpose — it exercises the schema form, SSE, the queue panel and
  * the gallery plumbing — and once those worked end to end against the real
- * API the remaining six arrived as data. Labels, types, defaults, ranges,
+ * API the remaining seven arrived as data. Labels, types, defaults, ranges,
  * choices, grouping, column, conditional visibility and submission order all
  * come from `tabschema.py`, which is checked against the handler signatures
  * at import and against the parity baseline by `scripts/check_schema.py`.

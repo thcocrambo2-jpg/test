@@ -94,7 +94,7 @@ RUN python3 -m pip install --no-cache-dir huggingface_hub hf_xet
 
 WORKDIR /src
 # scripts/ first: PINS.json and mirror_manifest.json change far more often
-# than the thirteen ember/ files below, and ember/weights/mirror.py looks in
+# than the fifteen ember/ files below, and ember/weights/mirror.py looks in
 # PROJECT_DIR/scripts for both.
 COPY scripts/PINS.json scripts/mirror_manifest.json /src/scripts/
 COPY ember/__init__.py ember/features.py ember/logs.py ember/settings.py \
@@ -106,6 +106,8 @@ COPY ember/pipelines/krea2/__init__.py ember/pipelines/krea2/constants.py \
      /src/ember/pipelines/krea2/
 COPY ember/pipelines/krea2_v2/__init__.py \
      ember/pipelines/krea2_v2/constants.py /src/ember/pipelines/krea2_v2/
+COPY ember/pipelines/zimage/__init__.py \
+     ember/pipelines/zimage/constants.py /src/ember/pipelines/zimage/
 COPY docker/bake_nodes.py docker/bake_torch.py /src/
 
 

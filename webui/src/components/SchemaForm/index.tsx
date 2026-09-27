@@ -17,12 +17,12 @@ import { cx } from '@/lib/util'
 import s from './form.module.css'
 
 /*
- * One form for seven of the nine tabs.
+ * One form for eight of the ten tabs.
  *
  * The schema says what the fields are, in what order they submit, which column
  * they belong to and how they group. This renders that. There is no per-tab
  * form code anywhere: Krea2 and Krea2 Edit are the same component with different
- * schemas, and so will the other five be.
+ * schemas, and so are the other six.
  *
  * The important invariant is that rendering never touches submission order.
  * Groups reorder freely for the eye; `toSubmission()` walks `schema.fields`,

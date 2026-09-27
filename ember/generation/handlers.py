@@ -1,9 +1,9 @@
 """What every tab's generator has in common, and the pipelines do not own.
 
 The feature keys the catalogue files each tab's models and LoRAs under,
-the model guard every Krea generator opens with, the preset tickbox they
-all honour, the Krea 2 resolution parser, and the zip of everything this
-pod has rendered. The generators themselves are in
+the model guard every Krea and Z-Image generator opens with, the preset
+tickbox they all honour, the Krea 2 resolution parser, and the zip of
+everything this pod has rendered. The generators themselves are in
 ember/pipelines/<name>/handler.py, beside the workflow.py each one
 builds through, and what they share with each other is in
 ember.generation.runner and ember.generation.loras.
@@ -32,14 +32,17 @@ from ember.pipelines.krea2.constants import (
     RESOLUTION_PRESETS,
 )
 
-# The four tabs whose models and LoRAs come from the catalogue, by the
-# feature key the catalogue files their lists under. Each generator
+# The four Krea tabs, whose models and LoRAs come from the catalogue, by
+# the feature key the catalogue files their lists under. Each generator
 # reads its own, so Krea2 and Krea2 Edit (and the two V2 tabs) can offer
 # different lists without a second code path.
 KREA_T2I = str(Key.KREA_T2I)
 KREA_EDIT = str(Key.KREA_EDIT)
 KREA_V2_T2I = str(Key.KREA_V2_T2I)
 KREA_V2_EDIT = str(Key.KREA_V2_EDIT)
+# Z-Image reads a model list and a LoRA list the same way. Its text encoder,
+# VAE and upscale model are fixed in pipelines/zimage/constants.py.
+ZIMAGE_T2I = str(Key.ZIMAGE_T2I)
 # The MiniMax tabs take LoRAs from the catalogue too, but no model: their
 # weights are fixed in pipelines/minimax/constants.py, so only the LoRA
 # list is read.

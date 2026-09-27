@@ -45,6 +45,7 @@ from ember.pipelines.minimax.constants import (
     MINIMAX_COMFYUI_MIN,
     MINIMAX_NODE,
 )
+from ember.pipelines.zimage.constants import ZIMAGE_UPSCALE_NODES
 
 
 def main() -> None:
@@ -118,6 +119,7 @@ def main() -> None:
     bootstrap.install_comfyui()
     bootstrap.install_custom_nodes()
     bootstrap.install_v2_nodes()
+    bootstrap.install_zimage_nodes()
     # Last of the installs, so nothing after it can move torch under the
     # build it picked for that torch, and before ComfyUI starts, which reads
     # the verdict through comfy.start_comfyui -> bootstrap.attention_args.
@@ -184,6 +186,14 @@ def main() -> None:
         comfy.verify_custom_node(
             "Krea2EditModelPatch", "comfyui-krea2edit",
             COMFY_DIR / "custom_nodes" / "comfyui-krea2edit",
+        )
+    if features.enabled(features.Key.ZIMAGE_T2I):
+        # Only the Upscale tick needs this pack, so a failed import costs
+        # that tick alone — the tab says so itself when it is used, and
+        # this is where the reason is logged.
+        dirname, _repo, class_type = ZIMAGE_UPSCALE_NODES
+        comfy.verify_custom_node(
+            class_type, dirname, COMFY_DIR / "custom_nodes" / dirname,
         )
 
     # 7 · The web app: uvicorn, the React bundle, and the tunnel that gives

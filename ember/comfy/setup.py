@@ -31,11 +31,14 @@ from ember.settings import (
 )
 from ember.pipelines.krea2.constants import KREA2EDIT_NODES_REPO
 from ember.pipelines.krea2_v2.constants import V2_NODE_REPOS
+from ember.pipelines.zimage.constants import ZIMAGE_UPSCALE_NODES
 
 COMFYUI_REPO = "https://github.com/comfyanonymous/ComfyUI.git"
 
-# Model folders ComfyUI must see.
-MODEL_DIRS = ("diffusion_models", "text_encoders", "vae", "loras")
+# Model folders ComfyUI must see. upscale_models holds Z-Image's 4xLSDIR;
+# nothing else reads it.
+MODEL_DIRS = ("diffusion_models", "text_encoders", "vae", "loras",
+              "upscale_models")
 
 
 def runtime_python() -> str:
@@ -652,18 +655,39 @@ def clone_pinned(url: str, dest, name: str, desc: str) -> None:
 
     Falls back to shallow-cloning HEAD when there is no pin, because an
     unpinned checkout still beats no app at all; the log says which you got.
+    Either way the clone's submodules follow it — see init_submodules.
     """
     sha = mirror.node_pin(name).get("sha")
     if not sha:
         log.warning("No pin recorded for %s — cloning HEAD, which may not "
                     "be the revision this release was tested against.", name)
         run_cmd(["git", "clone", "--depth", "1", url, dest], desc=desc)
+        init_submodules(dest, name)
         return
     # Not --depth 1: a shallow clone of main cannot check out an arbitrary
     # older commit, which is exactly what a pin usually is.
     run_cmd(["git", "clone", url, dest], desc=desc)
     run_cmd(["git", "-C", dest, "checkout", "--quiet", sha],
             desc=f"Pinning {name} to {sha[:8]}")
+    init_submodules(dest, name)
+
+
+def init_submodules(dest, name: str) -> None:
+    """Check out a clone's git submodules at the commits it records.
+
+    A plain clone leaves every submodule an empty directory. Only
+    ComfyUI_UltimateSDUpscale has one today — the A1111 script it wraps —
+    and that pack fills an empty one at import by downloading the script's
+    master branch, unpinned. Initialising it here puts the commit the pin
+    records there instead.
+
+    Nothing at all for a checkout without a .gitmodules, which is ComfyUI
+    and every other pack. Raises like run_cmd.
+    """
+    if not (Path(dest) / ".gitmodules").exists():
+        return
+    run_cmd(["git", "-C", dest, "submodule", "update", "--init",
+             "--recursive"], desc=f"Checking out {name}'s submodules")
 
 
 def repin_checkout(dest, name: str) -> None:
@@ -711,6 +735,7 @@ def repin_checkout(dest, name: str) -> None:
                 desc=f"Fetching {name} {sha[:8]}")
         run_cmd(["git", "-C", dest, "checkout", "--quiet", sha],
                 desc=f"Pinning {name} to {sha[:8]}")
+        init_submodules(dest, name)
     except Exception as exc:                  # noqa: BLE001
         log.error("Could not move %s to %s (%s) — continuing on %s. Tabs "
                   "that need the newer revision will say so at startup.",
@@ -858,6 +883,43 @@ def install_v2_nodes() -> None:
         except RuntimeError as exc:
             log.error("%s requirements failed to install (%s) — the pack may "
                       "not load in ComfyUI.", dirname, exc)
+
+
+def install_zimage_nodes() -> None:
+    """Clone ComfyUI_UltimateSDUpscale, Z-Image's upscale pass (idempotent).
+
+    Only the Upscale 1.5x tick uses it, so this is skipped entirely when
+    zimage_t2i is off. The pack has no requirements of its own. It does
+    have a submodule, which clone_pinned checks out at the pinned commit
+    and which is re-checked here on every start, so a checkout left half
+    done by an interrupted run is completed rather than kept.
+
+    Nothing here is fatal — the contract install_v2_nodes follows: a pack
+    that will not install leaves the tick refusing with a message saying
+    so, and every other tab, and Z-Image without the tick, untouched. A
+    fresh clone that fails part way is removed, so the pack's own
+    unpinned download never fills the gap and the next start tries again.
+    """
+    if not features.enabled(features.Key.ZIMAGE_T2I):
+        return
+    dirname, repo, _class_type = ZIMAGE_UPSCALE_NODES
+    dest = COMFY_DIR / "custom_nodes" / dirname
+    if dest.exists():
+        log.info("%s already present at %s — skipping clone", dirname, dest)
+        if (dest / ".git").exists():
+            try:
+                init_submodules(dest, dirname)
+            except RuntimeError as exc:
+                log.error("%s's submodule could not be checked out (%s) — "
+                          "Upscale 1.5x may not load.", dirname, exc)
+        return
+    try:
+        install_node_pack(dirname, repo, dest, f"Cloning {dirname}")
+    except RuntimeError as exc:
+        log.error("Could not install %s (%s) — Upscale 1.5x on the Z-Image "
+                  "tab will refuse to run until it is installed.",
+                  dirname, exc)
+        shutil.rmtree(dest, ignore_errors=True)
 
 
 def link_model_dirs() -> None:

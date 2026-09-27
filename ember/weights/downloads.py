@@ -7,11 +7,12 @@ idempotent — re-running only downloads what is missing.
 
 Two kinds of weights, two sources of truth. The pipeline pieces every
 build needs — VAEs, text encoders, the Identity Edit LoRA, the Wan and
-MiniMax weights — are named in each pipeline's constants.py and fetched by
-their own groups. The Krea models and the Krea and MiniMax LoRAs a customer
-picks from are named by the catalogue (ember.licensing.catalog, from the
-licence server) and fetched by the "catalog" group, which asks nothing of
-the pipeline constants at all.
+MiniMax weights, Z-Image's encoder and upscale model — are named in each
+pipeline's constants.py and fetched by their own groups. The Krea and
+Z-Image models and the LoRAs a customer picks from are named by the
+catalogue (ember.licensing.catalog, from the licence server) and fetched
+by the "catalog" group, which asks nothing of the pipeline constants at
+all.
 """
 
 import time
@@ -46,6 +47,12 @@ from ember.pipelines.minimax.constants import (
     MINIMAX_TURBO_LORA_REPO,
 )
 from ember.pipelines.wan.constants import WAN_HF_FILES, WAN_HF_REPO
+from ember.pipelines.zimage.constants import (
+    ZIMAGE_HF_FILES,
+    ZIMAGE_HF_REPO,
+    ZIMAGE_UPSCALE_HF_FILE,
+    ZIMAGE_UPSCALE_REPO,
+)
 
 DOWNLOAD_CHUNK = 8 * 1024 * 1024
 DOWNLOAD_RETRIES = 3
@@ -133,7 +140,8 @@ def fetch_hf_repo_file(repo: str, relpath: str) -> None:
     fetch_hf_file is this with the repo fixed to Comfy-Org/Krea-2, and
     fetch_hf_file_to is for a repo whose layout is *not* ComfyUI's. The
     MiniMax repo keeps diffusion_models/, text_encoders/ and vae/ exactly
-    where ComfyUI wants them, so the file lands in place with no rename —
+    where ComfyUI wants them, and Z-Image's upscale model sits in its
+    repo's upscale_models/, so the file lands in place with no rename —
     mirror first, then upstream at the pinned revision, like the rest.
     """
     dest = MODELS_DIR / relpath
@@ -397,8 +405,8 @@ def download_catalog() -> None:
     """Fetch every model and LoRA the enabled catalogue features offer.
 
     What to fetch is the union of the catalogue lists of the features that
-    need this group and are on — the four Krea tabs and the two MiniMax
-    tabs, which list LoRAs only. A tab that is off contributes nothing, so
+    need this group and are on — the four Krea tabs, Z-Image, and the two
+    MiniMax tabs, which list LoRAs only. A tab that is off contributes nothing, so
     a V2-only licence never downloads a model only Krea2 offers, and vice
     versa.
 
@@ -531,6 +539,32 @@ def download_minimax_models() -> None:
                   MINIMAX_TURBO_LORA, exc)
 
 
+def download_zimage_models() -> None:
+    """Fetch Z-Image Turbo's text encoder, VAE and upscale model (~8.4 GB).
+
+    The diffusion model is a catalogue record, fetched by the "catalog"
+    group; these are the pipeline files the catalogue does not describe.
+    Every item is independent, the same posture as the Wan and MiniMax
+    downloaders: a missing file costs only the Z-Image tab, which names
+    what it is waiting for, and the next run retries it. The two Comfy-Org
+    files sit under split_files/ upstream, like Wan's; the upscale model is
+    fetched whether or not the Upscale tick is ever used, at 67 MB.
+    """
+    for relpath in ZIMAGE_HF_FILES:
+        try:
+            fetch_repackaged_file(ZIMAGE_HF_REPO, relpath)
+        except Exception as exc:
+            log.error("Z-Image file %s unavailable (%s) — the Z-Image tab "
+                      "will refuse to run until a later run fetches it.",
+                      relpath, exc)
+    try:
+        fetch_hf_repo_file(ZIMAGE_UPSCALE_REPO, ZIMAGE_UPSCALE_HF_FILE)
+    except Exception as exc:
+        log.error("Z-Image upscale model %s unavailable (%s) — Upscale 1.5x "
+                  "will refuse to run until a later run fetches it.",
+                  ZIMAGE_UPSCALE_HF_FILE, exc)
+
+
 # Asset group → the function that fetches it. Iteration order is download
 # order, so the cheap shared pieces land before the tens of gigabytes.
 ASSET_GROUPS = {
@@ -539,6 +573,7 @@ ASSET_GROUPS = {
     "edit_lora": download_edit_lora,
     "v2": download_v2_models,
     "catalog": download_catalog,
+    "zimage": download_zimage_models,
     "wan": download_wan_models,
     "minimax": download_minimax_models,
 }

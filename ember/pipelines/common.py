@@ -2,12 +2,15 @@
 
 Ids are what forms, presets and prompts carry; a file name appears only
 once a graph is being built. These turn one into the other, and they are
-here rather than in a family's builder because the Krea and MiniMax
-catalogue paths both go through them — all four Krea tabs and the two
-MiniMax tabs.
+here rather than in a family's builder because the Krea, Z-Image and
+MiniMax catalogue paths all go through them — all four Krea tabs, the
+Z-Image tab and the two MiniMax tabs.
 
 The catalogue is per feature, so every helper that reads it takes the
 feature key: each tab offers exactly its own feature's lists.
+
+Plus the one piece of graph two families build identically: the
+model-only LoRA chain, shared by Krea2 / Krea2 Edit and Z-Image.
 """
 
 from ember.licensing import catalog
@@ -67,6 +70,24 @@ def feature_lora(feature, lora_id) -> "catalog.Lora | None":
         return None
     return next((lora for lora in catalog.feature_loras(feature)
                  if lora.id == lora_id), None)
+
+
+def chain_loras(wf: dict, model_ref: list, loras) -> list:
+    """Chain one LoraLoaderModelOnly per LoRA onto `model_ref`, in order.
+
+    `loras` is a sequence of (filename, strength) pairs, already resolved.
+    The nodes are `lora0`, `lora1`, … in `wf`; returns the ref at the end
+    of the chain, which is `model_ref` itself when there are none.
+    """
+    for i, (lora_file, weight) in enumerate(loras):
+        node = f"lora{i}"
+        wf[node] = {
+            "class_type": "LoraLoaderModelOnly",
+            "inputs": {"lora_name": lora_file, "strength_model": float(weight),
+                       "model": model_ref},
+        }
+        model_ref = [node, 0]
+    return model_ref
 
 
 def edit_lora_available() -> bool:

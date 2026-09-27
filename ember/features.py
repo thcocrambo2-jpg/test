@@ -66,6 +66,7 @@ class Key(str, Enum):
 
     KREA_T2I = "krea_t2i"
     KREA_V2_T2I = "krea_v2_t2i"
+    ZIMAGE_T2I = "zimage_t2i"
     GALLERY = "gallery"
     KREA_EDIT = "krea_edit"
     KREA_V2_EDIT = "krea_v2_edit"
@@ -133,8 +134,9 @@ class Feature:
 # pipeline's constants.py: it is every model and LoRA the catalogue
 # (ember.licensing.catalog, from the licence server) lists for the enabled
 # features
-# that name it. Each Krea tab names it, and so do the MiniMax tabs for
-# their LoRAs; downloads.download_catalog reads the lists of exactly
+# that name it. Each Krea tab names it, so does Z-Image, and so do the
+# MiniMax tabs for their LoRAs; downloads.download_catalog reads the
+# lists of exactly
 # those that are on — so a feature's own models are what it pulls in, not
 # a group-wide set, and a file two tabs share is fetched once.
 FEATURES = (
@@ -142,6 +144,9 @@ FEATURES = (
             needs=("text_encoder", "krea2", "catalog")),
     Feature(Key.KREA_V2_T2I, "🔶 Krea2 V2", default=True,
             needs=("text_encoder", "v2", "catalog")),
+    # Its own text encoder, VAE and upscale model ("zimage"); the diffusion
+    # model is a catalogue record, like Krea's, and so are its LoRAs.
+    Feature(Key.ZIMAGE_T2I, "⚡ Z-Image", needs=("zimage", "catalog")),
     Feature(Key.GALLERY, "🖼️ Gallery", default=True),
     Feature(Key.KREA_EDIT, "✨ Krea2 Edit",
             needs=("text_encoder", "krea2", "edit_lora", "catalog")),

@@ -1,8 +1,9 @@
 """The LoRA stack, as the forms offer it and a run resolves it.
 
-Both families read from here. The Krea2, Krea2 Edit and MiniMax tabs
-render eight blank slots and the V2 tabs render one row per LoRA their
-feature lists, but every stack reaches a handler as the same flat
+Every family with a stack reads from here. The Krea2, Krea2 Edit,
+Z-Image and MiniMax tabs render eight blank slots and the V2 tabs render
+one row per LoRA their feature lists, but every stack reaches a handler
+as the same flat
 (enabled, id, weight) tail — and _resolve_lora_slots is the one place a
 catalogue id becomes a file name.
 """
@@ -15,8 +16,8 @@ from ember.pipelines.common import (
 )
 
 
-# Number of LoRA slots the Krea2, Krea2 Edit and MiniMax tabs render, all
-# blank. The UI rows, the handlers and the workflow chain are all driven
+# Number of LoRA slots the Krea2, Krea2 Edit, Z-Image and MiniMax tabs
+# render, all blank. The UI rows, the handlers and the workflow chain are all driven
 # from this, so changing it here is the whole change. (The V2 tabs have
 # one row per LoRA in their feature's list instead — see
 # ember.pipelines.krea2_v2.workflow.default_lora_slots.)
