@@ -30,8 +30,9 @@ Three tiers are public:
 | `studio` | 1799 | 1550 | + `wan_i2v`, `minimax_i2v`, `minimax_t2v` |
 
 Three more in `DEFAULT_PLANS` carry `is_public: false` and never reach
-the pricing page: `admin` (every tab the binary can build, and where a
-new tab lands first), `admin-minimal`, and `test-krea1-only`. A fourth
+the pricing page: `admin` (every tab the binary can build except
+`zimage_t2i`, and where a new tab usually lands first), `admin-minimal`,
+and `test-krea1-only`. A fourth
 internal tier, `customer-admin`, exists only as a hand-made document in
 Atlas, so it is not in `DEFAULT_PLANS` and cannot be read from this
 repository.
@@ -123,6 +124,7 @@ keep a plain name. The registry, in `sort_order`:
 | --- | --- | --- |
 | `krea_t2i` | Krea2 | generation |
 | `krea_v2_t2i` | Krea2 V2 | generation |
+| `zimage_t2i` | Z-Image Turbo | generation |
 | `gallery` | Gallery | tools |
 | `krea_edit` | Krea2 Edit | editing |
 | `community_prompts` | Prompt Library | tools |
@@ -130,6 +132,20 @@ keep a plain name. The registry, in `sort_order`:
 | `wan_i2v` | Wan Video | video |
 | `minimax_i2v` | MiniMax Video | video |
 | `minimax_t2v` | MiniMax Text to Video | video |
+
+`zimage_t2i` is on no plan yet, not even `admin`, and its row is
+`enabled: false`. A key gets it through `features_extra`:
+
+```bash
+npm run issue-key -- --key EMBER-XXXX-XXXX-XXXX --features-extra zimage_t2i --update
+```
+
+`--features-extra` replaces the key's whole extras list, so name any
+extras it already has in the same value. The flag keeps the tab out of
+`/v1/plans` and the bot's plan list and changes nothing about what a key
+receives — `/v1/acquire` sends the tab and its label either way. Set it
+to `true` when a plan grants the tab, or `/v1/plans` leaves it out of
+that plan's list.
 
 There is **no alias map** for keys that were named differently before any
 key was issued — nothing needed translating, and a permanent map that

@@ -202,7 +202,7 @@ context at all — that is what keeps `license-validator/.env`, the root
 `.env` and `dist/ember` out of a published image.
 
 The bake stage is separate from the published image for the same reason. It
-copies individual named files — the thirteen `ember/` modules that
+copies individual named files — the fifteen `ember/` modules that
 `docker/bake_nodes.py` and `docker/bake_torch.py` actually import, plus
 `scripts/PINS.json` and `scripts/mirror_manifest.json` — never a directory,
 and only `/opt/ember` is copied out of it. Adding an import to a bake

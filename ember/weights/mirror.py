@@ -83,7 +83,7 @@ def location(relpath: str) -> tuple[str, str] | None:
     """(mirror repo id, path in repo) for a path under MODELS_DIR, or None.
 
     None means "not mirrored, go upstream" — which is the correct answer
-    for the ~185 GB of Comfy-Org weights that are deliberately pinned-only.
+    for the ~205 GB of Comfy-Org weights that are deliberately pinned-only.
     Catalogue LoRAs are not here either: their records carry their own
     mirror location (see downloads.fetch_catalog_file).
     """

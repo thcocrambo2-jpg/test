@@ -1,8 +1,9 @@
 # Settings presets
 
 The **⚙️ Preset** dropdown on the 🎨 Krea2 and 🔶 Krea2 V2 tabs, what
-the two Edit tabs do with it, and the one list the two MiniMax tabs share. For someone using the tabs, for the admin
-who writes presets, and for someone changing how they apply.
+the two Edit tabs do with it, the one list the two MiniMax tabs share,
+and ⚡ Z-Image's own. For someone using the tabs, for the admin who
+writes presets, and for someone changing how they apply.
 
 Picking a preset writes every control below it — model, steps, CFG,
 resolution, sampler, seed, batch count, the whole LoRA stack — and
@@ -13,7 +14,7 @@ blob, same guarding, minus the words.
 Presets live on the licence server, so changing one changes it for every
 customer without shipping a binary. The pod's side is
 [`ember/licensing/presets.py`](../../ember/licensing/presets.py), whose
-`TABS` is `krea_t2i`, `krea_v2_t2i` and `minimax_i2v`.
+`TABS` is `krea_t2i`, `krea_v2_t2i`, `minimax_i2v` and `zimage_t2i`.
 
 ## The Edit tabs read the same list
 
@@ -59,6 +60,17 @@ preset has **no `model`**: the licence server's `MODELLESS_TABS` accepts
 a blob without one for this tab, and refuses one that has one. A preset
 saved from T2V carries an aspect ratio that I2V skips. See
 [minimax.md](../pipelines/minimax.md#presets).
+
+## Z-Image has a list of its own
+
+⚡ Z-Image reads and saves its own list, filed under `zimage_t2i`, with
+the save tickbox and no publish one, like MiniMax. A Z-Image preset
+carries the model, steps, CFG, resolution, resolution multiplier,
+sampler, the Upscale tick, seed, randomize, batch count and the LoRA
+stack. No preset is seeded for it, so the tab opens on its compiled
+defaults until one is saved and marked `is_default`. Saving needs a
+licence server whose `PRESET_TABS` lists `zimage_t2i`; reading does not.
+See [zimage.md](../pipelines/zimage.md#presets).
 
 ## Only an admin can write one
 

@@ -29,6 +29,7 @@ asset groups it needs.
 | --- | --- | --- |
 | `krea_t2i` | 🎨 Krea2 | ~26 GB (Krea 2 base, shared) |
 | `krea_v2_t2i` | 🔶 Krea2 V2 | ~17 GB |
+| `zimage_t2i` | ⚡ Z-Image — on no plan yet | ~20.8 GB |
 | `gallery` | 🖼️ Gallery | none |
 | `krea_edit` | ✨ Krea2 Edit | ~1.9 GB + base |
 | `krea_v2_edit` | 🔷 Krea2 V2 Edit | ~1.9 GB + V2 |
@@ -54,6 +55,14 @@ why the second tab is free.
 A new tab lands on the internal `admin` plan first and is added to a
 public plan in `license-validator/src/plans.js` when it should be
 something a customer can buy.
+
+A tab can also be on no plan at all, which is where `zimage_t2i` is. A
+key gets it through `features_extra` (`npm run issue-key -- --key <key>
+--features-extra zimage_t2i --update`), and its row in the `features`
+collection is `enabled: false`, so neither `/v1/plans` nor the Telegram
+bot mentions it. That flag never touches an entitlement, so the key still
+gets the tab and its label; set it to `true` in the same edit that puts
+the tab on a plan, or `/v1/plans` drops it from that plan's list.
 
 **Keys are permanent and names are not.** A key is compiled into every
 shipped binary, so renaming one drops that tab for anyone on an older

@@ -35,10 +35,13 @@ places rather than making the two layouts disagree.
   custom-node tarballs). `repo_id()` turns a key into
   `<your-user>/<name>`.
 - **`items`** — the **pipeline** assets: the merged text encoder, the
-  VAEs, the Identity Edit LoRA. Each names a `local` path under
-  `MODELS_DIR`, a `path_in_repo`, and the `source` it was fetched from.
+  VAEs, the Identity Edit LoRA, Z-Image's `4xLSDIR.pth` upscale model.
+  Each names a `local` path under `MODELS_DIR`, a `path_in_repo`, and the
+  `source` it was fetched from.
 - **`node_packs`** and **`pin_upstream`** — the custom-node packs and the
-  upstream repos that get a revision recorded in `PINS.json`.
+  upstream repos that get a revision recorded in `PINS.json`. The packs
+  are RES4LYF, RBG Smart Seed Variance, the post-processing nodes,
+  comfyui-krea2edit and ComfyUI_UltimateSDUpscale.
 - **`mirror_public`** — whether the mirror repos are public. When they
   are, `mirror.token()` returns `None` on purpose: passing a customer's
   token to a public repo would work, but a stale or malformed `HF_TOKEN`
@@ -74,7 +77,7 @@ licence. The whole thing is idempotent and resumable: the mirror repo,
 not the local disk, decides the work.
 
 ```bash
-# 1. boot a pod with everything on and let it finish downloading (~200 GB)
+# 1. boot a pod with everything on and let it finish downloading (~220 GB)
 EMBER_LICENSE_KEY=<operator key> python3 app.py
 
 # 2. capture pod state — the revisions everything resolved to
@@ -104,7 +107,7 @@ with `EMBER_LICENSE_KEY` and `EMBER_NODE_TAG` — or, with
 ([`license-validator/data/assets.json`](../../license-validator/data/assets.json)
 is one).
 
-## Why only ~18 GB of ~200 GB is mirrored
+## Why only ~18 GB of ~220 GB is mirrored
 
 Only what is actually at risk of disappearing: the CivitAI LoRAs, the
 community HF repos and the GitHub node packs. The Comfy-Org repos stay
@@ -116,6 +119,15 @@ that `pin_upstream` pins, and that no manifest item mirrors from, needs
 no mirror and is not reported as missing one. `mirror.location()`
 returning `None` means exactly that — "not mirrored, go upstream" — and
 it is the correct answer for the bulk of the Comfy-Org weights.
+
+Z-Image shows both sides of the rule. Its diffusion model, text encoder
+and VAE come from `Comfy-Org/z_image_turbo`, pinned and upstream-only.
+Its upscale model comes from `Hearmeman/comfyui-template-assets`, a
+community repo, so it is pinned *and* has a manifest item in the
+`assets` repo. ComfyUI_UltimateSDUpscale is pinned with no `tarball`
+until a mirror run packs one, so pods clone it at the pin; the pack's
+git submodule is checked out with it, and a mirror run's tarball carries
+the submodule's files too, since it is packed from the working tree.
 
 Catalogue **models** are only audited. The script uploads catalogue
 LoRAs, not catalogue models.

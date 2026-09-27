@@ -40,7 +40,7 @@ in this file:
     `npm run assets` command that records it by hand instead. Adding a
     LoRA is therefore a DB edit followed by a run of this script.
 
-Step 1 leaves ~200 GB on disk. Only the ~18 GB that is actually at risk of
+Step 1 leaves ~220 GB on disk. Only the ~18 GB that is actually at risk of
 disappearing is mirrored — the CivitAI LoRAs, the community HF repos and
 the GitHub node packs. The Comfy-Org repos stay upstream: they are
 org-backed and built to serve that traffic. What they need instead is a
@@ -758,7 +758,7 @@ def pack_nodes(manifest: dict, staging: Path) -> tuple[list[Item], dict]:
 def add_upstream_revisions(api: HfApi, manifest: dict, pins: dict) -> None:
     """Record the current revision of the repos we deliberately do NOT mirror.
 
-    Those ~185 GB are always fetched from upstream, so a revision is the
+    Those ~205 GB are always fetched from upstream, so a revision is the
     only thing between you and a maintainer replacing weights under a
     filename you already ship. It also keeps the mirror and its upstream
     fallback honest: both must resolve to the same revision, or the

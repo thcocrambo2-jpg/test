@@ -43,6 +43,21 @@ fine for these two. A missing or malformed list is not its business —
 list goes through it: `POST /v1/admin/feature-assets`, `npm run assets`
 and `npm run seed-assets`.
 
+## A feature with no LoRAs yet
+
+The opposite case needs nothing. `zimage_t2i` lists one model and an
+empty `loras` list: `idListProblems()` accepts an empty list, and only
+`models` has the at-least-one rule. Its model record is
+`z-image-turbo-bf16` — `z_image_turbo_bf16.safetensors` from
+`Comfy-Org/z_image_turbo` (`split_files/diffusion_models/…`), no mirror,
+variant `turbo`, 12 steps, CFG 1, no turbo LoRA, no trigger. The Krea
+LoRAs do not load on Z-Image, so none are listed; a Z-Image LoRA joins
+the list once its record exists:
+
+```bash
+npm run assets -- --feature zimage_t2i --add-lora <id>
+```
+
 ## What a pod reads
 
 `POST /v1/catalog` is what a pod reads, once, at startup — after its seat is
@@ -127,7 +142,17 @@ them is **an id**, never a file name or a label:
 { model: "krea2-turbo-mxfp8", aspect: "...", megapixels: 1.5, multiple: 8, ...,
   sampler: { ... }, variance: { ... }, sharpen: false, film_grain: false,
   loras: [[false, "krea2-turbo", 0.6], [true, "filter-bypass-3", 0.93], ...] }
+
+// zimage_t2i — krea_t2i's shape plus the multiplier and the upscale tick
+{ model: "z-image-turbo-bf16", steps: 12, cfg: 1.0,
+  resolution: "1080×1920 (1080p portrait)", multiplier: 1.0, sampler: "er_sde",
+  upscale: false, seed: 42, randomize: true, batch_count: 1,
+  loras: [[false, null, 1.0], ...] }
 ```
+
+A preset can be saved for the tabs in `PRESET_TABS` in
+[`../src/app.js`](../src/app.js): `krea_t2i`, `krea_v2_t2i`,
+`minimax_i2v` and `zimage_t2i`.
 
 Every LoRA row is a triple `[on, lora id | null, weight]`. An empty slot is
 `null`; the form calls it "None", but that word never reaches storage. The

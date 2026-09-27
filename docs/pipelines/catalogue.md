@@ -4,8 +4,8 @@ Which diffusion models and style LoRAs each tab offers. For someone
 running the app who wants to add or remove one, and for someone changing
 the code who needs to know where those lists come from.
 
-The Krea diffusion models and the style LoRAs are **not compiled into the
-binary**. They live in the licence-server database, and the pod reads them
+The Krea and Z-Image diffusion models and the style LoRAs are **not
+compiled into the binary**. They live in the licence-server database, and the pod reads them
 at startup. The database side — the collections, the admin CLI, the
 validation rules — is documented in
 [Catalogue data](../../license-validator/docs/catalogue-data.md); this page is the pod's half.
@@ -23,8 +23,14 @@ validation rules — is documented in
   that tab offers. The first model is the tab's default. An id may appear
   in any number of features.
 
-Six features have a `feature_assets` entry: `krea_t2i`, `krea_edit`,
-`krea_v2_t2i`, `krea_v2_edit`, `minimax_i2v` and `minimax_t2v`.
+Seven features have a `feature_assets` entry: `krea_t2i`, `krea_edit`,
+`krea_v2_t2i`, `krea_v2_edit`, `zimage_t2i`, `minimax_i2v` and
+`minimax_t2v`.
+
+`zimage_t2i` lists one model, `z-image-turbo-bf16`, and no LoRAs yet: the
+Krea LoRAs do not load on Z-Image, so its list starts empty and its stack
+offers `None` alone until Z-Image LoRAs are added. An empty `loras` list
+is valid on every feature; the at-least-one rule is for `models` only.
 
 ## Tabs with LoRAs and no models
 
@@ -61,8 +67,8 @@ Sources, in order:
 | `POST /v1/catalog` | the live answer, saved to `BASE_DIR/.catalog.json` |
 | `.catalog.json` | the last live answer, when the server does not reply |
 
-With none of them the catalogue is empty: the Krea tabs report that they
-have no models, the MiniMax tabs offer no LoRAs but still run, and the
+With none of them the catalogue is empty: the Krea and Z-Image tabs report
+that they have no models, the MiniMax tabs offer no LoRAs but still run, and the
 tabs that do not read it are unaffected.
 
 `license-validator/data/assets.json` is the seed document and also the
@@ -103,7 +109,7 @@ source of truth for them.
 
 ## The two shapes of LoRA stack
 
-| | Krea2, Krea2 Edit, MiniMax I2V, MiniMax T2V | Krea2 V2, Krea2 V2 Edit |
+| | Krea2, Krea2 Edit, Z-Image, MiniMax I2V, MiniMax T2V | Krea2 V2, Krea2 V2 Edit |
 | --- | --- | --- |
 | rows | `MAX_LORA_SLOTS` blank slots (currently 8), all empty | one row per LoRA in the feature's list, in that order |
 | starting state | every slot `None` and off | every row off, at its record's `default_strength` |
@@ -125,7 +131,8 @@ is purely visual.
 
 The V2 tabs' rows are described under
 [krea2-v2.md](krea2-v2.md#lora-stack); the MiniMax chain under
-[minimax.md](minimax.md#the-lora-stack).
+[minimax.md](minimax.md#the-lora-stack), and Z-Image's under
+[zimage.md](zimage.md#the-lora-stack).
 
 ## Where the files come from
 

@@ -77,6 +77,24 @@ token is reported before the download rather than during it.
 New weights that are not org-backed also need a mirror entry and a pin:
 see [the mirror and the pins](../releasing/mirror-and-pins.md).
 
+A weight that lands in a models folder ComfyUI does not see yet needs
+that folder in `MODEL_DIRS` in
+[`ember/comfy/setup.py`](../../ember/comfy/setup.py), which is what
+`link_model_dirs()` links. `upscale_models` arrived that way, for
+Z-Image's upscaler.
+
+### 5a. A node pack, if the graph needs one
+
+The tuple `(custom_nodes dir, git URL, a class that proves it loaded)`
+goes in the pipeline's `constants.py`; an `install_*_nodes()` in
+`ember/comfy/setup.py` clones it only while the feature is on, and logs
+rather than raises; `main.py` calls `comfy.verify_custom_node` on the
+class after ComfyUI starts. The pack gets a pin in `scripts/PINS.json`
+and a `node_packs` entry in `scripts/mirror_manifest.json`. A pack with a
+git submodule needs nothing more: `clone_pinned()` and
+`repin_checkout()` check submodules out at the pinned commit
+(`init_submodules`), which ComfyUI_UltimateSDUpscale depends on.
+
 ### 6. Catalogue records
 
 In [`license-validator/data/assets.json`](../../license-validator/data/assets.json),
@@ -92,12 +110,17 @@ default rule is that a tab needs at least one model, and the first one in
 the list is its default. The database side is in
 [catalogue data](../../license-validator/docs/catalogue-data.md).
 
+A tab with a model and **no LoRAs yet** needs nothing: an empty `loras`
+list is valid on every feature, and `zimage_t2i` starts that way.
+
 ### 7. A showcase entry
 
 A block under `features` in
 [`assets/showcase/showcase.json`](../../assets/showcase/showcase.json),
 keyed by the feature key, plus the images it references. Without it the
-pricing page has a tab it cannot describe.
+pricing page has a tab it cannot describe. A tab on no plan needs none
+yet, since the page only describes what a plan sells, and no check asks
+for one.
 
 ### 8. A golden case
 
@@ -105,6 +128,10 @@ A case in `scripts/golden.py` naming the handler and the arguments to
 call it with, then `$PY scripts/golden.py` to write
 `scripts/golden/<handler>.json`. Commit the snapshot. From then on
 `golden.py --check` fails on any change to the graph the handler builds.
+
+A handler that builds two graphs worth freezing — Z-Image with and
+without its upscale pass — gets a second case under another name, mapped
+back to the handler in `CASE_HANDLERS`, and a second snapshot.
 
 ### 9. `scripts/parity_baseline.json`
 
@@ -117,7 +144,8 @@ The bake stage copies **individually named files**, never a directory,
 because the image is public. A new constants module reached by what the
 stage imports has to be named in both the `Dockerfile` `COPY` lines and
 the `.dockerignore` allow-list. Most pipelines' constants are not reached
-and are deliberately not copied.
+and are deliberately not copied. Z-Image's are, because
+`ember/comfy/setup.py` reads its node-pack tuple from them.
 
 ---
 
