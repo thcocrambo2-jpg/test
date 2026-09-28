@@ -1,0 +1,1843 @@
+<!doctype html>
+<html lang="en" data-theme="dark" data-state="2" data-layout="A" data-notes="on">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<meta name="color-scheme" content="dark light" />
+<title>Qwen 2.1 Reference · mockup</title>
+<style>
+/* =========================================================================
+ * TOKEN BLOCK
+ * 1. webui/src/theme/tokens.css, copied verbatim (light on :root, dark as
+ *    the [data-theme='dark'] override).
+ * 2. Mockup-only tokens: the colours of the placeholder pictures. They
+ *    stand in for photographs, so like the app's --c-on-media family they
+ *    are the same in both themes. Not for the app.
+ * No colour literal appears anywhere below this block.
+ * ========================================================================= */
+
+/*
+ * The palette. Every colour in this application is defined here and nowhere
+ * else, for one reason: one list drives both modes, so light and dark cannot
+ * drift apart.
+ *
+ * Light is the base definition on :root; dark is the *primary* mode and is
+ * what index.html stamps by default, but it is still expressed as an override
+ * so that a single missing token degrades to a readable colour instead of to
+ * transparent.
+ *
+ * If you are about to write a hex digit inside a component stylesheet: stop,
+ * and add a token here instead. "The theme" in
+ * `docs/architecture/web-ui.md` has the grep that catches one.
+ */
+
+:root {
+  /* ---- surfaces (light) ---- */
+  --c-bg: #ffffff;
+  --c-bg-sunken: #f2f3f5;
+  --c-panel: #f7f8fa;
+  --c-panel-hover: #eef0f4;
+  --c-elevated: #ffffff;
+  --c-input: #ffffff;
+  --c-input-hover: #f7f8fa;
+  --c-border: #e5e7eb;
+  --c-border-strong: #d3d7de;
+  --c-overlay: rgba(24, 26, 30, 0.55);
+
+  /* ---- text (light) ---- */
+  --c-text: #262626;
+  --c-text-muted: #6b7280;
+  --c-text-faint: #9aa1ad;
+  --c-text-on-accent: #1a1a1a;
+
+  /* ---- brand + semantics (identical in both modes) ---- */
+  --c-accent: #ffa116;
+  --c-accent-hover: #ffb03d;
+  --c-accent-soft: rgba(255, 161, 22, 0.14);
+  --c-accent-line: rgba(255, 161, 22, 0.42);
+
+  --c-success: #00b8a3;
+  --c-success-soft: rgba(0, 184, 163, 0.14);
+  --c-warning: #ffc01e;
+  --c-warning-soft: rgba(255, 192, 30, 0.16);
+  --c-error: #ff375f;
+  --c-error-soft: rgba(255, 55, 95, 0.13);
+  --c-error-line: rgba(255, 55, 95, 0.4);
+  --c-info: #0fa5e9;
+  --c-info-soft: rgba(15, 165, 233, 0.14);
+
+  /* Over-media colours. Deliberately identical in both themes: these sit on
+     top of a photograph, not on the page, so a "light mode" version of them
+     would be white text on a white scrim over someone's picture. Named
+     rather than inlined so that intent is legible and the rule "no literal
+     colour outside this file" stays true. */
+  --c-on-media: #ffffff;
+  --c-on-media-soft: rgba(255, 255, 255, 0.86);
+  --c-on-media-faint: rgba(255, 255, 255, 0.52);
+  --c-media-ground: #000000;
+  --c-media-scrim: rgba(0, 0, 0, 0.78);
+  --c-media-chip: rgba(0, 0, 0, 0.62);
+  --c-media-outline: rgba(255, 255, 255, 0.9);
+  --c-media-outline-dark: rgba(0, 0, 0, 0.55);
+
+  /* Semantic borders, as the semantic colour at the alpha the borders use. */
+  --c-success-line: rgba(0, 184, 163, 0.4);
+  --c-warning-line: rgba(255, 192, 30, 0.42);
+  --c-info-line: rgba(15, 165, 233, 0.4);
+
+  /* The <select> caret. A data URI cannot inherit currentColor, so the one
+     colour it needs lives here like every other one, and gets a dark-mode
+     value below. */
+  --icon-caret: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 12 12'%3E%3Cpath d='M2.5 4.5 6 8l3.5-3.5' fill='none' stroke='%236b7280' stroke-width='1.5' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E");
+
+  --c-focus: var(--c-info);
+  --c-skeleton: rgba(120, 128, 140, 0.13);
+  --c-skeleton-sheen: rgba(120, 128, 140, 0.22);
+
+  /* ---- type ---- */
+  --font-sans: "Inter", ui-sans-serif, system-ui, -apple-system, "Segoe UI",
+    Roboto, "Helvetica Neue", Arial, sans-serif;
+  --font-mono: ui-monospace, "SFMono-Regular", "JetBrains Mono", Menlo,
+    Consolas, monospace;
+
+  /* A 1.2-ish scale anchored at 14px, which is what a dense tool wants. */
+  --t-2xs: 0.6875rem; /* 11 */
+  --t-xs: 0.75rem;    /* 12 */
+  --t-sm: 0.8125rem;  /* 13 */
+  --t-md: 0.875rem;   /* 14 — body */
+  --t-lg: 1rem;       /* 16 */
+  --t-xl: 1.25rem;    /* 20 */
+  --t-2xl: 1.5rem;    /* 24 */
+  --t-3xl: 2rem;      /* 32 */
+  --t-4xl: 2.75rem;   /* 44 */
+
+  --lh-tight: 1.2;
+  --lh-snug: 1.35;
+  --lh-normal: 1.55;
+  --lh-loose: 1.7;
+
+  --fw-normal: 400;
+  --fw-medium: 500;
+  --fw-semibold: 600;
+  --fw-bold: 700;
+
+  /* ---- spacing: a 4px rhythm, named so the steps stay honest ---- */
+  --s-0: 0;
+  --s-1: 0.25rem;
+  --s-2: 0.5rem;
+  --s-3: 0.75rem;
+  --s-4: 1rem;
+  --s-5: 1.25rem;
+  --s-6: 1.5rem;
+  --s-8: 2rem;
+  --s-10: 2.5rem;
+  --s-12: 3rem;
+  --s-16: 4rem;
+  --s-20: 5rem;
+
+  /* ---- shape ---- */
+  --r-xs: 4px;
+  --r-sm: 6px;
+  --r-md: 8px;
+  --r-lg: 12px;
+  --r-xl: 16px;
+  --r-full: 999px;
+
+  /* ---- elevation ---- */
+  --sh-sm: 0 1px 2px rgba(16, 18, 22, 0.06);
+  --sh-md: 0 4px 12px rgba(16, 18, 22, 0.08);
+  --sh-lg: 0 12px 32px rgba(16, 18, 22, 0.12);
+  --sh-focus: 0 0 0 3px rgba(15, 165, 233, 0.35);
+
+  /* ---- motion ---- */
+  --e-out: cubic-bezier(0.22, 1, 0.36, 1);
+  --d-fast: 110ms;
+  --d-base: 180ms;
+  --d-slow: 320ms;
+
+  /* ---- layout ---- */
+  --w-nav: 236px;
+  --w-queue: 320px;
+  --h-header: 56px;
+  --w-content: 1560px;
+  --z-sticky: 20;
+  --z-panel: 40;
+  --z-modal: 80;
+  /* Above --z-modal because the gallery's lightbox sits at it, and a
+   * confirmation is always asked on top of whatever raised it. */
+  --z-confirm: 90;
+  --z-toast: 100;
+}
+
+[data-theme='dark'] {
+  --c-bg: #1a1a1a;
+  --c-bg-sunken: #141414;
+  --c-panel: #282828;
+  --c-panel-hover: #2f2f2f;
+  --c-elevated: #303030;
+  --c-input: #303030;
+  --c-input-hover: #383838;
+  --c-border: #3e3e3e;
+  --c-border-strong: #525252;
+  --c-overlay: rgba(8, 8, 8, 0.72);
+
+  --c-text: #eff1f6;
+  --c-text-muted: #b3b3b3;
+  --c-text-faint: #7d7d7d;
+  --c-text-on-accent: #1a1a1a;
+
+  --c-accent-soft: rgba(255, 161, 22, 0.16);
+  --c-error-soft: rgba(255, 55, 95, 0.16);
+  --c-success-soft: rgba(0, 184, 163, 0.16);
+  --c-info-soft: rgba(15, 165, 233, 0.16);
+  --c-warning-soft: rgba(255, 192, 30, 0.14);
+
+  --c-skeleton: rgba(255, 255, 255, 0.06);
+  --c-skeleton-sheen: rgba(255, 255, 255, 0.12);
+
+  --icon-caret: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 12 12'%3E%3Cpath d='M2.5 4.5 6 8l3.5-3.5' fill='none' stroke='%23b3b3b3' stroke-width='1.5' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E");
+
+  --sh-sm: 0 1px 2px rgba(0, 0, 0, 0.4);
+  --sh-md: 0 4px 14px rgba(0, 0, 0, 0.45);
+  --sh-lg: 0 16px 40px rgba(0, 0, 0, 0.55);
+}
+
+/* ---- mockup-only: placeholder-picture colours (same in both themes) ---- */
+:root {
+  --art-studio: #d9d4cc;
+  --art-studio-2: #e7e3dc;
+  --art-studio-3: #cfd8dc;
+  --art-studio-4: #e9dccb;
+  --art-glow: rgba(255, 255, 255, 0.45);
+  --art-shadow: rgba(0, 0, 0, 0.18);
+  --art-skin: #e0b394;
+  --art-skin-shade: #c89274;
+  --art-hair: #3b2a22;
+  --art-eye: #2a1d18;
+  --art-lip: #b86a5e;
+  --art-shirt: #f2efe9;
+  --art-jacket: #8a5a3b;
+  --art-jacket-shade: #6d452c;
+  --art-zip: #c9c2b5;
+  --art-sky: #cfe0ea;
+  --art-wall: #c98f6b;
+  --art-wall-shade: #a9714f;
+  --art-awning: #3f6b4f;
+  --art-window: #5a3f2a;
+  --art-window-glow: #e2b36a;
+  --art-door: #3a2a20;
+  --art-sign: #f1e6cf;
+  --art-street: #8e8a84;
+  --art-table: #2e2e2e;
+  --art-plant: #4f7a45;
+  --art-sneaker: #f4f4f1;
+  --art-sole: #c79a62;
+  --art-lace: #b9b9b3;
+  --art-stripe: #2f4f7a;
+  --art-bag: #7a2331;
+  --art-bag-shade: #5e1a25;
+  --art-gold: #d4a94f;
+  --art-pastel: #f0d9d4;
+  --art-lens: #1f2327;
+  --art-frame: #7a4b2a;
+  --art-straw: #d9bf85;
+  --art-straw-shade: #b79c63;
+  --art-band: #2b2b2b;
+  --art-sky-2: #f3c9a0;
+  --art-sun: #fff0c9;
+  --art-sea: #4f8fb0;
+  --art-sand: #e6cfa3;
+  --art-board: #a27b55;
+  --art-velvet: #22303a;
+}
+
+/* =========================================================================
+ * webui/src/theme/base.css (verbatim, minus the @import)
+ * ========================================================================= */
+*,
+*::before,
+*::after {
+  box-sizing: border-box;
+}
+
+html,
+body,
+#root {
+  height: 100%;
+}
+
+body {
+  margin: 0;
+  background: var(--c-bg);
+  color: var(--c-text);
+  font-family: var(--font-sans);
+  font-size: var(--t-md);
+  line-height: var(--lh-normal);
+  -webkit-font-smoothing: antialiased;
+  text-rendering: optimizeLegibility;
+}
+
+h1, h2, h3, h4, h5, h6, p, figure {
+  margin: 0;
+}
+
+h1, h2, h3, h4 {
+  line-height: var(--lh-tight);
+  font-weight: var(--fw-semibold);
+  letter-spacing: -0.012em;
+}
+
+a {
+  color: var(--c-info);
+  text-decoration: none;
+}
+a:hover {
+  text-decoration: underline;
+}
+
+button,
+input,
+select,
+textarea {
+  font: inherit;
+  color: inherit;
+}
+
+img,
+video {
+  max-width: 100%;
+  display: block;
+}
+
+ul, ol {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+code, kbd, pre {
+  font-family: var(--font-mono);
+  font-size: 0.92em;
+}
+
+:focus {
+  outline: none;
+}
+:focus-visible {
+  outline: 2px solid var(--c-focus);
+  outline-offset: 2px;
+  border-radius: var(--r-xs);
+}
+
+::selection {
+  background: var(--c-accent-soft);
+}
+
+* {
+  scrollbar-width: thin;
+  scrollbar-color: var(--c-border-strong) transparent;
+}
+*::-webkit-scrollbar {
+  width: 10px;
+  height: 10px;
+}
+*::-webkit-scrollbar-track {
+  background: transparent;
+}
+*::-webkit-scrollbar-thumb {
+  background: var(--c-border-strong);
+  border-radius: var(--r-full);
+  border: 3px solid transparent;
+  background-clip: content-box;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
+  }
+}
+
+.kx-visually-hidden {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  margin: -1px;
+  overflow: hidden;
+  clip: rect(0 0 0 0);
+  white-space: nowrap;
+  border: 0;
+}
+
+/* =========================================================================
+ * Shell — features/shell/shell.module.css
+ * ========================================================================= */
+.app {
+  display: grid;
+  grid-template-columns: var(--w-nav) minmax(0, 1fr);
+  grid-template-rows: var(--h-header) minmax(0, 1fr) auto;
+  grid-template-areas:
+    'header header'
+    'nav    main'
+    'nav    footer';
+  min-height: 100vh;
+}
+
+.header {
+  grid-area: header;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--s-4);
+  padding: 0 var(--s-5);
+  border-bottom: 1px solid var(--c-border);
+  background: var(--c-bg);
+  position: sticky;
+  top: 0;
+  z-index: var(--z-sticky);
+}
+
+.brand { display: flex; align-items: center; gap: var(--s-3); min-width: 0; color: inherit; }
+.brand:hover { text-decoration: none; }
+
+.logo {
+  width: 30px; height: 30px; border-radius: var(--r-md);
+  display: grid; place-items: center;
+  background: var(--c-accent); color: var(--c-text-on-accent);
+  font-weight: var(--fw-bold); font-size: var(--t-lg); flex: none; line-height: 1;
+}
+
+.name { display: block; font-size: var(--t-lg); font-weight: var(--fw-semibold); letter-spacing: -0.02em; line-height: 1.1; }
+.tagline { display: block; font-size: var(--t-2xs); color: var(--c-text-faint); line-height: 1.2; }
+.headerRight { display: flex; align-items: center; gap: var(--s-2); }
+@media (max-width: 720px) { .tagline { display: none; } }
+
+.nav {
+  grid-area: nav;
+  border-right: 1px solid var(--c-border);
+  background: var(--c-bg);
+  padding: var(--s-4) var(--s-3) var(--s-6);
+  display: flex;
+  flex-direction: column;
+  gap: var(--s-5);
+  position: sticky;
+  top: var(--h-header);
+  align-self: start;
+  max-height: calc(100vh - var(--h-header));
+  overflow-y: auto;
+}
+.navGroup { display: flex; flex-direction: column; gap: 2px; }
+.navTitle {
+  font-size: var(--t-2xs); font-weight: var(--fw-semibold); letter-spacing: 0.09em;
+  text-transform: uppercase; color: var(--c-text-faint); padding: 0 var(--s-3) var(--s-2);
+}
+.navLink {
+  display: flex; align-items: center; gap: var(--s-3);
+  padding: var(--s-2) var(--s-3); border-radius: var(--r-md);
+  color: var(--c-text-muted); font-size: var(--t-sm); font-weight: var(--fw-medium);
+  border-left: 2px solid transparent;
+  transition: background var(--d-fast) var(--e-out), color var(--d-fast) var(--e-out);
+}
+.navLink:hover { background: var(--c-panel); color: var(--c-text); text-decoration: none; }
+.navActive, .navActive:hover { background: var(--c-accent-soft); color: var(--c-accent); border-left-color: var(--c-accent); }
+.navIcon { font-size: 15px; line-height: 1; width: 18px; text-align: center; flex: none; }
+.navLabel { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.navBadge {
+  margin-left: auto; font-size: 9px; letter-spacing: 0.08em; text-transform: uppercase;
+  color: var(--c-text-faint); border: 1px solid var(--c-border); border-radius: var(--r-full);
+  padding: 1px 6px; flex: none;
+}
+.navFoot { margin-top: auto; display: flex; flex-direction: column; gap: var(--s-2); padding: 0 var(--s-1); }
+
+.main { grid-area: main; padding: var(--s-5); min-width: 0; max-width: var(--w-content); width: 100%; }
+.pageBody { display: block; }
+.pageHead {
+  display: flex; align-items: flex-start; justify-content: space-between;
+  gap: var(--s-4); margin-bottom: var(--s-5); flex-wrap: wrap;
+}
+.pageTitle { display: flex; align-items: center; gap: var(--s-3); font-size: var(--t-2xl); letter-spacing: -0.02em; }
+.pageIcon { font-size: 22px; line-height: 1; }
+.pageBlurb { color: var(--c-text-muted); font-size: var(--t-sm); margin-top: var(--s-1); }
+
+.footer {
+  grid-area: footer; display: flex; align-items: center; justify-content: space-between;
+  gap: var(--s-4); flex-wrap: wrap; padding: var(--s-3) var(--s-5);
+  border-top: 1px solid var(--c-border); background: var(--c-bg);
+  font-size: var(--t-xs); color: var(--c-text-muted);
+}
+.fHint { display: flex; align-items: center; gap: var(--s-2); }
+.kbd {
+  display: inline-block; padding: 1px 6px; border: 1px solid var(--c-border); border-bottom-width: 2px;
+  border-radius: var(--r-xs); background: var(--c-elevated); font-family: var(--font-mono);
+  font-size: 10px; color: var(--c-text);
+}
+.footerRight { display: flex; align-items: center; gap: var(--s-2); flex-wrap: wrap; }
+
+@media (max-width: 900px) {
+  .app {
+    grid-template-columns: minmax(0, 1fr);
+    grid-template-areas: 'header' 'nav' 'main' 'footer';
+    grid-template-rows: var(--h-header) auto minmax(0, 1fr) auto;
+  }
+  .nav {
+    position: sticky; top: var(--h-header); z-index: var(--z-sticky);
+    flex-direction: row; gap: var(--s-4); border-right: none; border-bottom: 1px solid var(--c-border);
+    padding: var(--s-2) var(--s-3); max-height: none; overflow-x: auto; overflow-y: hidden;
+  }
+  .navGroup { flex-direction: row; align-items: center; gap: var(--s-1); }
+  .navTitle { padding: 0 var(--s-2) 0 0; align-self: center; }
+  .navLink { border-left: none; border-bottom: 2px solid transparent; white-space: nowrap; }
+  .navActive, .navActive:hover { border-left-color: transparent; border-bottom-color: var(--c-accent); }
+  .navFoot { display: none; }
+  .main { padding: var(--s-4) var(--s-3); padding-bottom: var(--s-16); }
+}
+
+/* Queue launcher — features/queue/queue.module.css */
+.launcher {
+  position: fixed; right: var(--s-5); bottom: var(--s-5); z-index: var(--z-panel);
+  display: flex; align-items: center; gap: var(--s-2); height: 38px; padding: 0 var(--s-4);
+  border-radius: var(--r-full); border: 1px solid var(--c-border); background: var(--c-elevated);
+  color: var(--c-text); box-shadow: var(--sh-lg); cursor: pointer;
+  font-size: var(--t-sm); font-weight: var(--fw-medium);
+}
+.launcher:hover { border-color: var(--c-border-strong); }
+
+/* =========================================================================
+ * UI kit — components/ui/ui.module.css (the parts this tab uses)
+ * ========================================================================= */
+.button {
+  --btn-bg: var(--c-elevated);
+  --btn-fg: var(--c-text);
+  --btn-border: var(--c-border);
+  display: inline-flex; align-items: center; justify-content: center; gap: var(--s-2);
+  padding: 0 var(--s-4); height: 34px;
+  border: 1px solid var(--btn-border); border-radius: var(--r-md);
+  background: var(--btn-bg); color: var(--btn-fg);
+  font-size: var(--t-sm); font-weight: var(--fw-medium);
+  cursor: pointer; white-space: nowrap;
+  transition: background var(--d-fast) var(--e-out), border-color var(--d-fast) var(--e-out),
+    transform var(--d-fast) var(--e-out), opacity var(--d-fast) var(--e-out);
+}
+.button:hover:not(:disabled) { background: var(--c-panel-hover); border-color: var(--c-border-strong); }
+.button:active:not(:disabled) { transform: translateY(1px); }
+.button:disabled { opacity: 0.48; cursor: not-allowed; }
+.primary { --btn-bg: var(--c-accent); --btn-fg: var(--c-text-on-accent); --btn-border: var(--c-accent); font-weight: var(--fw-semibold); }
+.primary:hover:not(:disabled) { background: var(--c-accent-hover); border-color: var(--c-accent-hover); }
+.ghost { --btn-bg: transparent; --btn-border: transparent; color: var(--c-text-muted); }
+.ghost:hover:not(:disabled) { background: var(--c-panel-hover); border-color: transparent; color: var(--c-text); }
+.danger { --btn-fg: var(--c-error); --btn-border: var(--c-error-line); --btn-bg: transparent; }
+.danger:hover:not(:disabled) { background: var(--c-error-soft); border-color: var(--c-error); }
+.lg { height: 42px; padding: 0 var(--s-5); font-size: var(--t-md); }
+.sm { height: 28px; padding: 0 var(--s-3); font-size: var(--t-xs); }
+.iconOnly { padding: 0; width: 34px; }
+.iconOnly.sm { width: 28px; }
+.block { width: 100%; }
+
+.card { background: var(--c-panel); border: 1px solid var(--c-border); border-radius: var(--r-lg); }
+.cardHead {
+  display: flex; align-items: center; justify-content: space-between; gap: var(--s-3);
+  padding: var(--s-3) var(--s-4); border-bottom: 1px solid var(--c-border); min-height: 44px;
+}
+.cardTitle { font-size: var(--t-sm); font-weight: var(--fw-semibold); letter-spacing: 0.01em; }
+.cardSub { font-size: var(--t-xs); color: var(--c-text-muted); font-weight: var(--fw-normal); }
+.cardBody { padding: var(--s-4); }
+
+.pill {
+  display: inline-flex; align-items: center; gap: var(--s-2); padding: 3px var(--s-3);
+  border-radius: var(--r-full); border: 1px solid var(--c-border); background: var(--c-elevated);
+  font-size: var(--t-xs); color: var(--c-text-muted); line-height: 1.6; white-space: nowrap;
+}
+.pill b { color: var(--c-text); font-weight: var(--fw-semibold); }
+
+.alert {
+  display: flex; gap: var(--s-3); padding: var(--s-3) var(--s-4); border-radius: var(--r-md);
+  border: 1px solid var(--c-border); background: var(--c-elevated); font-size: var(--t-sm);
+  line-height: var(--lh-snug); align-items: flex-start;
+}
+.alertWarning { border-color: var(--c-warning-line); background: var(--c-warning-soft); }
+.alertIcon { flex: none; margin-top: 1px; }
+.alertWarning .alertIcon { color: var(--c-warning); }
+.alertBody { flex: 1; min-width: 0; }
+.alertTitle { font-weight: var(--fw-semibold); margin-bottom: 2px; }
+.alertText { color: var(--c-text-muted); overflow-wrap: anywhere; }
+.alertClose {
+  flex: none; background: none; border: none; color: var(--c-text-faint); cursor: pointer;
+  padding: 2px; border-radius: var(--r-xs); line-height: 0;
+}
+.alertClose:hover { color: var(--c-text); background: var(--c-panel-hover); }
+
+.empty {
+  display: flex; flex-direction: column; align-items: center; justify-content: center; text-align: center;
+  gap: var(--s-2); padding: var(--s-10) var(--s-6); color: var(--c-text-muted);
+}
+.emptyIcon { font-size: 26px; opacity: 0.65; margin-bottom: var(--s-1); line-height: 1; }
+.emptyTitle { color: var(--c-text); font-weight: var(--fw-semibold); font-size: var(--t-md); }
+.emptyText { font-size: var(--t-sm); max-width: 42ch; line-height: var(--lh-normal); }
+
+.segmented {
+  display: inline-flex; padding: 3px; gap: 2px; background: var(--c-bg-sunken);
+  border: 1px solid var(--c-border); border-radius: var(--r-md);
+}
+.segment {
+  border: none; background: transparent; color: var(--c-text-muted); padding: 5px var(--s-3);
+  border-radius: var(--r-sm); font-size: var(--t-xs); font-weight: var(--fw-medium); cursor: pointer;
+  transition: background var(--d-fast) var(--e-out), color var(--d-fast) var(--e-out); white-space: nowrap;
+}
+.segment:hover { color: var(--c-text); }
+.segment[aria-pressed='true'] { background: var(--c-elevated); color: var(--c-text); box-shadow: var(--sh-sm); }
+
+/* =========================================================================
+ * Form shell — components/SchemaForm/form.module.css
+ * ========================================================================= */
+.twoColumn {
+  display: grid;
+  grid-template-columns: minmax(320px, 400px) minmax(0, 1fr);
+  gap: var(--s-5);
+  align-items: start;
+}
+@media (max-width: 1100px) { .twoColumn { grid-template-columns: minmax(0, 1fr); } }
+.left, .right { display: flex; flex-direction: column; gap: var(--s-4); min-width: 0; }
+.left > *, .right > * { flex: none; }
+@media (min-width: 1101px) {
+  .twoColumn { height: 100%; align-items: stretch; overflow: hidden; }
+  .left, .right {
+    min-height: 0; overflow-y: auto; overflow-x: hidden;
+    padding-right: var(--s-2); margin-right: calc(var(--s-2) * -1);
+  }
+}
+
+.group { border: 1px solid var(--c-border); border-radius: var(--r-lg); background: var(--c-panel); overflow: hidden; }
+.groupHead {
+  display: flex; align-items: center; justify-content: space-between; gap: var(--s-3); width: 100%;
+  padding: var(--s-3) var(--s-4); background: none; border: none; text-align: left; color: var(--c-text);
+  font-size: var(--t-xs); font-weight: var(--fw-semibold); letter-spacing: 0.06em; text-transform: uppercase;
+}
+.groupHeadButton { cursor: pointer; }
+.groupHeadButton:hover { background: var(--c-panel-hover); }
+.groupCaret { color: var(--c-text-faint); font-size: var(--t-2xs); transition: transform var(--d-base) var(--e-out); }
+details[open] > summary .groupCaret { transform: rotate(90deg); }
+summary.groupHead { list-style: none; }
+summary.groupHead::-webkit-details-marker { display: none; }
+.groupBody {
+  padding: 0 var(--s-4) var(--s-4); display: grid; gap: var(--s-4);
+  grid-template-columns: minmax(0, 1fr); align-items: start;
+}
+.groupDense { grid-template-columns: repeat(2, minmax(0, 1fr)); column-gap: var(--s-4); }
+@media (max-width: 480px) { .groupDense { grid-template-columns: minmax(0, 1fr); } }
+.groupCount {
+  font-weight: var(--fw-normal); letter-spacing: 0; text-transform: none; color: var(--c-text-faint);
+  font-size: var(--t-2xs); font-family: var(--font-mono);
+}
+
+.seedRow { display: grid; grid-template-columns: minmax(0, 1.4fr) auto; gap: var(--s-3) var(--s-4); align-items: end; }
+.seedRowLocked input[type='number'] { opacity: 0.5; }
+.seedDice { align-self: end; padding-bottom: var(--s-2); }
+.seedBatch { grid-column: 1 / -1; }
+@media (max-width: 420px) { .seedRow { grid-template-columns: minmax(0, 1fr); } }
+
+.loraSlot {
+  display: grid; grid-template-columns: auto minmax(0, 1fr); gap: var(--s-2) var(--s-3); align-items: center;
+  padding: var(--s-3); border: 1px solid var(--c-border); border-radius: var(--r-md); background: var(--c-elevated);
+  transition: border-color var(--d-fast) var(--e-out), opacity var(--d-fast) var(--e-out);
+}
+.loraSlotIdle { opacity: 0.62; }
+.loraSlot:hover { border-color: var(--c-border-strong); opacity: 1; }
+.loraWeight { grid-column: 1 / -1; }
+.loraToggle { align-self: center; }
+.loraList { display: flex; flex-direction: column; gap: var(--s-2); }
+
+.submitBar {
+  position: sticky; bottom: 0; display: flex; flex-direction: column; gap: var(--s-2);
+  padding: var(--s-3) 0 var(--s-1); background: linear-gradient(transparent, var(--c-bg) 28%);
+}
+.submitHint { display: flex; align-items: center; justify-content: center; gap: var(--s-2); font-size: var(--t-2xs); color: var(--c-text-faint); }
+
+/* PresetBar — its border-bottom names var(--border), which is not a token,
+   so the real app draws no line here. Reproduced as rendered. */
+.bar { padding-bottom: var(--s-3); margin-bottom: var(--s-3); }
+
+/* =========================================================================
+ * Fields — components/fields/fields.module.css
+ * ========================================================================= */
+.field { display: flex; flex-direction: column; gap: var(--s-2); min-width: 0; }
+.field > .ticks { margin-top: calc(var(--s-2) * -1); }
+.fieldWide { grid-column: 1 / -1; }
+.labelRow { display: flex; align-items: baseline; justify-content: space-between; gap: var(--s-3); min-height: 18px; }
+.label { font-size: var(--t-xs); font-weight: var(--fw-medium); color: var(--c-text-muted); letter-spacing: 0.012em; line-height: var(--lh-snug); }
+.hint { font-size: var(--t-2xs); color: var(--c-text-faint); line-height: var(--lh-snug); }
+
+.input, .textarea, .select {
+  width: 100%; background: var(--c-input); color: var(--c-text); border: 1px solid var(--c-border);
+  border-radius: var(--r-md); padding: 0 var(--s-3); height: 34px; font-size: var(--t-sm);
+  transition: border-color var(--d-fast) var(--e-out), background var(--d-fast) var(--e-out);
+}
+.input:hover, .textarea:hover, .select:hover { border-color: var(--c-border-strong); }
+.input:focus, .textarea:focus, .select:focus, .select.isOpen {
+  border-color: var(--c-accent); outline: none; box-shadow: 0 0 0 3px var(--c-accent-soft);
+}
+.input::placeholder, .textarea::placeholder { color: var(--c-text-faint); }
+.textarea { height: auto; padding: var(--s-3); line-height: var(--lh-normal); resize: vertical; min-height: 68px; font-family: inherit; }
+.mono { font-family: var(--font-mono); font-size: var(--t-xs); }
+.select {
+  appearance: none; padding-right: var(--s-8); cursor: pointer; background-image: var(--icon-caret);
+  background-repeat: no-repeat; background-position: right var(--s-3) center;
+}
+.select option { background: var(--c-input); color: var(--c-text); }
+
+.slider { --track: var(--c-bg-sunken); --filled: var(--c-accent); width: 100%; appearance: none; height: 20px; background: transparent; cursor: pointer; margin: 0; }
+.slider::-webkit-slider-runnable-track {
+  height: 4px; border-radius: var(--r-full);
+  background: linear-gradient(to right, var(--filled) 0%, var(--filled) var(--fill, 0%), var(--track) var(--fill, 0%), var(--track) 100%);
+  border: 1px solid var(--c-border);
+}
+.slider::-moz-range-track { height: 4px; border-radius: var(--r-full); background: var(--track); border: 1px solid var(--c-border); }
+.slider::-moz-range-progress { height: 4px; border-radius: var(--r-full); background: var(--filled); }
+.slider::-webkit-slider-thumb {
+  appearance: none; width: 14px; height: 14px; margin-top: -6px; border-radius: 50%;
+  background: var(--c-text); border: 2px solid var(--c-panel); box-shadow: var(--sh-sm);
+  transition: transform var(--d-fast) var(--e-out);
+}
+.slider::-moz-range-thumb { width: 14px; height: 14px; border-radius: 50%; background: var(--c-text); border: 2px solid var(--c-panel); box-shadow: var(--sh-sm); }
+.slider:hover::-webkit-slider-thumb { transform: scale(1.15); }
+.slider:active::-webkit-slider-thumb { background: var(--c-accent); }
+.slider:focus-visible::-webkit-slider-thumb { box-shadow: var(--sh-focus); }
+.sliderNumber {
+  width: 62px; flex: none; height: 22px; font-size: var(--t-2xs); font-family: var(--font-mono);
+  text-align: right; padding: 0 var(--s-2); border-radius: var(--r-xs); background: var(--c-bg-sunken);
+  -moz-appearance: textfield;
+}
+.sliderNumber::-webkit-outer-spin-button, .sliderNumber::-webkit-inner-spin-button { appearance: none; margin: 0; }
+.ticks { display: flex; justify-content: space-between; font-size: var(--t-2xs); color: var(--c-text-faint); font-family: var(--font-mono); margin-top: -2px; }
+
+.check { display: flex; align-items: center; gap: var(--s-3); cursor: pointer; user-select: none; padding: var(--s-2) 0; min-width: 0; }
+.checkBox {
+  appearance: none; width: 17px; height: 17px; flex: none; border: 1px solid var(--c-border-strong);
+  border-radius: var(--r-xs); background: var(--c-input); cursor: pointer; display: grid; place-content: center;
+  transition: background var(--d-fast) var(--e-out), border-color var(--d-fast) var(--e-out); margin: 0;
+}
+.checkBox::after {
+  content: ''; width: 9px; height: 5px; border: 2px solid var(--c-text-on-accent); border-top: 0; border-right: 0;
+  transform: rotate(-45deg) translate(1px, -1px) scale(0); transition: transform var(--d-fast) var(--e-out);
+}
+.checkBox:checked { background: var(--c-accent); border-color: var(--c-accent); }
+.checkBox:checked::after { transform: rotate(-45deg) translate(1px, -1px) scale(1); }
+.checkBox:hover { border-color: var(--c-accent); }
+.checkBox:focus-visible { box-shadow: var(--sh-focus); }
+.checkLabel { font-size: var(--t-sm); color: var(--c-text); line-height: var(--lh-snug); }
+
+.drop {
+  position: relative; border: 1px dashed var(--c-border-strong); border-radius: var(--r-lg);
+  background: var(--c-bg-sunken); min-height: 168px; display: grid; place-items: center; text-align: center;
+  padding: var(--s-6) var(--s-4); cursor: pointer;
+  transition: border-color var(--d-fast) var(--e-out), background var(--d-fast) var(--e-out);
+  color: var(--c-text-muted); font-size: var(--t-sm); overflow: hidden;
+}
+.drop:hover { border-color: var(--c-accent); background: var(--c-panel-hover); }
+.dropIcon { font-size: 22px; opacity: 0.7; display: block; margin-bottom: var(--s-2); }
+.dropHint { font-size: var(--t-xs); color: var(--c-text-faint); margin-top: var(--s-1); }
+
+.undoBar { display: flex; gap: var(--s-1); justify-content: flex-end; margin-top: var(--s-1); }
+.undoBtn {
+  display: inline-flex; align-items: center; justify-content: center; width: 26px; height: 26px; padding: 0;
+  background: transparent; color: var(--c-text-muted); border: 1px solid transparent; border-radius: var(--r-sm); cursor: pointer;
+  transition: color var(--d-fast) var(--e-out), background var(--d-fast) var(--e-out), border-color var(--d-fast) var(--e-out);
+}
+.undoBtn svg { width: 15px; height: 15px; fill: none; stroke: currentColor; stroke-width: 2; stroke-linecap: round; stroke-linejoin: round; }
+.undoBtn:hover:not(:disabled) { color: var(--c-text); background: var(--c-elevated); border-color: var(--c-border); }
+.undoBtn:disabled { opacity: 0.35; cursor: default; }
+
+.collapsedBox {
+  display: block; width: 100%; text-align: left; padding: var(--s-2) var(--s-3);
+  border: 1px dashed var(--c-border); border-radius: var(--r-md); background: var(--c-bg-sunken);
+  color: var(--c-text-faint); font-size: var(--t-xs); font-family: inherit; cursor: pointer;
+  transition: border-color var(--d-fast) var(--e-out), color var(--d-fast) var(--e-out);
+}
+.collapsedBox:hover { border-color: var(--c-accent); color: var(--c-text-muted); }
+
+/* RecentStrip — components/fields/RecentStrip/recent.module.css */
+.rsWrap { display: flex; flex-direction: column; gap: var(--s-2); min-width: 0; }
+.rsHead { display: flex; align-items: baseline; gap: var(--s-2); min-width: 0; flex-wrap: wrap; }
+.rsLabel { font-size: var(--t-xs); font-weight: var(--fw-medium); color: var(--c-text-muted); letter-spacing: 0.012em; }
+.rsNote { font-size: var(--t-2xs); color: var(--c-text-faint); }
+.rsStrip { display: flex; gap: var(--s-2); overflow-x: auto; padding-bottom: var(--s-1); scrollbar-width: thin; }
+.rsThumb {
+  position: relative; flex: none; width: 54px; height: 54px; border-radius: var(--r-sm); overflow: hidden;
+  border: 2px solid transparent; background: var(--c-bg-sunken); padding: 0; line-height: 0; cursor: pointer;
+  opacity: 0.62; transition: opacity var(--d-fast) var(--e-out), border-color var(--d-fast) var(--e-out);
+}
+.rsThumb svg { width: 100%; height: 100%; display: block; }
+.rsThumb:hover { opacity: 1; }
+
+/* =========================================================================
+ * Output panel — features/tabs/tabs.module.css
+ * ========================================================================= */
+.output { display: flex; flex-direction: column; gap: var(--s-4); }
+.statusCard { display: flex; flex-direction: column; gap: var(--s-3); }
+.seed { font-family: var(--font-mono); font-size: var(--t-xs); }
+.cardActions { display: flex; gap: var(--s-2); align-items: center; }
+.grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(var(--tile, 240px), 1fr)); gap: var(--s-3); align-items: start; }
+.tile {
+  position: relative; border-radius: var(--r-md); overflow: hidden; border: 1px solid var(--c-border);
+  background: var(--c-bg-sunken); cursor: zoom-in; line-height: 0;
+  transition: border-color var(--d-fast) var(--e-out), transform var(--d-fast) var(--e-out);
+}
+.tile:hover { border-color: var(--c-accent); transform: translateY(-2px); }
+.tileImage { width: 100%; height: auto; aspect-ratio: var(--ratio, 1); object-fit: cover; display: block; }
+.tileBar {
+  position: absolute; inset: auto 0 0 0; display: flex; align-items: center; justify-content: space-between;
+  gap: var(--s-2); padding: var(--s-2) var(--s-3); background: linear-gradient(transparent, var(--c-media-scrim));
+  opacity: 0; transition: opacity var(--d-fast) var(--e-out); line-height: var(--lh-normal);
+}
+.tile:hover .tileBar, .tile:focus-within .tileBar { opacity: 1; }
+.tileMeta { font-family: var(--font-mono); font-size: var(--t-2xs); color: var(--c-on-media-soft); }
+.runs { display: flex; gap: var(--s-2); overflow-x: auto; padding-bottom: var(--s-1); }
+.run {
+  flex: none; border: 1px solid var(--c-border); background: var(--c-elevated); border-radius: var(--r-sm);
+  padding: var(--s-1) var(--s-3); font-size: var(--t-2xs); font-family: var(--font-mono); color: var(--c-text-muted);
+  cursor: pointer; white-space: nowrap;
+}
+.run:hover { border-color: var(--c-border-strong); color: var(--c-text); }
+.runActive, .runActive:hover { border-color: var(--c-accent); background: var(--c-accent-soft); color: var(--c-accent); }
+
+/* =========================================================================
+ * NEW — the multi-image reference field
+ * Everything from here to "Mockup chrome" is the proposal. It is built from
+ * the same tokens and the same pieces as ImageDropField + RecentStrip.
+ * ========================================================================= */
+.refField { container-type: inline-size; }
+
+/* The drop target around the grid. A transparent border in every state, so
+   lighting it up while files are dragged over it shifts nothing. */
+.refDrop {
+  position: relative;
+  margin: calc(var(--s-2) * -1);
+  padding: var(--s-2);
+  border: 1px dashed transparent;
+  border-radius: var(--r-lg);
+  transition: border-color var(--d-fast) var(--e-out), background var(--d-fast) var(--e-out);
+}
+
+/* 5 → 4 → 3 columns, by the width of the field rather than the window, so
+   the same rule serves the wide right column (A), the 400px left column (B)
+   and a phone. */
+.refGrid { display: grid; gap: var(--s-2); grid-template-columns: repeat(3, minmax(0, 1fr)); }
+@container (min-width: 400px) { .refGrid { grid-template-columns: repeat(4, minmax(0, 1fr)); } }
+@container (min-width: 560px) { .refGrid { grid-template-columns: repeat(5, minmax(0, 1fr)); } }
+
+.ref { position: relative; min-width: 0; }
+.refPick {
+  position: relative; display: block; width: 100%; aspect-ratio: 1; padding: 0; margin: 0;
+  border: 1px solid var(--c-border); border-radius: var(--r-md); overflow: hidden;
+  background: var(--c-bg-sunken); cursor: zoom-in; line-height: 0;
+  transition: box-shadow var(--d-fast) var(--e-out), border-color var(--d-fast) var(--e-out);
+}
+.refPick svg { width: 100%; height: 100%; display: block; }
+.refPick:hover { border-color: var(--c-border-strong); }
+.refPick:focus-visible { outline-offset: 3px; border-radius: var(--r-md); }
+
+/* Main: an accent frame drawn over the picture, plus the word in the badge. */
+.ref.isMain .refPick::after {
+  content: ''; position: absolute; inset: 0; border-radius: inherit;
+  border: 2px solid var(--c-accent); pointer-events: none;
+}
+
+/* The number. Always on, over the picture, so it uses the over-media tokens. */
+.refNum {
+  position: absolute; top: 6px; left: 6px; z-index: 2;
+  display: inline-flex; align-items: center; justify-content: center; gap: 5px;
+  height: 22px; min-width: 22px; padding: 0 7px; border-radius: var(--r-sm);
+  background: var(--c-media-chip); color: var(--c-on-media);
+  font-family: var(--font-mono); font-size: var(--t-xs); font-weight: var(--fw-bold);
+  line-height: 1; pointer-events: none; white-space: nowrap;
+}
+.refNum small {
+  font-family: var(--font-sans); font-size: var(--t-2xs); font-weight: var(--fw-bold);
+  letter-spacing: 0.06em; text-transform: uppercase;
+}
+.ref.isMain .refNum { background: var(--c-accent); color: var(--c-text-on-accent); }
+.refNum .old { opacity: 0.55; text-decoration: line-through; }
+
+/* Tile controls: hidden until hover or keyboard focus. */
+.refScrim {
+  position: absolute; inset: 0; border-radius: var(--r-md); pointer-events: none;
+  background: linear-gradient(var(--c-media-chip), transparent 36%, transparent 60%, var(--c-media-scrim));
+  opacity: 0; transition: opacity var(--d-fast) var(--e-out);
+}
+.refX, .refGrip {
+  position: absolute; z-index: 2; display: grid; place-items: center; padding: 0;
+  border: 1px solid transparent; background: var(--c-media-chip); color: var(--c-on-media);
+  cursor: pointer; opacity: 0; transition: opacity var(--d-fast) var(--e-out), background var(--d-fast) var(--e-out);
+}
+.refX { top: 5px; right: 5px; width: 24px; height: 24px; border-radius: var(--r-full); }
+/* Left edge, halfway down: the one spot a 100px tile has free once the
+   number (top left), × (top right) and size (bottom left) are placed. */
+.refGrip { left: 5px; top: 50%; transform: translateY(-50%); width: 20px; height: 30px; border-radius: var(--r-sm); cursor: grab; }
+.refX:hover, .refGrip:hover { background: var(--c-media-scrim); border-color: var(--c-media-outline); }
+.refSize {
+  position: absolute; left: 6px; bottom: 6px; z-index: 2; padding: 1px 6px; border-radius: var(--r-xs);
+  background: var(--c-media-chip); color: var(--c-on-media-soft);
+  font-family: var(--font-mono); font-size: var(--t-2xs); line-height: 1.5; white-space: nowrap;
+  pointer-events: none; opacity: 0; transition: opacity var(--d-fast) var(--e-out);
+}
+.ico { width: 14px; height: 14px; fill: none; stroke: currentColor; stroke-width: 2.2; stroke-linecap: round; stroke-linejoin: round; }
+.icoFill { fill: currentColor; stroke: none; }
+.ref:hover :is(.refScrim, .refX, .refGrip, .refSize),
+.ref:focus-within :is(.refScrim, .refX, .refGrip, .refSize) { opacity: 1; }
+/* No hover on a touchscreen: remove and reorder stay visible there. */
+@media (hover: none) {
+  .refX, .refGrip { opacity: 1; }
+}
+
+/* The Add tile — the drop zone's look, shrunk to one cell. */
+.refAdd {
+  display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 2px;
+  width: 100%; aspect-ratio: 1; padding: var(--s-2); margin: 0;
+  border: 1px dashed var(--c-border-strong); border-radius: var(--r-md); background: var(--c-bg-sunken);
+  color: var(--c-text-muted); font-size: var(--t-xs); font-weight: var(--fw-medium); text-align: center;
+  cursor: pointer; line-height: var(--lh-snug);
+  transition: border-color var(--d-fast) var(--e-out), background var(--d-fast) var(--e-out);
+}
+.refAdd:hover { border-color: var(--c-accent); background: var(--c-panel-hover); color: var(--c-text); }
+.refAddIcon { font-size: 22px; line-height: 1; font-weight: var(--fw-normal); opacity: 0.8; }
+.refAddCount { font-family: var(--font-mono); font-size: var(--t-2xs); color: var(--c-text-faint); font-weight: var(--fw-normal); }
+.refAddHint { font-size: var(--t-2xs); color: var(--c-text-faint); font-weight: var(--fw-normal); }
+@container (max-width: 399px) { .refAddHint { display: none; } }
+
+/* Incoming files while dragging (state 4). */
+.refIncoming {
+  display: grid; place-items: center; aspect-ratio: 1; border-radius: var(--r-md);
+  border: 1px dashed var(--c-accent); background: var(--c-accent-soft); color: var(--c-accent);
+  font-family: var(--font-mono); font-weight: var(--fw-bold); font-size: var(--t-xl);
+}
+.refIncoming span { display: block; font-family: var(--font-sans); font-size: var(--t-2xs); font-weight: var(--fw-medium); letter-spacing: 0.04em; text-align: center; line-height: 1.2; }
+
+/* The slot a dragged tile will land in (state 5), and the tile in flight. */
+.refGap {
+  position: relative; aspect-ratio: 1; border-radius: var(--r-md);
+  border: 2px dashed var(--c-accent); background: var(--c-accent-soft);
+}
+.refGap .ref { position: absolute; inset: 0; z-index: 3; transform: translate(-7%, -9%) rotate(-4deg) scale(1.04); }
+.refGap .refPick { box-shadow: var(--sh-lg); cursor: grabbing; opacity: 0.94; }
+.refGap .refGrip { opacity: 1; cursor: grabbing; }
+
+
+/* Which numbers the prompt names (proposal). */
+.mentions { display: flex; flex-wrap: wrap; align-items: center; gap: var(--s-1); font-size: var(--t-2xs); color: var(--c-text-faint); }
+.mentionsLabel { margin-right: var(--s-1); }
+.mnum {
+  display: inline-grid; place-items: center; min-width: 18px; height: 18px; padding: 0 4px;
+  border: 1px solid var(--c-border); border-radius: var(--r-xs); background: var(--c-bg-sunken);
+  color: var(--c-text-muted); font-family: var(--font-mono); font-size: var(--t-2xs); font-weight: var(--fw-semibold);
+}
+.mnum.isMain { border-color: var(--c-accent-line); color: var(--c-accent); }
+.mnum.missing { border-style: dashed; border-color: var(--c-warning-line); color: var(--c-warning); background: var(--c-warning-soft); }
+.mentionsWarn { color: var(--c-warning); }
+
+/* The native <select>, drawn open (state 6). */
+.selectWrap { position: relative; }
+.selectMenu {
+  position: absolute; top: calc(100% + 2px); left: 0; right: 0; z-index: 5; padding: var(--s-1) 0;
+  background: var(--c-elevated); border: 1px solid var(--c-border-strong); border-radius: var(--r-sm);
+  box-shadow: var(--sh-lg); font-size: var(--t-sm);
+}
+.selectOpt { display: flex; justify-content: space-between; gap: var(--s-3); padding: 5px var(--s-3); color: var(--c-text); }
+.selectOpt.isHi { background: var(--c-info-soft); }
+.selectOpt.isRule { border-bottom: 1px solid var(--c-border); padding-bottom: 7px; margin-bottom: 2px; }
+.selectOpt small { color: var(--c-text-faint); font-family: var(--font-mono); font-size: var(--t-2xs); }
+
+/* =========================================================================
+ * Mockup chrome — not part of the app
+ * ========================================================================= */
+.mockbar {
+  display: flex; flex-wrap: wrap; align-items: center; gap: var(--s-2) var(--s-4);
+  padding: var(--s-2) var(--s-5); background: var(--c-bg-sunken);
+  border-bottom: 1px dashed var(--c-info-line); font-size: var(--t-xs); color: var(--c-text-muted);
+}
+.mockTag {
+  display: inline-flex; align-items: center; padding: 1px var(--s-2); border-radius: var(--r-full);
+  border: 1px dashed var(--c-info-line); background: var(--c-info-soft); color: var(--c-text);
+  font-size: var(--t-2xs); font-weight: var(--fw-semibold); letter-spacing: 0.08em; text-transform: uppercase;
+}
+.mockTitle { color: var(--c-text); font-weight: var(--fw-semibold); font-size: var(--t-sm); }
+.mockGroup { display: flex; align-items: center; gap: var(--s-2); min-width: 0; max-width: 100%; }
+.mockGroup .segmented { overflow-x: auto; max-width: 100%; }
+.mockLabel { color: var(--c-text-faint); }
+.mockCheck { padding: 0; gap: var(--s-2); }
+.mockCheck .checkLabel { font-size: var(--t-xs); }
+.mockCaption { flex: 1 1 100%; color: var(--c-text-faint); font-size: var(--t-2xs); }
+.mockCaption b { color: var(--c-text-muted); font-weight: var(--fw-semibold); }
+
+/* Annotations: dashed info-blue boxes, so nothing in them reads as UI. */
+.note {
+  border: 1px dashed var(--c-info-line); background: var(--c-info-soft); border-radius: var(--r-md);
+  padding: var(--s-2) var(--s-3); font-size: var(--t-xs); line-height: var(--lh-snug); color: var(--c-text);
+  text-transform: none; letter-spacing: 0; font-weight: var(--fw-normal);
+}
+.note b { font-weight: var(--fw-semibold); }
+.noteTag {
+  display: inline-block; margin-right: var(--s-1); font-size: var(--t-2xs); font-weight: var(--fw-bold);
+  letter-spacing: 0.07em; text-transform: uppercase; color: var(--c-info);
+}
+.note ul { list-style: disc; padding-left: 1.1em; display: grid; gap: var(--s-1); margin-top: var(--s-1); }
+.note p + p { margin-top: var(--s-1); }
+.same {
+  display: inline-block; margin-left: var(--s-2); padding: 0 7px; vertical-align: 1px;
+  border: 1px dashed var(--c-info-line); border-radius: var(--r-full); background: var(--c-info-soft);
+  color: var(--c-text-muted); font-family: var(--font-sans); font-size: var(--t-2xs); font-weight: var(--fw-medium);
+  letter-spacing: 0; text-transform: none; line-height: 1.6;
+}
+.same.isNew { color: var(--c-text); }
+.pageHead .note { flex: 1 1 360px; max-width: 600px; }
+html[data-notes='off'] :is(.note, .same) { display: none !important; }
+
+/* The app owns the viewport above the stacking breakpoint, as it does in
+   shell.module.css — here the mockup bar takes its row first. */
+@media (min-width: 1101px) {
+  body { height: 100dvh; display: flex; flex-direction: column; overflow: hidden; }
+  .app { flex: 1 1 auto; min-height: 0; }
+  .main { display: flex; flex-direction: column; overflow: hidden; }
+  .pageBody { flex: 1 1 auto; min-height: 0; overflow-y: auto; }
+}
+@media (max-width: 900px) {
+  .mockbar { padding: var(--s-2) var(--s-3); }
+}
+
+/* =========================================================================
+ * State switcher: an element with data-w="2 4 5" exists only in those states.
+ * Hiding rather than showing, so each element keeps its own display value.
+ * ========================================================================= */
+html[data-state='1'] [data-w]:not([data-w~='1']),
+html[data-state='2'] [data-w]:not([data-w~='2']),
+html[data-state='3'] [data-w]:not([data-w~='3']),
+html[data-state='4'] [data-w]:not([data-w~='4']),
+html[data-state='5'] [data-w]:not([data-w~='5']),
+html[data-state='6'] [data-w]:not([data-w~='6']),
+html[data-state='7'] [data-w]:not([data-w~='7']) { display: none !important; }
+html[data-layout='A'] [data-l]:not([data-l~='A']),
+html[data-layout='B'] [data-l]:not([data-l~='B']) { display: none !important; }
+
+/* State 2: tile 2 shown as hovered. */
+html[data-state='2'] .ref.hov :is(.refScrim, .refX, .refGrip, .refSize) { opacity: 1; }
+html[data-state='2'] .ref.hov .refPick { border-color: var(--c-border-strong); }
+/* State 4: files over the field. */
+html[data-state='4'] .refDrop { border-style: solid; border-color: var(--c-accent); background: var(--c-accent-soft); }
+/* State 3: the recent strip cannot add to a full field. */
+html[data-state='3'] .rsThumb { opacity: 0.3; cursor: not-allowed; }
+/* State 6: the Output group lets the open list hang out of it. */
+html[data-state='6'] #outGroup { overflow: visible; }
+
+/* =========================================================================
+ * Placeholder pictures (inline SVG, drawn from the art tokens)
+ * ========================================================================= */
+.a-studio { fill: var(--art-studio); } .a-studio2 { fill: var(--art-studio-2); }
+.a-studio3 { fill: var(--art-studio-3); } .a-studio4 { fill: var(--art-studio-4); }
+.a-glow { fill: var(--art-glow); } .a-shadow { fill: var(--art-shadow); }
+.a-skin { fill: var(--art-skin); } .a-skinS { fill: var(--art-skin-shade); }
+.a-hair { fill: var(--art-hair); } .a-eye { fill: var(--art-eye); } .a-lip { fill: var(--art-lip); }
+.a-shirt { fill: var(--art-shirt); } .a-jacket { fill: var(--art-jacket); } .a-jacketS { fill: var(--art-jacket-shade); }
+.a-zipS { stroke: var(--art-zip); stroke-width: 1; fill: none; } .a-zip { fill: var(--art-zip); }
+.a-hanger { stroke: var(--art-table); stroke-width: 1.4; fill: none; stroke-linecap: round; }
+.a-sky { fill: var(--art-sky); } .a-wall { fill: var(--art-wall); } .a-wallS { fill: var(--art-wall-shade); }
+.a-awning { fill: var(--art-awning); } .a-window { fill: var(--art-window); } .a-winGlow { fill: var(--art-window-glow); }
+.a-door { fill: var(--art-door); } .a-sign { fill: var(--art-sign); } .a-street { fill: var(--art-street); }
+.a-table { fill: var(--art-table); } .a-plant { fill: var(--art-plant); }
+.a-sneaker { fill: var(--art-sneaker); } .a-sole { fill: var(--art-sole); } .a-stripe { fill: var(--art-stripe); }
+.a-lace { stroke: var(--art-lace); stroke-width: 1.4; fill: none; stroke-linecap: round; }
+.a-bag { fill: var(--art-bag); } .a-bagS { fill: var(--art-bag-shade); }
+.a-handle { stroke: var(--art-bag-shade); stroke-width: 4; fill: none; stroke-linecap: round; }
+.a-gold { fill: var(--art-gold); } .a-chain { stroke: var(--art-gold); stroke-width: 1.4; fill: none; }
+.a-pastel { fill: var(--art-pastel); } .a-lens { fill: var(--art-lens); stroke: var(--art-frame); stroke-width: 3; }
+.a-frameS { stroke: var(--art-frame); stroke-width: 3; fill: none; stroke-linecap: round; }
+.a-straw { fill: var(--art-straw); } .a-strawS { fill: var(--art-straw-shade); } .a-band { fill: var(--art-band); }
+.a-sky2 { fill: var(--art-sky-2); } .a-sun { fill: var(--art-sun); } .a-sea { fill: var(--art-sea); }
+.a-sand { fill: var(--art-sand); } .a-board { fill: var(--art-board); } .a-velvet { fill: var(--art-velvet); }
+</style>
+</head>
+<body>
+
+<!-- Placeholder pictures, drawn once and reused. Each <g> is in the
+     coordinate space of its "photo" (a 1536 × 2048 portrait is 75 × 100). -->
+<svg width="0" height="0" style="position:absolute" aria-hidden="true" focusable="false">
+  <defs>
+    <filter id="soft"><feGaussianBlur stdDeviation="1.1" /></filter>
+    <!-- 1 · maya-front.jpg · 1536 × 2048 -->
+    <g id="art-maya">
+      <rect width="75" height="100" class="a-studio" />
+      <circle cx="54" cy="20" r="38" class="a-glow" />
+      <path class="a-hair" d="M17 60 C12 30 21 15 37.5 15 C54 15 63 30 58 60 C54 67 21 67 17 60 Z" />
+      <rect class="a-skinS" x="32" y="50" width="11" height="15" rx="3" />
+      <path class="a-shirt" d="M5 100 C7 78 20 66 37.5 66 C55 66 68 78 70 100 Z" />
+      <ellipse class="a-skin" cx="37.5" cy="40" rx="12" ry="15" />
+      <path class="a-hair" d="M25 37 C24 24 32 21 38 21 C47 21 52 27 50 37 C46 30 38 28 29 33 Z" />
+      <ellipse class="a-eye" cx="33" cy="41" rx="1.5" ry="1" />
+      <ellipse class="a-eye" cx="42" cy="41" rx="1.5" ry="1" />
+      <path class="a-lip" d="M34 49 Q37.5 51.5 41 49 Q37.5 50.3 34 49 Z" />
+    </g>
+    <!-- 2 · leather-jacket.png · 1080 × 1350 -->
+    <g id="art-jacket">
+      <rect width="80" height="100" class="a-studio2" />
+      <path class="a-hanger" d="M40 14 C40 10 44 9 44 6 M14 25 L40 14 L66 25" />
+      <path class="a-jacket" d="M16 23 L40 17 L64 23 L73 36 L77 88 L67 90 L64 52 L64 96 L16 96 L16 52 L13 90 L3 88 L7 36 Z" />
+      <path class="a-shirt" d="M32 20 L40 44 L48 20 L40 18 Z" />
+      <path class="a-jacketS" d="M32 20 L38 45 L28 53 L24 31 Z" />
+      <path class="a-jacketS" d="M48 20 L42 45 L52 53 L56 31 Z" />
+      <path class="a-zipS" d="M40 45 L40 96" />
+      <rect class="a-zip" x="20" y="62" width="11" height="1.4" />
+      <rect class="a-zip" x="49" y="62" width="11" height="1.4" />
+    </g>
+    <!-- 3 · cafe-corner.jpg · 1920 × 1080 -->
+    <g id="art-cafe">
+      <rect width="160" height="90" class="a-sky" />
+      <rect y="8" width="160" height="62" class="a-wall" />
+      <rect y="8" width="160" height="4" class="a-wallS" />
+      <rect x="56" y="16" width="48" height="9" rx="1" class="a-sign" />
+      <path class="a-awning" d="M12 30 L70 30 L74 40 L8 40 Z" />
+      <path class="a-awning" d="M88 30 L148 30 L152 40 L84 40 Z" />
+      <rect class="a-window" x="14" y="41" width="54" height="25" />
+      <rect class="a-winGlow" x="18" y="45" width="21" height="17" />
+      <rect class="a-winGlow" x="43" y="45" width="21" height="17" />
+      <rect class="a-window" x="90" y="41" width="56" height="25" />
+      <rect class="a-winGlow" x="94" y="45" width="22" height="17" />
+      <rect class="a-winGlow" x="120" y="45" width="22" height="17" />
+      <rect class="a-door" x="73" y="38" width="12" height="32" />
+      <rect y="70" width="160" height="20" class="a-street" />
+      <ellipse class="a-table" cx="40" cy="76" rx="11" ry="2.4" />
+      <rect class="a-table" x="39" y="76" width="2" height="10" />
+      <ellipse class="a-table" cx="120" cy="77" rx="11" ry="2.4" />
+      <rect class="a-table" x="119" y="77" width="2" height="10" />
+      <circle class="a-plant" cx="6" cy="65" r="7" />
+      <circle class="a-plant" cx="154" cy="65" r="7" />
+    </g>
+    <!-- 4 · sneakers.png · 2000 × 2000 -->
+    <g id="art-sneaker">
+      <rect width="100" height="100" class="a-studio3" />
+      <ellipse class="a-shadow" cx="51" cy="74" rx="40" ry="4" />
+      <path class="a-sole" d="M11 63 L88 63 C93 63 93 72 87 72 L15 72 C9 72 8 63 11 63 Z" />
+      <path class="a-sneaker" d="M13 64 C13 51 20 43 30 41 L44 39 C50 47 60 51 72 53 C83 55 89 58 89 64 Z" />
+      <rect class="a-stripe" x="48" y="55" width="30" height="4" rx="2" />
+      <path class="a-lace" d="M33 43 L39 49 M37 41 L43 47 M41 40 L47 46" />
+    </g>
+    <!-- 5 · bag-burgundy.jpg · 1600 × 1600 -->
+    <g id="art-bag">
+      <rect width="100" height="100" class="a-studio" />
+      <ellipse class="a-shadow" cx="50" cy="84" rx="33" ry="3" />
+      <path class="a-handle" d="M34 40 C34 19 66 19 66 40" />
+      <rect class="a-bag" x="19" y="38" width="62" height="45" rx="6" />
+      <path class="a-bagS" d="M19 51 L81 51 L81 44 C81 41 78 38 75 38 L25 38 C22 38 19 41 19 44 Z" />
+      <rect class="a-gold" x="46" y="48" width="8" height="7" rx="1" />
+    </g>
+    <!-- 6 · maya-profile.jpg · 1024 × 1536 -->
+    <g id="art-profile">
+      <rect width="80" height="120" class="a-studio4" />
+      <path class="a-hair" d="M20 74 C12 42 21 20 40 20 C57 20 61 35 57 48 L50 74 Z" />
+      <rect class="a-skinS" x="34" y="58" width="12" height="20" rx="3" />
+      <path class="a-shirt" d="M7 120 C9 93 24 79 40 79 C56 79 71 93 73 120 Z" />
+      <path class="a-skin" d="M34 30 C46 26 56 34 56 44 L60 51 L56 53 C56 61 52 67 44 67 C36 67 32 57 32 46 Z" />
+      <path class="a-hair" d="M29 46 C27 28 40 21 51 26 C44 28 38 34 36 47 Z" />
+      <ellipse class="a-eye" cx="50" cy="42" rx="1.3" ry="0.9" />
+      <path class="a-lip" d="M52 58 Q55 58.5 56 57.5 Q55 59.5 52 58 Z" />
+    </g>
+    <!-- 7 · sunglasses.png · 1500 × 1000 -->
+    <g id="art-shades">
+      <rect width="150" height="100" class="a-pastel" />
+      <ellipse class="a-shadow" cx="75" cy="72" rx="54" ry="4" />
+      <path class="a-frameS" d="M22 40 L11 33 M128 40 L139 33 M66 43 C70 38 80 38 84 43" />
+      <rect class="a-lens" x="22" y="34" width="44" height="30" rx="12" />
+      <rect class="a-lens" x="84" y="34" width="44" height="30" rx="12" />
+    </g>
+    <!-- 8 · straw-hat.jpg · 1200 × 1200 -->
+    <g id="art-hat">
+      <rect width="100" height="100" class="a-studio2" />
+      <ellipse class="a-strawS" cx="50" cy="66" rx="43" ry="12" />
+      <ellipse class="a-straw" cx="50" cy="63" rx="41" ry="10" />
+      <path class="a-straw" d="M28 62 C28 34 72 34 72 62 Z" />
+      <rect class="a-band" x="28.4" y="53" width="43.2" height="6" />
+    </g>
+    <!-- 9 · boardwalk.jpg · 2560 × 1440 -->
+    <g id="art-beach">
+      <rect width="160" height="90" class="a-sky2" />
+      <circle class="a-sun" cx="118" cy="33" r="10" />
+      <rect y="44" width="160" height="14" class="a-sea" />
+      <rect y="58" width="160" height="32" class="a-sand" />
+      <path class="a-board" d="M0 90 L62 58 L82 58 L42 90 Z" />
+    </g>
+    <!-- 10 · necklace.jpg · 1080 × 1080 -->
+    <g id="art-necklace">
+      <rect width="100" height="100" class="a-velvet" />
+      <path class="a-chain" d="M22 20 C24 60 40 71 50 71 C60 71 76 60 78 20" />
+      <circle class="a-gold" cx="50" cy="76" r="6.5" />
+      <circle class="a-velvet" cx="50" cy="76" r="2.6" />
+    </g>
+    <!-- The result: 1, wearing 2, outside 3 · 2048 × 2048 -->
+    <g id="art-result">
+      <use href="#art-cafe" transform="translate(-40 0) scale(1.112)" filter="url(#soft)" />
+      <g transform="translate(22 30) scale(0.75)">
+        <path class="a-hair" d="M17 60 C12 30 21 15 37.5 15 C54 15 63 30 58 60 C54 67 21 67 17 60 Z" />
+        <rect class="a-skinS" x="32" y="50" width="11" height="15" rx="3" />
+        <path class="a-jacket" d="M3 100 C5 78 18 65 37.5 65 C57 65 70 78 72 100 Z" />
+        <path class="a-shirt" d="M31 66 L37.5 84 L44 66 Z" />
+        <path class="a-jacketS" d="M31 66 L36 86 L27 92 L22 72 Z" />
+        <path class="a-jacketS" d="M44 66 L39 86 L48 92 L53 72 Z" />
+        <ellipse class="a-skin" cx="37.5" cy="40" rx="12" ry="15" />
+        <path class="a-hair" d="M25 37 C24 24 32 21 38 21 C47 21 52 27 50 37 C46 30 38 28 29 33 Z" />
+        <ellipse class="a-eye" cx="33" cy="41" rx="1.5" ry="1" />
+        <ellipse class="a-eye" cx="42" cy="41" rx="1.5" ry="1" />
+        <path class="a-lip" d="M34 49 Q37.5 51.5 41 49 Q37.5 50.3 34 49 Z" />
+      </g>
+      <ellipse class="a-table" cx="78" cy="96" rx="20" ry="4" />
+    </g>
+  </defs>
+</svg>
+
+<!-- ======================= Mockup controls (not the app) ======================= -->
+<div class="mockbar" role="region" aria-label="Mockup controls">
+  <span class="mockTag">Mockup</span>
+  <span class="mockTitle">Qwen 2.1 Reference</span>
+  <div class="mockGroup">
+    <span class="mockLabel" id="lbl-state">State</span>
+    <div class="segmented" role="group" aria-labelledby="lbl-state">
+      <button type="button" class="segment" data-set="state=1">1 Empty</button>
+      <button type="button" class="segment" data-set="state=2">2 Three</button>
+      <button type="button" class="segment" data-set="state=3">3 Full</button>
+      <button type="button" class="segment" data-set="state=4">4 Dropping</button>
+      <button type="button" class="segment" data-set="state=5">5 Reorder</button>
+      <button type="button" class="segment" data-set="state=6">6 Size</button>
+      <button type="button" class="segment" data-set="state=7">7 Not image</button>
+    </div>
+  </div>
+  <div class="mockGroup">
+    <span class="mockLabel" id="lbl-layout">Layout</span>
+    <div class="segmented" role="group" aria-labelledby="lbl-layout">
+      <button type="button" class="segment" data-set="layout=A">A · right</button>
+      <button type="button" class="segment" data-set="layout=B">B · left</button>
+    </div>
+  </div>
+  <div class="mockGroup">
+    <span class="mockLabel" id="lbl-theme">Theme</span>
+    <div class="segmented" role="group" aria-labelledby="lbl-theme">
+      <button type="button" class="segment" data-set="theme=dark">Dark</button>
+      <button type="button" class="segment" data-set="theme=light">Light</button>
+    </div>
+  </div>
+  <label class="check mockCheck">
+    <input type="checkbox" class="checkBox" id="notesToggle" checked />
+    <span class="checkLabel">Annotations</span>
+  </label>
+  <p class="mockCaption" aria-live="polite">
+    <span data-w="1"><b>1 · Empty.</b> No references yet: the field is one big drop zone and Generate is disabled.</span>
+    <span data-w="2"><b>2 · Three references.</b> Image 1 is Main; image 2 is hovered, showing its tile controls.</span>
+    <span data-w="3"><b>3 · Full.</b> Ten references: the Add tile is gone, and a drop that would make it eleven was refused.</span>
+    <span data-w="4"><b>4 · Dropping.</b> Three files are being dragged over the field; it lights up and shows the numbers they will get.</span>
+    <span data-w="5"><b>5 · Reordering.</b> Image 2 (the jacket) is mid-drag towards third place; the café is about to become image 2.</span>
+    <span data-w="6"><b>6 · Output size.</b> The size list is open on “Same as reference 1”, and the line under it says what that means.</span>
+    <span data-w="7"><b>7 · Not an image.</b> A PDF was dropped with the pictures; it was skipped, and the field says so.</span>
+  </p>
+</div>
+
+<!-- ================================== The app ================================== -->
+<div class="app">
+  <header class="header">
+    <a href="#" class="brand">
+      <span class="logo" aria-hidden="true">E</span>
+      <span>
+        <span class="name">Ember</span>
+        <span class="tagline">ComfyUI generation suite</span>
+      </span>
+    </a>
+    <div class="headerRight">
+      <button type="button" class="button ghost sm iconOnly" id="themeToggle" title="Switch to light" aria-label="Toggle theme">☀</button>
+    </div>
+  </header>
+
+  <nav class="nav" aria-label="Tabs">
+    <div class="navGroup">
+      <div class="navTitle">Generate</div>
+      <a href="#" class="navLink"><span class="navIcon" aria-hidden="true">🎨</span><span class="navLabel">Krea2</span></a>
+      <a href="#" class="navLink"><span class="navIcon" aria-hidden="true">🔶</span><span class="navLabel">Krea2 V2</span></a>
+      <a href="#" class="navLink"><span class="navIcon" aria-hidden="true">⚡</span><span class="navLabel">Z-Image</span></a>
+    </div>
+    <div class="navGroup">
+      <div class="navTitle">Edit</div>
+      <a href="#" class="navLink"><span class="navIcon" aria-hidden="true">✨</span><span class="navLabel">Krea2 Edit</span></a>
+      <a href="#" class="navLink"><span class="navIcon" aria-hidden="true">🔷</span><span class="navLabel">Krea2 V2 Edit</span></a>
+      <a href="#" class="navLink navActive" aria-current="page"><span class="navIcon" aria-hidden="true">🧩</span><span class="navLabel">Qwen 2.1 Reference</span></a>
+    </div>
+    <div class="navGroup">
+      <div class="navTitle">Video</div>
+      <a href="#" class="navLink"><span class="navIcon" aria-hidden="true">🎬</span><span class="navLabel">Wan Video</span></a>
+      <a href="#" class="navLink"><span class="navIcon" aria-hidden="true">🎥</span><span class="navLabel">MiniMax I2V</span></a>
+      <a href="#" class="navLink"><span class="navIcon" aria-hidden="true">🎞️</span><span class="navLabel">MiniMax T2V</span></a>
+    </div>
+    <div class="navGroup">
+      <div class="navTitle">Library</div>
+      <a href="#" class="navLink"><span class="navIcon" aria-hidden="true">🖼️</span><span class="navLabel">Gallery</span></a>
+      <a href="#" class="navLink"><span class="navIcon" aria-hidden="true">🌟</span><span class="navLabel">Prompt Library</span><span class="navBadge">soon</span></a>
+    </div>
+    <div class="navFoot">
+      <a href="#" class="navLink"><span class="navIcon" aria-hidden="true">✦</span><span class="navLabel">Plans &amp; features</span></a>
+    </div>
+  </nav>
+
+  <main class="main">
+    <div class="pageHead">
+      <div>
+        <h1 class="pageTitle"><span class="pageIcon" aria-hidden="true">🧩</span>Qwen 2.1 Reference</h1>
+        <p class="pageBlurb">Keep a character, an outfit or a product consistent: up to 10 reference images and a prompt.</p>
+      </div>
+      <aside class="note" aria-label="Design note: layout">
+        <span class="noteTag">Layout</span>
+        <b>A</b>: references on the right above the result, like Krea2 Edit's Images. <b>B</b>: references first on the left, above Prompt.
+        <p><b>1440 px: A.</b> Prompt and numbered tiles side by side, so you read the numbers as you type them; 5 columns; the result lands under its references.</p>
+        <p><b>Phone: B.</b> Stacking puts A's references below the LoRA stack, after the prompt that names them. Both at once needs TwoColumn to lift the right column's inputs to the top when it stacks.</p>
+      </aside>
+    </div>
+
+    <div class="pageBody">
+      <div class="twoColumn">
+        <!-- ------------------------------- left column ------------------------------- -->
+        <div class="left" id="leftCol">
+          <div class="bar">
+            <div class="field fieldWide">
+              <div class="labelRow"><label class="label" for="preset">Preset</label></div>
+              <select id="preset" class="select">
+                <option></option>
+                <option selected>Default</option>
+                <option>Character sheet · 40 steps</option>
+              </select>
+              <div class="hint">Presets for this tab. Your images and prompt are left alone.</div>
+            </div>
+          </div>
+          <div id="slot-left" hidden></div>
+
+          <section class="group" aria-labelledby="g-prompt">
+            <div class="groupHead"><span id="g-prompt">Prompt<span class="same">same as Krea2 Edit</span></span></div>
+            <div class="groupBody">
+              <div class="field fieldWide">
+                <div class="labelRow"><label class="label" for="prompt">Prompt</label></div>
+                <textarea id="prompt" rows="5" class="textarea" data-w="1 2 4 5 6 7">The woman from image 1 wearing the leather jacket from image 2, sitting at a table outside the café in image 3. Late afternoon sun, candid 35 mm photo, shallow depth of field.</textarea>
+                <textarea id="prompt3" rows="5" class="textarea" data-w="3" aria-label="Prompt">The woman from image 1 (her profile is image 6) in the leather jacket from image 2, the sneakers from image 4, the sunglasses from image 7 and the necklace from image 10, carrying the bag from image 5 and the straw hat from image 8. She walks along the boardwalk in image 9, the café from image 3 behind her. Candid 35 mm photo.</textarea>
+                <div class="undoBar">
+                  <button type="button" class="undoBtn" title="Undo (Ctrl+Z)" aria-label="Undo"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M9 14 4 9l5-5" /><path d="M4 9h8a6 6 0 0 1 0 12H9" /></svg></button>
+                  <button type="button" class="undoBtn" title="Redo (Ctrl+Shift+Z)" aria-label="Redo" disabled><svg viewBox="0 0 24 24" aria-hidden="true"><path d="m15 14 5-5-5-5" /><path d="M20 9h-8a6 6 0 0 0 0 12h3" /></svg></button>
+                  <button type="button" class="undoBtn" title="Clear" aria-label="Clear"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M18 6 6 18" /><path d="m6 6 12 12" /></svg></button>
+                </div>
+                <!-- Proposal: which image numbers the prompt names. -->
+                <div class="mentions" data-w="2 4 6 7">
+                  <span class="mentionsLabel">Mentions</span>
+                  <span class="mnum isMain">1</span><span class="mnum">2</span><span class="mnum">3</span>
+                  <span>· all added</span>
+                </div>
+                <div class="mentions" data-w="3">
+                  <span class="mentionsLabel">Mentions</span>
+                  <span class="mnum isMain">1</span><span class="mnum">2</span><span class="mnum">3</span><span class="mnum">4</span><span class="mnum">5</span><span class="mnum">6</span><span class="mnum">7</span><span class="mnum">8</span><span class="mnum">9</span><span class="mnum">10</span>
+                  <span>· all added</span>
+                </div>
+                <div class="mentions" data-w="1">
+                  <span class="mentionsLabel">Mentions</span>
+                  <span class="mnum missing">1</span><span class="mnum missing">2</span><span class="mnum missing">3</span>
+                  <span class="mentionsWarn">· none added yet</span>
+                </div>
+                <div class="mentions" data-w="5">
+                  <span class="mentionsLabel">On drop</span>
+                  <span class="mnum">2</span><span>⇄</span><span class="mnum">3</span>
+                  <span>when you let go, the prompt's “image 2” and “image 3” swap, so they still name the jacket and the café</span>
+                </div>
+                <div class="note">
+                  <span class="noteTag">Proposal · optional</span>
+                  The <b>Mentions</b> line reads the image numbers out of the prompt and flags any that aren't added. Reordering then offers to rewrite them (state 5), so “image 2” keeps meaning the jacket.
+                </div>
+              </div>
+              <div class="field fieldWide">
+                <div class="labelRow">
+                  <label class="label" for="neg">Negative prompt</label>
+                  <button type="button" class="button ghost sm">Expand</button>
+                </div>
+                <button type="button" class="collapsedBox" id="neg" aria-expanded="false">Empty — click to write one</button>
+                <div class="hint">Above 1 turns the negative prompt on.</div>
+              </div>
+            </div>
+          </section>
+
+          <div class="note" data-w="6">
+            <span class="noteTag">State 6</span>
+            A native &lt;select&gt;, drawn open for the mockup. “Same as reference 1” says what it resolves to, and the number changes if another image is dragged to the front.
+          </div>
+
+          <section class="group" id="outGroup" aria-labelledby="g-out">
+            <div class="groupHead"><span id="g-out">Output<span class="same isNew">new: Output size</span></span></div>
+            <div class="groupBody groupDense">
+              <div class="field fieldWide">
+                <div class="labelRow"><label class="label" for="size">Output size</label></div>
+                <div class="selectWrap">
+                  <select id="size" class="select" data-w="1 2 3 4 5 7">
+                    <option>Same as reference 1</option>
+                    <option selected>1:1 · 2048×2048</option>
+                    <option>4:3 · 2400×1792</option>
+                    <option>3:4 · 1792×2400</option>
+                    <option>3:2 · 2528×1696</option>
+                    <option>2:3 · 1696×2528</option>
+                    <option>16:9 · 2752×1536</option>
+                    <option>9:16 · 1536×2752</option>
+                  </select>
+                  <select class="select isOpen" data-w="6" aria-label="Output size" aria-expanded="true">
+                    <option selected>Same as reference 1</option>
+                    <option>1:1 · 2048×2048</option>
+                  </select>
+                  <div class="selectMenu" data-w="6" role="listbox" aria-label="Output size">
+                    <div class="selectOpt isHi isRule" role="option" aria-selected="true">Same as reference 1 <small>1536×2048</small></div>
+                    <div class="selectOpt" role="option" aria-selected="false">1:1 · 2048×2048</div>
+                    <div class="selectOpt" role="option" aria-selected="false">4:3 · 2400×1792</div>
+                    <div class="selectOpt" role="option" aria-selected="false">3:4 · 1792×2400</div>
+                    <div class="selectOpt" role="option" aria-selected="false">3:2 · 2528×1696</div>
+                    <div class="selectOpt" role="option" aria-selected="false">2:3 · 1696×2528</div>
+                    <div class="selectOpt" role="option" aria-selected="false">16:9 · 2752×1536</div>
+                    <div class="selectOpt" role="option" aria-selected="false">9:16 · 1536×2752</div>
+                  </div>
+                </div>
+                <div class="hint" data-w="6">Output will be <strong>1536 × 2048</strong>, the shape of reference 1. Drag another image to the front to change it.</div>
+              </div>
+              <div class="field fieldWide">
+                <div class="labelRow"><label class="label" for="model">Model</label></div>
+                <select id="model" class="select">
+                  <option selected>Qwen Image 2.1 int8</option>
+                </select>
+                <div class="hint"><strong>Int8</strong> · defaults: 25 steps, CFG 1</div>
+              </div>
+            </div>
+          </section>
+
+          <details class="group" open>
+            <summary class="groupHead groupHeadButton"><span>Sampler<span class="same">same as Krea2 Edit, plus Scheduler</span></span><span class="groupCaret" aria-hidden="true">▶</span></summary>
+            <div class="groupBody groupDense">
+              <div class="field">
+                <div class="labelRow"><label class="label" for="steps">Steps</label><input type="number" aria-label="Steps value" class="input sliderNumber" value="25" min="1" max="60" /></div>
+                <input id="steps" type="range" class="slider" style="--fill: 40.68%" value="25" min="1" max="60" step="1" />
+                <div class="ticks"><span>1</span><span>60</span></div>
+              </div>
+              <div class="field">
+                <div class="labelRow"><label class="label" for="cfg">CFG</label><input type="number" aria-label="CFG value" class="input sliderNumber" value="1" min="0.5" max="8" step="0.1" /></div>
+                <input id="cfg" type="range" class="slider" style="--fill: 6.67%" value="1" min="0.5" max="8" step="0.1" />
+                <div class="ticks"><span>0.5</span><span>8</span></div>
+                <div class="hint">Above 1 turns the negative prompt on.</div>
+              </div>
+              <div class="field">
+                <div class="labelRow"><label class="label" for="sampler">Sampler</label></div>
+                <select id="sampler" class="select">
+                  <option selected>euler</option><option>euler_ancestral</option><option>dpmpp_2m</option><option>res_multistep</option><option>er_sde</option>
+                </select>
+              </div>
+              <div class="field">
+                <div class="labelRow"><label class="label" for="sched">Scheduler</label></div>
+                <select id="sched" class="select">
+                  <option selected>simple</option><option>beta</option>
+                </select>
+              </div>
+            </div>
+          </details>
+
+          <details class="group">
+            <summary class="groupHead groupHeadButton"><span>Advanced<span class="same isNew">new</span></span><span class="groupCaret" aria-hidden="true">▶</span></summary>
+            <div class="groupBody">
+              <div class="field fieldWide">
+                <div class="labelRow"><label class="label" for="detail">Reference detail</label><input type="number" aria-label="Reference detail value" class="input sliderNumber" value="1024" min="0" max="4096" step="32" /></div>
+                <input id="detail" type="range" class="slider" style="--fill: 25%" value="1024" min="0" max="4096" step="32" />
+                <div class="ticks"><span>0</span><span>4096</span></div>
+                <div class="hint">How finely each reference is read. 0 keeps each image's own size.</div>
+              </div>
+              <div class="note">
+                <span class="noteTag">Note</span>
+                The node's <code>resolution</code> input. Closed by default: 1024 is right for nearly everyone.
+              </div>
+            </div>
+          </details>
+
+          <section class="group" aria-labelledby="g-seed">
+            <div class="groupHead"><span id="g-seed">Seed &amp; batch<span class="same">same as Krea2 Edit</span></span></div>
+            <div class="groupBody">
+              <div class="seedRow seedRowLocked">
+                <div class="field">
+                  <div class="labelRow"><label class="label" for="seedIn">Seed</label></div>
+                  <input id="seedIn" type="number" class="input mono" value="42" step="1" />
+                  <div class="hint">Ignored while Random seed is on.</div>
+                </div>
+                <div class="seedDice"><button type="button" class="button sm" title="Roll a seed and pin it">Roll</button></div>
+                <div class="field fieldWide">
+                  <label class="check" for="rnd"><input id="rnd" type="checkbox" class="checkBox" checked /><span class="checkLabel">🎲 Random seed</span></label>
+                </div>
+                <div class="seedBatch">
+                  <div class="field">
+                    <div class="labelRow"><label class="label" for="batch">Batch count</label><input type="number" aria-label="Batch count value" class="input sliderNumber" value="1" min="1" max="20" /></div>
+                    <input id="batch" type="range" class="slider" style="--fill: 0%" value="1" min="1" max="20" step="1" />
+                    <div class="ticks"><span>1</span><span>20</span></div>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </section>
+
+          <details class="group">
+            <summary class="groupHead groupHeadButton"><span>Presets<span class="same">same as Z-Image</span></span><span class="groupCaret" aria-hidden="true">▶</span></summary>
+            <div class="groupBody">
+              <div class="field fieldWide">
+                <label class="check" for="savePreset"><input id="savePreset" type="checkbox" class="checkBox" /><span class="checkLabel">💾 Save these settings as a preset</span></label>
+              </div>
+            </div>
+          </details>
+
+          <details class="group">
+            <summary class="groupHead groupHeadButton"><span>LoRA stack — model + CLIP <span class="groupCount">0/4 active</span><span class="same">same as Krea2 V2</span></span><span class="groupCaret" aria-hidden="true">▶</span></summary>
+            <div class="groupBody">
+              <div class="loraList">
+                <div class="loraSlot loraSlotIdle">
+                  <div class="loraToggle"><label class="check"><input type="checkbox" class="checkBox" aria-label="Use LoRA 1" /></label></div>
+                  <div class="field"><div class="labelRow"><label class="label" for="l1">LoRA 1</label></div><select id="l1" class="select"><option>None</option></select></div>
+                  <div class="loraWeight"><div class="field"><div class="labelRow"><label class="label" for="w1">Strength</label><input type="number" aria-label="Strength value" class="input sliderNumber" value="1" /></div><input id="w1" type="range" class="slider" style="--fill: 50%" value="1" min="0" max="2" step="0.05" /><div class="ticks"><span>0</span><span>2</span></div></div></div>
+                </div>
+                <div class="loraSlot loraSlotIdle">
+                  <div class="loraToggle"><label class="check"><input type="checkbox" class="checkBox" aria-label="Use LoRA 2" /></label></div>
+                  <div class="field"><div class="labelRow"><label class="label" for="l2">LoRA 2</label></div><select id="l2" class="select"><option>None</option></select></div>
+                  <div class="loraWeight"><div class="field"><div class="labelRow"><label class="label" for="w2">Strength</label><input type="number" aria-label="Strength value" class="input sliderNumber" value="1" /></div><input id="w2" type="range" class="slider" style="--fill: 50%" value="1" min="0" max="2" step="0.05" /><div class="ticks"><span>0</span><span>2</span></div></div></div>
+                </div>
+                <div class="loraSlot loraSlotIdle">
+                  <div class="loraToggle"><label class="check"><input type="checkbox" class="checkBox" aria-label="Use LoRA 3" /></label></div>
+                  <div class="field"><div class="labelRow"><label class="label" for="l3">LoRA 3</label></div><select id="l3" class="select"><option>None</option></select></div>
+                  <div class="loraWeight"><div class="field"><div class="labelRow"><label class="label" for="w3">Strength</label><input type="number" aria-label="Strength value" class="input sliderNumber" value="1" /></div><input id="w3" type="range" class="slider" style="--fill: 50%" value="1" min="0" max="2" step="0.05" /><div class="ticks"><span>0</span><span>2</span></div></div></div>
+                </div>
+                <div class="loraSlot loraSlotIdle">
+                  <div class="loraToggle"><label class="check"><input type="checkbox" class="checkBox" aria-label="Use LoRA 4" /></label></div>
+                  <div class="field"><div class="labelRow"><label class="label" for="l4">LoRA 4</label></div><select id="l4" class="select"><option>None</option></select></div>
+                  <div class="loraWeight"><div class="field"><div class="labelRow"><label class="label" for="w4">Strength</label><input type="number" aria-label="Strength value" class="input sliderNumber" value="1" /></div><input id="w4" type="range" class="slider" style="--fill: 50%" value="1" min="0" max="2" step="0.05" /><div class="ticks"><span>0</span><span>2</span></div></div></div>
+                </div>
+              </div>
+            </div>
+          </details>
+
+          <div class="submitBar">
+            <button type="button" class="button primary lg block" data-w="2 3 4 5 6 7">Generate</button>
+            <button type="button" class="button primary lg block" data-w="1" disabled aria-describedby="needRef">Generate</button>
+            <div class="submitHint" id="needRef" data-w="1">Add at least one reference image to generate.</div>
+            <div class="note" data-w="1">
+              <span class="noteTag">State 1</span>
+              Disabled, with the reason under it rather than red on a form you've just opened. The see-through top edge is how a disabled button renders in the app's sticky bar today (it also shows while “Queueing”). The node itself would run with no references, as plain text-to-image.
+            </div>
+          </div>
+        </div>
+
+        <!-- ------------------------------- right column ------------------------------ -->
+        <div class="right" id="rightCol">
+          <div id="slot-right" hidden></div>
+
+          <!-- ============ NEW: References (moved between columns by the A/B switch) ============ -->
+          <section class="group" id="refs" aria-labelledby="g-refs">
+            <div class="groupHead">
+              <span id="g-refs">References
+                <span class="groupCount"><span data-w="1">0/10</span><span data-w="2 4 5 6 7">3/10</span><span data-w="3">10/10</span></span><span class="same isNew">new field</span>
+              </span>
+            </div>
+            <div class="groupBody">
+              <div class="field fieldWide refField">
+                <div class="labelRow"><span class="label" id="refs-label">Reference images (paste with Ctrl+V)</span></div>
+
+                <!-- State 1: nothing yet — the single-image drop zone, reworded for many. -->
+                <div class="drop" role="button" tabindex="0" data-w="1" aria-describedby="refs-hint">
+                  <div>
+                    <span class="dropIcon" aria-hidden="true">⬆</span>
+                    Drop up to 10 images, or click to choose
+                    <div class="dropHint">Pick several at once · Ctrl+V pastes from the clipboard</div>
+                  </div>
+                </div>
+
+                <div class="refDrop" data-w="2 3 4 5 6 7">
+                  <ol class="refGrid" aria-labelledby="refs-label">
+                    <li class="ref isMain">
+                      <button type="button" class="refPick" title="Open full size" aria-label="Image 1, main reference: maya-front.jpg, 1536 × 2048">
+                        <svg viewBox="0 0 75 100" preserveAspectRatio="xMidYMid slice" aria-hidden="true"><use href="#art-maya" /></svg>
+                      </button>
+                      <span class="refScrim" aria-hidden="true"></span>
+                      <span class="refNum" aria-hidden="true">1 <small>Main</small></span>
+                      <button type="button" class="refGrip" title="Drag to reorder" aria-label="Reorder image 1: drag, or Alt+arrow keys"><svg class="ico icoFill" viewBox="0 0 24 24" aria-hidden="true"><circle cx="9" cy="6" r="1.8" /><circle cx="15" cy="6" r="1.8" /><circle cx="9" cy="12" r="1.8" /><circle cx="15" cy="12" r="1.8" /><circle cx="9" cy="18" r="1.8" /><circle cx="15" cy="18" r="1.8" /></svg></button>
+                      <button type="button" class="refX" title="Remove" aria-label="Remove image 1"><svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><path d="M17 7 7 17" /><path d="m7 7 10 10" /></svg></button>
+                      <span class="refSize" aria-hidden="true">1536 × 2048</span>
+                    </li>
+                    <li class="ref hov" data-w="2 3 4 6 7">
+                      <button type="button" class="refPick" title="Open full size" aria-label="Image 2: leather-jacket.png, 1080 × 1350">
+                        <svg viewBox="0 0 80 100" preserveAspectRatio="xMidYMid slice" aria-hidden="true"><use href="#art-jacket" /></svg>
+                      </button>
+                      <span class="refScrim" aria-hidden="true"></span>
+                      <span class="refNum" aria-hidden="true">2</span>
+                      <button type="button" class="refGrip" title="Drag to reorder" aria-label="Reorder image 2: drag, or Alt+arrow keys"><svg class="ico icoFill" viewBox="0 0 24 24" aria-hidden="true"><circle cx="9" cy="6" r="1.8" /><circle cx="15" cy="6" r="1.8" /><circle cx="9" cy="12" r="1.8" /><circle cx="15" cy="12" r="1.8" /><circle cx="9" cy="18" r="1.8" /><circle cx="15" cy="18" r="1.8" /></svg></button>
+                      <button type="button" class="refX" title="Remove" aria-label="Remove image 2"><svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><path d="M17 7 7 17" /><path d="m7 7 10 10" /></svg></button>
+                      <span class="refSize" aria-hidden="true">1080 × 1350</span>
+                    </li>
+                    <li class="ref">
+                      <button type="button" class="refPick" title="Open full size" aria-label="Image 3: cafe-corner.jpg, 1920 × 1080">
+                        <svg viewBox="0 0 160 90" preserveAspectRatio="xMidYMid slice" aria-hidden="true"><use href="#art-cafe" /></svg>
+                      </button>
+                      <span class="refScrim" aria-hidden="true"></span>
+                      <span class="refNum" aria-hidden="true" data-w="2 3 4 6 7">3</span>
+                      <span class="refNum" aria-hidden="true" data-w="5"><span class="old">3</span>→ 2</span>
+                      <button type="button" class="refGrip" title="Drag to reorder" aria-label="Reorder image 3: drag, or Alt+arrow keys"><svg class="ico icoFill" viewBox="0 0 24 24" aria-hidden="true"><circle cx="9" cy="6" r="1.8" /><circle cx="15" cy="6" r="1.8" /><circle cx="9" cy="12" r="1.8" /><circle cx="15" cy="12" r="1.8" /><circle cx="9" cy="18" r="1.8" /><circle cx="15" cy="18" r="1.8" /></svg></button>
+                      <button type="button" class="refX" title="Remove" aria-label="Remove image 3"><svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><path d="M17 7 7 17" /><path d="m7 7 10 10" /></svg></button>
+                      <span class="refSize" aria-hidden="true">1920 × 1080</span>
+                    </li>
+
+                    <!-- State 5: the slot the jacket will land in, with the jacket in flight over it. -->
+                    <li class="refGap" data-w="5" aria-hidden="true">
+                      <div class="ref">
+                        <div class="refPick"><svg viewBox="0 0 80 100" preserveAspectRatio="xMidYMid slice"><use href="#art-jacket" /></svg></div>
+                        <span class="refNum"><span class="old">2</span>→ 3</span>
+                        <span class="refGrip"><svg class="ico icoFill" viewBox="0 0 24 24"><circle cx="9" cy="6" r="1.8" /><circle cx="15" cy="6" r="1.8" /><circle cx="9" cy="12" r="1.8" /><circle cx="15" cy="12" r="1.8" /><circle cx="9" cy="18" r="1.8" /><circle cx="15" cy="18" r="1.8" /></svg></span>
+                      </div>
+                    </li>
+
+                    <!-- State 3: seven more. -->
+                    <li class="ref" data-w="3">
+                      <button type="button" class="refPick" title="Open full size" aria-label="Image 4: sneakers.png, 2000 × 2000"><svg viewBox="0 0 100 100" preserveAspectRatio="xMidYMid slice" aria-hidden="true"><use href="#art-sneaker" /></svg></button>
+                      <span class="refScrim" aria-hidden="true"></span><span class="refNum" aria-hidden="true">4</span>
+                      <button type="button" class="refGrip" title="Drag to reorder" aria-label="Reorder image 4: drag, or Alt+arrow keys"><svg class="ico icoFill" viewBox="0 0 24 24" aria-hidden="true"><circle cx="9" cy="6" r="1.8" /><circle cx="15" cy="6" r="1.8" /><circle cx="9" cy="12" r="1.8" /><circle cx="15" cy="12" r="1.8" /><circle cx="9" cy="18" r="1.8" /><circle cx="15" cy="18" r="1.8" /></svg></button>
+                      <button type="button" class="refX" title="Remove" aria-label="Remove image 4"><svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><path d="M17 7 7 17" /><path d="m7 7 10 10" /></svg></button>
+                      <span class="refSize" aria-hidden="true">2000 × 2000</span>
+                    </li>
+                    <li class="ref" data-w="3">
+                      <button type="button" class="refPick" title="Open full size" aria-label="Image 5: bag-burgundy.jpg, 1600 × 1600"><svg viewBox="0 0 100 100" preserveAspectRatio="xMidYMid slice" aria-hidden="true"><use href="#art-bag" /></svg></button>
+                      <span class="refScrim" aria-hidden="true"></span><span class="refNum" aria-hidden="true">5</span>
+                      <button type="button" class="refGrip" title="Drag to reorder" aria-label="Reorder image 5: drag, or Alt+arrow keys"><svg class="ico icoFill" viewBox="0 0 24 24" aria-hidden="true"><circle cx="9" cy="6" r="1.8" /><circle cx="15" cy="6" r="1.8" /><circle cx="9" cy="12" r="1.8" /><circle cx="15" cy="12" r="1.8" /><circle cx="9" cy="18" r="1.8" /><circle cx="15" cy="18" r="1.8" /></svg></button>
+                      <button type="button" class="refX" title="Remove" aria-label="Remove image 5"><svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><path d="M17 7 7 17" /><path d="m7 7 10 10" /></svg></button>
+                      <span class="refSize" aria-hidden="true">1600 × 1600</span>
+                    </li>
+                    <li class="ref" data-w="3">
+                      <button type="button" class="refPick" title="Open full size" aria-label="Image 6: maya-profile.jpg, 1024 × 1536"><svg viewBox="0 0 80 120" preserveAspectRatio="xMidYMid slice" aria-hidden="true"><use href="#art-profile" /></svg></button>
+                      <span class="refScrim" aria-hidden="true"></span><span class="refNum" aria-hidden="true">6</span>
+                      <button type="button" class="refGrip" title="Drag to reorder" aria-label="Reorder image 6: drag, or Alt+arrow keys"><svg class="ico icoFill" viewBox="0 0 24 24" aria-hidden="true"><circle cx="9" cy="6" r="1.8" /><circle cx="15" cy="6" r="1.8" /><circle cx="9" cy="12" r="1.8" /><circle cx="15" cy="12" r="1.8" /><circle cx="9" cy="18" r="1.8" /><circle cx="15" cy="18" r="1.8" /></svg></button>
+                      <button type="button" class="refX" title="Remove" aria-label="Remove image 6"><svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><path d="M17 7 7 17" /><path d="m7 7 10 10" /></svg></button>
+                      <span class="refSize" aria-hidden="true">1024 × 1536</span>
+                    </li>
+                    <li class="ref" data-w="3">
+                      <button type="button" class="refPick" title="Open full size" aria-label="Image 7: sunglasses.png, 1500 × 1000"><svg viewBox="0 0 150 100" preserveAspectRatio="xMidYMid slice" aria-hidden="true"><use href="#art-shades" /></svg></button>
+                      <span class="refScrim" aria-hidden="true"></span><span class="refNum" aria-hidden="true">7</span>
+                      <button type="button" class="refGrip" title="Drag to reorder" aria-label="Reorder image 7: drag, or Alt+arrow keys"><svg class="ico icoFill" viewBox="0 0 24 24" aria-hidden="true"><circle cx="9" cy="6" r="1.8" /><circle cx="15" cy="6" r="1.8" /><circle cx="9" cy="12" r="1.8" /><circle cx="15" cy="12" r="1.8" /><circle cx="9" cy="18" r="1.8" /><circle cx="15" cy="18" r="1.8" /></svg></button>
+                      <button type="button" class="refX" title="Remove" aria-label="Remove image 7"><svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><path d="M17 7 7 17" /><path d="m7 7 10 10" /></svg></button>
+                      <span class="refSize" aria-hidden="true">1500 × 1000</span>
+                    </li>
+                    <li class="ref" data-w="3">
+                      <button type="button" class="refPick" title="Open full size" aria-label="Image 8: straw-hat.jpg, 1200 × 1200"><svg viewBox="0 0 100 100" preserveAspectRatio="xMidYMid slice" aria-hidden="true"><use href="#art-hat" /></svg></button>
+                      <span class="refScrim" aria-hidden="true"></span><span class="refNum" aria-hidden="true">8</span>
+                      <button type="button" class="refGrip" title="Drag to reorder" aria-label="Reorder image 8: drag, or Alt+arrow keys"><svg class="ico icoFill" viewBox="0 0 24 24" aria-hidden="true"><circle cx="9" cy="6" r="1.8" /><circle cx="15" cy="6" r="1.8" /><circle cx="9" cy="12" r="1.8" /><circle cx="15" cy="12" r="1.8" /><circle cx="9" cy="18" r="1.8" /><circle cx="15" cy="18" r="1.8" /></svg></button>
+                      <button type="button" class="refX" title="Remove" aria-label="Remove image 8"><svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><path d="M17 7 7 17" /><path d="m7 7 10 10" /></svg></button>
+                      <span class="refSize" aria-hidden="true">1200 × 1200</span>
+                    </li>
+                    <li class="ref" data-w="3">
+                      <button type="button" class="refPick" title="Open full size" aria-label="Image 9: boardwalk.jpg, 2560 × 1440"><svg viewBox="0 0 160 90" preserveAspectRatio="xMidYMid slice" aria-hidden="true"><use href="#art-beach" /></svg></button>
+                      <span class="refScrim" aria-hidden="true"></span><span class="refNum" aria-hidden="true">9</span>
+                      <button type="button" class="refGrip" title="Drag to reorder" aria-label="Reorder image 9: drag, or Alt+arrow keys"><svg class="ico icoFill" viewBox="0 0 24 24" aria-hidden="true"><circle cx="9" cy="6" r="1.8" /><circle cx="15" cy="6" r="1.8" /><circle cx="9" cy="12" r="1.8" /><circle cx="15" cy="12" r="1.8" /><circle cx="9" cy="18" r="1.8" /><circle cx="15" cy="18" r="1.8" /></svg></button>
+                      <button type="button" class="refX" title="Remove" aria-label="Remove image 9"><svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><path d="M17 7 7 17" /><path d="m7 7 10 10" /></svg></button>
+                      <span class="refSize" aria-hidden="true">2560 × 1440</span>
+                    </li>
+                    <li class="ref" data-w="3">
+                      <button type="button" class="refPick" title="Open full size" aria-label="Image 10: necklace.jpg, 1080 × 1080"><svg viewBox="0 0 100 100" preserveAspectRatio="xMidYMid slice" aria-hidden="true"><use href="#art-necklace" /></svg></button>
+                      <span class="refScrim" aria-hidden="true"></span><span class="refNum" aria-hidden="true">10</span>
+                      <button type="button" class="refGrip" title="Drag to reorder" aria-label="Reorder image 10: drag, or Alt+arrow keys"><svg class="ico icoFill" viewBox="0 0 24 24" aria-hidden="true"><circle cx="9" cy="6" r="1.8" /><circle cx="15" cy="6" r="1.8" /><circle cx="9" cy="12" r="1.8" /><circle cx="15" cy="12" r="1.8" /><circle cx="9" cy="18" r="1.8" /><circle cx="15" cy="18" r="1.8" /></svg></button>
+                      <button type="button" class="refX" title="Remove" aria-label="Remove image 10"><svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><path d="M17 7 7 17" /><path d="m7 7 10 10" /></svg></button>
+                      <span class="refSize" aria-hidden="true">1080 × 1080</span>
+                    </li>
+
+                    <!-- State 4: the three files being dragged in, at the numbers they'll get. -->
+                    <li class="refIncoming" data-w="4" aria-hidden="true"><div>4<span>new</span></div></li>
+                    <li class="refIncoming" data-w="4" aria-hidden="true"><div>5<span>new</span></div></li>
+                    <li class="refIncoming" data-w="4" aria-hidden="true"><div>6<span>new</span></div></li>
+
+                    <!-- The Add tile. Gone at 10. -->
+                    <li data-w="2 5 6 7">
+                      <button type="button" class="refAdd" aria-label="Add reference images: 3 of 10 used. Choose files, drop them here, or paste with Ctrl+V.">
+                        <span class="refAddIcon" aria-hidden="true">+</span>
+                        <span>Add images</span>
+                        <span class="refAddCount">3 / 10</span>
+                        <span class="refAddHint">drop or paste</span>
+                      </button>
+                    </li>
+                  </ol>
+                </div>
+
+                <p class="hint" data-w="4" aria-live="polite"><strong>Drop to add 3 images</strong>: they become 4, 5 and 6.</p>
+                <p class="hint" data-w="5" aria-live="polite"><strong>Moving image 2 (leather-jacket.png) to 3rd.</strong> The café becomes image 2.</p>
+
+                <div class="alert alertWarning" role="status" data-w="3">
+                  <span class="alertIcon" aria-hidden="true">⚠️</span>
+                  <div class="alertBody">
+                    <div class="alertTitle">Up to 10 references</div>
+                    <div class="alertText">1 of the 2 files you dropped wasn't added: <code>scarf.jpg</code>. Remove a reference to make room.</div>
+                  </div>
+                  <button type="button" class="alertClose" aria-label="Dismiss"><svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><path d="M17 7 7 17" /><path d="m7 7 10 10" /></svg></button>
+                </div>
+                <div class="alert alertWarning" role="status" data-w="7">
+                  <span class="alertIcon" aria-hidden="true">⚠️</span>
+                  <div class="alertBody">
+                    <div class="alertTitle">“moodboard.pdf” isn't an image</div>
+                    <div class="alertText">It was skipped; the other 3 files were added. References can be PNG, JPEG or WebP.</div>
+                  </div>
+                  <button type="button" class="alertClose" aria-label="Dismiss"><svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><path d="M17 7 7 17" /><path d="m7 7 10 10" /></svg></button>
+                </div>
+
+                <!-- RecentStrip, as under every image input. -->
+                <div class="rsWrap">
+                  <div class="rsHead">
+                    <span class="rsLabel">Recent generations</span>
+                    <span class="rsNote">
+                      <span data-w="1">click one to add it as image 1</span>
+                      <span data-w="2 5 6">click one to add it as image 4</span>
+                      <span data-w="7">click one to add it as image 4</span>
+                      <span data-w="4">click one to add it as image 4</span>
+                      <span data-w="3">full: remove a reference to add one</span>
+                    </span>
+                  </div>
+                  <div class="rsStrip">
+                    <button type="button" class="rsThumb" aria-label="Use qwen21_00012_.png"><svg viewBox="0 0 100 100" preserveAspectRatio="xMidYMid slice" aria-hidden="true"><use href="#art-result" /></svg></button>
+                    <button type="button" class="rsThumb" aria-label="Use qwen21_00011_.png"><svg viewBox="0 0 100 100" preserveAspectRatio="xMidYMid slice" aria-hidden="true"><g transform="translate(100 0) scale(-1 1)"><use href="#art-result" /></g></svg></button>
+                    <button type="button" class="rsThumb" aria-label="Use krea2_00042_.png"><svg viewBox="0 0 75 100" preserveAspectRatio="xMidYMid slice" aria-hidden="true"><use href="#art-maya" /></svg></button>
+                    <button type="button" class="rsThumb" aria-label="Use zimage_00007_.png"><svg viewBox="0 0 160 90" preserveAspectRatio="xMidYMid slice" aria-hidden="true"><use href="#art-beach" /></svg></button>
+                  </div>
+                </div>
+
+                <div class="hint" id="refs-hint">Refer to images by number in your prompt: “the woman in image 1 wearing the jacket from image 2”.</div>
+
+                <!-- Annotations for the new field. -->
+                <div class="note">
+                  <span class="noteTag">New field</span>
+                  <ul>
+                    <li><b>Numbers.</b> The prompt names pictures by number, and the number is the slot the model reads (<code>image_1</code>…<code>image_10</code>). So each tile shows it as text, always, and it only changes when you reorder or remove.</li>
+                    <li><b>Main.</b> Image 1 is the main subject, and “Same as reference 1” takes its shape. It gets an accent frame <i>and</i> the word Main, so colour isn't the only signal. To change it, drag another image to the front.</li>
+                    <li><b>On each tile</b> (hover or keyboard focus): × removes, ⠿ drags to reorder, the chip shows the size. On touch screens × and ⠿ stay visible. Alt+← / Alt+→ moves the focused tile.</li>
+                    <li><b>Full size.</b> Clicking a tile opens it in the existing gallery Lightbox, big enough to check a face.</li>
+                    <li><b>Add tile.</b> Choose several files at once, drop several, or paste. It counts “3 / 10” and disappears at 10.</li>
+                    <li><b>Recent generations</b> is the strip every image input has; here a click adds the picture as the next number.</li>
+                  </ul>
+                </div>
+                <div class="note" data-w="3"><span class="noteTag">State 3</span> At 10 the Add tile goes, and at five columns the grid is two full rows (the template's 5 × 2). A drop that would pass 10 adds what fits and names what it left out.</div>
+                <div class="note" data-w="4"><span class="noteTag">State 4</span> While files are over it the whole field is the target, and the new tiles show the numbers they'll get before you let go.</div>
+                <div class="note" data-w="5"><span class="noteTag">State 5</span> Numbers update while dragging, so what you see when you let go is what the model gets. The prompt rewrite under Prompt is the optional part.</div>
+                <div class="note" data-w="7"><span class="noteTag">State 7</span> Refusals are shown in the field, next to what they're about, rather than as a toast; the rest of the drop still goes in.</div>
+              </div>
+            </div>
+          </section>
+
+          <!-- The result — OutputPanel, as on Krea2 Edit. -->
+          <div class="output">
+            <section class="card" aria-label="Output">
+              <header class="cardHead">
+                <div>
+                  <div class="cardTitle">Output<span class="same">same as Krea2 Edit</span></div>
+                  <div class="cardSub" data-w="1">Nothing run yet</div>
+                  <div class="cardSub" data-w="2 3 4 5 6 7">✅ All 1 job(s) done</div>
+                </div>
+                <div class="cardActions" data-w="2 3 4 5 6 7">
+                  <span class="pill seed" title="The seed this run used">seed <b>482913067</b></span>
+                </div>
+              </header>
+              <div class="cardBody">
+                <div class="statusCard">
+                  <div class="empty" data-w="1">
+                    <div class="emptyIcon" aria-hidden="true">🧩</div>
+                    <div class="emptyTitle">No images yet</div>
+                    <p class="emptyText">Keep a character, an outfit or a product consistent: up to 10 reference images and a prompt. Fill the form and press <strong>Generate</strong>, or hit Ctrl+Enter from anywhere on this page.</p>
+                  </div>
+                  <div class="runs" data-w="2 3 4 5 6 7">
+                    <button type="button" class="run">14:02:11 · 1</button>
+                    <button type="button" class="run runActive">14:06:38 · 1</button>
+                  </div>
+                  <div class="grid" data-w="2 3 4 5 6 7">
+                    <div class="tile" style="--ratio: 1 / 1" role="button" tabindex="0" aria-label="Open qwen21_00012_.png">
+                      <svg class="tileImage" viewBox="0 0 100 100" preserveAspectRatio="xMidYMid slice" aria-hidden="true"><use href="#art-result" /></svg>
+                      <div class="tileBar">
+                        <span class="tileMeta">2048 × 2048</span>
+                        <button type="button" class="button ghost sm" title="Copy the file path">Path</button>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            </section>
+          </div>
+        </div>
+      </div>
+    </div>
+  </main>
+
+  <footer class="footer">
+    <div class="fHint">
+      <kbd class="kbd">Ctrl</kbd><span>+</span><kbd class="kbd">Enter</kbd><span>runs the tab you are on</span>
+    </div>
+    <div class="footerRight">
+      <span class="pill"><b>4</b> models</span>
+      <span class="pill"><b>1</b> GPU</span>
+      <button type="button" class="button ghost sm">Terms</button>
+    </div>
+  </footer>
+</div>
+
+<button type="button" class="launcher" aria-label="Open the queue"><span>Queue</span></button>
+
+<script>
+/* Presentational only: theme, state, layout and annotation switches. The
+   layout switch moves the References group between the two columns. */
+(function () {
+  var root = document.documentElement;
+  var refs = document.getElementById('refs');
+  var slots = { A: document.getElementById('slot-right'), B: document.getElementById('slot-left') };
+  var toggle = document.getElementById('themeToggle');
+  var notes = document.getElementById('notesToggle');
+  var allowed = { state: ['1', '2', '3', '4', '5', '6', '7'], layout: ['A', 'B'], theme: ['dark', 'light'], notes: ['on', 'off'] };
+  var s = { state: '2', layout: 'A', theme: 'dark', notes: 'on' };
+
+  location.hash.replace(/^#/, '').split('&').forEach(function (pair) {
+    var kv = pair.split('=');
+    if (allowed[kv[0]] && allowed[kv[0]].indexOf(kv[1]) !== -1) s[kv[0]] = kv[1];
+  });
+
+  function render() {
+    root.setAttribute('data-state', s.state);
+    root.setAttribute('data-layout', s.layout);
+    root.setAttribute('data-theme', s.theme);
+    root.setAttribute('data-notes', s.notes);
+    slots[s.layout].after(refs);
+    if (s.state === '6') document.getElementById('outGroup').scrollIntoView({ block: 'center' });
+    document.querySelectorAll('[data-set]').forEach(function (button) {
+      var kv = button.getAttribute('data-set').split('=');
+      button.setAttribute('aria-pressed', String(s[kv[0]] === kv[1]));
+    });
+    notes.checked = s.notes === 'on';
+    toggle.textContent = s.theme === 'dark' ? '☀' : '☾';
+    toggle.title = s.theme === 'dark' ? 'Switch to light' : 'Switch to dark';
+    try {
+      history.replaceState(null, '', '#state=' + s.state + '&layout=' + s.layout + '&theme=' + s.theme + '&notes=' + s.notes);
+    } catch (e) { /* file:// in some browsers */ }
+  }
+
+  document.addEventListener('click', function (event) {
+    var button = event.target.closest('[data-set]');
+    if (button) {
+      var kv = button.getAttribute('data-set').split('=');
+      s[kv[0]] = kv[1];
+      render();
+      return;
+    }
+    if (event.target.closest('#themeToggle')) {
+      s.theme = s.theme === 'dark' ? 'light' : 'dark';
+      render();
+      return;
+    }
+    if (event.target.closest('a[href="#"]')) event.preventDefault();
+  });
+  notes.addEventListener('change', function () {
+    s.notes = notes.checked ? 'on' : 'off';
+    render();
+  });
+  render();
+})();
+</script>
+</body>
+</html>
