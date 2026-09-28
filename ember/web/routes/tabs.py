@@ -114,9 +114,13 @@ def _mount_tab(api: APIRouter, schema) -> None:
             values = schema.restore_recipe(stored.get("fields") or [])
             # An image field restores as the name its source was kept
             # under (sources.py); the browser wants somewhere to fetch it.
+            # An images field restores as a list of them, in order.
             for field in schema.named():
                 if field.kind == "image" and field.name in values:
                     values[field.name] = _source_url(values[field.name])
+                elif field.kind == "images" and field.name in values:
+                    values[field.name] = [_source_url(name)
+                                          for name in values[field.name]]
             if stored.get("seed") is not None and schema.field("seed"):
                 values["seed"] = stored["seed"]
             return {"values": values, "applied": stored.get("tab_label")}

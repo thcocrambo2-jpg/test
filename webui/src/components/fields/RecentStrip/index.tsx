@@ -25,13 +25,22 @@ import s from './recent.module.css'
 export function RecentStrip({
   value,
   onPick,
+  note = 'click one to reuse it',
+  disabled = false,
 }: {
   /** What the field holds now, so the strip can light up the thumb it handed
    *  over — and stop lighting it up the instant something else is dropped,
    *  pasted or chosen. Derived rather than tracked: the picked file either is
-   *  the field's value or it is not, and nothing has to notice the change. */
-  value: File | null
+   *  the field's value or it is not, and nothing has to notice the change.
+   *  A list for a field that holds several: the thumb lights while its file
+   *  is any of them. */
+  value: File | readonly File[] | null
   onPick: (file: File) => void
+  /** The line beside the heading. A field that adds rather than replaces
+   *  says where the picture will go. */
+  note?: string
+  /** Shown but not clickable — a field that is full. */
+  disabled?: boolean
 }) {
   const { data } = useRecentImages()
   const toast = useToast()
@@ -44,10 +53,11 @@ export function RecentStrip({
   const inFlight = useRef(false)
 
   const items = data?.items ?? []
-  const activeId = picked && picked.file === value ? picked.id : null
+  const held = Array.isArray(value) ? value : value ? [value] : []
+  const activeId = picked && held.includes(picked.file) ? picked.id : null
 
   async function pick(item: MediaItem) {
-    if (inFlight.current) return
+    if (inFlight.current || disabled) return
     inFlight.current = true
     setBusy(item.id)
     try {
@@ -72,7 +82,7 @@ export function RecentStrip({
     <div className={s.wrap}>
       <div className={s.head}>
         <span className={s.label}>Recent generations</span>
-        <span className={s.note}>click one to reuse it</span>
+        <span className={s.note}>{note}</span>
       </div>
       <div className={s.strip}>
         {items.map((item) => (
@@ -80,6 +90,7 @@ export function RecentStrip({
             key={item.id}
             type="button"
             className={cx(s.thumb, item.id === activeId && s.thumbActive)}
+            disabled={disabled}
             onClick={() => void pick(item)}
             aria-pressed={item.id === activeId}
             aria-label={`Use ${fileName(item.id)}`}

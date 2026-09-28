@@ -5,6 +5,8 @@ import { Button } from '@/components/ui'
 import { RecentStrip } from './RecentStrip'
 import s from './fields.module.css'
 
+export { ImagesField } from './ImagesField'
+
 /*
  * The field kit.
  *

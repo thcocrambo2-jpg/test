@@ -3,6 +3,7 @@ import type { Field, FieldColumn, GroupSpec, TabSchema } from '@/api/types'
 import {
   BoolField,
   ImageDropField,
+  ImagesField,
   NumberField,
   RadioField,
   SelectField,
@@ -39,6 +40,11 @@ export interface SchemaFormProps {
    * "not downloaded yet" is a fact the schema cannot carry because it is not
    * about the control. */
   hints?: Record<string, ReactNode>
+  /* Which of the column's groups to draw. `all` is every tab's form.
+   * GenerateTab splits a column in two only while the page is stacked and
+   * the schema has a `stackFirst` group: that group alone at the top of the
+   * page, and the `rest` where the column always sits. */
+  placement?: 'all' | 'stackFirst' | 'rest'
 }
 
 /** Whether a field's `showIf` is satisfied. */
@@ -47,8 +53,21 @@ function visible(field: Field, values: Record<string, unknown>): boolean {
   return values[field.showIf.field] === field.showIf.equals
 }
 
-export function SchemaForm({ schema, values, setValue, column, hints }: SchemaFormProps) {
-  const groups = schema.groups ?? []
+export function SchemaForm({
+  schema,
+  values,
+  setValue,
+  column,
+  hints,
+  placement = 'all',
+}: SchemaFormProps) {
+  const groups = (schema.groups ?? []).filter((group) =>
+    placement === 'all'
+      ? true
+      : placement === 'stackFirst'
+        ? Boolean(group.stackFirst)
+        : !group.stackFirst,
+  )
 
   const inColumn = schema.fields.filter((field) => field.column === column)
 
@@ -68,7 +87,8 @@ export function SchemaForm({ schema, values, setValue, column, hints }: SchemaFo
   // Fields with no group render first, in order, so a control added to the
   // Python side appears rather than disappearing into a group that does not
   // exist.
-  const ungrouped = inColumn.filter((field) => !field.group)
+  const ungrouped =
+    placement === 'stackFirst' ? [] : inColumn.filter((field) => !field.group)
 
   return (
     <>
@@ -95,7 +115,7 @@ export function SchemaForm({ schema, values, setValue, column, hints }: SchemaFo
         )
       })}
 
-      {column === 'left' && schema.lora && (
+      {column === 'left' && placement !== 'stackFirst' && schema.lora && (
         <LoraStack spec={schema.lora} values={values} onChange={setValue} />
       )}
     </>
@@ -117,6 +137,21 @@ function FieldGroup({
 }) {
   const [open, setOpen] = useState(group.defaultOpen ?? true)
   const shown = group.collapsible ? open : true
+
+  // A group holding a list of pictures says how full it is, the way the
+  // LoRA stack says how many rows are on.
+  const list = fields.find((field) => field.type === 'images')
+  const held = list && Array.isArray(values[list.name]) ? (values[list.name] as unknown[]).length : 0
+  const title = list ? (
+    <span>
+      {group.title}{' '}
+      <span className={s.groupCount}>
+        {held}/{list.max ?? 10}
+      </span>
+    </span>
+  ) : (
+    <span>{group.title}</span>
+  )
 
   let body: ReactNode
   switch (group.renderer) {
@@ -156,15 +191,13 @@ function FieldGroup({
           onClick={() => setOpen((value) => !value)}
           aria-expanded={open}
         >
-          <span>{group.title}</span>
+          {title}
           <span className={cx(s.groupCaret, open && s.groupCaretOpen)} aria-hidden>
             ▶
           </span>
         </button>
       ) : (
-        <div className={s.groupHead}>
-          <span>{group.title}</span>
-        </div>
+        <div className={s.groupHead}>{title}</div>
       )}
       {shown && body}
     </section>
@@ -273,6 +306,16 @@ function FieldRenderer({
           hint={hint}
           wide
           value={(value as File | null) ?? null}
+          onChange={set}
+        />
+      )
+    case 'images':
+      return (
+        <ImagesField
+          label={field.label}
+          hint={hint}
+          max={field.max}
+          value={Array.isArray(value) ? (value as File[]) : []}
           onChange={set}
         />
       )

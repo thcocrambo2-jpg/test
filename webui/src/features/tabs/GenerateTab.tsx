@@ -9,7 +9,7 @@ import { defaultsFor } from '@/lib/schema'
 import { useActiveJob, useJobsForTab, useQueue, isLive } from '@/store/queue'
 import { useHandoff } from '@/store/handoff'
 import { useTabState } from '@/store/tabState'
-import { useSubmitHotkey } from '@/lib/util'
+import { useMediaQuery, useSubmitHotkey } from '@/lib/util'
 import { AutoPromptPanel } from './AutoPrompt'
 import { OutputPanel } from './OutputPanel'
 import s from '@/components/SchemaForm/form.module.css'
@@ -34,6 +34,11 @@ import s from '@/components/SchemaForm/form.module.css'
  *  component, which the Gallery unmounts — and it is read when a preset
  *  request comes back, so it has to be live rather than a render's copy. */
 const HANDED_OFF = new Set<string>()
+
+/** Where form.module.css stacks the two columns. Kept in step with its
+ *  `max-width: 1100px` rule by hand; see `lift` below for the one thing JS
+ *  does with it. */
+const STACKED = '(max-width: 1100px)'
 
 export function GenerateTab({ schema }: { schema: TabSchema }) {
   const defaults = useMemo(() => defaultsFor(schema), [schema])
@@ -68,6 +73,27 @@ export function GenerateTab({ schema }: { schema: TabSchema }) {
   const [values, setValues] = useTabState<Record<string, unknown>>(
     `form.${schema.key}`,
     defaults,
+  )
+
+  /* Groups marked `stackFirst` move to the top of the form, under the
+   * preset bar, while the page is stacked — rather than landing under the
+   * whole left column with the rest of the right one. For inputs the left
+   * column's controls refer to: Qwen 2.1's numbered references, which the
+   * prompt names. Opt-in, so every other tab renders exactly as it did.
+   * JS rather than CSS `order`, because the left column has to stay one box
+   * for its sticky submit bar. */
+  const stacked = useMediaQuery(STACKED)
+  const lift = stacked && (schema.groups ?? []).some((group) => group.stackFirst)
+
+  /* An images field that needs pictures before it can run keeps the button
+   * off and says why under it — rather than red on a form just opened. The
+   * handler refuses the same case; this saves the round trip. */
+  const short = schema.fields.find(
+    (field) =>
+      field.type === 'images' &&
+      (field.min ?? 0) > 0 &&
+      (Array.isArray(values[field.name]) ? (values[field.name] as unknown[]).length : 0) <
+        (field.min ?? 0),
   )
 
   const submitJob = useQueue((state) => state.submit)
@@ -249,7 +275,7 @@ export function GenerateTab({ schema }: { schema: TabSchema }) {
   // The shortcut the footer advertises. Bound while this tab is mounted and
   // unbound when it is not, so it always runs the tab you are looking at.
   useSubmitHotkey(() => {
-    if (!submitting) void submit()
+    if (!submitting && !short) void submit()
   })
 
   return (
@@ -277,6 +303,18 @@ export function GenerateTab({ schema }: { schema: TabSchema }) {
           {schema.autoprompt && (
             <AutoPromptPanel key={`autoprompt.${schema.key}`} schema={schema} values={values} />
           )}
+          {lift &&
+            (['left', 'right'] as const).map((column) => (
+              <SchemaForm
+                key={`${schema.key}.first.${column}`}
+                schema={schema}
+                values={values}
+                setValue={setField}
+                column={column}
+                hints={hints}
+                placement="stackFirst"
+              />
+            ))}
           <SchemaForm
             key={schema.key}
             schema={schema}
@@ -284,6 +322,7 @@ export function GenerateTab({ schema }: { schema: TabSchema }) {
             setValue={setField}
             column="left"
             hints={hints}
+            placement={lift ? 'rest' : 'all'}
           />
           <div className={s.submitBar}>
             <Button
@@ -291,10 +330,17 @@ export function GenerateTab({ schema }: { schema: TabSchema }) {
               size="lg"
               block
               loading={submitting}
+              disabled={Boolean(short)}
+              aria-describedby={short ? `${schema.key}-short` : undefined}
               onClick={() => void submit()}
             >
               {submitting ? 'Queueing' : schema.submitLabel}
             </Button>
+            {short && (
+              <div className={s.submitHint} id={`${schema.key}-short`}>
+                {short.emptyNote ?? `Add at least ${short.min} to ${short.label}.`}
+              </div>
+            )}
             {/* Only the queue depth. The Ctrl+Enter reminder that used to
              *  sit here as well is in the footer, where it is stated once for
              *  the whole app rather than under every tab's button.
@@ -316,6 +362,7 @@ export function GenerateTab({ schema }: { schema: TabSchema }) {
             setValue={setField}
             column="right"
             hints={hints}
+            placement={lift ? 'rest' : 'all'}
           />
           <OutputPanel schema={schema} job={job} runs={runs} />
         </>

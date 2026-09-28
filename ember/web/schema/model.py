@@ -110,6 +110,8 @@ class Field:
     name: str                       # == the handler's parameter name
     label: str                      # recipe-keyed text — see the docstring
     kind: str                       # text|textarea|number|slider|select|...
+                                    # image: one picture; images: a list of
+                                    # them, at most `hi`, in the user's order
     default: Any = None             # value, or a callable read late
     choices: Any = None             # sequence, or a callable read late
     lo: float | None = None
@@ -149,6 +151,11 @@ class Field:
     # stacks. Shipped as `choiceLabels`; None means every value is its own
     # label, which is every other field.
     labels: Any = None
+    # An images field with `lo` set: the line under the submit button,
+    # which stays disabled, while the field holds fewer pictures than that.
+    # The handler refuses the same case with its own message; this saves
+    # the round trip.
+    empty_note: str | None = None
 
     def options(self) -> tuple:
         """This field's choices, resolved. Empty for a non-choice field."""
@@ -176,6 +183,14 @@ class Field:
         kind = self.kind
         if kind == "image":
             return value                     # resolved by api.py's uploads
+        if kind == "images":
+            # Resolved by api.py's uploads too, into PIL images in the
+            # order they were sent — which is the order the handler numbers
+            # them in. Only the count is this method's business.
+            images = list(value or ())
+            if self.hi is not None and len(images) > int(self.hi):
+                raise Invalid(self.name, "at most %d images" % int(self.hi))
+            return images
         if kind == "bool":
             if isinstance(value, str):
                 return value.lower() in ("1", "true", "yes", "on")
@@ -226,6 +241,16 @@ class Field:
             if sources.path(value) is None:
                 return False, None
             return True, value
+        if kind == "images":
+            # A list of those names. Any that has been swept is dropped and
+            # the rest keep their order, so what comes back is renumbered
+            # rather than holed.
+            if not isinstance(value, (list, tuple)):
+                return False, None
+            kept = [name for name in value if sources.path(name) is not None]
+            if not kept:
+                return False, None
+            return True, kept
         if kind == "bool":
             return True, bool(value)
         if kind in ("text", "textarea"):
@@ -251,11 +276,14 @@ class Field:
 
     def to_json(self) -> dict:
         """The wire shape `webui/src/api/types.ts:Field` describes."""
+        default = self.initial()
+        if self.kind == "images":
+            default = list(default or ())
         row = {
             "name": self.name,
             "type": self.kind,
             "label": self.label,
-            "default": self.initial(),
+            "default": default,
             "column": self.column,
         }
         if self.group:
@@ -285,6 +313,8 @@ class Field:
             row["wide"] = True
         if self.collapsed:
             row["collapsed"] = True
+        if self.empty_note:
+            row["emptyNote"] = self.empty_note
         return row
 
 
@@ -299,10 +329,17 @@ class Group:
     default_open: bool = True
     dense: bool = False
     column: str | None = None
+    # Lifted to the top of the form when the two columns stack, rather than
+    # left where the right column lands (under the whole left column). For
+    # inputs the left column's controls refer to — Qwen 2.1's numbered
+    # references, which the prompt names. Opt-in: no other group moves.
+    stack_first: bool = False
 
     def to_json(self) -> dict:
         row = {"id": self.id, "renderer": self.renderer,
                "title": self.title}
+        if self.stack_first:
+            row["stackFirst"] = True
         if self.collapsible:
             row["collapsible"] = True
             row["defaultOpen"] = self.default_open
@@ -439,14 +476,19 @@ class TabSchema:
             recipe cannot silently re-arm a publish;
           * an uploaded file is stored as the name `kept` gives it — the
             copy sources.py keeps so a recipe can hand the picture back —
-            or as None when there is no copy, as it always used to be.
+            or as None when there is no copy, as it always used to be. A
+            list of pictures is stored as the list of those names, in
+            order, or None when none was kept.
         """
         kept = kept or {}
         rows = []
         for f in self.named():
             value = values.get(f.name)
-            if f.kind == "image":
+            if f.kind in ("image", "images"):
                 value = kept.get(f.name)
+            if f.kind == "images":
+                rows.append([f.label, list(value) if f.record and value else None])
+                continue
             keep = f.record and isinstance(value, (str, int, float, bool))
             rows.append([f.label, value if keep else None])
         tail = self.tail()

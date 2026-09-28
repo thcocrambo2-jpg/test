@@ -17,6 +17,9 @@ export type FieldType =
   | 'radio'
   | 'bool'
   | 'image'
+  /** A numbered list of pictures, at most `max`, in the order the handler
+   *  receives them. The value is a `File[]`. */
+  | 'images'
 
 /** Which column a field lands in.
  *
@@ -71,6 +74,9 @@ export interface Field {
    *  boilerplate, and a couple of rows of that is a couple of rows of noise
    *  above the box anybody actually came for. */
   collapsed?: boolean
+  /** An images field with a `min`: what the submit bar says, under a
+   *  disabled button, while the field holds fewer pictures than that. */
+  emptyNote?: string
 }
 
 /** How a tab's LoRA tail is shaped.
@@ -133,6 +139,10 @@ export interface GroupSpec {
   defaultOpen?: boolean
   /** Two-up where the fields fit. */
   dense?: boolean
+  /** Moved to the top of the form, under the preset bar, when the two
+   *  columns stack. For right-column inputs the left column's controls
+   *  refer to, which would otherwise land below all of them. */
+  stackFirst?: boolean
 }
 
 export interface TabSchema {

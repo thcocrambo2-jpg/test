@@ -519,7 +519,11 @@ export function Lightbox({
  *  else — see `fileFromMedia` in RecentStrip for why — so the URL is turned
  *  into one here, before the handoff, rather than teaching the form a
  *  second kind of value. A source that will not come back is dropped: the
- *  drop zone stays empty, which is what every recipe did before. */
+ *  drop zone stays empty, which is what every recipe did before.
+ *
+ *  An images field comes back as a list of URLs and goes in as a list of
+ *  Files in the same order. One that will not come back is left out and
+ *  the rest close up behind it; if none do, the field is left alone. */
 async function withSources(
   schema: TabSchema,
   values: Record<string, unknown>,
@@ -529,20 +533,38 @@ async function withSources(
     schema.fields
       .filter((field) => field.type === 'image' && typeof values[field.name] === 'string')
       .map(async (field) => {
-        const url = values[field.name] as string
-        try {
-          const response = await fetch(url)
-          if (!response.ok) throw new Error(response.statusText)
-          const blob = await response.blob()
-          out[field.name] = new File([blob], fileName(url), {
-            type: blob.type || 'image/png',
-          })
-        } catch {
-          delete out[field.name]
-        }
+        const file = await sourceFile(values[field.name] as string)
+        if (file) out[field.name] = file
+        else delete out[field.name]
+      }),
+  )
+  await Promise.all(
+    schema.fields
+      .filter((field) => field.type === 'images' && Array.isArray(values[field.name]))
+      .map(async (field) => {
+        const urls = (values[field.name] as unknown[]).filter(
+          (url): url is string => typeof url === 'string',
+        )
+        const files = (await Promise.all(urls.map(sourceFile))).filter(
+          (file): file is File => file !== null,
+        )
+        if (files.length > 0) out[field.name] = files
+        else delete out[field.name]
       }),
   )
   return out
+}
+
+/** One kept source, fetched back into a File; null when it will not come. */
+async function sourceFile(url: string): Promise<File | null> {
+  try {
+    const response = await fetch(url)
+    if (!response.ok) throw new Error(response.statusText)
+    const blob = await response.blob()
+    return new File([blob], fileName(url), { type: blob.type || 'image/png' })
+  } catch {
+    return null
+  }
 }
 
 /** "Load these settings" for one generated file.

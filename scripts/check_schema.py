@@ -75,6 +75,9 @@ KIND_TO_GRADIO = {
     "radio": "Radio",
     "bool": "Checkbox",
     "image": "Image",
+    # No Gradio form ever had one; Gallery is Gradio's multi-image input,
+    # and the name the baseline records for it.
+    "images": "Gallery",
 }
 
 # Attributes the baseline records that a schema field can be compared on.

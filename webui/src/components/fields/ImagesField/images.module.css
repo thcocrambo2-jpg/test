@@ -1,0 +1,360 @@
+/* A numbered list of pictures.
+   The same tokens and the same pieces as the single image input — its drop
+   zone while the list is empty, the recent strip under it — with a grid of
+   tiles once something is in it. */
+
+.field {
+  container-type: inline-size;
+}
+
+/* The drop target around the grid. A transparent border in every state, so
+   lighting it up while files are dragged over it shifts nothing. */
+.target {
+  position: relative;
+  margin: calc(var(--s-2) * -1);
+  padding: var(--s-2);
+  border: 1px dashed transparent;
+  border-radius: var(--r-lg);
+  transition:
+    border-color var(--d-fast) var(--e-out),
+    background var(--d-fast) var(--e-out);
+}
+
+.targetActive {
+  border-style: solid;
+  border-color: var(--c-accent);
+  background: var(--c-accent-soft);
+}
+
+/* 3 -> 4 -> 5 columns by the width of the field rather than the window, so
+   one rule serves the wide right column, the narrow left one and a phone. */
+.grid {
+  display: grid;
+  gap: var(--s-2);
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+}
+
+@container (min-width: 400px) {
+  .grid {
+    grid-template-columns: repeat(4, minmax(0, 1fr));
+  }
+}
+
+@container (min-width: 560px) {
+  .grid {
+    grid-template-columns: repeat(5, minmax(0, 1fr));
+  }
+}
+
+.tile {
+  position: relative;
+  min-width: 0;
+}
+
+.pick {
+  position: relative;
+  display: block;
+  width: 100%;
+  aspect-ratio: 1;
+  padding: 0;
+  margin: 0;
+  border: 1px solid var(--c-border);
+  border-radius: var(--r-md);
+  overflow: hidden;
+  background: var(--c-bg-sunken);
+  cursor: zoom-in;
+  line-height: 0;
+  transition:
+    box-shadow var(--d-fast) var(--e-out),
+    border-color var(--d-fast) var(--e-out);
+}
+
+.pick img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
+.pick:hover {
+  border-color: var(--c-border-strong);
+}
+
+.pick:focus-visible {
+  outline-offset: 3px;
+  border-radius: var(--r-md);
+}
+
+/* Main: an accent frame drawn over the picture, plus the word in the badge,
+   so colour is never the only signal. */
+.main .pick::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  border-radius: inherit;
+  border: 2px solid var(--c-accent);
+  pointer-events: none;
+}
+
+/* The number. Always on, over the picture, so it uses the over-media
+   tokens. */
+.num {
+  position: absolute;
+  top: 6px;
+  left: 6px;
+  z-index: 2;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 5px;
+  height: 22px;
+  min-width: 22px;
+  padding: 0 7px;
+  border-radius: var(--r-sm);
+  background: var(--c-media-chip);
+  color: var(--c-on-media);
+  font-family: var(--font-mono);
+  font-size: var(--t-xs);
+  font-weight: var(--fw-bold);
+  line-height: 1;
+  pointer-events: none;
+  white-space: nowrap;
+}
+
+.num small {
+  font-family: var(--font-sans);
+  font-size: var(--t-2xs);
+  font-weight: var(--fw-bold);
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+}
+
+.main .num {
+  background: var(--c-accent);
+  color: var(--c-text-on-accent);
+}
+
+.old {
+  opacity: 0.55;
+  text-decoration: line-through;
+}
+
+/* Tile controls: hidden until hover or keyboard focus. */
+.scrim {
+  position: absolute;
+  inset: 0;
+  border-radius: var(--r-md);
+  pointer-events: none;
+  background: linear-gradient(
+    var(--c-media-chip),
+    transparent 36%,
+    transparent 60%,
+    var(--c-media-scrim)
+  );
+  opacity: 0;
+  transition: opacity var(--d-fast) var(--e-out);
+}
+
+.remove,
+.grip {
+  position: absolute;
+  z-index: 2;
+  display: grid;
+  place-items: center;
+  padding: 0;
+  border: 1px solid transparent;
+  background: var(--c-media-chip);
+  color: var(--c-on-media);
+  cursor: pointer;
+  opacity: 0;
+  transition:
+    opacity var(--d-fast) var(--e-out),
+    background var(--d-fast) var(--e-out);
+}
+
+.remove {
+  top: 5px;
+  right: 5px;
+  width: 24px;
+  height: 24px;
+  border-radius: var(--r-full);
+}
+
+/* Left edge, halfway down: the one spot a 100px tile has free once the
+   number (top left), the x (top right) and the size (bottom left) are
+   placed. */
+.grip {
+  left: 5px;
+  top: 50%;
+  transform: translateY(-50%);
+  width: 20px;
+  height: 30px;
+  border-radius: var(--r-sm);
+  cursor: grab;
+  touch-action: none;
+}
+
+.remove:hover,
+.grip:hover {
+  background: var(--c-media-scrim);
+  border-color: var(--c-media-outline);
+}
+
+.size {
+  position: absolute;
+  left: 6px;
+  bottom: 6px;
+  z-index: 2;
+  padding: 1px 6px;
+  border-radius: var(--r-xs);
+  background: var(--c-media-chip);
+  color: var(--c-on-media-soft);
+  font-family: var(--font-mono);
+  font-size: var(--t-2xs);
+  line-height: 1.5;
+  white-space: nowrap;
+  pointer-events: none;
+  opacity: 0;
+  transition: opacity var(--d-fast) var(--e-out);
+}
+
+.icon {
+  width: 14px;
+  height: 14px;
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 2.2;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+
+.iconFill {
+  fill: currentColor;
+  stroke: none;
+}
+
+.tile:hover :is(.scrim, .remove, .grip, .size),
+.tile:focus-within :is(.scrim, .remove, .grip, .size) {
+  opacity: 1;
+}
+
+/* No hover on a touchscreen: remove and reorder stay visible there. */
+@media (hover: none) {
+  .remove,
+  .grip {
+    opacity: 1;
+  }
+}
+
+/* The Add tile — the drop zone's look, shrunk to one cell. */
+.add {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 2px;
+  width: 100%;
+  aspect-ratio: 1;
+  padding: var(--s-2);
+  margin: 0;
+  border: 1px dashed var(--c-border-strong);
+  border-radius: var(--r-md);
+  background: var(--c-bg-sunken);
+  color: var(--c-text-muted);
+  font-size: var(--t-xs);
+  font-weight: var(--fw-medium);
+  text-align: center;
+  cursor: pointer;
+  line-height: var(--lh-snug);
+  transition:
+    border-color var(--d-fast) var(--e-out),
+    background var(--d-fast) var(--e-out);
+}
+
+.add:hover {
+  border-color: var(--c-accent);
+  background: var(--c-panel-hover);
+  color: var(--c-text);
+}
+
+.addIcon {
+  font-size: 22px;
+  line-height: 1;
+  font-weight: var(--fw-normal);
+  opacity: 0.8;
+}
+
+.addCount {
+  font-family: var(--font-mono);
+  font-size: var(--t-2xs);
+  color: var(--c-text-faint);
+  font-weight: var(--fw-normal);
+}
+
+.addHint {
+  font-size: var(--t-2xs);
+  color: var(--c-text-faint);
+  font-weight: var(--fw-normal);
+}
+
+@container (max-width: 399px) {
+  .addHint {
+    display: none;
+  }
+}
+
+/* Files on their way in: the numbers they will get, before the drop. */
+.incoming {
+  display: grid;
+  place-items: center;
+  aspect-ratio: 1;
+  border-radius: var(--r-md);
+  border: 1px dashed var(--c-accent);
+  background: var(--c-accent-soft);
+  color: var(--c-accent);
+  font-family: var(--font-mono);
+  font-weight: var(--fw-bold);
+  font-size: var(--t-xl);
+}
+
+.incoming span {
+  display: block;
+  font-family: var(--font-sans);
+  font-size: var(--t-2xs);
+  font-weight: var(--fw-medium);
+  letter-spacing: 0.04em;
+  text-align: center;
+  line-height: 1.2;
+}
+
+/* The slot a dragged tile will land in, with the tile in flight over it. */
+.gap {
+  position: relative;
+  aspect-ratio: 1;
+  border-radius: var(--r-md);
+  border: 2px dashed var(--c-accent);
+  background: var(--c-accent-soft);
+}
+
+.gap .tile {
+  position: absolute;
+  inset: 0;
+  z-index: 3;
+  transform: translate(-7%, -9%) rotate(-4deg) scale(1.04);
+}
+
+.gap .pick {
+  box-shadow: var(--sh-lg);
+  cursor: grabbing;
+  opacity: 0.94;
+}
+
+.gap .grip {
+  opacity: 1;
+  cursor: grabbing;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .gap .tile {
+    transform: none;
+  }
+}

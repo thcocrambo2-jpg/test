@@ -127,6 +127,16 @@ async function resolveUploads(
     const value = values[field.name]
     if (field.type === 'image') {
       out[field.name] = value instanceof Blob ? await upload(value, field.name) : null
+    } else if (field.type === 'images') {
+      // One upload each, in order: the list of ids is the order the handler
+      // numbers them in. Sequential rather than all at once, so a slow
+      // tunnel is not asked for ten large bodies together.
+      const ids: string[] = []
+      const files = Array.isArray(value) ? value : []
+      for (const [index, file] of files.entries()) {
+        if (file instanceof Blob) ids.push(await upload(file, `${field.name}_${index + 1}`))
+      }
+      out[field.name] = ids
     }
   }
   return out

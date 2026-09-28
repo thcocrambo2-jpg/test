@@ -124,9 +124,12 @@ def sweep(recipes) -> None:
     wanted = set()
     for row in recipes:
         for field in row.get("fields") or []:
-            if isinstance(field, (list, tuple)) and len(field) > 1 \
-                    and isinstance(field[1], str) and _NAME.match(field[1]):
-                wanted.add(field[1])
+            if not (isinstance(field, (list, tuple)) and len(field) > 1):
+                continue
+            # A list of names is an images field's value.
+            values = field[1] if isinstance(field[1], list) else [field[1]]
+            wanted.update(value for value in values
+                          if isinstance(value, str) and _NAME.match(value))
     cutoff = time.time() - GRACE
     try:
         entries = list(SOURCES_DIR.iterdir())

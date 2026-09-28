@@ -173,14 +173,46 @@ def _resolve_uploads(schema, raw: dict) -> dict:
     closing the page, after pressing Generate must not reach a job already
     in the line.
 
-    Only `image` fields need it; each upload id becomes a PIL image.
+    Only `image` and `images` fields need it; each upload id becomes a PIL
+    image. An `images` field sends a list of ids and gets a list of images
+    back, in the same order. Its count is checked here as well as by
+    Field.coerce, so a list longer than the field takes is refused before
+    a single file is opened.
     """
     values = dict(raw)
     for field in schema.named():
         value = values.get(field.name)
         if field.kind == "image":
             values[field.name] = _pil(value) if value else None
+        elif field.kind == "images":
+            values[field.name] = _pils(field, value)
     return values
+
+
+def _pils(field, value) -> list:
+    """An `images` field's upload ids -> PIL images, in the order sent.
+
+    Raises tabschema.Invalid, which the routes answer with 422 and the
+    field's name: a list that is not a list of ids, one more picture than
+    the field takes, or a file that is not a picture at all.
+    """
+    if not value:
+        return []
+    if not isinstance(value, list) or not all(isinstance(v, str) for v in value):
+        raise tabschema.Invalid(field.name, "expected a list of upload ids")
+    if field.hi is not None and len(value) > int(field.hi):
+        raise tabschema.Invalid(field.name, "at most %d images" % int(field.hi))
+    images = []
+    for number, upload_id in enumerate(value, start=1):
+        try:
+            images.append(_pil(upload_id))
+        except (OSError, SyntaxError, ValueError):
+            # Image.open's UnidentifiedImageError is an OSError. The browser
+            # skips anything that is not a picture before it uploads, so this
+            # is a client that did not.
+            raise tabschema.Invalid(
+                field.name, "image %d is not a picture this app can read" % number)
+    return images
 
 
 def _keep_sources(schema, raw: dict) -> dict:
@@ -191,23 +223,34 @@ def _keep_sources(schema, raw: dict) -> dict:
     and the recipe records the copy's name in that field's slot. Called
     after `_resolve_uploads`, which has already refused an id that is not
     there. A field whose image could not be kept is simply absent, and its
-    recipe row stays None, which is what every recipe held before.
+    recipe row stays None, which is what every recipe held before. An
+    `images` field's entry is the list of its kept names, in order.
     """
     kept = {}
     for field in schema.named():
         value = raw.get(field.name)
-        if field.kind != "image" or not value:
-            continue
-        path = _upload_path(value)
-        try:
-            with Image.open(path) as image:
-                fmt = image.format
-        except Exception:                        # noqa: BLE001
-            continue
-        name = sources.keep(path, fmt)
-        if name:
-            kept[field.name] = name
+        if field.kind == "image" and value:
+            name = _keep_one(value)
+            if name:
+                kept[field.name] = name
+        elif field.kind == "images" and value:
+            # The names in order. One that could not be kept is left out,
+            # so a recipe hands back the rest, renumbered.
+            names = [name for name in map(_keep_one, value) if name]
+            if names:
+                kept[field.name] = names
     return kept
+
+
+def _keep_one(upload_id: str) -> str | None:
+    """Copy one upload into the source store; its kept name, or None."""
+    path = _upload_path(upload_id)
+    try:
+        with Image.open(path) as image:
+            fmt = image.format
+    except Exception:                            # noqa: BLE001
+        return None
+    return sources.keep(path, fmt)
 
 
 def _source_url(name: str) -> str:
