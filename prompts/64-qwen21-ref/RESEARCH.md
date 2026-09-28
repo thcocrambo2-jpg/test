@@ -4,10 +4,10 @@ Research done 2026-09-27 on branch `63-zimage` (tip `11739bb`). This file is
 input for the implementation prompt that follows the UI mockup. It is not a
 prompt itself.
 
-Source: `Hearmeman24/comfyui-qwen-template`,
-`workflows/Qwen Image 2.1/qwen_image_2.1_reference_workflow.json`. There is a
-copy at `tmp2/comfyui-qwen-template/…` and one committed on branch
-`edit-poc` under `poc/workflows/Qwen Image 2.1/`.
+Source: `Hearmeman24/comfyui-qwen-template` at `858888f`,
+`workflows/Qwen Image 2.1/qwen_image_2.1_reference_workflow.json`. A copy is
+committed next to this file:
+**`prompts/64-qwen21-ref/reference/qwen_image_2.1_reference_workflow.json`**.
 
 ## What the workflow does
 

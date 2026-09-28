@@ -13,7 +13,9 @@ tab lives there and isn't merged yet, so build on it.
 
 1. `prompts/64-qwen21-ref/RESEARCH.md`: the workflow, its graph, the two
    new core nodes, the weights, and why the template's node pack is
-   skipped.
+   skipped. Read it alongside the source workflow it describes,
+   `prompts/64-qwen21-ref/reference/qwen_image_2.1_reference_workflow.json`
+   (the template's JSON, unchanged). Take the node values from that file.
 2. `prompts/64-qwen21-ref/mockup/qwen21-reference.html`: the **approved UI
    mockup**. Open it in a browser and go through every state, both layouts,
    both themes and phone width. **The UI you build must match it**, except
@@ -125,7 +127,8 @@ Qwen 2.1 code.
 - `workflow.py`: `build_qwen21_ref_workflow(job)`;
 - `handler.py`: `generate_qwen21_ref(...)`.
 
-**The graph** (the workflow and RESEARCH.md have the full detail):
+**The graph** (`reference/qwen_image_2.1_reference_workflow.json` and
+RESEARCH.md have the full detail):
 
 ```
 UNETLoader(qwen_image_2.1_int8_convrot) ─┐
