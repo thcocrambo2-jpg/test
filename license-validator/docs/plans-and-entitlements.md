@@ -125,7 +125,7 @@ keep a plain name. The registry, in `sort_order`:
 | --- | --- | --- |
 | `krea_t2i` | Krea2 | generation |
 | `krea_v2_t2i` | Krea2 V2 | generation |
-| `zimage_t2i` | Z-Image Turbo | generation |
+| `zimage_t2i` | Ember Lite | generation |
 | `gallery` | Gallery | tools |
 | `krea_edit` | Krea2 Edit | editing |
 | `community_prompts` | Prompt Library | tools |

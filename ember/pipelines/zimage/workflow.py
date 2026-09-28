@@ -81,7 +81,7 @@ def build_zimage_workflow(
     loras=(),
     unet_file: str,
     upscale: bool = False,
-    filename_prefix: str = "ZImage",
+    filename_prefix: str = "EmberLite",
 ) -> dict:
     """Build a Z-Image Turbo workflow in ComfyUI API format.
 

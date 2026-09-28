@@ -11,7 +11,7 @@ easy to get wrong. For whoever calls this API or changes it.
 | `POST` | `/v1/heartbeat` | Keep it. Re-checks the licence every call |
 | `POST` | `/v1/release` | Give it back. Idempotent |
 | `POST` | `/v1/build` | Which build this licence gets + a signed R2 URL. `{license_key, instance_id, current_sha, platform}`. Takes no seat |
-| `POST` | `/v1/catalog` | The model and LoRA catalogue the Krea, Z-Image, Qwen 2.1 and MiniMax tabs are built from. `{license_key, instance_id}`, licence checked like acquire. Takes no seat |
+| `POST` | `/v1/catalog` | The model and LoRA catalogue the Krea, Ember Lite, Qwen 2.1 and MiniMax tabs are built from. `{license_key, instance_id}`, licence checked like acquire. Takes no seat |
 | `GET` | `/v1/start.sh` | 302 to a signed URL for the Linux start script. Unauthenticated — the RunPod template fetches it |
 | `GET` | `/v1/start.ps1` | The same for the Windows start script, fetched by a desktop shortcut |
 | `GET` | `/v1/plans` | Public catalogue — `is_public` plans, enabled features, enabled billing cycles |

@@ -60,7 +60,7 @@ def generate_zimage(prompt, negative, seed, randomize, steps, cfg,
         return
     missing = zimage_missing(upscale)
     if missing:
-        yield [], ("❌ The Z-Image weights are not downloaded yet (missing: "
+        yield [], ("❌ The Ember Lite weights are not downloaded yet (missing: "
                    "%s) — restart the app so the download step can fetch "
                    "them." % ", ".join(missing)), 0
         return
@@ -99,5 +99,5 @@ def generate_zimage(prompt, negative, seed, randomize, steps, cfg,
         "unet_file": entry.file, "upscale": bool(upscale),
     } for i in range(int(batch_count))]
     for images, status in _run_jobs(jobs, builder=build_zimage_workflow,
-                                    prefix="ZImage"):
+                                    prefix="EmberLite"):
         yield images, notice + status, base_seed

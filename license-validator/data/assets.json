@@ -753,7 +753,7 @@
     },
     {
       "id": "z-image-turbo-bf16",
-      "name": "Z-Image Turbo bf16",
+      "name": "Ember Lite Turbo bf16",
       "file": "z_image_turbo_bf16.safetensors",
       "source": {
         "kind": "hf",

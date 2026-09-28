@@ -101,8 +101,8 @@ export const FEATURES = [
   // /v1/plans drops it from that plan's list.
   {
     key: "zimage_t2i",
-    name: "Z-Image Turbo",
-    tab_label: "⚡ Z-Image",
+    name: "Ember Lite",
+    tab_label: "⚡ Ember Lite",
     description: "Fast, realistic images from a text prompt",
     category: "generation",
     // 25, after Krea2 V2 (20), so it reads with the other text-to-image

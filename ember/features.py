@@ -147,7 +147,7 @@ FEATURES = (
             needs=("text_encoder", "v2", "catalog")),
     # Its own text encoder, VAE and upscale model ("zimage"); the diffusion
     # model is a catalogue record, like Krea's, and so are its LoRAs.
-    Feature(Key.ZIMAGE_T2I, "⚡ Z-Image", needs=("zimage", "catalog")),
+    Feature(Key.ZIMAGE_T2I, "⚡ Ember Lite", needs=("zimage", "catalog")),
     Feature(Key.GALLERY, "🖼️ Gallery", default=True),
     Feature(Key.KREA_EDIT, "✨ Krea2 Edit",
             needs=("text_encoder", "krea2", "edit_lora", "catalog")),

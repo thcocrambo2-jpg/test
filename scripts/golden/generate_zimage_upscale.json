@@ -79,7 +79,7 @@
     "save": {
       "class_type": "SaveImage",
       "inputs": {
-        "filename_prefix": "ZImage_golden00",
+        "filename_prefix": "EmberLite_golden00",
         "images": [
           "upscale",
           0
@@ -235,7 +235,7 @@
     "save": {
       "class_type": "SaveImage",
       "inputs": {
-        "filename_prefix": "ZImage_golden00",
+        "filename_prefix": "EmberLite_golden00",
         "images": [
           "upscale",
           0

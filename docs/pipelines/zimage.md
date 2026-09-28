@@ -1,7 +1,7 @@
-# Z-Image Turbo — text to image, with an optional upscale
+# Ember Lite — text to image, with an optional upscale
 
-The **⚡ Z-Image** tab (`zimage_t2i`): fast, realistic text-to-image on
-Z-Image Turbo, with an **Upscale 1.5x** tick that adds a second, tiled
+The **⚡ Ember Lite** tab (`zimage_t2i`, at `/generate/ember-lite`): fast,
+realistic text-to-image on Z-Image Turbo, with an **Upscale 1.5x** tick that adds a second, tiled
 pass. For someone using the tab, and for someone changing the graph it
 builds.
 
@@ -13,7 +13,7 @@ the fixed half — the text encoder, the VAE, the upscale pass, the
 resolution and sampler lists — is in
 [`ember/pipelines/zimage/constants.py`](../../ember/pipelines/zimage/constants.py).
 The diffusion model is not: it is a catalogue record,
-`z-image-turbo-bf16`, so the Model dropdown works the way Krea's does. See
+`z-image-turbo-bf16` (shown as "Ember Lite Turbo bf16"), so the Model dropdown works the way Krea's does. See
 [catalogue.md](catalogue.md).
 
 The feature is on no plan. A key gets it through `features_extra`; see

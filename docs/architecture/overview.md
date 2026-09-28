@@ -146,7 +146,7 @@ ember/
     <family>/handler.py     that family's generate_* generators
   generation/
     runner.py         the lanes, and the loop each job runs through
-    loras.py          the LoRA slots Krea, Z-Image, Qwen 2.1 and MiniMax share
+    loras.py          the LoRA slots Krea, Ember Lite, Qwen 2.1 and MiniMax share
     handlers.py       the feature keys, the preset save, and the output listing
     queue.py          the visible job queue: one worker thread per lane
     eta.py            how long the running job has left

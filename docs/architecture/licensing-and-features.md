@@ -29,7 +29,7 @@ asset groups it needs.
 | --- | --- | --- |
 | `krea_t2i` | 🎨 Krea2 | ~26 GB (Krea 2 base, shared) |
 | `krea_v2_t2i` | 🔶 Krea2 V2 | ~17 GB |
-| `zimage_t2i` | ⚡ Z-Image — on no plan yet | ~20.8 GB |
+| `zimage_t2i` | ⚡ Ember Lite — on no plan yet | ~20.8 GB |
 | `gallery` | 🖼️ Gallery | none |
 | `krea_edit` | ✨ Krea2 Edit | ~1.9 GB + base |
 | `krea_v2_edit` | 🔷 Krea2 V2 Edit | ~1.9 GB + V2 |

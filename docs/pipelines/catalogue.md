@@ -4,7 +4,7 @@ Which diffusion models and style LoRAs each tab offers. For someone
 running the app who wants to add or remove one, and for someone changing
 the code who needs to know where those lists come from.
 
-The Krea, Z-Image and Qwen 2.1 diffusion models and the style LoRAs are
+The Krea, Ember Lite and Qwen 2.1 diffusion models and the style LoRAs are
 **not compiled into the binary**. They live in the licence-server database, and the pod reads them
 at startup. The database side — the collections, the admin CLI, the
 validation rules — is documented in
@@ -71,7 +71,7 @@ Sources, in order:
 | `POST /v1/catalog` | the live answer, saved to `BASE_DIR/.catalog.json` |
 | `.catalog.json` | the last live answer, when the server does not reply |
 
-With none of them the catalogue is empty: the Krea, Z-Image and Qwen 2.1
+With none of them the catalogue is empty: the Krea, Ember Lite and Qwen 2.1
 tabs report that they have no models, the MiniMax tabs offer no LoRAs but still run, and the
 tabs that do not read it are unaffected.
 
@@ -113,7 +113,7 @@ source of truth for them.
 
 ## The two shapes of LoRA stack
 
-| | Krea2, Krea2 Edit, Z-Image, MiniMax I2V, MiniMax T2V | Krea2 V2, Krea2 V2 Edit |
+| | Krea2, Krea2 Edit, Ember Lite, MiniMax I2V, MiniMax T2V | Krea2 V2, Krea2 V2 Edit |
 | --- | --- | --- |
 | rows | `MAX_LORA_SLOTS` blank slots (currently 8), all empty | one row per LoRA in the feature's list, in that order |
 | starting state | every slot `None` and off | every row off, at its record's `default_strength` |

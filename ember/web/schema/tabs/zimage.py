@@ -1,4 +1,4 @@
-"""The ⚡ Z-Image tab."""
+"""The ⚡ Ember Lite tab — Z-Image Turbo underneath."""
 
 from ember import features
 from ember.generation import handlers
@@ -46,7 +46,7 @@ ZIMAGE_SCHEMA = TabSchema(
     lane=runner.COMFY_LANE, prompt_field="prompt",
     result_keys=IMAGE_KEYS, tab_id="zimage",
     icon="⚡", blurb="Fast, realistic text-to-image.",
-    category="generate", route="/generate/z-image",
+    category="generate", route="/generate/ember-lite",
     submit_label="Generate", preset_tab=presets.TAB_ZIMAGE,
     preset_note=GEN_PRESET_NOTE,
     groups=(G_PROMPT, G_CORE, G_SAMPLER,

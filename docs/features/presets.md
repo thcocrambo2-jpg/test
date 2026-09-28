@@ -2,7 +2,7 @@
 
 The **⚙️ Preset** dropdown on the 🎨 Krea2 and 🔶 Krea2 V2 tabs, what
 the two Edit tabs do with it, the one list the two MiniMax tabs share,
-and the lists of their own that ⚡ Z-Image and 🧩 Qwen 2.1 Reference
+and the lists of their own that ⚡ Ember Lite and 🧩 Qwen 2.1 Reference
 keep. For someone using the tabs, for the admin who
 writes presets, and for someone changing how they apply.
 
@@ -63,10 +63,10 @@ a blob without one for this tab, and refuses one that has one. A preset
 saved from T2V carries an aspect ratio that I2V skips. See
 [minimax.md](../pipelines/minimax.md#presets).
 
-## Z-Image has a list of its own
+## Ember Lite has a list of its own
 
-⚡ Z-Image reads and saves its own list, filed under `zimage_t2i`, with
-the save tickbox and no publish one, like MiniMax. A Z-Image preset
+⚡ Ember Lite reads and saves its own list, filed under `zimage_t2i`, with
+the save tickbox and no publish one, like MiniMax. An Ember Lite preset
 carries the model, steps, CFG, resolution, resolution multiplier,
 sampler, the Upscale tick, seed, randomize, batch count and the LoRA
 stack. No preset is seeded for it, so the tab opens on its compiled

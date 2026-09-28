@@ -916,7 +916,7 @@ def install_zimage_nodes() -> None:
     try:
         install_node_pack(dirname, repo, dest, f"Cloning {dirname}")
     except RuntimeError as exc:
-        log.error("Could not install %s (%s) — Upscale 1.5x on the Z-Image "
+        log.error("Could not install %s (%s) — Upscale 1.5x on the Ember Lite "
                   "tab will refuse to run until it is installed.",
                   dirname, exc)
         shutil.rmtree(dest, ignore_errors=True)

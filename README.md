@@ -6,7 +6,7 @@ single binary: the front end is compiled into it as a Python module and
 served from memory, and a licence server decides which tabs each key
 opens. The tabs are 🎨 Krea2 and ✨ Krea2 Edit, 🔶 Krea2 V2 and 🔷 Krea2 V2
 Edit (text-to-image and instruction editing on the Krea 2 model), ⚡
-Z-Image (Z-Image Turbo text-to-image, with an optional 1.5x upscale), 🧩
+Ember Lite (Z-Image Turbo text-to-image, with an optional 1.5x upscale), 🧩
 Qwen 2.1 Reference (Qwen Image 2.1, one new image kept consistent with up
 to 10 reference images), 🎬 Wan Video (Wan 2.2 image-to-video), and 🎥
 MiniMax I2V and 🎞️ MiniMax T2V

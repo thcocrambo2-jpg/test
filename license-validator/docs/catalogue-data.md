@@ -43,10 +43,11 @@ fine for these two. A missing or malformed list is not its business —
 list goes through it: `POST /v1/admin/feature-assets`, `npm run assets`
 and `npm run seed-assets`.
 
-## Z-Image's lists
+## Ember Lite's lists
 
-`zimage_t2i` lists one model and LoRAs of its own. Its model record is
-`z-image-turbo-bf16` — `z_image_turbo_bf16.safetensors` from
+`zimage_t2i` (the ⚡ Ember Lite tab, Z-Image Turbo underneath) lists one
+model and LoRAs of its own. Its model record is `z-image-turbo-bf16`,
+named "Ember Lite Turbo bf16" — `z_image_turbo_bf16.safetensors` from
 `Comfy-Org/z_image_turbo` (`split_files/diffusion_models/…`), no mirror,
 variant `turbo`, 12 steps, CFG 1, no turbo LoRA, no trigger. The Krea
 LoRAs do not load on Z-Image, so none are shared; a Z-Image LoRA joins

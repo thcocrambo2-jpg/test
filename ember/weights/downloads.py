@@ -556,13 +556,13 @@ def download_zimage_models() -> None:
         try:
             fetch_repackaged_file(ZIMAGE_HF_REPO, relpath)
         except Exception as exc:
-            log.error("Z-Image file %s unavailable (%s) — the Z-Image tab "
+            log.error("Ember Lite file %s unavailable (%s) — the Ember Lite tab "
                       "will refuse to run until a later run fetches it.",
                       relpath, exc)
     try:
         fetch_hf_repo_file(ZIMAGE_UPSCALE_REPO, ZIMAGE_UPSCALE_HF_FILE)
     except Exception as exc:
-        log.error("Z-Image upscale model %s unavailable (%s) — Upscale 1.5x "
+        log.error("Ember Lite upscale model %s unavailable (%s) — Upscale 1.5x "
                   "will refuse to run until a later run fetches it.",
                   ZIMAGE_UPSCALE_HF_FILE, exc)
 

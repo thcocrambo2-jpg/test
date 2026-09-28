@@ -147,9 +147,10 @@ class Field:
     # would 422 on submit.
     allow_custom: bool = False
     # {value: label}, or a callable returning one, for a choice field
-    # whose values are catalogue ids: the Model dropdowns and the LoRA
-    # stacks. Shipped as `choiceLabels`; None means every value is its own
-    # label, which is every other field.
+    # whose values are not what it should say: the Model dropdowns and the
+    # LoRA stacks (catalogue ids), and V2's variance Model type. Shipped as
+    # `choiceLabels`; a value it leaves out is its own label, and None
+    # means every value is, which is every other field.
     labels: Any = None
     # An images field with `lo` set: the line under the submit button,
     # which stays disabled, while the field holds fewer pictures than that.

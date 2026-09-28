@@ -224,6 +224,11 @@ def _v2_sampler_fields(feature, denoise=True):
     return tuple(rows)
 
 
+# The node's own enum value is what gets submitted; only what the dropdown
+# says changes, so Z-Image reads as the Ember Lite tab's model.
+_VARIANCE_MODEL_TYPE_LABELS = {"⚡ Z-Image Turbo": "⚡ Ember Lite Turbo"}
+
+
 def _v2_variance_fields():
     """RBG Smart Seed Variance, shared by the V2 and V2 Edit tabs.
 
@@ -241,7 +246,8 @@ def _v2_variance_fields():
               group="variance", preset="variance.fine_tune_variance"),
         Field("variance_model_type", "Model type", "select", d["model_type"],
               choices=V2_VARIANCE_MODEL_TYPES, group="variance",
-              preset="variance.model_type"),
+              preset="variance.model_type",
+              labels=_VARIANCE_MODEL_TYPE_LABELS),
         Field("variance_schedule", "Schedule", "select",
               d["variance_schedule"], choices=V2_VARIANCE_SCHEDULES,
               group="variance", preset="variance.variance_schedule"),
