@@ -767,6 +767,23 @@
       "turbo_lora": null,
       "trigger": "",
       "enabled": true
+    },
+    {
+      "id": "qwen-image-2-1-int8",
+      "name": "Qwen Image 2.1 int8",
+      "file": "qwen_image_2.1_int8_convrot.safetensors",
+      "source": {
+        "kind": "hf",
+        "repo": "Comfy-Org/Qwen-Image-2.1",
+        "path": "diffusion_models/qwen_image_2.1_int8_convrot.safetensors"
+      },
+      "mirror": null,
+      "variant": "raw",
+      "steps": 25,
+      "cfg": 1.0,
+      "turbo_lora": null,
+      "trigger": "",
+      "enabled": true
     }
   ],
   "features": {
@@ -899,6 +916,12 @@
         "private-style-v1-1",
         "knp-v4-3-exp"
       ]
+    },
+    "qwen21_edit": {
+      "models": [
+        "qwen-image-2-1-int8"
+      ],
+      "loras": []
     },
     "zimage_t2i": {
       "models": [

@@ -39,7 +39,7 @@
 //
 // `name` vs `tab_label`: the pricing page wants prose that says what a tab
 // is ("MiniMax Text to Video"), the tab strip wants something short enough
-// to sit in a row of ten ("MiniMax T2V"). They were separate strings
+// to sit in a row of eleven ("MiniMax T2V"). They were separate strings
 // in separate repos before this collection existed; keeping both fields
 // means unifying the source without flattening the two registers into one
 // awkward compromise. tab_label is optional — the client falls back to
@@ -140,6 +140,19 @@ export const FEATURES = [
     // instruction-edit tabs read together in a plan's feature list.
     sort_order: 67,
     enabled: true,
+  },
+  // On no plan yet, so off here like Z-Image: see that entry.
+  {
+    key: "qwen21_edit",
+    name: "Qwen 2.1 Reference",
+    tab_label: "🧩 Qwen 2.1 Reference",
+    description:
+      "Keep a character, an outfit or a product consistent across up to " +
+      "10 reference images",
+    category: "editing",
+    // 68, right after Krea2 V2 Edit (67), so it reads with the edit tabs.
+    sort_order: 68,
+    enabled: false,
   },
   {
     key: "wan_i2v",
