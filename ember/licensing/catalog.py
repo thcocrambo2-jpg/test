@@ -1,5 +1,5 @@
-"""The model and LoRA catalogue — what each Krea, Z-Image and MiniMax
-feature offers.
+"""The model and LoRA catalogue — what each Krea, Z-Image, Qwen 2.1 and
+MiniMax feature offers.
 
 The licence server holds three collections: `loras` and `models` (one
 record per file, keyed by a readable id) and `feature_assets` (per
@@ -24,8 +24,8 @@ Where the answer comes from, in order:
     POST /v1/catalog     the live answer, saved to BASE_DIR/.catalog.json
     .catalog.json        the last live answer, if the server did not answer
 
-With none of them the catalogue is empty: the Krea and Z-Image tabs report
-that they have no models, the MiniMax tabs offer no LoRAs but still run, and the
+With none of them the catalogue is empty: the Krea, Z-Image and Qwen 2.1
+tabs report that they have no models, the MiniMax tabs offer no LoRAs but still run, and the
 tabs that do not use it are unaffected.
 
 Stdlib-only, like the rest of this package — it runs before the pip

@@ -7,6 +7,10 @@
     "kind": "hf",
     "sha": "a98869194787969724c7425d95d0ed73ce9202af"
   },
+  "Comfy-Org/Qwen-Image-2.1": {
+    "kind": "hf",
+    "sha": "9a44dbdb47cefd046be9c0a13476192f34c8db8e"
+  },
   "Comfy-Org/Wan_2.2_ComfyUI_Repackaged": {
     "kind": "hf",
     "sha": "fb1388adc906ab39ffc26ee40e96b22886b56bc4"

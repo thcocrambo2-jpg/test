@@ -45,6 +45,10 @@ from ember.pipelines.minimax.constants import (
     MINIMAX_COMFYUI_MIN,
     MINIMAX_NODE,
 )
+from ember.pipelines.qwen21.constants import (
+    QWEN21_COMFYUI_MIN,
+    QWEN21_ENCODE_NODE,
+)
 from ember.pipelines.zimage.constants import ZIMAGE_UPSCALE_NODES
 
 
@@ -178,6 +182,10 @@ def main() -> None:
         # carries them — which is what an existing volume has until
         # bootstrap.repin_checkout has moved it to the pin.
         comfy.verify_core_node(MINIMAX_NODE, MINIMAX_COMFYUI_MIN)
+    if features.enabled(features.Key.QWEN21_EDIT):
+        # Core ComfyUI too, and newer still: a checkout the repin could not
+        # move is older than the release these nodes ship in.
+        comfy.verify_core_node(QWEN21_ENCODE_NODE, QWEN21_COMFYUI_MIN)
     if (features.enabled(features.Key.KREA_EDIT)
             or features.enabled(features.Key.KREA_V2_EDIT)):
         # Krea2Edit is cloned rather than vendored, so it fails the same

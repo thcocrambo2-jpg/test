@@ -65,6 +65,25 @@ function keyOf(file: File): number {
   return key
 }
 
+/** A picture's size, read once per file and shared with the tiles. */
+export function useImageSize(file: File | undefined): { width: number; height: number } | null {
+  const [, setProbed] = useState(0)
+  useEffect(() => {
+    if (!file || SIZES.has(file)) return
+    let live = true
+    const probe = new Image()
+    probe.onload = () => {
+      SIZES.set(file, { width: probe.naturalWidth, height: probe.naturalHeight })
+      if (live) setProbed((n) => n + 1)
+    }
+    probe.src = urlOf(file)
+    return () => {
+      live = false
+    }
+  }, [file])
+  return file ? (SIZES.get(file) ?? null) : null
+}
+
 function isImage(file: File): boolean {
   return file.type.startsWith('image/')
 }

@@ -7,9 +7,10 @@ idempotent — re-running only downloads what is missing.
 
 Two kinds of weights, two sources of truth. The pipeline pieces every
 build needs — VAEs, text encoders, the Identity Edit LoRA, the Wan and
-MiniMax weights, Z-Image's encoder and upscale model — are named in each
-pipeline's constants.py and fetched by their own groups. The Krea and
-Z-Image models and the LoRAs a customer picks from are named by the
+MiniMax weights, Z-Image's encoder and upscale model, Qwen 2.1's encoder
+and VAE — are named in each pipeline's constants.py and fetched by their
+own groups. The Krea, Z-Image and Qwen 2.1 models and the LoRAs a customer
+picks from are named by the
 catalogue (ember.licensing.catalog, from the licence server) and fetched
 by the "catalog" group, which asks nothing of the pipeline constants at
 all.
@@ -47,6 +48,7 @@ from ember.pipelines.minimax.constants import (
     MINIMAX_TURBO_LORA_REPO,
 )
 from ember.pipelines.wan.constants import WAN_HF_FILES, WAN_HF_REPO
+from ember.pipelines.qwen21.constants import QWEN21_HF_FILES, QWEN21_HF_REPO
 from ember.pipelines.zimage.constants import (
     ZIMAGE_HF_FILES,
     ZIMAGE_HF_REPO,
@@ -405,8 +407,8 @@ def download_catalog() -> None:
     """Fetch every model and LoRA the enabled catalogue features offer.
 
     What to fetch is the union of the catalogue lists of the features that
-    need this group and are on — the four Krea tabs, Z-Image, and the two
-    MiniMax tabs, which list LoRAs only. A tab that is off contributes nothing, so
+    need this group and are on — the four Krea tabs, Z-Image, Qwen 2.1
+    Reference, and the two MiniMax tabs, which list LoRAs only. A tab that is off contributes nothing, so
     a V2-only licence never downloads a model only Krea2 offers, and vice
     versa.
 
@@ -565,6 +567,25 @@ def download_zimage_models() -> None:
                   ZIMAGE_UPSCALE_HF_FILE, exc)
 
 
+def download_qwen21_models() -> None:
+    """Fetch Qwen Image 2.1's text encoder and VAE (~10.0 GB).
+
+    The diffusion model is a catalogue record, fetched by the "catalog"
+    group; these are the pipeline files the catalogue does not describe.
+    The repo keeps them in ComfyUI's own folders, so each lands in place.
+    Every item is independent, the same posture as the Z-Image
+    downloader: a missing file costs only the Qwen 2.1 tab, which names
+    what it is waiting for, and the next run retries it.
+    """
+    for relpath in QWEN21_HF_FILES:
+        try:
+            fetch_hf_repo_file(QWEN21_HF_REPO, relpath)
+        except Exception as exc:
+            log.error("Qwen 2.1 file %s unavailable (%s) — the Qwen 2.1 "
+                      "Reference tab will refuse to run until a later run "
+                      "fetches it.", relpath, exc)
+
+
 # Asset group → the function that fetches it. Iteration order is download
 # order, so the cheap shared pieces land before the tens of gigabytes.
 ASSET_GROUPS = {
@@ -574,6 +595,7 @@ ASSET_GROUPS = {
     "v2": download_v2_models,
     "catalog": download_catalog,
     "zimage": download_zimage_models,
+    "qwen21": download_qwen21_models,
     "wan": download_wan_models,
     "minimax": download_minimax_models,
 }

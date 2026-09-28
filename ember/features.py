@@ -70,6 +70,7 @@ class Key(str, Enum):
     GALLERY = "gallery"
     KREA_EDIT = "krea_edit"
     KREA_V2_EDIT = "krea_v2_edit"
+    QWEN21_EDIT = "qwen21_edit"
     WAN_I2V = "wan_i2v"
     MINIMAX_I2V = "minimax_i2v"
     MINIMAX_T2V = "minimax_t2v"
@@ -134,8 +135,8 @@ class Feature:
 # pipeline's constants.py: it is every model and LoRA the catalogue
 # (ember.licensing.catalog, from the licence server) lists for the enabled
 # features
-# that name it. Each Krea tab names it, so does Z-Image, and so do the
-# MiniMax tabs for their LoRAs; downloads.download_catalog reads the
+# that name it. Each Krea tab names it, so do Z-Image and Qwen 2.1
+# Reference, and so do the MiniMax tabs for their LoRAs; downloads.download_catalog reads the
 # lists of exactly
 # those that are on — so a feature's own models are what it pulls in, not
 # a group-wide set, and a file two tabs share is fetched once.
@@ -155,6 +156,10 @@ FEATURES = (
     # pipeline file the two edit tabs do share.
     Feature(Key.KREA_V2_EDIT, "🔷 Krea2 V2 Edit",
             needs=("text_encoder", "v2", "edit_lora", "catalog")),
+    # Its own text encoder and VAE ("qwen21"); the diffusion model is a
+    # catalogue record, like Z-Image's, and so are its LoRAs.
+    Feature(Key.QWEN21_EDIT, "🧩 Qwen 2.1 Reference",
+            needs=("qwen21", "catalog")),
     Feature(Key.WAN_I2V, "🎬 Wan Video", needs=("wan",)),
     # Two tabs, one graph, one download. The core MiniMax node takes an
     # optional first frame, so text-to-video is image-to-video without the

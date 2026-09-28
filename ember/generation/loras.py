@@ -1,8 +1,9 @@
 """The LoRA stack, as the forms offer it and a run resolves it.
 
 Every family with a stack reads from here. The Krea2, Krea2 Edit,
-Z-Image and MiniMax tabs render eight blank slots and the V2 tabs render
-one row per LoRA their feature lists, but every stack reaches a handler
+Z-Image and MiniMax tabs render eight blank slots, Qwen 2.1 Reference
+four, and the V2 tabs one row per LoRA their feature lists, but every
+stack reaches a handler
 as the same flat
 (enabled, id, weight) tail — and _resolve_lora_slots is the one place a
 catalogue id becomes a file name.

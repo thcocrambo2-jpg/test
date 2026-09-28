@@ -2,9 +2,9 @@
 
 Ids are what forms, presets and prompts carry; a file name appears only
 once a graph is being built. These turn one into the other, and they are
-here rather than in a family's builder because the Krea, Z-Image and
-MiniMax catalogue paths all go through them — all four Krea tabs, the
-Z-Image tab and the two MiniMax tabs.
+here rather than in a family's builder because the Krea, Z-Image,
+Qwen 2.1 and MiniMax catalogue paths all go through them — all four Krea
+tabs, the Z-Image and Qwen 2.1 Reference tabs and the two MiniMax tabs.
 
 The catalogue is per feature, so every helper that reads it takes the
 feature key: each tab offers exactly its own feature's lists.

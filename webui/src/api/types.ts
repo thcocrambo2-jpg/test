@@ -269,6 +269,20 @@ export interface AppCatalog {
   }
   resolutions: Record<string, number[]>
   samplers: string[]
+  /** Output sizes that take their shape from a picture on the form, by tab
+   *  key: when `field` holds `choice`, the size is the first picture in
+   *  `images` at about `pixels` in all, each side a multiple of `multiple`.
+   *  The same rule the handler applies, so the hint names the size the pod
+   *  renders. Optional so a server one release behind still parses. */
+  sizeFromImage?: Record<string, SizeFromImage>
+}
+
+export interface SizeFromImage {
+  field: string
+  choice: string
+  images: string
+  pixels: number
+  multiple: number
 }
 
 /** A field this app renders but the schema declares with `allowCustom`.

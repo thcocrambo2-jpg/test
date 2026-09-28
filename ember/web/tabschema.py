@@ -99,6 +99,11 @@ from ember.pipelines.krea2_v2 import handler as krea2_v2
 from ember.pipelines.krea2_v2.workflow import (
     model_defaults as v2_model_defaults,
 )
+from ember.pipelines.qwen21.constants import (
+    QWEN21_SAME_AS_REFERENCE,
+    QWEN21_SIZE_MULTIPLE,
+    QWEN21_TARGET_PIXELS,
+)
 from ember.pipelines.wan.constants import (
     WAN_5B_DEFAULTS,
     WAN_5B_FPS,
@@ -118,13 +123,14 @@ from ember.web.schema.tabs.minimax import (
     MINIMAX_I2V_SCHEMA,
     MINIMAX_T2V_SCHEMA,
 )
+from ember.web.schema.tabs.qwen21 import QWEN21_REF_SCHEMA
 from ember.web.schema.tabs.wan import WAN_MODEL_CHOICES, WAN_SCHEMA
 from ember.web.schema.tabs.zimage import ZIMAGE_SCHEMA
 
 Key = features.Key
 
 
-# ════════════════════════════════════════════════════ the eight tabs
+# ═════════════════════════════════════════════════════ the nine tabs
 # Order is the order they appear in the navigation, which is ui.TAB_ORDER's
 # order with the two bespoke tabs (Gallery, Prompt Library) taken out —
 # those have no form and so no schema.
@@ -135,6 +141,7 @@ SCHEMAS = (
     ZIMAGE_SCHEMA,
     KREA2_EDIT_SCHEMA,
     KREA2_V2_EDIT_SCHEMA,
+    QWEN21_REF_SCHEMA,
     WAN_SCHEMA,
     MINIMAX_I2V_SCHEMA,
     MINIMAX_T2V_SCHEMA,
@@ -179,6 +186,16 @@ BESPOKE = (
 # swaps its trigger words into the prompt. Shipped so React applies them
 # locally, with no round trip and no second copy of the same three
 # numbers.
+
+_SIZE_FROM_IMAGE = {
+    str(Key.QWEN21_EDIT): {
+        "field": "output_size",
+        "choice": QWEN21_SAME_AS_REFERENCE,
+        "images": "references",
+        "pixels": QWEN21_TARGET_PIXELS,
+        "multiple": QWEN21_SIZE_MULTIPLE,
+    },
+}
 
 # The V2 family's rows carry one more default than the Krea2 family's:
 # whether the model's recipe switches its turbo LoRA on.
@@ -253,6 +270,15 @@ def catalog() -> dict:
         "aspects": {k: list(v) if isinstance(v, (list, tuple)) else v
                     for k, v in V2_ASPECT_RATIOS.items()},
         "samplers": list(SAMPLERS),
+        # Output sizes that take their shape from a picture on the form:
+        # Qwen 2.1's "Same as reference 1". Keyed by tab, and only for the
+        # entitled ones. The two numbers are qwen21.workflow.reference_size's
+        # (about `pixels` in all, each side a multiple of `multiple`), so the
+        # hint under the select names the size the pod will render.
+        "sizeFromImage": {
+            str(s.key): rule for s in entitled()
+            for rule in [_SIZE_FROM_IMAGE.get(str(s.key))] if rule
+        },
     }
 
 

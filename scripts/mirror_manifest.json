@@ -117,6 +117,7 @@
     "wangkanai/wan21-vae": "hf",
     "huihui-ai/Huihui-Qwen3-VL-4B-Instruct-abliterated": "hf",
     "Comfy-Org/z_image_turbo": "hf",
+    "Comfy-Org/Qwen-Image-2.1": "hf",
     "Hearmeman/comfyui-template-assets": "hf",
     "https://github.com/comfyanonymous/ComfyUI.git": "git"
   }

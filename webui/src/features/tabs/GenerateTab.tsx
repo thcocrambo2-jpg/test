@@ -1,6 +1,7 @@
-import { useCallback, useEffect, useMemo, useState } from 'react'
-import type { ModelRow, TabSchema } from '@/api/types'
-import { useModels } from '@/api/queries'
+import { useCallback, useEffect, useMemo, useState, type ReactNode } from 'react'
+import type { ModelRow, SizeFromImage, TabSchema } from '@/api/types'
+import { useAppCatalog, useModels } from '@/api/queries'
+import { useImageSize } from '@/components/fields'
 import { TwoColumn } from '@/components/TwoColumn'
 import { SchemaForm } from '@/components/SchemaForm'
 import { PresetBar } from '@/components/PresetBar'
@@ -15,7 +16,7 @@ import { OutputPanel } from './OutputPanel'
 import s from '@/components/SchemaForm/form.module.css'
 
 /*
- * Eight of the ten tabs. All of them.
+ * Nine of the eleven tabs. All of them.
  *
  * There is no per-tab code anywhere in this app any more. Krea2 was built
  * first on purpose — it exercises the schema form, SSE, the queue panel and
@@ -125,10 +126,24 @@ export function GenerateTab({ schema }: { schema: TabSchema }) {
    * Looked up by id, which is what the dropdown holds. Its label is the
    * model's name, but a name is not a key: it is free text in the DB, and
    * two records can share one weights file at different steps and CFG. */
+  /* The line under an output size that takes its shape from a picture —
+   * Qwen 2.1's "Same as reference 1" — naming the size the pod will
+   * render, which moves as pictures are dropped or reordered. */
+  const sizeRule = useAppCatalog().data?.sizeFromImage?.[schema.key]
+  const firstImage = sizeRule
+    ? (values[sizeRule.images] as File[] | undefined)?.[0]
+    : undefined
+  const firstSize = useImageSize(firstImage)
+
   const hints = useMemo(() => {
+    const out: Record<string, ReactNode> = {}
     const row = models.find((candidate) => candidate.id === values.model)
-    return row ? { model: <Inline text={row.info} /> } : undefined
-  }, [models, values.model])
+    if (row) out.model = <Inline text={row.info} />
+    if (sizeRule && values[sizeRule.field] === sizeRule.choice) {
+      out[sizeRule.field] = sizeHint(sizeRule, firstSize)
+    }
+    return Object.keys(out).length > 0 ? out : undefined
+  }, [models, values, sizeRule, firstSize])
 
   // A handoff — the Prompt Library's Use button, the Gallery's "load these
   // settings" — is drained on arrival and applied *over the defaults*, never
@@ -368,6 +383,35 @@ export function GenerateTab({ schema }: { schema: TabSchema }) {
         </>
       }
     />
+  )
+}
+
+/** The size a picture's shape comes to under `rule` — the handler's
+ *  `reference_size`, rounded half up on both sides of the wire. */
+function sizeFrom(rule: SizeFromImage, width: number, height: number): [number, number] {
+  const ratio = width / height
+  const side = (length: number) =>
+    Math.max(rule.multiple, Math.floor(length / rule.multiple + 0.5) * rule.multiple)
+  return [side(Math.sqrt(rule.pixels * ratio)), side(Math.sqrt(rule.pixels / ratio))]
+}
+
+function sizeHint(
+  rule: SizeFromImage,
+  size: { width: number; height: number } | null,
+): ReactNode {
+  if (!size) {
+    const edge = Math.round(Math.sqrt(rule.pixels))
+    return `The shape of reference 1, at about ${edge} × ${edge} pixels in all.`
+  }
+  const [width, height] = sizeFrom(rule, size.width, size.height)
+  return (
+    <>
+      Output will be{' '}
+      <strong>
+        {width} × {height}
+      </strong>
+      , the shape of reference 1. Drag another image to the front to change it.
+    </>
   )
 }
 

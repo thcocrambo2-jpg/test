@@ -1,7 +1,7 @@
 """What every tab's generator has in common, and the pipelines do not own.
 
 The feature keys the catalogue files each tab's models and LoRAs under,
-the model guard every Krea and Z-Image generator opens with, the preset
+the model guard every Krea, Z-Image and Qwen 2.1 generator opens with, the preset
 tickbox they all honour, the Krea 2 resolution parser, and the zip of
 everything this pod has rendered. The generators themselves are in
 ember/pipelines/<name>/handler.py, beside the workflow.py each one
@@ -43,6 +43,9 @@ KREA_V2_EDIT = str(Key.KREA_V2_EDIT)
 # Z-Image reads a model list and a LoRA list the same way. Its text encoder,
 # VAE and upscale model are fixed in pipelines/zimage/constants.py.
 ZIMAGE_T2I = str(Key.ZIMAGE_T2I)
+# So does Qwen 2.1 Reference. Its text encoder and VAE are fixed in
+# pipelines/qwen21/constants.py.
+QWEN21_EDIT = str(Key.QWEN21_EDIT)
 # The MiniMax tabs take LoRAs from the catalogue too, but no model: their
 # weights are fixed in pipelines/minimax/constants.py, so only the LoRA
 # list is read.
