@@ -145,7 +145,7 @@ def stub_comfy() -> None:
 def handler_modules() -> tuple:
     """Every module a patched name can have been copied into, in one place.
 
-    The six pipeline handler modules hold the generate_* functions;
+    The seven pipeline handler modules hold the generate_* functions;
     ember.generation.handlers, .runner and .loras hold what they share;
     the workflow modules are here because the availability helpers are
     defined there and from-imported by the rest. Patching walks all of
@@ -164,14 +164,16 @@ def handler_modules() -> tuple:
     from ember.pipelines.krea2_v2_edit import workflow as krea2_v2_edit
     from ember.pipelines.minimax import handler as minimax_handler
     from ember.pipelines.minimax import workflow as minimax
+    from ember.pipelines.qwen21 import handler as qwen21_handler
+    from ember.pipelines.qwen21 import workflow as qwen21
     from ember.pipelines.wan import handler as wan_handler
     from ember.pipelines.wan import workflow as wan
     from ember.pipelines.zimage import handler as zimage_handler
     from ember.pipelines.zimage import workflow as zimage
     return (handlers, loras, runner,
             krea2_handler, krea2_v2_handler, krea2_v2_edit_handler,
-            wan_handler, minimax_handler, zimage_handler,
-            krea2, krea2_v2, krea2_v2_edit, wan, minimax, zimage)
+            wan_handler, minimax_handler, zimage_handler, qwen21_handler,
+            krea2, krea2_v2, krea2_v2_edit, wan, minimax, zimage, qwen21)
 
 
 class Namespace:
@@ -281,6 +283,9 @@ def patch(users, capture) -> None:
     # missing is an empty list rather than True. Its Upscale tick also asks
     # ComfyUI whether the UltimateSDUpscale node is registered.
     _patch_all(users, "zimage_missing", lambda *a, **k: [])
+    # Qwen 2.1's is the same shape. Its two core nodes are asked for
+    # through node_registered, patched above.
+    _patch_all(users, "qwen21_missing", lambda *a, **k: [])
     _patch_all(users, "node_registered", lambda *a, **k: True)
 
     _patch_all(users, "comfy_ensure_alive", lambda *a, **k: (True, ""))
@@ -335,6 +340,7 @@ def cases(module) -> dict:
     v2_model = module.default_model(module.KREA_V2_T2I)
     v2_edit_model = module.default_model(module.KREA_V2_EDIT)
     zimage_model = module.default_model(module.ZIMAGE_T2I)
+    qwen21_model = module.default_model(module.QWEN21_EDIT)
     image = _image()
 
     # Krea2: eight blank slots. The first three name LoRAs — two on, one
@@ -373,6 +379,23 @@ def cases(module) -> dict:
         v for i in range(module.MAX_LORA_SLOTS)
         for v in (*({0: (True, "hmbody-d-e10")}.get(i, (False, "None"))),
                   round(0.65 + i / 100, 2)))
+    # Qwen 2.1 Reference: four blank slots over its own list, which is
+    # empty in the seed catalogue. The second row ticks a Krea LoRA, which
+    # this tab does not offer, so the snapshots show it skipped.
+    qwen21_triples = tuple(
+        v for i in range(4)
+        for v in (*({1: (True, "realism-v2")}.get(i, (False, "None"))),
+                  round(0.85 + i / 100, 2)))
+    # References of different shapes, so "Same as reference 1" has a shape
+    # to take and the order is visible in the sizes.
+    from PIL import Image
+    references = [Image.new("RGB", size, (40 * n % 255, 90, 160))
+                  for n, size in enumerate(
+                      [(1536, 2048), (1080, 1350), (1920, 1080),
+                       (2000, 2000), (1600, 1600), (1024, 1536),
+                       (1500, 1000), (1200, 1200), (2560, 1440),
+                       (1080, 1080)], start=1)]
+
     # V2: one row per LoRA in the feature's list, as the form has them.
     # Rows 1-4 on (filter bypass, enhancer, realism v2, realism engine
     # v3.1), every other row off but still naming its LoRA.
@@ -460,13 +483,41 @@ def cases(module) -> dict:
             9123456, False, 13, 1.6, "1080×1920 (1080p portrait)", 0.9,
             "dpmpp_2m", zimage_model, True, 2, False, "",
         ) + zimage_triples,
+
+        # Qwen 2.1 Reference with one reference and "Same as reference 1":
+        # 653×431 at about 2048² pixels, on the 32 grid, is 2528×1664.
+        # Saves a preset, so its blob is checked against settings().
+        "generate_qwen21_ref": (
+            [image], "the woman from image 1 on a beach at dusk",
+            "blurry, watermark", "Same as reference 1", qwen21_model,
+            27, 1.3, "euler_ancestral", "beta", 896, 1357913, False, 2,
+            True, "Golden",
+        ) + qwen21_triples,
+
+        # Three references and a preset size: 16:9 is 2752×1536 whatever
+        # reference 1 is, and image_1..image_3 are wired in order.
+        "generate_qwen21_ref_three": (
+            references[:3], "the woman from image 1 in the jacket from "
+            "image 2 outside the café in image 3", "", "16:9 · 2752×1536",
+            qwen21_model, 25, 1.0, "euler", "simple", 1024, 2468024, False,
+            2, False, "",
+        ) + qwen21_triples,
+
+        # All ten, the most the tab takes: image_1..image_10.
+        "generate_qwen21_ref_ten": (
+            references, "the woman from image 1 wearing every item from "
+            "images 2 to 10", "", "Same as reference 1", qwen21_model, 31,
+            1.1, "dpmpp_2m", "simple", 0, 3579135, False, 2, False, "",
+        ) + qwen21_triples,
     }
 
 
 # Cases that call a handler under another name, because one handler has
 # more than one graph worth freezing. Every other case is named after its
 # handler.
-CASE_HANDLERS = {"generate_zimage_upscale": "generate_zimage"}
+CASE_HANDLERS = {"generate_zimage_upscale": "generate_zimage",
+                 "generate_qwen21_ref_three": "generate_qwen21_ref",
+                 "generate_qwen21_ref_ten": "generate_qwen21_ref"}
 
 
 def check_settings(name, args, settings) -> None:
@@ -482,8 +533,9 @@ def check_settings(name, args, settings) -> None:
     import, because that one is a plain function. The V2 blob is built
     inline inside generate_v2, so the only way to see it is to run the
     handler — which is what happens here. The two MiniMax cases and the
-    first Z-Image case tick the save-preset box, so their blobs
-    (_minimax_settings, _zimage_settings) are checked too.
+    first Z-Image and Qwen 2.1 cases tick the save-preset box, so their
+    blobs (_minimax_settings, _zimage_settings, _qwen21_settings) are
+    checked too.
 
     The inversion in the middle is worth reading twice. `Field.name` is
     the handler parameter name and `fields` is submission order, so

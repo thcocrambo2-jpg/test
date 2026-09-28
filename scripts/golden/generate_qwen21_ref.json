@@ -1,0 +1,238 @@
+[
+  {
+    "cache": {
+      "class_type": "QwenImage21Cache",
+      "inputs": {
+        "device": "auto",
+        "dtype": "default",
+        "model": [
+          "unet",
+          0
+        ]
+      }
+    },
+    "clip": {
+      "class_type": "CLIPLoader",
+      "inputs": {
+        "clip_name": "qwen3vl_8b_int8_convrot.safetensors",
+        "device": "default",
+        "type": "qwen_image"
+      }
+    },
+    "decode": {
+      "class_type": "VAEDecode",
+      "inputs": {
+        "samples": [
+          "sampler",
+          0
+        ],
+        "vae": [
+          "vae",
+          0
+        ]
+      }
+    },
+    "encode": {
+      "class_type": "TextEncodeQwenImage21",
+      "inputs": {
+        "clip": [
+          "clip",
+          0
+        ],
+        "images.image_1": [
+          "ref1",
+          0
+        ],
+        "negative_prompt": "blurry, watermark",
+        "prompt": "the woman from image 1 on a beach at dusk",
+        "resolution": 896,
+        "vae": [
+          "vae",
+          0
+        ]
+      }
+    },
+    "latent": {
+      "class_type": "EmptyLatentImage",
+      "inputs": {
+        "batch_size": 1,
+        "height": 1664,
+        "width": 2528
+      }
+    },
+    "ref1": {
+      "class_type": "LoadImage",
+      "inputs": {
+        "image": "golden_upload.png"
+      }
+    },
+    "sampler": {
+      "class_type": "KSampler",
+      "inputs": {
+        "cfg": 1.3,
+        "denoise": 1.0,
+        "latent_image": [
+          "latent",
+          0
+        ],
+        "model": [
+          "cache",
+          0
+        ],
+        "negative": [
+          "encode",
+          1
+        ],
+        "positive": [
+          "encode",
+          0
+        ],
+        "sampler_name": "euler_ancestral",
+        "scheduler": "beta",
+        "seed": 1357913,
+        "steps": 27
+      }
+    },
+    "save": {
+      "class_type": "SaveImage",
+      "inputs": {
+        "filename_prefix": "Qwen21Ref_golden00",
+        "images": [
+          "decode",
+          0
+        ]
+      }
+    },
+    "unet": {
+      "class_type": "UNETLoader",
+      "inputs": {
+        "unet_name": "qwen_image_2.1_int8_convrot.safetensors",
+        "weight_dtype": "default"
+      }
+    },
+    "vae": {
+      "class_type": "VAELoader",
+      "inputs": {
+        "vae_name": "qwen_image_2.1_vae_bf16.safetensors"
+      }
+    }
+  },
+  {
+    "cache": {
+      "class_type": "QwenImage21Cache",
+      "inputs": {
+        "device": "auto",
+        "dtype": "default",
+        "model": [
+          "unet",
+          0
+        ]
+      }
+    },
+    "clip": {
+      "class_type": "CLIPLoader",
+      "inputs": {
+        "clip_name": "qwen3vl_8b_int8_convrot.safetensors",
+        "device": "default",
+        "type": "qwen_image"
+      }
+    },
+    "decode": {
+      "class_type": "VAEDecode",
+      "inputs": {
+        "samples": [
+          "sampler",
+          0
+        ],
+        "vae": [
+          "vae",
+          0
+        ]
+      }
+    },
+    "encode": {
+      "class_type": "TextEncodeQwenImage21",
+      "inputs": {
+        "clip": [
+          "clip",
+          0
+        ],
+        "images.image_1": [
+          "ref1",
+          0
+        ],
+        "negative_prompt": "blurry, watermark",
+        "prompt": "the woman from image 1 on a beach at dusk",
+        "resolution": 896,
+        "vae": [
+          "vae",
+          0
+        ]
+      }
+    },
+    "latent": {
+      "class_type": "EmptyLatentImage",
+      "inputs": {
+        "batch_size": 1,
+        "height": 1664,
+        "width": 2528
+      }
+    },
+    "ref1": {
+      "class_type": "LoadImage",
+      "inputs": {
+        "image": "golden_upload.png"
+      }
+    },
+    "sampler": {
+      "class_type": "KSampler",
+      "inputs": {
+        "cfg": 1.3,
+        "denoise": 1.0,
+        "latent_image": [
+          "latent",
+          0
+        ],
+        "model": [
+          "cache",
+          0
+        ],
+        "negative": [
+          "encode",
+          1
+        ],
+        "positive": [
+          "encode",
+          0
+        ],
+        "sampler_name": "euler_ancestral",
+        "scheduler": "beta",
+        "seed": 1357914,
+        "steps": 27
+      }
+    },
+    "save": {
+      "class_type": "SaveImage",
+      "inputs": {
+        "filename_prefix": "Qwen21Ref_golden00",
+        "images": [
+          "decode",
+          0
+        ]
+      }
+    },
+    "unet": {
+      "class_type": "UNETLoader",
+      "inputs": {
+        "unet_name": "qwen_image_2.1_int8_convrot.safetensors",
+        "weight_dtype": "default"
+      }
+    },
+    "vae": {
+      "class_type": "VAELoader",
+      "inputs": {
+        "vae_name": "qwen_image_2.1_vae_bf16.safetensors"
+      }
+    }
+  }
+]

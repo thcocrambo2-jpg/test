@@ -119,6 +119,9 @@ def _baseline_value(control, kind):
         return value if isinstance(value, str) else ""
     if kind == "bool":
         return value is True
+    if kind == "images":
+        # A list in JSON, a tuple as the schema's default; the same empty.
+        return tuple(value or ())
     return value
 
 

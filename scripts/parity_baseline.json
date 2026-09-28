@@ -9631,6 +9631,368 @@
         }
       ]
     },
+    "qwen21_edit": {
+      "tab_id": "qwen21ref",
+      "controls": [
+        {
+          "type": "Gallery",
+          "label": "Reference images (paste with Ctrl+V)",
+          "value": [],
+          "minimum": 1,
+          "maximum": 10,
+          "placeholder": null,
+          "interactive": null,
+          "visible": true,
+          "elem_id": null
+        },
+        {
+          "type": "Textbox",
+          "label": "Prompt",
+          "value": "The woman from image 1 wearing the leather jacket from image 2, sitting at a table outside the caf\u00e9 in image 3. Late afternoon sun, candid 35 mm photo, shallow depth of field.",
+          "lines": 5,
+          "placeholder": null,
+          "interactive": null,
+          "visible": true,
+          "elem_id": null
+        },
+        {
+          "type": "Textbox",
+          "label": "Negative prompt",
+          "value": null,
+          "lines": 3,
+          "placeholder": null,
+          "interactive": null,
+          "visible": true,
+          "elem_id": null
+        },
+        {
+          "type": "Dropdown",
+          "label": "Output size",
+          "value": "Same as reference 1",
+          "interactive": null,
+          "visible": true,
+          "multiselect": null,
+          "elem_id": null,
+          "choices": [
+            [
+              "Same as reference 1",
+              "Same as reference 1"
+            ],
+            [
+              "1:1 \u00b7 2048\u00d72048",
+              "1:1 \u00b7 2048\u00d72048"
+            ],
+            [
+              "4:3 \u00b7 2400\u00d71792",
+              "4:3 \u00b7 2400\u00d71792"
+            ],
+            [
+              "3:4 \u00b7 1792\u00d72400",
+              "3:4 \u00b7 1792\u00d72400"
+            ],
+            [
+              "3:2 \u00b7 2528\u00d71696",
+              "3:2 \u00b7 2528\u00d71696"
+            ],
+            [
+              "2:3 \u00b7 1696\u00d72528",
+              "2:3 \u00b7 1696\u00d72528"
+            ],
+            [
+              "16:9 \u00b7 2752\u00d71536",
+              "16:9 \u00b7 2752\u00d71536"
+            ],
+            [
+              "9:16 \u00b7 1536\u00d72752",
+              "9:16 \u00b7 1536\u00d72752"
+            ]
+          ]
+        },
+        {
+          "type": "Dropdown",
+          "label": "Model",
+          "value": "qwen-image-2-1-int8",
+          "interactive": null,
+          "visible": true,
+          "multiselect": null,
+          "elem_id": null,
+          "choices": [
+            [
+              "Qwen Image 2.1 int8",
+              "qwen-image-2-1-int8"
+            ]
+          ]
+        },
+        {
+          "type": "Slider",
+          "label": "Steps",
+          "value": 25,
+          "minimum": 1,
+          "maximum": 60,
+          "step": 1,
+          "interactive": null,
+          "visible": true,
+          "elem_id": null
+        },
+        {
+          "type": "Slider",
+          "label": "CFG",
+          "value": 1.0,
+          "minimum": 0.5,
+          "maximum": 8.0,
+          "step": 0.1,
+          "interactive": null,
+          "visible": true,
+          "elem_id": null
+        },
+        {
+          "type": "Dropdown",
+          "label": "Sampler",
+          "value": "euler",
+          "interactive": null,
+          "visible": true,
+          "multiselect": null,
+          "elem_id": null,
+          "choices": [
+            [
+              "euler",
+              "euler"
+            ],
+            [
+              "euler_ancestral",
+              "euler_ancestral"
+            ],
+            [
+              "dpmpp_2m",
+              "dpmpp_2m"
+            ],
+            [
+              "res_multistep",
+              "res_multistep"
+            ],
+            [
+              "er_sde",
+              "er_sde"
+            ]
+          ]
+        },
+        {
+          "type": "Dropdown",
+          "label": "Scheduler",
+          "value": "simple",
+          "interactive": null,
+          "visible": true,
+          "multiselect": null,
+          "elem_id": null,
+          "choices": [
+            [
+              "simple",
+              "simple"
+            ],
+            [
+              "beta",
+              "beta"
+            ]
+          ]
+        },
+        {
+          "type": "Slider",
+          "label": "Reference detail",
+          "value": 1024,
+          "minimum": 0,
+          "maximum": 4096,
+          "step": 32,
+          "interactive": null,
+          "visible": true,
+          "elem_id": null
+        },
+        {
+          "type": "Number",
+          "label": "Seed",
+          "value": 42,
+          "minimum": 0,
+          "maximum": null,
+          "step": 1,
+          "placeholder": null,
+          "interactive": null,
+          "visible": true,
+          "elem_id": null
+        },
+        {
+          "type": "Checkbox",
+          "label": "\ud83c\udfb2 Random seed",
+          "value": true,
+          "interactive": null,
+          "visible": true,
+          "elem_id": null
+        },
+        {
+          "type": "Slider",
+          "label": "Batch count",
+          "value": 1,
+          "minimum": 1,
+          "maximum": 20,
+          "step": 1,
+          "interactive": null,
+          "visible": true,
+          "elem_id": null
+        },
+        {
+          "type": "Checkbox",
+          "label": "\ud83d\udcbe Save these settings as a preset",
+          "value": false,
+          "interactive": null,
+          "visible": true,
+          "elem_id": null
+        },
+        {
+          "type": "Textbox",
+          "label": "Preset name",
+          "value": null,
+          "lines": 1,
+          "placeholder": null,
+          "interactive": null,
+          "visible": true,
+          "elem_id": null
+        },
+        {
+          "type": "Checkbox",
+          "label": "On",
+          "value": false,
+          "interactive": null,
+          "visible": true,
+          "elem_id": null
+        },
+        {
+          "type": "Dropdown",
+          "label": "LoRA 1",
+          "value": "None",
+          "interactive": null,
+          "visible": true,
+          "multiselect": null,
+          "elem_id": null,
+          "choices": [
+            [
+              "None",
+              "None"
+            ]
+          ]
+        },
+        {
+          "type": "Slider",
+          "label": "Strength",
+          "value": 1.0,
+          "minimum": 0.0,
+          "maximum": 2.0,
+          "step": 0.01,
+          "interactive": null,
+          "visible": true,
+          "elem_id": null
+        },
+        {
+          "type": "Checkbox",
+          "label": "On",
+          "value": false,
+          "interactive": null,
+          "visible": true,
+          "elem_id": null
+        },
+        {
+          "type": "Dropdown",
+          "label": "LoRA 2",
+          "value": "None",
+          "interactive": null,
+          "visible": true,
+          "multiselect": null,
+          "elem_id": null,
+          "choices": [
+            [
+              "None",
+              "None"
+            ]
+          ]
+        },
+        {
+          "type": "Slider",
+          "label": "Strength",
+          "value": 1.0,
+          "minimum": 0.0,
+          "maximum": 2.0,
+          "step": 0.01,
+          "interactive": null,
+          "visible": true,
+          "elem_id": null
+        },
+        {
+          "type": "Checkbox",
+          "label": "On",
+          "value": false,
+          "interactive": null,
+          "visible": true,
+          "elem_id": null
+        },
+        {
+          "type": "Dropdown",
+          "label": "LoRA 3",
+          "value": "None",
+          "interactive": null,
+          "visible": true,
+          "multiselect": null,
+          "elem_id": null,
+          "choices": [
+            [
+              "None",
+              "None"
+            ]
+          ]
+        },
+        {
+          "type": "Slider",
+          "label": "Strength",
+          "value": 1.0,
+          "minimum": 0.0,
+          "maximum": 2.0,
+          "step": 0.01,
+          "interactive": null,
+          "visible": true,
+          "elem_id": null
+        },
+        {
+          "type": "Checkbox",
+          "label": "On",
+          "value": false,
+          "interactive": null,
+          "visible": true,
+          "elem_id": null
+        },
+        {
+          "type": "Dropdown",
+          "label": "LoRA 4",
+          "value": "None",
+          "interactive": null,
+          "visible": true,
+          "multiselect": null,
+          "elem_id": null,
+          "choices": [
+            [
+              "None",
+              "None"
+            ]
+          ]
+        },
+        {
+          "type": "Slider",
+          "label": "Strength",
+          "value": 1.0,
+          "minimum": 0.0,
+          "maximum": 2.0,
+          "step": 0.01,
+          "interactive": null,
+          "visible": true,
+          "elem_id": null
+        }
+      ]
+    },
     "wan_i2v": {
       "tab_id": "video",
       "controls": [
@@ -11110,6 +11472,27 @@
         "cutoff_strength",
         "shift_strength",
         "batch_count"
+      ],
+      "varargs": "lora_slots",
+      "keyword_only": []
+    },
+    "generate_qwen21_ref": {
+      "positional": [
+        "references",
+        "prompt",
+        "negative",
+        "output_size",
+        "model",
+        "steps",
+        "cfg",
+        "sampler",
+        "scheduler",
+        "reference_detail",
+        "seed",
+        "randomize",
+        "batch_count",
+        "save_preset",
+        "preset_name"
       ],
       "varargs": "lora_slots",
       "keyword_only": []

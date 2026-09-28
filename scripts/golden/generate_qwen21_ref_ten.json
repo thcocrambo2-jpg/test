@@ -1,0 +1,418 @@
+[
+  {
+    "cache": {
+      "class_type": "QwenImage21Cache",
+      "inputs": {
+        "device": "auto",
+        "dtype": "default",
+        "model": [
+          "unet",
+          0
+        ]
+      }
+    },
+    "clip": {
+      "class_type": "CLIPLoader",
+      "inputs": {
+        "clip_name": "qwen3vl_8b_int8_convrot.safetensors",
+        "device": "default",
+        "type": "qwen_image"
+      }
+    },
+    "decode": {
+      "class_type": "VAEDecode",
+      "inputs": {
+        "samples": [
+          "sampler",
+          0
+        ],
+        "vae": [
+          "vae",
+          0
+        ]
+      }
+    },
+    "encode": {
+      "class_type": "TextEncodeQwenImage21",
+      "inputs": {
+        "clip": [
+          "clip",
+          0
+        ],
+        "images.image_1": [
+          "ref1",
+          0
+        ],
+        "images.image_10": [
+          "ref10",
+          0
+        ],
+        "images.image_2": [
+          "ref2",
+          0
+        ],
+        "images.image_3": [
+          "ref3",
+          0
+        ],
+        "images.image_4": [
+          "ref4",
+          0
+        ],
+        "images.image_5": [
+          "ref5",
+          0
+        ],
+        "images.image_6": [
+          "ref6",
+          0
+        ],
+        "images.image_7": [
+          "ref7",
+          0
+        ],
+        "images.image_8": [
+          "ref8",
+          0
+        ],
+        "images.image_9": [
+          "ref9",
+          0
+        ],
+        "negative_prompt": "",
+        "prompt": "the woman from image 1 wearing every item from images 2 to 10",
+        "resolution": 0,
+        "vae": [
+          "vae",
+          0
+        ]
+      }
+    },
+    "latent": {
+      "class_type": "EmptyLatentImage",
+      "inputs": {
+        "batch_size": 1,
+        "height": 2368,
+        "width": 1760
+      }
+    },
+    "ref1": {
+      "class_type": "LoadImage",
+      "inputs": {
+        "image": "golden_upload.png"
+      }
+    },
+    "ref10": {
+      "class_type": "LoadImage",
+      "inputs": {
+        "image": "golden_upload.png"
+      }
+    },
+    "ref2": {
+      "class_type": "LoadImage",
+      "inputs": {
+        "image": "golden_upload.png"
+      }
+    },
+    "ref3": {
+      "class_type": "LoadImage",
+      "inputs": {
+        "image": "golden_upload.png"
+      }
+    },
+    "ref4": {
+      "class_type": "LoadImage",
+      "inputs": {
+        "image": "golden_upload.png"
+      }
+    },
+    "ref5": {
+      "class_type": "LoadImage",
+      "inputs": {
+        "image": "golden_upload.png"
+      }
+    },
+    "ref6": {
+      "class_type": "LoadImage",
+      "inputs": {
+        "image": "golden_upload.png"
+      }
+    },
+    "ref7": {
+      "class_type": "LoadImage",
+      "inputs": {
+        "image": "golden_upload.png"
+      }
+    },
+    "ref8": {
+      "class_type": "LoadImage",
+      "inputs": {
+        "image": "golden_upload.png"
+      }
+    },
+    "ref9": {
+      "class_type": "LoadImage",
+      "inputs": {
+        "image": "golden_upload.png"
+      }
+    },
+    "sampler": {
+      "class_type": "KSampler",
+      "inputs": {
+        "cfg": 1.1,
+        "denoise": 1.0,
+        "latent_image": [
+          "latent",
+          0
+        ],
+        "model": [
+          "cache",
+          0
+        ],
+        "negative": [
+          "encode",
+          1
+        ],
+        "positive": [
+          "encode",
+          0
+        ],
+        "sampler_name": "dpmpp_2m",
+        "scheduler": "simple",
+        "seed": 3579135,
+        "steps": 31
+      }
+    },
+    "save": {
+      "class_type": "SaveImage",
+      "inputs": {
+        "filename_prefix": "Qwen21Ref_golden00",
+        "images": [
+          "decode",
+          0
+        ]
+      }
+    },
+    "unet": {
+      "class_type": "UNETLoader",
+      "inputs": {
+        "unet_name": "qwen_image_2.1_int8_convrot.safetensors",
+        "weight_dtype": "default"
+      }
+    },
+    "vae": {
+      "class_type": "VAELoader",
+      "inputs": {
+        "vae_name": "qwen_image_2.1_vae_bf16.safetensors"
+      }
+    }
+  },
+  {
+    "cache": {
+      "class_type": "QwenImage21Cache",
+      "inputs": {
+        "device": "auto",
+        "dtype": "default",
+        "model": [
+          "unet",
+          0
+        ]
+      }
+    },
+    "clip": {
+      "class_type": "CLIPLoader",
+      "inputs": {
+        "clip_name": "qwen3vl_8b_int8_convrot.safetensors",
+        "device": "default",
+        "type": "qwen_image"
+      }
+    },
+    "decode": {
+      "class_type": "VAEDecode",
+      "inputs": {
+        "samples": [
+          "sampler",
+          0
+        ],
+        "vae": [
+          "vae",
+          0
+        ]
+      }
+    },
+    "encode": {
+      "class_type": "TextEncodeQwenImage21",
+      "inputs": {
+        "clip": [
+          "clip",
+          0
+        ],
+        "images.image_1": [
+          "ref1",
+          0
+        ],
+        "images.image_10": [
+          "ref10",
+          0
+        ],
+        "images.image_2": [
+          "ref2",
+          0
+        ],
+        "images.image_3": [
+          "ref3",
+          0
+        ],
+        "images.image_4": [
+          "ref4",
+          0
+        ],
+        "images.image_5": [
+          "ref5",
+          0
+        ],
+        "images.image_6": [
+          "ref6",
+          0
+        ],
+        "images.image_7": [
+          "ref7",
+          0
+        ],
+        "images.image_8": [
+          "ref8",
+          0
+        ],
+        "images.image_9": [
+          "ref9",
+          0
+        ],
+        "negative_prompt": "",
+        "prompt": "the woman from image 1 wearing every item from images 2 to 10",
+        "resolution": 0,
+        "vae": [
+          "vae",
+          0
+        ]
+      }
+    },
+    "latent": {
+      "class_type": "EmptyLatentImage",
+      "inputs": {
+        "batch_size": 1,
+        "height": 2368,
+        "width": 1760
+      }
+    },
+    "ref1": {
+      "class_type": "LoadImage",
+      "inputs": {
+        "image": "golden_upload.png"
+      }
+    },
+    "ref10": {
+      "class_type": "LoadImage",
+      "inputs": {
+        "image": "golden_upload.png"
+      }
+    },
+    "ref2": {
+      "class_type": "LoadImage",
+      "inputs": {
+        "image": "golden_upload.png"
+      }
+    },
+    "ref3": {
+      "class_type": "LoadImage",
+      "inputs": {
+        "image": "golden_upload.png"
+      }
+    },
+    "ref4": {
+      "class_type": "LoadImage",
+      "inputs": {
+        "image": "golden_upload.png"
+      }
+    },
+    "ref5": {
+      "class_type": "LoadImage",
+      "inputs": {
+        "image": "golden_upload.png"
+      }
+    },
+    "ref6": {
+      "class_type": "LoadImage",
+      "inputs": {
+        "image": "golden_upload.png"
+      }
+    },
+    "ref7": {
+      "class_type": "LoadImage",
+      "inputs": {
+        "image": "golden_upload.png"
+      }
+    },
+    "ref8": {
+      "class_type": "LoadImage",
+      "inputs": {
+        "image": "golden_upload.png"
+      }
+    },
+    "ref9": {
+      "class_type": "LoadImage",
+      "inputs": {
+        "image": "golden_upload.png"
+      }
+    },
+    "sampler": {
+      "class_type": "KSampler",
+      "inputs": {
+        "cfg": 1.1,
+        "denoise": 1.0,
+        "latent_image": [
+          "latent",
+          0
+        ],
+        "model": [
+          "cache",
+          0
+        ],
+        "negative": [
+          "encode",
+          1
+        ],
+        "positive": [
+          "encode",
+          0
+        ],
+        "sampler_name": "dpmpp_2m",
+        "scheduler": "simple",
+        "seed": 3579136,
+        "steps": 31
+      }
+    },
+    "save": {
+      "class_type": "SaveImage",
+      "inputs": {
+        "filename_prefix": "Qwen21Ref_golden00",
+        "images": [
+          "decode",
+          0
+        ]
+      }
+    },
+    "unet": {
+      "class_type": "UNETLoader",
+      "inputs": {
+        "unet_name": "qwen_image_2.1_int8_convrot.safetensors",
+        "weight_dtype": "default"
+      }
+    },
+    "vae": {
+      "class_type": "VAELoader",
+      "inputs": {
+        "vae_name": "qwen_image_2.1_vae_bf16.safetensors"
+      }
+    }
+  }
+]
