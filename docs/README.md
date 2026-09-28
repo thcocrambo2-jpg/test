@@ -42,6 +42,7 @@ and LoRAs a licence can see.
 | [Krea 2 V2](pipelines/krea2-v2.md) | 🔶 The V2 graph, turbo and raw |
 | [Krea 2 V2 Edit](pipelines/krea2-v2-edit.md) | The V2 graph with editing |
 | [Z-Image Turbo](pipelines/zimage.md) | ⚡ Z-Image text-to-image, and the 1.5x upscale pass |
+| [Qwen Image 2.1](pipelines/qwen21.md) | 🧩 Qwen 2.1 Reference: a prompt and up to 10 reference images |
 | [Video](pipelines/wan.md) | Wan 2.2 image-to-video, and the parallel instance |
 | [Video with sound](pipelines/minimax.md) | MiniMax H3, both tabs, and the LoRA stack |
 

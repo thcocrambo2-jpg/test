@@ -4,8 +4,8 @@ Which diffusion models and style LoRAs each tab offers. For someone
 running the app who wants to add or remove one, and for someone changing
 the code who needs to know where those lists come from.
 
-The Krea and Z-Image diffusion models and the style LoRAs are **not
-compiled into the binary**. They live in the licence-server database, and the pod reads them
+The Krea, Z-Image and Qwen 2.1 diffusion models and the style LoRAs are
+**not compiled into the binary**. They live in the licence-server database, and the pod reads them
 at startup. The database side — the collections, the admin CLI, the
 validation rules — is documented in
 [Catalogue data](../../license-validator/docs/catalogue-data.md); this page is the pod's half.
@@ -23,14 +23,18 @@ validation rules — is documented in
   that tab offers. The first model is the tab's default. An id may appear
   in any number of features.
 
-Seven features have a `feature_assets` entry: `krea_t2i`, `krea_edit`,
-`krea_v2_t2i`, `krea_v2_edit`, `zimage_t2i`, `minimax_i2v` and
-`minimax_t2v`.
+Eight features have a `feature_assets` entry: `krea_t2i`, `krea_edit`,
+`krea_v2_t2i`, `krea_v2_edit`, `zimage_t2i`, `qwen21_edit`,
+`minimax_i2v` and `minimax_t2v`.
 
 `zimage_t2i` lists one model, `z-image-turbo-bf16`, and LoRAs trained
 for Z-Image; the Krea LoRAs do not load on it, so none are shared. An
 empty `loras` list is valid on every feature; the at-least-one rule is
 for `models` only.
+
+`qwen21_edit` lists one model, `qwen-image-2-1-int8`, and no LoRAs yet:
+nothing trained for Qwen Image 2.1 is in the catalogue, so its stack
+offers `None` alone until some are added.
 
 ## Tabs with LoRAs and no models
 
@@ -67,8 +71,8 @@ Sources, in order:
 | `POST /v1/catalog` | the live answer, saved to `BASE_DIR/.catalog.json` |
 | `.catalog.json` | the last live answer, when the server does not reply |
 
-With none of them the catalogue is empty: the Krea and Z-Image tabs report
-that they have no models, the MiniMax tabs offer no LoRAs but still run, and the
+With none of them the catalogue is empty: the Krea, Z-Image and Qwen 2.1
+tabs report that they have no models, the MiniMax tabs offer no LoRAs but still run, and the
 tabs that do not read it are unaffected.
 
 `license-validator/data/assets.json` is the seed document and also the
@@ -128,6 +132,11 @@ renders the whole stack as one collapsed card and puts the count on its
 header — "3/8 active", or "no slots" for a feature with none. Opening it
 shows every slot at once; the list is flat and ordered, and the collapse
 is purely visual.
+
+🧩 Qwen 2.1 Reference sits between the two: four blank slots offering
+its feature's whole list, like the left column, chained as `LoraLoader`
+on the model and the CLIP, like the right one, because the template's
+loader patched both. See [qwen21.md](qwen21.md#the-lora-stack).
 
 The V2 tabs' rows are described under
 [krea2-v2.md](krea2-v2.md#lora-stack); the MiniMax chain under

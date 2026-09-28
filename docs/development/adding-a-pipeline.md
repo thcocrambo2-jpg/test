@@ -95,6 +95,17 @@ git submodule needs nothing more: `clone_pinned()` and
 `repin_checkout()` check submodules out at the pinned commit
 (`init_submodules`), which ComfyUI_UltimateSDUpscale depends on.
 
+### 5b. A core node newer than the ComfyUI pin
+
+A graph built on core nodes needs no pack, but it may need a newer
+ComfyUI: MiniMax's nodes ship in v0.34.0 and Qwen 2.1's in v0.37.0. The
+release goes in the pipeline's `constants.py` as `<NAME>_COMFYUI_MIN`,
+`main.py` calls `comfy.verify_core_node` on one of the nodes when the
+feature is on, and the handler refuses with a message when ComfyUI does
+not have them. Moving the pin is a commit of its own, checked the way
+[the mirror and the pins](../releasing/mirror-and-pins.md#the-comfyui-pin)
+lists, because every tab runs on it.
+
 ### 6. Catalogue records
 
 In [`license-validator/data/assets.json`](../../license-validator/data/assets.json),
@@ -130,13 +141,31 @@ call it with, then `$PY scripts/golden.py` to write
 `golden.py --check` fails on any change to the graph the handler builds.
 
 A handler that builds two graphs worth freezing — Z-Image with and
-without its upscale pass — gets a second case under another name, mapped
-back to the handler in `CASE_HANDLERS`, and a second snapshot.
+without its upscale pass, Qwen 2.1 with one, three and ten references —
+gets a case per graph under another name, mapped back to the handler in
+`CASE_HANDLERS`, and a snapshot each.
+
+Then post each snapshot to a ComfyUI at the pin, with zero-byte files
+standing in for the weights (`scripts/mock_models.py`), and check
+`POST /prompt` accepts it. It does not check everything: an input name
+the node does not have is ignored, not refused. For a node with dynamic
+inputs — Qwen 2.1's `images.image_1` … — link one to an output of the
+wrong type once; a type-mismatch error proves the name is one the node
+reads.
 
 ### 9. `scripts/parity_baseline.json`
 
 The frozen record of every control, label, default and choice. Adding a
 tab adds a section; `check_schema.py --choices` diffs against it.
+
+### 9a. `scripts/config_baseline.json`
+
+`check_config.py` compares every public constant against this baseline.
+A new `constants.py` goes into its `SOURCES`, and the new tab keys
+(`presets.TAB_*`, `handlers.*`) into `QUALIFIED`; the baseline gains
+exactly those names. Add them by hand: `--write` rewrites the whole file
+from this machine, which sweeps in unrelated settings — some of them
+naming this machine.
 
 ### 10. If the Docker bake stage imports it
 

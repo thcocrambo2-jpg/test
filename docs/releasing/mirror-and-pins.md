@@ -65,7 +65,9 @@ and is fed to `hf_hub_download(revision=…)`. A git repo records
 ComfyUI itself is pinned the same way, under `ComfyUI` in `PINS.json`,
 at **v0.37.4** (`8ff6dc38`). Every tab runs on it, so it moves only when
 a tab needs a newer release, and the floor is set by the tabs whose nodes
-are core ComfyUI: MiniMax needs v0.34.0 (`MINIMAX_COMFYUI_MIN`).
+are core ComfyUI: MiniMax needs v0.34.0 (`MINIMAX_COMFYUI_MIN`) and Qwen
+2.1 Reference v0.37.0 (`QWEN21_COMFYUI_MIN`), which is why the pin is
+where it is.
 
 A checkout that already exists (a pod volume, a Windows install, the
 Docker image's baked tree) is moved to a new pin on its next start by
@@ -76,7 +78,10 @@ packages cannot move torch.
 
 Before moving it, check against a checkout at the new revision:
 
-- every snapshot in `scripts/golden/` passes `POST /prompt`;
+- every snapshot in `scripts/golden/` passes `POST /prompt`. The
+  validator ignores an input name a node does not have, so a renamed
+  input passes it; link a named input to the wrong type to prove the
+  name is live;
 - every node pack in `node_packs` imports, and the classes `main.py`
   verifies are registered;
 - a catalogue LoRA of each kind still maps all its keys (LoRA loaders
@@ -100,7 +105,7 @@ licence. The whole thing is idempotent and resumable: the mirror repo,
 not the local disk, decides the work.
 
 ```bash
-# 1. boot a pod with everything on and let it finish downloading (~220 GB)
+# 1. boot a pod with everything on and let it finish downloading (~240 GB)
 EMBER_LICENSE_KEY=<operator key> python3 app.py
 
 # 2. capture pod state — the revisions everything resolved to
@@ -147,7 +152,7 @@ with `EMBER_LICENSE_KEY` and `EMBER_NODE_TAG` — or, with
 ([`license-validator/data/assets.json`](../../license-validator/data/assets.json)
 is one).
 
-## Why only ~18 GB of ~220 GB is mirrored
+## Why only ~18 GB of ~240 GB is mirrored
 
 Only what is actually at risk of disappearing: the CivitAI LoRAs, the
 community HF repos and the GitHub node packs. The Comfy-Org repos stay
@@ -168,6 +173,10 @@ community repo, so it is pinned *and* has a manifest item in the
 until a mirror run packs one, so pods clone it at the pin; the pack's
 git submodule is checked out with it, and a mirror run's tarball carries
 the submodule's files too, since it is packed from the working tree.
+
+Qwen 2.1 Reference is the plain case: its diffusion model, text encoder
+and VAE all come from `Comfy-Org/Qwen-Image-2.1`, pinned at `9a44dbdb`
+and fetched upstream, and it installs no node pack.
 
 Catalogue **models** are only audited. The script uploads catalogue
 LoRAs, not catalogue models.

@@ -142,8 +142,8 @@ Two things are deliberately left out:
   has to restore whole — but a dropdown reading "None" beside a weight of
   0.8 is a row of noise.
 
-**Uploaded files** — the source image of an edit or an image-to-video run
-— are not stored *in* the recipe, but they do come back. See
+**Uploaded files** — the source image of an edit or an image-to-video run,
+Qwen 2.1's reference images — are not stored *in* the recipe, but they do come back. See
 [Source images](#source-images) below.
 
 Because `.recipes.jsonl` on live pods is keyed positionally and read back
@@ -190,6 +190,12 @@ store, and the recipe records the copy's name in that image field's slot.
   and the Lightbox fetches that into a `File` before the handoff, because
   an image field holds a `File` and nothing else. A recipe from before
   this, or one whose source has gone, leaves the drop zone empty.
+- **A list for an `images` field.** Qwen 2.1's references are recorded
+  as the list of their kept names, in order, and come back as a list of
+  URLs and then of `File`s, in the same order, so image 2 is still image
+  2. One that has gone is dropped and the rest close up behind it; if
+  none is left, the field is left alone. The sweep reads a list of names
+  as well as a single one.
 - **Served only by name shape.** `/sources/{name}` resolves nothing but a
   64-character hex digest with a `.png`, `.jpg` or `.webp` suffix, which
   cannot name anything outside the store.

@@ -31,7 +31,8 @@ Three tiers are public:
 
 Three more in `DEFAULT_PLANS` carry `is_public: false` and never reach
 the pricing page: `admin` (every tab the binary can build except
-`zimage_t2i`, and where a new tab usually lands first), `admin-minimal`,
+`zimage_t2i` and `qwen21_edit`, and where a new tab usually lands
+first), `admin-minimal`,
 and `test-krea1-only`. A fourth
 internal tier, `customer-admin`, exists only as a hand-made document in
 Atlas, so it is not in `DEFAULT_PLANS` and cannot be read from this
@@ -129,15 +130,17 @@ keep a plain name. The registry, in `sort_order`:
 | `krea_edit` | Krea2 Edit | editing |
 | `community_prompts` | Prompt Library | tools |
 | `krea_v2_edit` | Krea2 V2 Edit | editing |
+| `qwen21_edit` | Qwen 2.1 Reference | editing |
 | `wan_i2v` | Wan Video | video |
 | `minimax_i2v` | MiniMax Video | video |
 | `minimax_t2v` | MiniMax Text to Video | video |
 
-`zimage_t2i` is on no plan yet, not even `admin`, and its row is
-`enabled: false`. A key gets it through `features_extra`:
+`zimage_t2i` and `qwen21_edit` are on no plan yet, not even `admin`,
+and their rows are `enabled: false`. A key gets one through
+`features_extra`:
 
 ```bash
-npm run issue-key -- --key EMBER-XXXX-XXXX-XXXX --features-extra zimage_t2i --update
+npm run issue-key -- --key EMBER-XXXX-XXXX-XXXX --features-extra qwen21_edit --update
 ```
 
 `--features-extra` replaces the key's whole extras list, so name any

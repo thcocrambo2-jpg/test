@@ -107,6 +107,42 @@ a LoRA id, `"None"` for an empty slot. `/api/v1/catalog` keys `models` by
 feature key, a tab's `modelRegistry` is that key, and a model row is
 matched by `id` — never by `name`, which is only its label.
 
+## Field types
+
+A `Field`'s `kind` picks the control: `text`, `textarea`, `number`,
+`slider`, `select`, `radio`, `bool`, `image` and `images`. The last two
+are the ones whose values are files, and every layer that handles one
+handles both:
+
+| Layer | `image` | `images` |
+| --- | --- | --- |
+| the form value | a `File`, or null | a `File[]`, in the order shown |
+| submit (`resolveUploads`) | one upload id | a list of upload ids, uploaded in order |
+| the route (`_resolve_uploads`) | a PIL image | a list of PIL images; more than `hi`, a list that is not ids, or a file PIL cannot open is a 422 naming the field |
+| the handler | one positional argument | one positional argument, the list |
+| the recipe | the kept source's name | the list of kept names |
+
+An `images` field carries its limit as `hi` (`max` on the wire). With `lo`
+set as well, `GenerateTab` keeps the submit button disabled until the
+field holds that many, and shows the field's `empty_note` under it; the
+handler refuses the same case on its own. A group holding one shows
+"3/10" in its header, as the LoRA stack shows its active rows.
+`ImagesField` renders it — see
+[image input shortcuts](../features/image-shortcuts.md#several-pictures-at-once).
+🧩 Qwen 2.1 Reference is the one tab with one.
+
+**A group that goes first when the page stacks.** Below 1100 px the two
+columns stack, and the right column lands under the whole left one. A
+`Group` with `stack_first=True` (`stackFirst` on the wire) is lifted to
+the top of the form instead, under the preset bar. It is for inputs the
+left column's controls refer to: Qwen 2.1's numbered references sit
+beside the prompt that names them on a wide screen, and above it on a
+phone. `GenerateTab` does the move with `useMediaQuery`, rendering that
+group through `SchemaForm`'s `placement` prop, rather than with CSS
+`order`, because the left column has to stay one box for its sticky
+submit bar. No group sets it unless it asks, so every other tab renders
+as it did.
+
 ## Serving the bundle
 
 [`ember/web/spa.py`](../../ember/web/spa.py) serves the compiled app from

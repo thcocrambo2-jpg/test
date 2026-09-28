@@ -1,7 +1,7 @@
 # Image input shortcuts
 
 The four ways a picture gets into an image field. For someone using the
-app, and for someone changing `ImageDropField`.
+app, and for someone changing `ImageDropField` or `ImagesField`.
 
 Image inputs appear on **✨ Krea2 Edit** and **🔷 Krea2 V2 Edit** (a
 source image, plus an optional second reference), on **🎬 Video
@@ -9,6 +9,11 @@ source image, plus an optional second reference), on **🎬 Video
 is the same component,
 [`webui/src/components/fields/index.tsx`](../../webui/src/components/fields/index.tsx),
 so every one of them takes all four routes in.
+
+**🧩 Qwen 2.1 Reference** has the one multi-picture input, `ImagesField`
+([`webui/src/components/fields/ImagesField`](../../webui/src/components/fields/ImagesField/index.tsx)),
+for up to 10 numbered references. It takes the same four routes, several
+pictures at a time — see [below](#several-pictures-at-once).
 
 ## Click, drop, paste
 
@@ -55,6 +60,24 @@ picked file is derived, not tracked, so nothing has to notice the change.
 A second click while the first fetch is still in flight is guarded, so
 the field cannot end up holding whichever request happened to finish
 last.
+
+## Several pictures at once
+
+`ImagesField` takes every route the single input does, and adds rather
+than replaces:
+
+- the file picker allows several files, and a drop or a paste can carry
+  several;
+- a click in the recent strip adds that picture as the next number; the
+  strip says which ("click one to add it as image 4") and is greyed out
+  once the field is full;
+- a file that is not a picture is skipped, and one past the limit is
+  refused; both are named in a warning inside the field, not a toast,
+  and the rest of the drop still goes in.
+
+While files are dragged over it the field lights up and shows the
+numbers they will get. The paste rule is the single input's: it acts
+only while the field is hovered or holds focus.
 
 ## Related
 

@@ -2,7 +2,8 @@
 
 The **⚙️ Preset** dropdown on the 🎨 Krea2 and 🔶 Krea2 V2 tabs, what
 the two Edit tabs do with it, the one list the two MiniMax tabs share,
-and ⚡ Z-Image's own. For someone using the tabs, for the admin who
+and the lists of their own that ⚡ Z-Image and 🧩 Qwen 2.1 Reference
+keep. For someone using the tabs, for the admin who
 writes presets, and for someone changing how they apply.
 
 Picking a preset writes every control below it — model, steps, CFG,
@@ -14,7 +15,8 @@ blob, same guarding, minus the words.
 Presets live on the licence server, so changing one changes it for every
 customer without shipping a binary. The pod's side is
 [`ember/licensing/presets.py`](../../ember/licensing/presets.py), whose
-`TABS` is `krea_t2i`, `krea_v2_t2i`, `minimax_i2v` and `zimage_t2i`.
+`TABS` is `krea_t2i`, `krea_v2_t2i`, `minimax_i2v`, `zimage_t2i` and
+`qwen21_edit`.
 
 ## The Edit tabs read the same list
 
@@ -71,6 +73,16 @@ stack. No preset is seeded for it, so the tab opens on its compiled
 defaults until one is saved and marked `is_default`. Saving needs a
 licence server whose `PRESET_TABS` lists `zimage_t2i`; reading does not.
 See [zimage.md](../pipelines/zimage.md#presets).
+
+## So does Qwen 2.1 Reference
+
+🧩 Qwen 2.1 Reference works the same way, under `qwen21_edit`. Its
+presets carry the output size, model, steps, CFG, sampler, scheduler,
+reference detail, seed, randomize, batch count and the LoRA stack, and
+**never the reference images**: like the pictures on every other tab,
+they stay with the form. No preset is seeded for it. Saving needs a
+licence server whose `PRESET_TABS` lists `qwen21_edit`. See
+[qwen21.md](../pipelines/qwen21.md#presets).
 
 ## Only an admin can write one
 

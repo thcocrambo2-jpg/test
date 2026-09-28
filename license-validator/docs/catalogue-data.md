@@ -59,6 +59,19 @@ npm run assets -- --feature zimage_t2i --add-lora <id>
 An empty `loras` list is valid too: `idListProblems()` accepts it, and
 only `models` has the at-least-one rule.
 
+## Qwen 2.1's lists
+
+`qwen21_edit` lists one model and no LoRAs yet. Its model record is
+`qwen-image-2-1-int8` — `qwen_image_2.1_int8_convrot.safetensors` from
+`Comfy-Org/Qwen-Image-2.1` (`diffusion_models/…`), no mirror, variant
+`raw` (25 steps, not distilled), CFG 1, no turbo LoRA, no trigger. A
+bf16 record can join the list the same way, as a second model. A Qwen
+2.1 LoRA joins once its record exists:
+
+```bash
+npm run assets -- --feature qwen21_edit --add-lora <id>
+```
+
 ## What a pod reads
 
 `POST /v1/catalog` is what a pod reads, once, at startup — after its seat is
@@ -149,11 +162,17 @@ them is **an id**, never a file name or a label:
   resolution: "1080×1920 (1080p portrait)", multiplier: 1.0, sampler: "er_sde",
   upscale: false, seed: 42, randomize: true, batch_count: 1,
   loras: [[false, null, 1.0], ...] }
+
+// qwen21_edit — flat, four LoRA slots, and never the reference images
+{ output_size: "Same as reference 1", model: "qwen-image-2-1-int8",
+  steps: 25, cfg: 1.0, sampler: "euler", scheduler: "simple",
+  reference_detail: 1024, seed: 42, randomize: true, batch_count: 1,
+  loras: [[false, null, 1.0], ...] }
 ```
 
 A preset can be saved for the tabs in `PRESET_TABS` in
 [`../src/app.js`](../src/app.js): `krea_t2i`, `krea_v2_t2i`,
-`minimax_i2v` and `zimage_t2i`.
+`minimax_i2v`, `zimage_t2i` and `qwen21_edit`.
 
 Every LoRA row is a triple `[on, lora id | null, weight]`. An empty slot is
 `null`; the form calls it "None", but that word never reaches storage. The
