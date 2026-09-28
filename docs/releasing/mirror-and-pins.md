@@ -60,6 +60,29 @@ and is fed to `hf_hub_download(revision=…)`. A git repo records
 `ember/comfy/setup.py`. `mirror.revision()`, `mirror.node_pin()` and
 `mirror.comfyui_sha()` are the only readers.
 
+### The ComfyUI pin
+
+ComfyUI itself is pinned the same way, under `ComfyUI` in `PINS.json`,
+at **v0.37.4** (`8ff6dc38`). Every tab runs on it, so it moves only when
+a tab needs a newer release, and the floor is set by the tabs whose nodes
+are core ComfyUI: MiniMax needs v0.34.0 (`MINIMAX_COMFYUI_MIN`).
+
+A checkout that already exists (a pod volume, a Windows install, the
+Docker image's baked tree) is moved to a new pin on its next start by
+`repin_checkout()` in `ember/comfy/setup.py`, and ComfyUI's
+requirements are reinstalled straight after, under the torch
+constraints file, so a release that bumps its frontend or kernel
+packages cannot move torch.
+
+Before moving it, check against a checkout at the new revision:
+
+- every snapshot in `scripts/golden/` passes `POST /prompt`;
+- every node pack in `node_packs` imports, and the classes `main.py`
+  verifies are registered;
+- a catalogue LoRA of each kind still maps all its keys (LoRA loaders
+  change between releases; the Z-Image LoKr is the unusual one);
+- `repin_checkout()` moves a checkout at the old pin.
+
 `ember/weights/mirror.py` answers questions about these two files and
 nothing else. It downloads nothing — `ember/weights/downloads.py` and
 `ember/comfy/setup.py` do that — so the policy stays in one place and the

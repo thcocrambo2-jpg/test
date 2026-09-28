@@ -192,10 +192,13 @@ Generate when ready still queues it.
 The routes are mounted from `routes/tabs.py`'s per-tab loop, behind the
 same gate as the tab's others, so a licence without the tab gets a 403.
 
-## This feature moved the ComfyUI pin
+## The ComfyUI version it needs
 
-The MiniMax nodes ship in ComfyUI **v0.34.0**, so `scripts/PINS.json`
-pins `12d52794`, the v0.34.0 tag. Three things follow:
+The MiniMax nodes ship in ComfyUI **v0.34.0**, so the ComfyUI pin in
+`scripts/PINS.json` has to be that release or a later one. It is at
+v0.37.4 (`8ff6dc38`); the pin itself is described in
+[the mirror and the pins](../releasing/mirror-and-pins.md#the-comfyui-pin).
+Two things follow:
 
 - `ember.comfy.setup.install_comfyui()` moves an *existing* checkout to
   the pin when its HEAD differs (`repin_checkout`), so a pod volume or a
@@ -205,14 +208,9 @@ pins `12d52794`, the v0.34.0 tag. Three things follow:
   happen the app runs on what it has, and
   `ember.comfy.server.verify_core_node` logs which tab that costs.
   `MINIMAX_COMFYUI_MIN` is the version it reports against.
-- The move was checked before it was made. Under v0.34.0 the four pinned
-  node packs (RES4LYF, RBG Smart Seed Variance, post-processing,
-  Krea2Edit) all import without error, and every existing tab's golden
-  workflow passes its prompt validator unchanged. `scripts/golden.py
-  --check` is byte-identical before and after.
-- What was **not** checked is a GPU render on v0.34.0: no machine here
-  holds these models. The first pod start after this lands is the test of
-  that.
+- Both MiniMax golden workflows pass the pinned ComfyUI's prompt
+  validator. What has not been checked is a MiniMax GPU render: no
+  machine here holds these models.
 
 ## Why they never ride the parallel instance
 
