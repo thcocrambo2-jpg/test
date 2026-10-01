@@ -1125,10 +1125,12 @@ app.get(
 // what replaying a prompt does. A tab joins both lists in the commit that
 // teaches the client to load it.
 //
-// Plus MiniMax, Z-Image and Qwen 2.1 Reference, which have presets and no
-// prompt library: one list shared by both MiniMax tabs, filed under the
-// image tab's key, and one each for the other two.
-const PRESET_TABS = [...PROMPT_TABS, "minimax_i2v", "zimage_t2i", "qwen21_edit"];
+// Plus MiniMax, Z-Image and the two Qwen 2.1 tabs, which have presets and
+// no prompt library: one list shared by both MiniMax tabs, filed under the
+// image tab's key, and one each for the other three.
+const PRESET_TABS = [
+  ...PROMPT_TABS, "minimax_i2v", "zimage_t2i", "qwen21_edit", "qwen21_t2i",
+];
 
 const MAX_PRESET_NAME_CHARS = 60;
 const MAX_PRESET_DESCRIPTION_CHARS = 200;

@@ -39,7 +39,7 @@
 //
 // `name` vs `tab_label`: the pricing page wants prose that says what a tab
 // is ("MiniMax Text to Video"), the tab strip wants something short enough
-// to sit in a row of eleven ("MiniMax T2V"). They were separate strings
+// to sit in a row of twelve ("MiniMax T2V"). They were separate strings
 // in separate repos before this collection existed; keeping both fields
 // means unifying the source without flattening the two registers into one
 // awkward compromise. tab_label is optional — the client falls back to
@@ -108,6 +108,17 @@ export const FEATURES = [
     // 25, after Krea2 V2 (20), so it reads with the other text-to-image
     // tabs.
     sort_order: 25,
+    enabled: false,
+  },
+  // On no plan yet, so off here like Z-Image: see that entry.
+  {
+    key: "qwen21_t2i",
+    name: "Qwen 2.1",
+    tab_label: "🌄 Qwen 2.1",
+    description: "Detailed 2K images from a text prompt, with legible text",
+    category: "generation",
+    // 26, right after Ember Lite (25), with the other text-to-image tabs.
+    sort_order: 26,
     enabled: false,
   },
   {

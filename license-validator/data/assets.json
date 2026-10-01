@@ -923,6 +923,12 @@
       ],
       "loras": []
     },
+    "qwen21_t2i": {
+      "models": [
+        "qwen-image-2-1-int8"
+      ],
+      "loras": []
+    },
     "zimage_t2i": {
       "models": [
         "z-image-turbo-bf16"
