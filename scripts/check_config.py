@@ -129,6 +129,7 @@ QUALIFIED = {
     "presets.TAB_MINIMAX": ("ember.licensing.presets", "TAB_MINIMAX"),
     "presets.TAB_ZIMAGE": ("ember.licensing.presets", "TAB_ZIMAGE"),
     "presets.TAB_QWEN21": ("ember.licensing.presets", "TAB_QWEN21"),
+    "presets.TAB_QWEN21_T2I": ("ember.licensing.presets", "TAB_QWEN21_T2I"),
     "prompts.TAB_KREA2": ("ember.licensing.prompts", "TAB_KREA2"),
     "prompts.TAB_KREA2_V2": ("ember.licensing.prompts", "TAB_KREA2_V2"),
     "handlers.KREA_T2I": ("ember.generation.handlers", "KREA_T2I"),
@@ -139,6 +140,7 @@ QUALIFIED = {
     "handlers.MINIMAX_T2V": ("ember.generation.handlers", "MINIMAX_T2V"),
     "handlers.ZIMAGE_T2I": ("ember.generation.handlers", "ZIMAGE_T2I"),
     "handlers.QWEN21_EDIT": ("ember.generation.handlers", "QWEN21_EDIT"),
+    "handlers.QWEN21_T2I": ("ember.generation.handlers", "QWEN21_T2I"),
 }
 
 # A public module-level constant: upper case, not starting with an

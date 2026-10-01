@@ -341,6 +341,7 @@ def cases(module) -> dict:
     v2_edit_model = module.default_model(module.KREA_V2_EDIT)
     zimage_model = module.default_model(module.ZIMAGE_T2I)
     qwen21_model = module.default_model(module.QWEN21_EDIT)
+    qwen21_t2i_model = module.default_model(module.QWEN21_T2I)
     image = _image()
 
     # Krea2: eight blank slots. The first three name LoRAs — two on, one
@@ -386,6 +387,12 @@ def cases(module) -> dict:
         v for i in range(4)
         for v in (*({1: (True, "realism-v2")}.get(i, (False, "None"))),
                   round(0.85 + i / 100, 2)))
+    # Qwen 2.1: the same four slots over its own empty list, a different
+    # row ticked, so a tail copied from the Reference tab shows up.
+    qwen21_t2i_triples = tuple(
+        v for i in range(4)
+        for v in (*({2: (True, "hmbody-d-e10")}.get(i, (False, "None"))),
+                  round(0.95 - i / 100, 2)))
     # References of different shapes, so "Same as reference 1" has a shape
     # to take and the order is visible in the sizes.
     from PIL import Image
@@ -509,6 +516,23 @@ def cases(module) -> dict:
             "images 2 to 10", "", "Same as reference 1", qwen21_model, 31,
             1.1, "dpmpp_2m", "simple", 0, 3579135, False, 2, False, "",
         ) + qwen21_triples,
+
+        # Qwen 2.1 text to image, the template's graph: no negative, so it
+        # is the positive's ConditioningZeroOut, at 3:2's 2528×1696. Saves
+        # a preset, so its blob is checked against settings().
+        "generate_qwen21_t2i": (
+            "a neon sign that reads \"OPEN\" above a noodle bar, rain",
+            "", "3:2 · 2528×1696", qwen21_t2i_model, 26, 1.0, "euler",
+            "simple", 4681357, False, 2, True, "Golden",
+        ) + qwen21_t2i_triples,
+
+        # With a negative and CFG above 1: the negative is encoded instead
+        # of zeroed. 9:16 is 1536×2752.
+        "generate_qwen21_t2i_negative": (
+            "a lighthouse in a storm, 35mm", "blurry, watermark",
+            "9:16 · 1536×2752", qwen21_t2i_model, 33, 3.5, "res_multistep",
+            "beta", 5791357, False, 2, False, "",
+        ) + qwen21_t2i_triples,
     }
 
 
@@ -517,7 +541,8 @@ def cases(module) -> dict:
 # handler.
 CASE_HANDLERS = {"generate_zimage_upscale": "generate_zimage",
                  "generate_qwen21_ref_three": "generate_qwen21_ref",
-                 "generate_qwen21_ref_ten": "generate_qwen21_ref"}
+                 "generate_qwen21_ref_ten": "generate_qwen21_ref",
+                 "generate_qwen21_t2i_negative": "generate_qwen21_t2i"}
 
 
 def check_settings(name, args, settings) -> None:
@@ -533,9 +558,9 @@ def check_settings(name, args, settings) -> None:
     import, because that one is a plain function. The V2 blob is built
     inline inside generate_v2, so the only way to see it is to run the
     handler — which is what happens here. The two MiniMax cases and the
-    first Z-Image and Qwen 2.1 cases tick the save-preset box, so their
-    blobs (_minimax_settings, _zimage_settings, _qwen21_settings) are
-    checked too.
+    first Z-Image and Qwen 2.1 Reference and Qwen 2.1 cases tick the
+    save-preset box, so their blobs (_minimax_settings, _zimage_settings,
+    _qwen21_settings, _qwen21_t2i_settings) are checked too.
 
     The inversion in the middle is worth reading twice. `Field.name` is
     the handler parameter name and `fields` is submission order, so
