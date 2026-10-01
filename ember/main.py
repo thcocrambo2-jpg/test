@@ -182,9 +182,12 @@ def main() -> None:
         # carries them — which is what an existing volume has until
         # bootstrap.repin_checkout has moved it to the pin.
         comfy.verify_core_node(MINIMAX_NODE, MINIMAX_COMFYUI_MIN)
-    if features.enabled(features.Key.QWEN21_EDIT):
+    if (features.enabled(features.Key.QWEN21_EDIT)
+            or features.enabled(features.Key.QWEN21_T2I)):
         # Core ComfyUI too, and newer still: a checkout the repin could not
-        # move is older than the release these nodes ship in.
+        # move is older than the release these nodes ship in. The text-to-
+        # image graph does not use the node, but the model it loads arrived
+        # in the same release, so the node stands for that too.
         comfy.verify_core_node(QWEN21_ENCODE_NODE, QWEN21_COMFYUI_MIN)
     if (features.enabled(features.Key.KREA_EDIT)
             or features.enabled(features.Key.KREA_V2_EDIT)):

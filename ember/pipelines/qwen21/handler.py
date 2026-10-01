@@ -1,4 +1,4 @@
-"""The 🧩 Qwen 2.1 Reference generator."""
+"""The 🧩 Qwen 2.1 Reference and 🌄 Qwen 2.1 generators."""
 
 import random
 import uuid
@@ -8,7 +8,12 @@ from PIL import Image, ImageOps
 from ember.comfy.client import client
 from ember.comfy.server import ensure_alive as comfy_ensure_alive
 from ember.comfy.server import node_registered
-from ember.generation.handlers import QWEN21_EDIT, _check_model, _save_preset
+from ember.generation.handlers import (
+    QWEN21_EDIT,
+    QWEN21_T2I,
+    _check_model,
+    _save_preset,
+)
 from ember.generation.loras import (
     _resolve_lora_slots,
     _skipped_note,
@@ -24,9 +29,12 @@ from ember.pipelines.qwen21.constants import (
     QWEN21_MAX_REFERENCE_EDGE,
     QWEN21_MAX_REFERENCES,
     QWEN21_OUTPUT_SIZES,
+    QWEN21_T2I_DEFAULT_SIZE,
+    QWEN21_T2I_SIZES,
 )
 from ember.pipelines.qwen21.workflow import (
     build_qwen21_ref_workflow,
+    build_qwen21_t2i_workflow,
     qwen21_missing,
     reference_size,
 )
@@ -168,4 +176,81 @@ def generate_qwen21_ref(references, prompt, negative, output_size, model,
     } for i in range(int(batch_count))]
     for images, status in _run_jobs(jobs, builder=build_qwen21_ref_workflow,
                                     prefix="Qwen21Ref"):
+        yield images, notice + status, base_seed
+
+
+def _qwen21_t2i_settings(output_size, model, steps, cfg, sampler, scheduler,
+                         seed, randomize, batch_count, lora_slots) -> dict:
+    """The Qwen 2.1 tab's controls as a preset stores them.
+
+    The Reference tab's shape without `reference_detail`. scripts/golden.py
+    checks this against tabschema's settings().
+    """
+    return {
+        "output_size": output_size,
+        "model": model,
+        "steps": int(steps),
+        "cfg": float(cfg),
+        "sampler": sampler,
+        "scheduler": scheduler,
+        "seed": int(seed or 0),
+        "randomize": bool(randomize),
+        "batch_count": int(batch_count),
+        "loras": [[bool(on), stored_lora(name), float(weight)]
+                  for on, name, weight
+                  in zip(lora_slots[::3], lora_slots[1::3], lora_slots[2::3])],
+    }
+
+
+def generate_qwen21_t2i(prompt, negative, output_size, model, steps, cfg,
+                        sampler, scheduler, seed, randomize, batch_count,
+                        save_preset, preset_name, *lora_slots):
+    """Qwen 2.1 tab: batch_count text-to-image jobs on sequential seeds."""
+    if not str(prompt or "").strip():
+        yield [], "❌ Write a prompt.", 0
+        return
+    entry, error = _check_model(QWEN21_T2I, model)
+    if error:
+        yield [], error, 0
+        return
+    missing = qwen21_missing()
+    if missing:
+        yield [], ("❌ The Qwen 2.1 weights are not downloaded yet (missing: "
+                   "%s) — restart the app so the download step can fetch "
+                   "them." % ", ".join(missing)), 0
+        return
+
+    # The graph is all long-standing nodes, but the model and its encoder
+    # load only on the ComfyUI release that added the Qwen 2.1 nodes, so
+    # their encode node stands for the version. ComfyUI first, as above.
+    alive, notice = comfy_ensure_alive()
+    if not alive:
+        yield [], notice, 0
+        return
+    notice = notice + "\n" if notice else ""
+    if not node_registered(QWEN21_ENCODE_NODE):
+        yield [], (notice + "❌ This ComfyUI cannot load Qwen Image 2.1 — it "
+                   "needs ComfyUI %s or later. Restart the app so setup can "
+                   "move ComfyUI to the pinned release."
+                   % QWEN21_COMFYUI_MIN), 0
+        return
+
+    notice += _save_preset(presets.TAB_QWEN21_T2I, save_preset, preset_name,
+                           _qwen21_t2i_settings(output_size, model, steps,
+                                                cfg, sampler, scheduler,
+                                                seed, randomize, batch_count,
+                                                lora_slots))
+    base_seed = random.randint(0, 2**32 - 1) if randomize else int(seed)
+    width, height = QWEN21_T2I_SIZES.get(
+        output_size, QWEN21_T2I_SIZES[QWEN21_T2I_DEFAULT_SIZE])
+    loras, skipped = _resolve_lora_slots(QWEN21_T2I, lora_slots)
+    notice += _skipped_note(skipped)
+    jobs = [{
+        "prompt": prompt, "negative": negative or "", "seed": base_seed + i,
+        "steps": int(steps), "cfg": float(cfg), "width": width,
+        "height": height, "sampler": sampler, "scheduler": scheduler,
+        "loras": loras, "unet_file": entry.file,
+    } for i in range(int(batch_count))]
+    for images, status in _run_jobs(jobs, builder=build_qwen21_t2i_workflow,
+                                    prefix="Qwen21"):
         yield images, notice + status, base_seed

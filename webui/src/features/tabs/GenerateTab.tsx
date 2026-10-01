@@ -16,7 +16,7 @@ import { OutputPanel } from './OutputPanel'
 import s from '@/components/SchemaForm/form.module.css'
 
 /*
- * Nine of the eleven tabs. All of them.
+ * Ten of the twelve tabs. All of them.
  *
  * There is no per-tab code anywhere in this app any more. Krea2 was built
  * first on purpose — it exercises the schema form, SSE, the queue panel and

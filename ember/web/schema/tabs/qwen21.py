@@ -1,4 +1,4 @@
-"""The 🧩 Qwen 2.1 Reference tab."""
+"""The 🧩 Qwen 2.1 Reference and 🌄 Qwen 2.1 tabs."""
 
 from ember import features
 from ember.generation import handlers
@@ -14,8 +14,13 @@ from ember.pipelines.qwen21.constants import (
     QWEN21_OUTPUT_SIZES,
     QWEN21_SAMPLERS,
     QWEN21_SCHEDULERS,
+    QWEN21_T2I_DEFAULT_SIZE,
+    QWEN21_T2I_SIZES,
 )
-from ember.pipelines.qwen21.handler import generate_qwen21_ref
+from ember.pipelines.qwen21.handler import (
+    generate_qwen21_ref,
+    generate_qwen21_t2i,
+)
 from ember.web.schema.fields import (
     GEN_PRESET_NOTE,
     G_CORE,
@@ -105,6 +110,57 @@ QWEN21_REF_SCHEMA = TabSchema(
         *_preset_save_fields(),
         Field("lora_slots", "LoRA stack", "repeat",
               repeat=_triple_tail(handlers.QWEN21_EDIT,
+                                  _blank_slots(QWEN21_LORA_SLOTS),
+                                  "LoRA stack — model + CLIP")),
+    ),
+)
+
+
+# The Reference tab's form with the references and Advanced taken out:
+# Prompt, Output with the size and the model, a Sampler with a scheduler,
+# presets with no prompt library, and the same model + CLIP LoRA stack over
+# this feature's own list. Sizes are the template's note, 1:1 first, as the
+# model card leads with it.
+QWEN21_T2I_SCHEMA = TabSchema(
+    model_registry=handlers.QWEN21_T2I,
+    key=Key.QWEN21_T2I, handler=generate_qwen21_t2i,
+    lane=runner.COMFY_LANE, prompt_field="prompt",
+    result_keys=IMAGE_KEYS, tab_id="qwen21t2i",
+    icon="🌄",
+    blurb="Detailed 2K images from a prompt, with legible text in them.",
+    category="generate", route="/generate/qwen21",
+    submit_label="Generate", preset_tab=presets.TAB_QWEN21_T2I,
+    preset_note=GEN_PRESET_NOTE,
+    groups=(G_PROMPT, G_CORE, G_SAMPLER, G_SEED, G_SAVE_PRESET),
+    fields=(
+        Field("prompt", "Prompt", "textarea",
+              "A neon shop sign that reads \"OPEN ALL NIGHT\" above a "
+              "noodle bar, rainy night, reflections on wet pavement, "
+              "35 mm photo",
+              lines=5, group="prompt"),
+        Field("negative", "Negative prompt", "textarea", "", lines=3,
+              group="prompt", collapsed=True, hint=_CFG_NOTE),
+        Field("output_size", "Output size", "select",
+              QWEN21_T2I_DEFAULT_SIZE, choices=list(QWEN21_T2I_SIZES),
+              group="core", preset="output_size", wide=True),
+        _model_field(handlers.QWEN21_T2I),
+        Field("steps", "Steps", "slider",
+              _model_setting(handlers.QWEN21_T2I, "steps"), lo=1, hi=60,
+              step=1, group="sampler", preset="steps"),
+        Field("cfg", "CFG", "slider",
+              _model_setting(handlers.QWEN21_T2I, "cfg"),
+              lo=0.5, hi=8.0, step=0.1, group="sampler", preset="cfg",
+              hint=_CFG_NOTE),
+        Field("sampler", "Sampler", "select", QWEN21_SAMPLERS[0],
+              choices=QWEN21_SAMPLERS, group="sampler", preset="sampler"),
+        Field("scheduler", "Scheduler", "select", QWEN21_SCHEDULERS[0],
+              choices=QWEN21_SCHEDULERS, group="sampler",
+              preset="scheduler"),
+        *_seed_fields(),
+        _batch_field(),
+        *_preset_save_fields(),
+        Field("lora_slots", "LoRA stack", "repeat",
+              repeat=_triple_tail(handlers.QWEN21_T2I,
                                   _blank_slots(QWEN21_LORA_SLOTS),
                                   "LoRA stack — model + CLIP")),
     ),

@@ -1,13 +1,13 @@
-"""Qwen Image 2.1 — the fixed half of the graph the 🧩 Qwen 2.1 Reference
-tab builds.
+"""Qwen Image 2.1 — the fixed half of the graphs the 🧩 Qwen 2.1 Reference
+and 🌄 Qwen 2.1 tabs build.
 
-Facts about the model and its workflow, and nothing read from the
+Facts about the model and its workflows, and nothing read from the
 environment (that is ember/settings.py). The diffusion model is not here:
-it is a catalogue record, listed for the qwen21_edit feature, so the Model
-dropdown works the way Krea's and Z-Image's do and a bf16 record can be
-added later as a database edit. What stays here is what the graph is
-wired around — the text encoder, the VAE, the two core nodes and the size
-rules.
+it is a catalogue record, listed for the qwen21_edit and qwen21_t2i
+features, so the Model dropdown works the way Krea's and Z-Image's do and
+a bf16 record can be added later as a database edit. What stays here is
+what the graphs are wired around — the text encoder, the VAE, the two core
+nodes and the size rules.
 
 A data module on purpose: nothing is imported, so weights/downloads.py can
 read it without a GPU or a licence.
@@ -89,3 +89,13 @@ QWEN21_SCHEDULERS = ["simple", "beta"]
 # The LoRA stack's rows. The template's Power Lora Loader was empty; the
 # form offers four, over the feature's catalogue list.
 QWEN21_LORA_SLOTS = 4
+
+# ── Text to image ─────────────────────────────────────────────────────────────
+# The 🌄 Qwen 2.1 tab, transcribed from qwen_image_2.1_workflow.json in the
+# same template: the text-to-image half of Qwen's own Qwen-Image-2.1
+# workflow Space, on the same encoder, VAE and diffusion model. Its sizes
+# are the template's note, which is the model card's aspect-ratio table —
+# the reference tab's list without "Same as reference 1".
+QWEN21_T2I_SIZES = {label: size for label, size in QWEN21_OUTPUT_SIZES.items()
+                    if size is not None}
+QWEN21_T2I_DEFAULT_SIZE = "1:1 · 2048×2048"

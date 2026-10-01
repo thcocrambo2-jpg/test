@@ -43,9 +43,10 @@ KREA_V2_EDIT = str(Key.KREA_V2_EDIT)
 # Z-Image reads a model list and a LoRA list the same way. Its text encoder,
 # VAE and upscale model are fixed in pipelines/zimage/constants.py.
 ZIMAGE_T2I = str(Key.ZIMAGE_T2I)
-# So does Qwen 2.1 Reference. Its text encoder and VAE are fixed in
-# pipelines/qwen21/constants.py.
+# So do the two Qwen 2.1 tabs, each its own lists. Their text encoder and
+# VAE are fixed in pipelines/qwen21/constants.py.
 QWEN21_EDIT = str(Key.QWEN21_EDIT)
+QWEN21_T2I = str(Key.QWEN21_T2I)
 # The MiniMax tabs take LoRAs from the catalogue too, but no model: their
 # weights are fixed in pipelines/minimax/constants.py, so only the LoRA
 # list is read.
