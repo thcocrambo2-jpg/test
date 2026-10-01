@@ -1,4 +1,4 @@
-# Qwen Image 2.1 — a prompt and up to 10 reference images
+# Qwen Image 2.1 — a prompt and up to 10 reference images, or a prompt alone
 
 The **🧩 Qwen 2.1 Reference** tab (`qwen21_edit`): the user adds 1 to 10
 numbered reference images and writes a prompt that names them by number
@@ -19,8 +19,12 @@ The diffusion model is not: it is a catalogue record,
 Z-Image's do, and a bf16 record can be added later as a database edit.
 See [catalogue.md](catalogue.md).
 
-The feature is on no plan. A key gets it through `features_extra`; see
-[Licensing and features](../architecture/licensing-and-features.md).
+A second tab, **🌄 Qwen 2.1** (`qwen21_t2i`), is plain text-to-image on
+the same model, encoder and VAE; see [Text to image](#text-to-image) at
+the end. Everything above that section is about the Reference tab.
+
+Both features are on no plan. A key gets one through `features_extra`;
+see [Licensing and features](../architecture/licensing-and-features.md).
 
 ## Where the graph comes from
 
@@ -187,6 +191,59 @@ tickbox and no prompt-library publish. A preset carries the output size,
 model, steps, CFG, sampler, scheduler, reference detail, seed, randomize,
 batch count and the LoRA stack — never the reference images. See
 [presets](../features/presets.md).
+
+## Text to image
+
+**🌄 Qwen 2.1** (`qwen21_t2i`, route `/generate/qwen21`) writes one image
+from a prompt. Its graph is `qwen_image_2.1_workflow.json` from the same
+template, which is the ComfyUI form of the text-to-image half of Qwen's own
+[Qwen-Image-2.1 workflow Space](https://huggingface.co/spaces/Qwen/Qwen-Image-2.1-workflow):
+the same model, a prompt in and an image out, at the model card's
+aspect-ratio table.
+
+```
+UNETLoader ─ LoraLoader × n ─────────────────────────── KSampler ─ VAEDecode ─ SaveImage
+CLIPLoader(qwen_image) ─┘  CLIPTextEncode(prompt) ──┬── positive      │          (prefix "Qwen21")
+                                                    └ ConditioningZeroOut ─ negative
+VAELoader ──────────────────────────── EmptyLatentImage(output size) ─┘
+```
+
+`build_qwen21_t2i_workflow` shares its loaders and LoRA chain with the
+reference graph (`_loaders`). The differences from it:
+
+- **`CLIPTextEncode`, not `TextEncodeQwenImage21`.** With this encoder
+  and `type="qwen_image"`, ComfyUI wraps the prompt in Qwen 2.1's own
+  text-to-image template, so the core node is the right one. There is no
+  `QwenImage21Cache`: the template has none, and it caches the references
+  this graph does not have.
+- **The negative is zeroed**, as in the template — unless the Negative
+  prompt box has text, which is then encoded the same way, so that a CFG
+  above 1 has something to push against.
+- **Output size** is the template's note without "Same as reference 1",
+  1:1 · 2048×2048 by default.
+
+The form is the Reference tab's without the references and Advanced:
+Prompt, Output (size and model), Sampler (steps, CFG, sampler,
+scheduler), Seed & batch, Presets, and the same four-row model + CLIP
+LoRA stack over `qwen21_t2i`'s own catalogue list, which is empty for
+now. Steps and CFG come from the model record: 25 and 1, the template's.
+Qwen's Space runs 28 steps and the model card 40, through diffusers'
+scheduler; raise Steps to try those.
+
+The Space's optional prompt rewriter (`Qwen-Image-2.1-PE-T2I`, a 9B model
+of its own) is left out, and so is its image-edit half: editing with
+references is the other tab.
+
+It needs no download of its own: the `qwen21` group and the catalogue
+model are the Reference tab's, so a key with both tabs fetches them once.
+The handler checks the same things the Reference tab's does, apart from
+the references: a prompt, the model, the two fixed files, and a ComfyUI
+new enough for Qwen Image 2.1 — the graph uses no Qwen node, but the
+model loads only on the release that added them, so
+`TextEncodeQwenImage21` stands for the version.
+
+Presets are a list of their own, under `qwen21_t2i`: the Reference tab's
+blob without `reference_detail`.
 
 ## Related
 

@@ -141,7 +141,8 @@ call it with, then `$PY scripts/golden.py` to write
 `golden.py --check` fails on any change to the graph the handler builds.
 
 A handler that builds two graphs worth freezing — Z-Image with and
-without its upscale pass, Qwen 2.1 with one, three and ten references —
+without its upscale pass, Qwen 2.1 Reference with one, three and ten
+references, Qwen 2.1 with and without a negative prompt —
 gets a case per graph under another name, mapped back to the handler in
 `CASE_HANDLERS`, and a snapshot each.
 

@@ -23,8 +23,8 @@ validation rules — is documented in
   that tab offers. The first model is the tab's default. An id may appear
   in any number of features.
 
-Eight features have a `feature_assets` entry: `krea_t2i`, `krea_edit`,
-`krea_v2_t2i`, `krea_v2_edit`, `zimage_t2i`, `qwen21_edit`,
+Nine features have a `feature_assets` entry: `krea_t2i`, `krea_edit`,
+`krea_v2_t2i`, `krea_v2_edit`, `zimage_t2i`, `qwen21_t2i`, `qwen21_edit`,
 `minimax_i2v` and `minimax_t2v`.
 
 `zimage_t2i` lists one model, `z-image-turbo-bf16`, and LoRAs trained
@@ -32,9 +32,9 @@ for Z-Image; the Krea LoRAs do not load on it, so none are shared. An
 empty `loras` list is valid on every feature; the at-least-one rule is
 for `models` only.
 
-`qwen21_edit` lists one model, `qwen-image-2-1-int8`, and no LoRAs yet:
-nothing trained for Qwen Image 2.1 is in the catalogue, so its stack
-offers `None` alone until some are added.
+`qwen21_t2i` and `qwen21_edit` each list one model, `qwen-image-2-1-int8`,
+and no LoRAs yet: nothing trained for Qwen Image 2.1 is in the catalogue,
+so their stacks offer `None` alone until some are added.
 
 ## Tabs with LoRAs and no models
 
@@ -133,8 +133,8 @@ header — "3/8 active", or "no slots" for a feature with none. Opening it
 shows every slot at once; the list is flat and ordered, and the collapse
 is purely visual.
 
-🧩 Qwen 2.1 Reference sits between the two: four blank slots offering
-its feature's whole list, like the left column, chained as `LoraLoader`
+🧩 Qwen 2.1 Reference and 🌄 Qwen 2.1 sit between the two: four blank slots offering
+each feature's whole list, like the left column, chained as `LoraLoader`
 on the model and the CLIP, like the right one, because the template's
 loader patched both. See [qwen21.md](qwen21.md#the-lora-stack).
 

@@ -30,10 +30,11 @@ asset groups it needs.
 | `krea_t2i` | 🎨 Krea2 | ~26 GB (Krea 2 base, shared) |
 | `krea_v2_t2i` | 🔶 Krea2 V2 | ~17 GB |
 | `zimage_t2i` | ⚡ Ember Lite — on no plan yet | ~20.8 GB |
+| `qwen21_t2i` | 🌄 Qwen 2.1 — on no plan yet | ~17.3 GB, shared with `qwen21_edit` |
 | `gallery` | 🖼️ Gallery | none |
 | `krea_edit` | ✨ Krea2 Edit | ~1.9 GB + base |
 | `krea_v2_edit` | 🔷 Krea2 V2 Edit | ~1.9 GB + V2 |
-| `qwen21_edit` | 🧩 Qwen 2.1 Reference — on no plan yet | ~17.3 GB |
+| `qwen21_edit` | 🧩 Qwen 2.1 Reference — on no plan yet | ~17.3 GB, shared with `qwen21_t2i` |
 | `wan_i2v` | 🎬 Wan Video | ~49 GB |
 | `minimax_i2v` | 🎥 MiniMax I2V (video with sound) | ~56 GB, shared with `minimax_t2v` |
 | `minimax_t2v` | 🎞️ MiniMax T2V (video with sound) | shared with `minimax_i2v` |
@@ -51,16 +52,16 @@ once. `krea_v2_edit` is the same trick one level up: it shares the
 Identity Edit LoRA with `krea_edit` and the ~17 GB of V2 weights with
 `krea_v2_t2i`, so its own cost is only whichever of those two is not
 already granted. The MiniMax pair name one group between them, which is
-why the second tab is free.
+why the second tab is free, and so do the two Qwen 2.1 tabs.
 
 A new tab lands on the internal `admin` plan first and is added to a
 public plan in `license-validator/src/plans.js` when it should be
 something a customer can buy.
 
-A tab can also be on no plan at all, which is where `zimage_t2i` and
-`qwen21_edit` are. A key gets one through `features_extra` (`npm run
-issue-key -- --key <key> --features-extra zimage_t2i,qwen21_edit
---update`), and its row in the `features` collection is `enabled: false`, so neither `/v1/plans` nor the Telegram
+A tab can also be on no plan at all, which is where `zimage_t2i`,
+`qwen21_t2i` and `qwen21_edit` are. A key gets one through
+`features_extra` (`npm run issue-key -- --key <key> --features-extra
+zimage_t2i,qwen21_t2i,qwen21_edit --update`), and its row in the `features` collection is `enabled: false`, so neither `/v1/plans` nor the Telegram
 bot mentions it. That flag never touches an entitlement, so the key still
 gets the tab and its label; set it to `true` in the same edit that puts
 the tab on a plan, or `/v1/plans` drops it from that plan's list.

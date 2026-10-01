@@ -65,8 +65,8 @@ and is fed to `hf_hub_download(revision=…)`. A git repo records
 ComfyUI itself is pinned the same way, under `ComfyUI` in `PINS.json`,
 at **v0.37.4** (`8ff6dc38`). Every tab runs on it, so it moves only when
 a tab needs a newer release, and the floor is set by the tabs whose nodes
-are core ComfyUI: MiniMax needs v0.34.0 (`MINIMAX_COMFYUI_MIN`) and Qwen
-2.1 Reference v0.37.0 (`QWEN21_COMFYUI_MIN`), which is why the pin is
+are core ComfyUI: MiniMax needs v0.34.0 (`MINIMAX_COMFYUI_MIN`) and both
+Qwen 2.1 tabs v0.37.0 (`QWEN21_COMFYUI_MIN`), which is why the pin is
 where it is.
 
 A checkout that already exists (a pod volume, a Windows install, the
