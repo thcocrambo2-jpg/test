@@ -31,6 +31,7 @@ from ember.settings import (
 )
 from ember.pipelines.krea2.constants import KREA2EDIT_NODES_REPO
 from ember.pipelines.krea2_v2.constants import V2_NODE_REPOS
+from ember.pipelines.wan.constants import WAN_RIFE_DIR, WAN_RIFE_NODES
 from ember.pipelines.zimage.constants import ZIMAGE_UPSCALE_NODES
 
 COMFYUI_REPO = "https://github.com/comfyanonymous/ComfyUI.git"
@@ -922,6 +923,64 @@ def install_zimage_nodes() -> None:
         shutil.rmtree(dest, ignore_errors=True)
 
 
+def install_wan_nodes() -> None:
+    """Clone ComfyUI-Frame-Interpolation, the Video tab's Smooth motion.
+
+    Only that tick uses it, so this is skipped entirely when wan_i2v is
+    off. The pack's requirements are not installed — see WAN_RIFE_NODES.
+    Its ckpts/ folder is linked to MODELS_DIR/frame_interpolation, where
+    the download step puts the RIFE checkpoint, so the pack finds it there
+    and never reaches for its own unpinned URLs.
+
+    Nothing here is fatal — the contract install_zimage_nodes follows: a
+    pack that will not install leaves Smooth motion skipped with a note
+    saying why, and every other tab, and Wan without it, untouched.
+    """
+    if not features.enabled(features.Key.WAN_I2V):
+        return
+    dirname, repo, _class_type = WAN_RIFE_NODES
+    dest = COMFY_DIR / "custom_nodes" / dirname
+    if dest.exists():
+        log.info("%s already present at %s — skipping clone", dirname, dest)
+    else:
+        try:
+            install_node_pack(dirname, repo, dest, f"Cloning {dirname}")
+        except RuntimeError as exc:
+            log.error("Could not install %s (%s) — Smooth motion on the "
+                      "Video tab will be skipped until it is installed.",
+                      dirname, exc)
+            shutil.rmtree(dest, ignore_errors=True)
+            return
+    try:
+        link_dir(MODELS_DIR / WAN_RIFE_DIR, dest / "ckpts")
+    except OSError as exc:
+        log.error("Could not link %s's checkpoints to %s (%s) — Smooth "
+                  "motion will not find the RIFE model.", dirname,
+                  MODELS_DIR / WAN_RIFE_DIR, exc)
+
+
+def link_dir(src, dst) -> None:
+    """Make dst a symlink to the directory src, creating src if need be.
+
+    The test is where a link *points*, not merely that it is a link — see
+    link_model_dirs. A link to anywhere else, or a real directory in the
+    way, is replaced.
+    """
+    src.mkdir(parents=True, exist_ok=True)
+    if dst.is_symlink():
+        # resolve(strict=False): a dangling link resolves to the target
+        # it names, so a stale one compares unequal rather than raising.
+        if dst.resolve() == src.resolve():
+            return
+        log.warning("Relinking %s — it pointed at %s, which is not %s",
+                    dst, dst.resolve(), src)
+        dst.unlink()
+    elif dst.exists():
+        shutil.rmtree(dst)
+    dst.symlink_to(src, target_is_directory=True)
+    log.info("Linked %s → %s", dst, src)
+
+
 def link_model_dirs() -> None:
     """Point ComfyUI's model folders at MODELS_DIR via symlinks.
 
@@ -938,18 +997,4 @@ def link_model_dirs() -> None:
     replaced.
     """
     for name in MODEL_DIRS:
-        src = MODELS_DIR / name
-        src.mkdir(parents=True, exist_ok=True)
-        dst = COMFY_DIR / "models" / name
-        if dst.is_symlink():
-            # resolve(strict=False): a dangling link resolves to the target
-            # it names, so a stale one compares unequal rather than raising.
-            if dst.resolve() == src.resolve():
-                continue
-            log.warning("Relinking %s — it pointed at %s, which is not %s",
-                        dst, dst.resolve(), src)
-            dst.unlink()
-        elif dst.exists():
-            shutil.rmtree(dst)
-        dst.symlink_to(src, target_is_directory=True)
-        log.info("Linked %s → %s", dst, src)
+        link_dir(MODELS_DIR / name, COMFY_DIR / "models" / name)

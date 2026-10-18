@@ -35,7 +35,7 @@ asset groups it needs.
 | `krea_edit` | ✨ Krea2 Edit | ~1.9 GB + base |
 | `krea_v2_edit` | 🔷 Krea2 V2 Edit | ~1.9 GB + V2 |
 | `qwen21_edit` | 🧩 Qwen 2.1 Reference — on no plan yet | ~17.3 GB, shared with `qwen21_t2i` |
-| `wan_i2v` | 🎬 Wan Video | ~49 GB |
+| `wan_i2v` | 🎬 Wan Video | ~48 GB |
 | `minimax_i2v` | 🎥 MiniMax I2V (video with sound) | ~56 GB, shared with `minimax_t2v` |
 | `minimax_t2v` | 🎞️ MiniMax T2V (video with sound) | shared with `minimax_i2v` |
 | `community_prompts` | 🌟 Prompt Library | none |

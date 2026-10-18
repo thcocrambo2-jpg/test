@@ -71,6 +71,17 @@
       "note": "Z-Image's Upscale 1.5x pass"
     },
     {
+      "repo": "assets",
+      "local": "frame_interpolation/rife/rife49.pth",
+      "path_in_repo": "frame_interpolation/rife/rife49.pth",
+      "source": {
+        "kind": "hf",
+        "repo": "Isi99999/Frame_Interpolation_Models",
+        "path": "rife49.pth"
+      },
+      "note": "Wan's Smooth motion (RIFE VFI)"
+    },
+    {
       "repo": "loras",
       "local": "diffusion_models/Krea2_FinePornV2_FP8.safetensors",
       "path_in_repo": "diffusion_models/Krea2_FinePornV2_FP8.safetensors",
@@ -108,6 +119,11 @@
       "dir": "ComfyUI_UltimateSDUpscale",
       "repo": "nodes",
       "url": "https://github.com/ssitu/ComfyUI_UltimateSDUpscale"
+    },
+    {
+      "dir": "ComfyUI-Frame-Interpolation",
+      "repo": "nodes",
+      "url": "https://github.com/Fannovel16/ComfyUI-Frame-Interpolation"
     }
   ],
   "pin_upstream": {
@@ -119,6 +135,8 @@
     "Comfy-Org/z_image_turbo": "hf",
     "Comfy-Org/Qwen-Image-2.1": "hf",
     "Hearmeman/comfyui-template-assets": "hf",
+    "lightx2v/Wan2.2-Distill-Loras": "hf",
+    "Isi99999/Frame_Interpolation_Models": "hf",
     "https://github.com/comfyanonymous/ComfyUI.git": "git"
   }
 }

@@ -6,12 +6,17 @@ the workflow chains two KSamplerAdvanced passes (the first returns its
 leftover noise to the second). Only nodes that ship with current ComfyUI
 are used: UNETLoader ×2, CLIPLoader(type="wan"), VAELoader,
 LoraLoaderModelOnly, ModelSamplingSD3, WanImageToVideo, KSamplerAdvanced,
-VAEDecode, CreateVideo and SaveVideo — no custom node packs.
+VAEDecode, CreateVideo and SaveVideo. The one custom node is RIFE VFI
+(ComfyUI-Frame-Interpolation), and only when Smooth motion is ticked.
 
-Turbo mode applies the lightx2v "Lightning" 4-step distillation LoRAs
-(one per expert, strength 1.0) with CFG 1.0 — the same idea as the Krea 2
-Turbo checkpoint, delivered as LoRAs because the base weights are shared
-with raw mode. Raw mode is the undistilled 20-step CFG 3.5 schedule.
+Turbo mode applies lightx2v's 4-step distillation LoRAs (one per expert,
+strength 1.0) with CFG 1.0 — the same idea as the Krea 2 Turbo
+checkpoint, delivered as LoRAs because the base weights are shared with
+raw mode. Raw mode is the undistilled 20-step CFG 3.5 schedule.
+
+Smooth motion puts RIFE between the decode and the video: the frames
+Wan made, with RIFE's in between, saved at the frame rate times the
+multiplier, so the clip keeps its length.
 
 The alternative TI2V 5B model (build_wan_5b_workflow) is a single dense
 model with its own Wan 2.2 VAE and a plain one-KSampler graph — lighter
@@ -21,15 +26,23 @@ in VRAM, 24 fps, no turbo/raw split.
 from ember.comfy.server import GPU_COUNT
 from ember.settings import MODELS_DIR
 from ember.pipelines.wan.constants import (
+    WAN_5B_RIFE_MULTIPLIER,
     WAN_5B_UNET,
     WAN_5B_VAE,
     WAN_HIGH_UNET,
     WAN_LIGHTNING_HIGH,
     WAN_LIGHTNING_LOW,
     WAN_LOW_UNET,
+    WAN_RIFE_FILE,
+    WAN_RIFE_MODEL,
+    WAN_RIFE_MULTIPLIER,
+    WAN_RIFE_NODES,
+    WAN_RIFE_SETTINGS,
     WAN_TEXT_ENCODER,
     WAN_VAE,
 )
+
+RIFE_NODE = WAN_RIFE_NODES[2]
 
 
 def wan_models_available() -> bool:
@@ -59,6 +72,36 @@ def wan_lightning_available() -> bool:
                for f in (WAN_LIGHTNING_HIGH, WAN_LIGHTNING_LOW))
 
 
+def wan_rife_available() -> bool:
+    """True once the RIFE checkpoint Smooth motion needs is on disk."""
+    return (MODELS_DIR / WAN_RIFE_FILE).exists()
+
+
+def _add_output(wf: dict, images_ref: list, fps: int, multiplier: int,
+                filename_prefix: str) -> None:
+    """The decoded frames to an mp4: CreateVideo + SaveVideo.
+
+    With a multiplier above 1, RIFE VFI comes first and the video runs at
+    fps times it, so the frames RIFE adds make it smoother, not longer.
+    """
+    if multiplier > 1:
+        wf["interpolate"] = {
+            "class_type": RIFE_NODE,
+            "inputs": {"ckpt_name": WAN_RIFE_MODEL, "frames": images_ref,
+                       "multiplier": int(multiplier), **WAN_RIFE_SETTINGS},
+        }
+        images_ref = ["interpolate", 0]
+    wf["video"] = {
+        "class_type": "CreateVideo",
+        "inputs": {"images": images_ref, "fps": float(fps * multiplier)},
+    }
+    wf["save"] = {
+        "class_type": "SaveVideo",
+        "inputs": {"video": ["video", 0], "filename_prefix": filename_prefix,
+                   "format": "mp4", "codec": "h264"},
+    }
+
+
 def build_wan_i2v_workflow(
     *,
     prompt: str,
@@ -73,6 +116,7 @@ def build_wan_i2v_workflow(
     sampler: str = "euler",
     shift: float = 5.0,
     lightning: bool = True,
+    interpolate: bool = False,
     image_name: str,
     filename_prefix: str = "wan/Wan22I2V",
 ) -> dict:
@@ -84,7 +128,8 @@ def build_wan_i2v_workflow(
     the frame count and must be a multiple of 4 plus 1 (81 = 5 s at 16
     fps, the training length). The two experts swap at steps // 2, the
     split the official template uses for both the 4- and 20-step
-    schedules.
+    schedules. `interpolate` runs RIFE at WAN_RIFE_MULTIPLIER, so the clip
+    is saved at 64 fps.
     """
     wf = {
         "unet_high": {
@@ -202,15 +247,8 @@ def build_wan_i2v_workflow(
         "class_type": "VAEDecode",
         "inputs": {"samples": ["sampler_low", 0], "vae": vae_ref},
     }
-    wf["video"] = {
-        "class_type": "CreateVideo",
-        "inputs": {"images": ["decode", 0], "fps": float(fps)},
-    }
-    wf["save"] = {
-        "class_type": "SaveVideo",
-        "inputs": {"video": ["video", 0], "filename_prefix": filename_prefix,
-                   "format": "mp4", "codec": "h264"},
-    }
+    _add_output(wf, ["decode", 0], fps,
+                WAN_RIFE_MULTIPLIER if interpolate else 1, filename_prefix)
     return wf
 
 
@@ -227,6 +265,7 @@ def build_wan_5b_workflow(
     fps: int = 24,
     sampler: str = "euler",
     shift: float = 8.0,
+    interpolate: bool = False,
     image_name: str,
     filename_prefix: str = "wan/Wan22TI2V5B",
 ) -> dict:
@@ -238,7 +277,8 @@ def build_wan_5b_workflow(
     that frame is kept. Uses the Wan **2.2** VAE (16× spatial compression
     — width/height must be multiples of 32) and runs at 24 fps; 121
     frames ≈ 5 s. There is no Lightning distillation for this model, so
-    there is no turbo/raw split.
+    there is no turbo/raw split. `interpolate` runs RIFE at
+    WAN_5B_RIFE_MULTIPLIER, so the clip is saved at 48 fps.
     """
     wf = {
         "unet": {
@@ -313,13 +353,6 @@ def build_wan_5b_workflow(
         "class_type": "VAEDecode",
         "inputs": {"samples": ["sampler", 0], "vae": vae_ref},
     }
-    wf["video"] = {
-        "class_type": "CreateVideo",
-        "inputs": {"images": ["decode", 0], "fps": float(fps)},
-    }
-    wf["save"] = {
-        "class_type": "SaveVideo",
-        "inputs": {"video": ["video", 0], "filename_prefix": filename_prefix,
-                   "format": "mp4", "codec": "h264"},
-    }
+    _add_output(wf, ["decode", 0], fps,
+                WAN_5B_RIFE_MULTIPLIER if interpolate else 1, filename_prefix)
     return wf

@@ -10,10 +10,14 @@ tab. Built by
 with the model facts in
 [`ember/pipelines/wan/constants.py`](../../ember/pipelines/wan/constants.py).
 
-Two model families are switchable per job in the tab. All files
-(~49 GB total) auto-download from `Comfy-Org/Wan_2.2_ComfyUI_Repackaged`,
-and **only stock ComfyUI nodes are used** — no node pack is installed for
-this feature.
+Two model families are switchable per job in the tab. The files
+(~48 GB total) auto-download: the models from
+`Comfy-Org/Wan_2.2_ComfyUI_Repackaged`, the turbo LoRAs from
+`lightx2v/Wan2.2-Distill-Loras` and the RIFE checkpoint from
+`Isi99999/Frame_Interpolation_Models`, all pinned. The graph is stock
+ComfyUI apart from one node pack,
+[ComfyUI-Frame-Interpolation](https://github.com/Fannovel16/ComfyUI-Frame-Interpolation),
+which only Smooth motion uses.
 
 ## The two families
 
@@ -21,15 +25,15 @@ this feature.
   high-noise model for the early sampler steps and a low-noise one for
   the late ones, ~14.3 GB each, at 16 fps. Best quality. Two modes mirror
   the Krea turbo/raw split:
-  - **Turbo** — the lightx2v *Lightning* distillation LoRAs (~1.2 GB
-    each) on both experts, 4 steps (2 high + 2 low), CFG 1.0, shift 5.0.
-    Roughly 5× faster; the default.
+  - **Turbo** — lightx2v's rank-64 4-step distillation LoRAs, the 1022
+    release (~0.7 GB each), on both experts: 4 steps (2 high + 2 low),
+    CFG 1.0, shift 5.0. Roughly 5× faster; the default.
   - **Raw** — no LoRA, the undistilled 20-step (10 + 10) CFG 3.5 schedule
     at shift 8.0. Slightly better motion and detail, but expect 15–45+
     minutes per clip on an A40.
 - **5B (TI2V 5B)** — a single dense ~10 GB fp16 model with its own
   higher-compression Wan 2.2 VAE (~1.4 GB), 24 fps, 20 steps / CFG 5 at
-  shift 8. There is no Lightning distillation for it, so it has no
+  shift 8. There is no 4-step distillation for it, so it has no
   turbo/raw choice. Lower quality than 14B, but it fits in about 18 GB of
   VRAM with no expert swap mid-run — the best choice when running the
   parallel video instance — and model switches to and from Krea are much
@@ -43,6 +47,13 @@ Both families share the UMT5-XXL text encoder (~6.7 GB). `shift` is the
 Resolution is chosen as a 480p or 720p *area* while keeping the source
 image's aspect ratio, with the sides snapped to a multiple of 16 (32 for
 the 5B model).
+
+**Smooth motion**, on by default, runs RIFE 4.9 frame interpolation
+over the decoded frames and saves the clip at four times the frame rate
+for 14B (64 fps) and twice for 5B (48 fps). The clip is smoother and
+exactly as long; it costs a few seconds per video. If the node pack or
+the checkpoint is missing, the clip is made without it at the native
+frame rate, and the status line says why.
 
 Videos are saved as MP4 under `output/wan/` and show up in the Gallery
 and in the zip download.
@@ -67,7 +78,7 @@ facts; see [Configuration](../configuration.md).
 
 ## Disk
 
-Make sure the pod volume has room. Krea (~32 GB) + Wan (~49 GB) +
+Make sure the pod volume has room. Krea (~32 GB) + Wan (~48 GB) +
 ComfyUI itself needs a **≥ 100 GB** disk; a 120 GB volume fits with about
 35 GB left for outputs.
 

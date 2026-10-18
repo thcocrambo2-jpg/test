@@ -6,6 +6,7 @@ from ember.pipelines.krea2.constants import SAMPLERS
 from ember.pipelines.wan.constants import (
     WAN_DEFAULT_NEGATIVE,
     WAN_DEFAULT_RESOLUTION,
+    WAN_INTERPOLATE_DEFAULT,
     WAN_MAX_SECONDS,
     WAN_MODE_DEFAULTS,
     WAN_RESOLUTIONS,
@@ -73,5 +74,10 @@ WAN_SCHEMA = TabSchema(
         Field("sampler", "Sampler", "select", "euler",
               choices=SAMPLERS + ["uni_pc"], group="sampling", wide=True),
         _batch_field(hi=10),
+        Field("interpolate", "Smooth motion (RIFE frame interpolation)",
+              "bool", WAN_INTERPOLATE_DEFAULT, group="core", wide=True,
+              hint="Adds frames in between Wan's: 14B clips are saved at "
+                   "64 fps, 5B at 48. Same length, a few seconds more "
+                   "per video."),
     ),
 )

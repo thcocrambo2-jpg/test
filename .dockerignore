@@ -34,6 +34,8 @@
 !ember/pipelines/krea2_v2/constants.py
 !ember/pipelines/zimage/__init__.py
 !ember/pipelines/zimage/constants.py
+!ember/pipelines/wan/__init__.py
+!ember/pipelines/wan/constants.py
 
 # The start script, copied in verbatim: the same file build.sh publishes
 # to R2 and a RunPod template downloads from /v1/start.sh.

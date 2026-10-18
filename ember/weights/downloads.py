@@ -47,7 +47,16 @@ from ember.pipelines.minimax.constants import (
     MINIMAX_TURBO_LORA,
     MINIMAX_TURBO_LORA_REPO,
 )
-from ember.pipelines.wan.constants import WAN_HF_FILES, WAN_HF_REPO
+from ember.pipelines.wan.constants import (
+    WAN_HF_FILES,
+    WAN_HF_REPO,
+    WAN_LIGHTNING_HIGH,
+    WAN_LIGHTNING_LOW,
+    WAN_LIGHTNING_REPO,
+    WAN_RIFE_FILE,
+    WAN_RIFE_MODEL,
+    WAN_RIFE_REPO,
+)
 from ember.pipelines.qwen21.constants import QWEN21_HF_FILES, QWEN21_HF_REPO
 from ember.pipelines.zimage.constants import (
     ZIMAGE_HF_FILES,
@@ -504,7 +513,13 @@ def download_edit_lora() -> None:
 
 
 def download_wan_models() -> None:
-    """Fetch the Wan 2.2 image-to-video models (~49 GB)."""
+    """Fetch the Wan 2.2 image-to-video models (~48 GB).
+
+    The models from Comfy-Org's repack, the turbo LoRAs from lightx2v's
+    repo, whose root they sit at, and the RIFE checkpoint Smooth motion
+    uses (~21 MB) from a community copy, into the folder the frame
+    interpolation pack's ckpts/ is linked to.
+    """
     for relpath in WAN_HF_FILES:
         try:
             fetch_repackaged_file(WAN_HF_REPO, relpath)
@@ -514,6 +529,21 @@ def download_wan_models() -> None:
             log.error("Wan 2.2 file %s unavailable (%s) — the Video tab "
                       "will refuse to run until a later run fetches it.",
                       relpath, exc)
+    for lora in (WAN_LIGHTNING_HIGH, WAN_LIGHTNING_LOW):
+        try:
+            fetch_hf_file_to(WAN_LIGHTNING_REPO, lora,
+                             MODELS_DIR / "loras" / lora)
+        except Exception as exc:
+            log.error("Wan 2.2 turbo LoRA %s unavailable (%s) — Turbo mode "
+                      "will refuse to run until a later run fetches it.",
+                      lora, exc)
+    try:
+        fetch_hf_file_to(WAN_RIFE_REPO, WAN_RIFE_MODEL,
+                         MODELS_DIR / WAN_RIFE_FILE)
+    except Exception as exc:
+        log.error("RIFE checkpoint %s unavailable (%s) — Smooth motion "
+                  "will be skipped until a later run fetches it.",
+                  WAN_RIFE_MODEL, exc)
 
 
 def download_minimax_models() -> None:

@@ -49,6 +49,7 @@ from ember.pipelines.qwen21.constants import (
     QWEN21_COMFYUI_MIN,
     QWEN21_ENCODE_NODE,
 )
+from ember.pipelines.wan.constants import WAN_RIFE_NODES
 from ember.pipelines.zimage.constants import ZIMAGE_UPSCALE_NODES
 
 
@@ -124,6 +125,7 @@ def main() -> None:
     bootstrap.install_custom_nodes()
     bootstrap.install_v2_nodes()
     bootstrap.install_zimage_nodes()
+    bootstrap.install_wan_nodes()
     # Last of the installs, so nothing after it can move torch under the
     # build it picked for that torch, and before ComfyUI starts, which reads
     # the verdict through comfy.start_comfyui -> bootstrap.attention_args.
@@ -203,6 +205,13 @@ def main() -> None:
         # that tick alone — the tab says so itself when it is used, and
         # this is where the reason is logged.
         dirname, _repo, class_type = ZIMAGE_UPSCALE_NODES
+        comfy.verify_custom_node(
+            class_type, dirname, COMFY_DIR / "custom_nodes" / dirname,
+        )
+    if features.enabled(features.Key.WAN_I2V):
+        # Smooth motion's pack, the same posture: a failed import costs
+        # that tick alone, and the Video tab says so when it skips it.
+        dirname, _repo, class_type = WAN_RIFE_NODES
         comfy.verify_custom_node(
             class_type, dirname, COMFY_DIR / "custom_nodes" / dirname,
         )

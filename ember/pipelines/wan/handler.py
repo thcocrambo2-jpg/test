@@ -4,6 +4,8 @@ import random
 import uuid
 
 from ember.comfy.client import wan_client
+from ember.comfy.server import ensure_alive as comfy_ensure_alive
+from ember.comfy.server import node_registered
 from ember.generation.runner import _png_bytes, _run_tag, _run_wan_jobs
 from ember.pipelines.wan.constants import (
     WAN_5B_DEFAULTS,
@@ -11,13 +13,23 @@ from ember.pipelines.wan.constants import (
     WAN_FPS,
     WAN_MODE_DEFAULTS,
     WAN_RESOLUTIONS,
+    WAN_RIFE_NODES,
 )
 from ember.pipelines.wan.workflow import (
+    RIFE_NODE,
     build_wan_5b_workflow,
     build_wan_i2v_workflow,
     wan_5b_available,
     wan_lightning_available,
     wan_models_available,
+    wan_rife_available,
+)
+from ember.settings import (
+    COMFY_LOG,
+    COMFY_PORT,
+    WAN_COMFY_LOG,
+    WAN_COMFY_PORT,
+    WAN_PARALLEL,
 )
 
 
@@ -44,9 +56,34 @@ def _is_wan_5b(model) -> bool:
     return "5b" in str(model).lower()
 
 
+def _interpolation_problem() -> str:
+    """Why Smooth motion cannot run right now, or "" when it can.
+
+    Asked of the instance the clips go to — the second one when
+    EMBER_WAN_PARALLEL is on — and only after that instance answers, so a
+    server that is down or restarting is not blamed on the pack.
+    """
+    if not wan_rife_available():
+        return ("the RIFE checkpoint is not downloaded yet — restart the "
+                "app so the download step can fetch it")
+    port, log_path = ((WAN_COMFY_PORT, WAN_COMFY_LOG) if WAN_PARALLEL
+                      else (COMFY_PORT, COMFY_LOG))
+    alive, _note = comfy_ensure_alive(port=port, log_path=log_path)
+    if alive and not node_registered(RIFE_NODE, port=port):
+        return ("ComfyUI has not loaded the %s node — restart the app so "
+                "setup can install %s" % (RIFE_NODE, WAN_RIFE_NODES[0]))
+    return ""
+
+
 def generate_wan_video(image, prompt, negative, model, mode, seed, randomize,
-                       steps, cfg, resolution, seconds, sampler, batch_count):
-    """Video tab: animate an uploaded image with Wan 2.2 (14B I2V or 5B TI2V)."""
+                       steps, cfg, resolution, seconds, sampler, batch_count,
+                       interpolate=False):
+    """Video tab: animate an uploaded image with Wan 2.2 (14B I2V or 5B TI2V).
+
+    Smooth motion is an improvement rather than the job, so when it cannot
+    run the clip is made without it and the status says why — a missing
+    pack never costs the tab.
+    """
     if image is None:
         yield [], None, "❌ Upload an image first.", 0
         return
@@ -77,6 +114,13 @@ def generate_wan_video(image, prompt, negative, model, mode, seed, randomize,
         shift = WAN_MODE_DEFAULTS["turbo" if turbo else "raw"]["shift"]
         builder = build_wan_i2v_workflow
         wan_prefix = "wan/Wan22I2V"
+    notice = ""
+    if interpolate:
+        problem = _interpolation_problem()
+        if problem:
+            notice = ("⚠️ Smooth motion skipped: %s. The video is at %d "
+                      "fps.\n" % (problem, fps))
+            interpolate = False
     image = image.convert("RGB")
     width, height = _fit_video_size(*image.size, WAN_RESOLUTIONS[resolution],
                                     snap=snap)
@@ -94,6 +138,7 @@ def generate_wan_video(image, prompt, negative, model, mode, seed, randomize,
         "width": width, "height": height,
         "length": _seconds_to_frames(seconds, fps), "fps": fps,
         "sampler": sampler, "shift": shift, "image_name": image_name,
+        "interpolate": bool(interpolate),
         # Spelled out here rather than left to the builder's default so
         # the tag can go on it — see _run_tag. Videos land in wan/, and
         # that subfolder has its own counter to be knocked backwards.
@@ -101,4 +146,4 @@ def generate_wan_video(image, prompt, negative, model, mode, seed, randomize,
         **({} if use_5b else {"lightning": turbo}),
     } for i in range(int(batch_count))]
     for videos, latest, status in _run_wan_jobs(jobs, builder=builder):
-        yield videos, latest, status, base_seed
+        yield videos, latest, notice + status, base_seed

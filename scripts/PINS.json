@@ -23,6 +23,10 @@
     "sha": "8ff6dc384ba5c410266b40e137799e049459d4f2",
     "url": "https://github.com/comfyanonymous/ComfyUI.git"
   },
+  "ComfyUI-Frame-Interpolation": {
+    "sha": "26545cc2dd95bc3d27f056016300673bdeee78f5",
+    "url": "https://github.com/Fannovel16/ComfyUI-Frame-Interpolation"
+  },
   "ComfyUI-RBG-SmartSeedVariance": {
     "sha": "318ce57d13620a78f2cc71453488e028515f2a2a",
     "tarball": "ComfyUI-RBG-SmartSeedVariance-318ce57d.tar.gz",
@@ -40,6 +44,10 @@
   "Hearmeman/comfyui-template-assets": {
     "kind": "hf",
     "sha": "75884efd87e34b798899d6930ab3b4a9e6cf8fb3"
+  },
+  "Isi99999/Frame_Interpolation_Models": {
+    "kind": "hf",
+    "sha": "bfbc870b7155e71d1ec2255f8dd800d065650e3d"
   },
   "RES4LYF": {
     "sha": "022c873c6d198c67b3312a1804336533a050df18",
@@ -63,6 +71,10 @@
   "lightx2v/Minimax-h3-Turbo": {
     "kind": "hf",
     "sha": "2f015e66b37c585cea9dc4ae6f1850ea8788e742"
+  },
+  "lightx2v/Wan2.2-Distill-Loras": {
+    "kind": "hf",
+    "sha": "57adea585d1d21085e2dfc91ce3c7b646cdd9345"
   },
   "wangkanai/wan21-vae": {
     "kind": "hf",
