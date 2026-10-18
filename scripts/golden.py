@@ -272,6 +272,7 @@ def patch(users, capture) -> None:
         "model_file_available", "lora_file_available", "edit_lora_available",
         "v2_turbo_lora_available",
         "wan_models_available", "wan_5b_available", "wan_lightning_available",
+        "wan_rife_available",
         "minimax_models_available",
     ):
         _patch_all(users, name, lambda *a, **k: True)
@@ -451,7 +452,26 @@ def cases(module) -> dict:
             image, "the waves roll in", "static, blurry",
             "14B two-expert (best quality, 16 fps)", "Raw (20 steps)",
             6789012, False, 17, 3.1, "720p (sharper, ~3× slower)", 3.25,
-            "dpmpp_2m", 2,
+            "dpmpp_2m", 2, False,
+        ),
+
+        # Turbo with Smooth motion: the two lightx2v LoRAs on the experts,
+        # and RIFE between the decode and the video, which is saved at
+        # 16 x 4 = 64 fps. 4.5 s at 16 fps is 73 frames.
+        "generate_wan_video_smooth": (
+            image, "a cat stretches and yawns", "",
+            "14B two-expert (best quality, 16 fps)",
+            "Turbo (Lightning, 4 steps)", 2468013, False, 5, 1.0,
+            "480p (faster)", 4.5, "euler", 1, True,
+        ),
+
+        # The 5B with Smooth motion: its 24 fps x 2 = 48. The mode radio
+        # is ignored for this model, so Turbo here must not wire a LoRA.
+        "generate_wan_video_5b_smooth": (
+            image, "leaves drift across the lawn", "washed out",
+            "5B TI2V (lighter, 24 fps)", "Turbo (Lightning, 4 steps)",
+            1357924, False, 19, 4.5, "480p (faster)", 2.75, "uni_pc", 1,
+            True,
         ),
 
         # The two MiniMax tabs share one builder; the snapshots prove the
@@ -542,7 +562,9 @@ def cases(module) -> dict:
 CASE_HANDLERS = {"generate_zimage_upscale": "generate_zimage",
                  "generate_qwen21_ref_three": "generate_qwen21_ref",
                  "generate_qwen21_ref_ten": "generate_qwen21_ref",
-                 "generate_qwen21_t2i_negative": "generate_qwen21_t2i"}
+                 "generate_qwen21_t2i_negative": "generate_qwen21_t2i",
+                 "generate_wan_video_smooth": "generate_wan_video",
+                 "generate_wan_video_5b_smooth": "generate_wan_video"}
 
 
 def check_settings(name, args, settings) -> None:

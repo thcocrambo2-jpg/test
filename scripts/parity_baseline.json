@@ -10513,6 +10513,14 @@
           "interactive": null,
           "visible": true,
           "elem_id": null
+        },
+        {
+          "type": "Checkbox",
+          "label": "Smooth motion (RIFE frame interpolation)",
+          "value": true,
+          "interactive": null,
+          "visible": true,
+          "elem_id": null
         }
       ]
     },
@@ -11866,7 +11874,8 @@
         "resolution",
         "seconds",
         "sampler",
-        "batch_count"
+        "batch_count",
+        "interpolate"
       ],
       "varargs": null,
       "keyword_only": []

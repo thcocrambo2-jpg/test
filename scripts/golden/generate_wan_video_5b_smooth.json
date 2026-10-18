@@ -1,0 +1,158 @@
+[
+  {
+    "clip": {
+      "class_type": "CLIPLoader",
+      "inputs": {
+        "clip_name": "umt5_xxl_fp8_e4m3fn_scaled.safetensors",
+        "device": "default",
+        "type": "wan"
+      }
+    },
+    "decode": {
+      "class_type": "VAEDecode",
+      "inputs": {
+        "samples": [
+          "sampler",
+          0
+        ],
+        "vae": [
+          "vae",
+          0
+        ]
+      }
+    },
+    "interpolate": {
+      "class_type": "RIFE VFI",
+      "inputs": {
+        "batch_size": 1,
+        "ckpt_name": "rife49.pth",
+        "clear_cache_after_n_frames": 5,
+        "dtype": "bfloat16",
+        "ensemble": false,
+        "fast_mode": false,
+        "frames": [
+          "decode",
+          0
+        ],
+        "multiplier": 2,
+        "scale_factor": 1.0,
+        "torch_compile": false
+      }
+    },
+    "latent": {
+      "class_type": "Wan22ImageToVideoLatent",
+      "inputs": {
+        "batch_size": 1,
+        "height": 512,
+        "length": 65,
+        "start_image": [
+          "source",
+          0
+        ],
+        "vae": [
+          "vae",
+          0
+        ],
+        "width": 768
+      }
+    },
+    "negative": {
+      "class_type": "CLIPTextEncode",
+      "inputs": {
+        "clip": [
+          "clip",
+          0
+        ],
+        "text": "washed out"
+      }
+    },
+    "positive": {
+      "class_type": "CLIPTextEncode",
+      "inputs": {
+        "clip": [
+          "clip",
+          0
+        ],
+        "text": "leaves drift across the lawn"
+      }
+    },
+    "sampler": {
+      "class_type": "KSampler",
+      "inputs": {
+        "cfg": 4.5,
+        "denoise": 1.0,
+        "latent_image": [
+          "latent",
+          0
+        ],
+        "model": [
+          "shift",
+          0
+        ],
+        "negative": [
+          "negative",
+          0
+        ],
+        "positive": [
+          "positive",
+          0
+        ],
+        "sampler_name": "uni_pc",
+        "scheduler": "simple",
+        "seed": 1357924,
+        "steps": 19
+      }
+    },
+    "save": {
+      "class_type": "SaveVideo",
+      "inputs": {
+        "codec": "h264",
+        "filename_prefix": "wan/Wan22TI2V5B_golden00",
+        "format": "mp4",
+        "video": [
+          "video",
+          0
+        ]
+      }
+    },
+    "shift": {
+      "class_type": "ModelSamplingSD3",
+      "inputs": {
+        "model": [
+          "unet",
+          0
+        ],
+        "shift": 8.0
+      }
+    },
+    "source": {
+      "class_type": "LoadImage",
+      "inputs": {
+        "image": "golden_upload.png"
+      }
+    },
+    "unet": {
+      "class_type": "UNETLoader",
+      "inputs": {
+        "unet_name": "wan2.2_ti2v_5B_fp16.safetensors",
+        "weight_dtype": "default"
+      }
+    },
+    "vae": {
+      "class_type": "VAELoader",
+      "inputs": {
+        "vae_name": "wan2.2_vae.safetensors"
+      }
+    },
+    "video": {
+      "class_type": "CreateVideo",
+      "inputs": {
+        "fps": 48.0,
+        "images": [
+          "interpolate",
+          0
+        ]
+      }
+    }
+  }
+]
