@@ -137,6 +137,7 @@
     "Hearmeman/comfyui-template-assets": "hf",
     "lightx2v/Wan2.2-Distill-Loras": "hf",
     "Isi99999/Frame_Interpolation_Models": "hf",
+    "circlestone-labs/Anima": "hf",
     "https://github.com/comfyanonymous/ComfyUI.git": "git"
   }
 }

@@ -8,9 +8,9 @@ idempotent — re-running only downloads what is missing.
 Two kinds of weights, two sources of truth. The pipeline pieces every
 build needs — VAEs, text encoders, the Identity Edit LoRA, the Wan and
 MiniMax weights, Z-Image's encoder and upscale model, Qwen 2.1's encoder
-and VAE — are named in each pipeline's constants.py and fetched by their
-own groups. The Krea, Z-Image and Qwen 2.1 models and the LoRAs a customer
-picks from are named by the
+and VAE, Anima's encoder — are named in each pipeline's constants.py and
+fetched by their own groups. The Krea, Z-Image, Qwen 2.1 and Anima models
+and the LoRAs a customer picks from are named by the
 catalogue (ember.licensing.catalog, from the licence server) and fetched
 by the "catalog" group, which asks nothing of the pipeline constants at
 all.
@@ -27,6 +27,7 @@ from ember import features
 from ember.weights import mirror
 from ember.logs import log
 from ember.settings import CIVITAI_TOKEN, HF_TOKEN, MODELS_DIR
+from ember.pipelines.anima.constants import ANIMA_HF_FILES, ANIMA_HF_REPO
 from ember.pipelines.krea2.constants import (
     ABLITERATED_ENCODER_FILE,
     ABLITERATED_ENCODER_REPO,
@@ -416,8 +417,8 @@ def download_catalog() -> None:
     """Fetch every model and LoRA the enabled catalogue features offer.
 
     What to fetch is the union of the catalogue lists of the features that
-    need this group and are on — the four Krea tabs, Z-Image, Qwen 2.1
-    Reference, and the two MiniMax tabs, which list LoRAs only. A tab that is off contributes nothing, so
+    need this group and are on — the four Krea tabs, Z-Image, both Qwen 2.1
+    tabs, Anima, and the two MiniMax tabs, which list LoRAs only. A tab that is off contributes nothing, so
     a V2-only licence never downloads a model only Krea2 offers, and vice
     versa.
 
@@ -616,6 +617,25 @@ def download_qwen21_models() -> None:
                       "fetches it.", relpath, exc)
 
 
+def download_anima_models() -> None:
+    """Fetch Anima's text encoder (~1.2 GB).
+
+    The diffusion model is a catalogue record, fetched by the "catalog"
+    group, and the VAE is the Krea tabs' Qwen image VAE, fetched by the
+    "krea2" group the feature also names. The repo keeps the encoder under
+    split_files/, so it is fetched like Wan's and Z-Image's. A missing
+    file costs only the Anima tab, which names what it is waiting for, and
+    the next run retries it.
+    """
+    for relpath in ANIMA_HF_FILES:
+        try:
+            fetch_repackaged_file(ANIMA_HF_REPO, relpath)
+        except Exception as exc:
+            log.error("Anima file %s unavailable (%s) — the Anima tab will "
+                      "refuse to run until a later run fetches it.",
+                      relpath, exc)
+
+
 # Asset group → the function that fetches it. Iteration order is download
 # order, so the cheap shared pieces land before the tens of gigabytes.
 ASSET_GROUPS = {
@@ -626,6 +646,7 @@ ASSET_GROUPS = {
     "catalog": download_catalog,
     "zimage": download_zimage_models,
     "qwen21": download_qwen21_models,
+    "anima": download_anima_models,
     "wan": download_wan_models,
     "minimax": download_minimax_models,
 }

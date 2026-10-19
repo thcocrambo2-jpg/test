@@ -68,6 +68,7 @@ class Key(str, Enum):
     KREA_V2_T2I = "krea_v2_t2i"
     ZIMAGE_T2I = "zimage_t2i"
     QWEN21_T2I = "qwen21_t2i"
+    ANIMA_T2I = "anima_t2i"
     GALLERY = "gallery"
     KREA_EDIT = "krea_edit"
     KREA_V2_EDIT = "krea_v2_edit"
@@ -136,8 +137,8 @@ class Feature:
 # pipeline's constants.py: it is every model and LoRA the catalogue
 # (ember.licensing.catalog, from the licence server) lists for the enabled
 # features
-# that name it. Each Krea tab names it, so do Z-Image and both Qwen 2.1
-# tabs, and so do the MiniMax tabs for their LoRAs; downloads.download_catalog reads the
+# that name it. Each Krea tab names it, so do Z-Image, both Qwen 2.1
+# tabs and Anima, and so do the MiniMax tabs for their LoRAs; downloads.download_catalog reads the
 # lists of exactly
 # those that are on — so a feature's own models are what it pulls in, not
 # a group-wide set, and a file two tabs share is fetched once.
@@ -152,6 +153,9 @@ FEATURES = (
     # Qwen 2.1 Reference's encoder and VAE ("qwen21") and a catalogue
     # model; a licence with both tabs fetches the files once.
     Feature(Key.QWEN21_T2I, "🌄 Qwen 2.1", needs=("qwen21", "catalog")),
+    # Its own text encoder ("anima"), the Qwen image VAE it shares with
+    # Krea ("krea2"), and a catalogue model.
+    Feature(Key.ANIMA_T2I, "🌸 Anima", needs=("anima", "krea2", "catalog")),
     Feature(Key.GALLERY, "🖼️ Gallery", default=True),
     Feature(Key.KREA_EDIT, "✨ Krea2 Edit",
             needs=("text_encoder", "krea2", "edit_lora", "catalog")),

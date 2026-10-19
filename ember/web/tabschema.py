@@ -116,6 +116,7 @@ from ember.pipelines.wan.constants import (
 # api.py answers 422 on `tabschema.Invalid`, and the submit path it wraps
 # is TabSchema.submit.
 from ember.web.schema.model import Invalid, TabSchema
+from ember.web.schema.tabs.anima import ANIMA_SCHEMA
 from ember.web.schema.tabs.krea2 import KREA2_EDIT_SCHEMA, KREA2_SCHEMA
 from ember.web.schema.tabs.krea2_v2 import KREA2_V2_SCHEMA
 from ember.web.schema.tabs.krea2_v2_edit import KREA2_V2_EDIT_SCHEMA
@@ -130,7 +131,7 @@ from ember.web.schema.tabs.zimage import ZIMAGE_SCHEMA
 Key = features.Key
 
 
-# ══════════════════════════════════════════════════════ the ten tabs
+# ═══════════════════════════════════════════════════ the eleven tabs
 # Order is the order they appear in the navigation, which is ui.TAB_ORDER's
 # order with the two bespoke tabs (Gallery, Prompt Library) taken out —
 # those have no form and so no schema.
@@ -140,6 +141,7 @@ SCHEMAS = (
     KREA2_V2_SCHEMA,
     ZIMAGE_SCHEMA,
     QWEN21_T2I_SCHEMA,
+    ANIMA_SCHEMA,
     KREA2_EDIT_SCHEMA,
     KREA2_V2_EDIT_SCHEMA,
     QWEN21_REF_SCHEMA,

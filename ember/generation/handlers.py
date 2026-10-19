@@ -47,6 +47,9 @@ ZIMAGE_T2I = str(Key.ZIMAGE_T2I)
 # VAE are fixed in pipelines/qwen21/constants.py.
 QWEN21_EDIT = str(Key.QWEN21_EDIT)
 QWEN21_T2I = str(Key.QWEN21_T2I)
+# And Anima. Its text encoder is fixed in pipelines/anima/constants.py; its
+# VAE is Krea's.
+ANIMA_T2I = str(Key.ANIMA_T2I)
 # The MiniMax tabs take LoRAs from the catalogue too, but no model: their
 # weights are fixed in pipelines/minimax/constants.py, so only the LoRA
 # list is read.

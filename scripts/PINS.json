@@ -55,6 +55,10 @@
     "url": "https://github.com/ClownsharkBatwing/RES4LYF"
   },
   "_note": "SHAs/revisions captured at mirror time. Feed these to ember/comfy/setup.py clones and hf_hub_download(revision=...). The mirror and the upstream fallback MUST resolve to the same revision.",
+  "circlestone-labs/Anima": {
+    "kind": "hf",
+    "sha": "f973fc41ec7545364ac9776c2440285f43ff2a30"
+  },
   "comfyui-krea2edit": {
     "sha": "86f886dac23013d88996e3a2e99093ba44d322fb",
     "tarball": "comfyui-krea2edit-86f886da.tar.gz",
