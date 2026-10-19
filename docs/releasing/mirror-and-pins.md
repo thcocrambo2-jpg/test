@@ -178,6 +178,15 @@ Qwen 2.1 Reference is the plain case: its diffusion model, text encoder
 and VAE all come from `Comfy-Org/Qwen-Image-2.1`, pinned at `9a44dbdb`
 and fetched upstream, and it installs no node pack.
 
+Anima is the case that must **not** be mirrored. Its text encoder comes
+from `circlestone-labs/Anima`, pinned at `f973fc41` and fetched upstream,
+with no manifest item; its diffusion model is a CivitAI catalogue
+record; its VAE is Krea's. Everything Anima ships is under the CircleStone
+Labs Non-Commercial License, and the mirror repos are public, so an
+upload would be distribution. Leave both out of the mirror until a
+commercial licence says otherwise — see
+[anima.md](../pipelines/anima.md#licence).
+
 Catalogue **models** are only audited. The script uploads catalogue
 LoRAs, not catalogue models.
 

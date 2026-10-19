@@ -31,7 +31,7 @@ Three tiers are public:
 
 Three more in `DEFAULT_PLANS` carry `is_public: false` and never reach
 the pricing page: `admin` (every tab the binary can build except
-`zimage_t2i`, `qwen21_t2i` and `qwen21_edit`, and where a new tab usually lands
+`zimage_t2i`, `qwen21_t2i`, `qwen21_edit` and `anima_t2i`, and where a new tab usually lands
 first), `admin-minimal`,
 and `test-krea1-only`. A fourth
 internal tier, `customer-admin`, exists only as a hand-made document in
@@ -127,6 +127,7 @@ keep a plain name. The registry, in `sort_order`:
 | `krea_v2_t2i` | Krea2 V2 | generation |
 | `zimage_t2i` | Ember Lite | generation |
 | `qwen21_t2i` | Qwen 2.1 | generation |
+| `anima_t2i` | Anima | generation |
 | `gallery` | Gallery | tools |
 | `krea_edit` | Krea2 Edit | editing |
 | `community_prompts` | Prompt Library | tools |
@@ -136,7 +137,7 @@ keep a plain name. The registry, in `sort_order`:
 | `minimax_i2v` | MiniMax Video | video |
 | `minimax_t2v` | MiniMax Text to Video | video |
 
-`zimage_t2i`, `qwen21_t2i` and `qwen21_edit` are on no plan yet, not even `admin`,
+`zimage_t2i`, `qwen21_t2i`, `qwen21_edit` and `anima_t2i` are on no plan yet, not even `admin`,
 and their rows are `enabled: false`. A key gets one through
 `features_extra`:
 

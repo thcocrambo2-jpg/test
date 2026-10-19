@@ -75,6 +75,23 @@ npm run assets -- --feature qwen21_t2i --add-lora <id>
 npm run assets -- --feature qwen21_edit --add-lora <id>
 ```
 
+## Anima's list
+
+`anima_t2i` lists one model and no LoRAs yet. Its model record is
+`bas-nsfw-anima-v1-0` — BAS:NSFW base-v1.0,
+`BASNSFWBetterAnimeStyleForNSFWHentai_baseV10.safetensors`, CivitAI
+version 3043144, variant `turbo` (the Anima Turbo LoRA is merged in),
+8 steps, CFG 1, no turbo LoRA, trigger
+`anime, anime coloring, anime screenshot`.
+
+Its `mirror` stays null, and so does any Anima record's. The weights are
+under the CircleStone Labs Non-Commercial License and the mirror repos are
+public, so a copy there would be distribution; `mirror_to_hf.py` never
+uploads catalogue models, so nothing has to be done to keep it off. The
+official builds (`anima-turbo-v1.1`, `anima-aesthetic-v1.1`, from
+`circlestone-labs/Anima`) can join the list as further models the same
+way.
+
 ## What a pod reads
 
 `POST /v1/catalog` is what a pod reads, once, at startup — after its seat is
@@ -177,11 +194,18 @@ them is **an id**, never a file name or a label:
   steps: 25, cfg: 1.0, sampler: "euler", scheduler: "simple",
   seed: 42, randomize: true, batch_count: 1,
   loras: [[false, null, 1.0], ...] }
+
+// anima_t2i — qwen21_t2i's shape
+{ output_size: "1:1 · 1024×1024", model: "bas-nsfw-anima-v1-0",
+  steps: 8, cfg: 1.0, sampler: "euler", scheduler: "simple",
+  seed: 42, randomize: true, batch_count: 1,
+  loras: [[false, null, 1.0], ...] }
 ```
 
 A preset can be saved for the tabs in `PRESET_TABS` in
 [`../src/app.js`](../src/app.js): `krea_t2i`, `krea_v2_t2i`,
-`minimax_i2v`, `zimage_t2i`, `qwen21_edit` and `qwen21_t2i`.
+`minimax_i2v`, `zimage_t2i`, `qwen21_edit`, `qwen21_t2i` and
+`anima_t2i`.
 
 Every LoRA row is a triple `[on, lora id | null, weight]`. An empty slot is
 `null`; the form calls it "None", but that word never reaches storage. The

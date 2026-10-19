@@ -31,6 +31,7 @@ asset groups it needs.
 | `krea_v2_t2i` | 🔶 Krea2 V2 | ~17 GB |
 | `zimage_t2i` | ⚡ Ember Lite — on no plan yet | ~20.8 GB |
 | `qwen21_t2i` | 🌄 Qwen 2.1 — on no plan yet | ~17.3 GB, shared with `qwen21_edit` |
+| `anima_t2i` | 🌸 Anima — on no plan (non-commercial licence) | ~5.2 GB, plus the Qwen image VAE Krea uses |
 | `gallery` | 🖼️ Gallery | none |
 | `krea_edit` | ✨ Krea2 Edit | ~1.9 GB + base |
 | `krea_v2_edit` | 🔷 Krea2 V2 Edit | ~1.9 GB + V2 |
@@ -59,12 +60,17 @@ public plan in `license-validator/src/plans.js` when it should be
 something a customer can buy.
 
 A tab can also be on no plan at all, which is where `zimage_t2i`,
-`qwen21_t2i` and `qwen21_edit` are. A key gets one through
+`qwen21_t2i`, `qwen21_edit` and `anima_t2i` are. A key gets one through
 `features_extra` (`npm run issue-key -- --key <key> --features-extra
 zimage_t2i,qwen21_t2i,qwen21_edit --update`), and its row in the `features` collection is `enabled: false`, so neither `/v1/plans` nor the Telegram
 bot mentions it. That flag never touches an entitlement, so the key still
 gets the tab and its label; set it to `true` in the same edit that puts
 the tab on a plan, or `/v1/plans` drops it from that plan's list.
+
+`anima_t2i` is on no plan for a reason of its own: Anima's weights are
+under the CircleStone Labs Non-Commercial License, so it is granted by
+hand to a key for personal use only, until a commercial licence is in
+place. See [anima.md](../pipelines/anima.md#licence).
 
 **Keys are permanent and names are not.** A key is compiled into every
 shipped binary, so renaming one drops that tab for anyone on an older
