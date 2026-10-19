@@ -47,8 +47,9 @@
 //                 slots. No preset is seeded for it.
 //   qwen21_t2i    qwen21_edit's shape without `reference_detail`. No
 //                 preset is seeded for it.
+//   anima_t2i     qwen21_t2i's shape. No preset is seeded for it.
 //
-// All six store `loras` the same way: [on, lora id, weight] triples, with
+// All seven store `loras` the same way: [on, lora id, weight] triples, with
 // `null` for an empty slot (the form shows it as "None"; that word never
 // reaches storage).
 //
@@ -68,7 +69,7 @@ const dryRun = process.argv.includes("--dry-run");
 
 const PRESET_TABS = [
   "krea_t2i", "krea_v2_t2i", "minimax_i2v", "zimage_t2i", "qwen21_edit",
-  "qwen21_t2i",
+  "qwen21_t2i", "anima_t2i",
 ];
 
 // Model and LoRA values are catalogue ids (data/assets.json). Edit here and

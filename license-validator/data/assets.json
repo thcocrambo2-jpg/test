@@ -784,6 +784,22 @@
       "turbo_lora": null,
       "trigger": "",
       "enabled": true
+    },
+    {
+      "id": "bas-nsfw-anima-v1-0",
+      "name": "BAS:NSFW Anima v1.0",
+      "file": "BASNSFWBetterAnimeStyleForNSFWHentai_baseV10.safetensors",
+      "source": {
+        "kind": "civitai",
+        "version": 3043144
+      },
+      "mirror": null,
+      "variant": "turbo",
+      "steps": 8,
+      "cfg": 1.0,
+      "turbo_lora": null,
+      "trigger": "anime, anime coloring, anime screenshot",
+      "enabled": true
     }
   ],
   "features": {
@@ -926,6 +942,12 @@
     "qwen21_t2i": {
       "models": [
         "qwen-image-2-1-int8"
+      ],
+      "loras": []
+    },
+    "anima_t2i": {
+      "models": [
+        "bas-nsfw-anima-v1-0"
       ],
       "loras": []
     },

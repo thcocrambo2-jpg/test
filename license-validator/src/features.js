@@ -39,7 +39,7 @@
 //
 // `name` vs `tab_label`: the pricing page wants prose that says what a tab
 // is ("MiniMax Text to Video"), the tab strip wants something short enough
-// to sit in a row of twelve ("MiniMax T2V"). They were separate strings
+// to sit in a row of thirteen ("MiniMax T2V"). They were separate strings
 // in separate repos before this collection existed; keeping both fields
 // means unifying the source without flattening the two registers into one
 // awkward compromise. tab_label is optional — the client falls back to
@@ -119,6 +119,20 @@ export const FEATURES = [
     category: "generation",
     // 26, right after Ember Lite (25), with the other text-to-image tabs.
     sort_order: 26,
+    enabled: false,
+  },
+  // On no plan, and off here, for a reason of its own: Anima's weights are
+  // under the CircleStone Labs Non-Commercial License, so the tab is for a
+  // key granted it by hand until a commercial licence is in place. Then
+  // flipping this and adding it to a plan is all it takes.
+  {
+    key: "anima_t2i",
+    name: "Anima",
+    tab_label: "🌸 Anima",
+    description: "Anime illustrations from tags or a sentence",
+    category: "generation",
+    // 27, after Qwen 2.1 (26), with the other text-to-image tabs.
+    sort_order: 27,
     enabled: false,
   },
   {
