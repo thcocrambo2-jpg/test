@@ -118,6 +118,7 @@ SOURCES = [
     "ember.pipelines.minimax.constants",
     "ember.pipelines.zimage.constants",
     "ember.pipelines.qwen21.constants",
+    "ember.pipelines.anima.constants",
 ]
 
 # Baseline key -> (module, attribute) it lives at today. The keys are the
@@ -130,6 +131,7 @@ QUALIFIED = {
     "presets.TAB_ZIMAGE": ("ember.licensing.presets", "TAB_ZIMAGE"),
     "presets.TAB_QWEN21": ("ember.licensing.presets", "TAB_QWEN21"),
     "presets.TAB_QWEN21_T2I": ("ember.licensing.presets", "TAB_QWEN21_T2I"),
+    "presets.TAB_ANIMA": ("ember.licensing.presets", "TAB_ANIMA"),
     "prompts.TAB_KREA2": ("ember.licensing.prompts", "TAB_KREA2"),
     "prompts.TAB_KREA2_V2": ("ember.licensing.prompts", "TAB_KREA2_V2"),
     "handlers.KREA_T2I": ("ember.generation.handlers", "KREA_T2I"),
@@ -141,6 +143,7 @@ QUALIFIED = {
     "handlers.ZIMAGE_T2I": ("ember.generation.handlers", "ZIMAGE_T2I"),
     "handlers.QWEN21_EDIT": ("ember.generation.handlers", "QWEN21_EDIT"),
     "handlers.QWEN21_T2I": ("ember.generation.handlers", "QWEN21_T2I"),
+    "handlers.ANIMA_T2I": ("ember.generation.handlers", "ANIMA_T2I"),
 }
 
 # A public module-level constant: upper case, not starting with an

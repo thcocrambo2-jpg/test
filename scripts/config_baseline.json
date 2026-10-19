@@ -2,6 +2,16 @@
   "names": {
     "ABLITERATED_ENCODER_FILE": "'qwen3vl_4b_abliterated.safetensors'",
     "ABLITERATED_ENCODER_REPO": "'huihui-ai/Huihui-Qwen3-VL-4B-Instruct-abliterated'",
+    "ANIMA_CLIP_TYPE": "'stable_diffusion'",
+    "ANIMA_DEFAULT_SIZE": "'1:1 · 1024×1024'",
+    "ANIMA_HF_FILES": "['text_encoders/qwen_3_06b_base.safetensors']",
+    "ANIMA_HF_REPO": "'circlestone-labs/Anima'",
+    "ANIMA_LORA_SLOTS": "4",
+    "ANIMA_NEGATIVE_HINT": "'worst quality, low quality, score_1, score_2, score_3, artist name, blurry, jpeg artifacts'",
+    "ANIMA_SAMPLERS": "['euler', 'er_sde', 'euler_ancestral', 'dpmpp_2m_sde_gpu']",
+    "ANIMA_SCHEDULERS": "['simple', 'beta']",
+    "ANIMA_SIZES": "{'1:1 · 1024×1024': (1024, 1024), '4:5 · 896×1152': (896, 1152), '5:4 · 1152×896': (1152, 896), '2:3 · 832×1216': (832, 1216), '3:2 · 1216×832': (1216, 832), '9:16 · 768×1344': (768, 1344), '16:9 · 1344×768': (1344, 768)}",
+    "ANIMA_TEXT_ENCODER": "'qwen_3_06b_base.safetensors'",
     "ASSETS_DIR": "Path('<ROOT>/assets')",
     "BASE_DIR": "Path('<BASE_DIR>')",
     "CIVITAI_TOKEN": "None",
@@ -161,6 +171,7 @@
     "ZIMAGE_VAE": "'ae.safetensors'"
   },
   "qualified": {
+    "handlers.ANIMA_T2I": "'anima_t2i'",
     "handlers.KREA_EDIT": "'krea_edit'",
     "handlers.KREA_T2I": "'krea_t2i'",
     "handlers.KREA_V2_EDIT": "'krea_v2_edit'",
@@ -170,6 +181,7 @@
     "handlers.QWEN21_EDIT": "'qwen21_edit'",
     "handlers.QWEN21_T2I": "'qwen21_t2i'",
     "handlers.ZIMAGE_T2I": "'zimage_t2i'",
+    "presets.TAB_ANIMA": "'anima_t2i'",
     "presets.TAB_KREA2": "'krea_t2i'",
     "presets.TAB_KREA2_V2": "'krea_v2_t2i'",
     "presets.TAB_MINIMAX": "'minimax_i2v'",

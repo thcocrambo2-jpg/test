@@ -157,6 +157,8 @@ def handler_modules() -> tuple:
     from ember.generation import loras
     from ember.generation import runner
     from ember.pipelines.krea2 import handler as krea2_handler
+    from ember.pipelines.anima import handler as anima_handler
+    from ember.pipelines.anima import workflow as anima
     from ember.pipelines.krea2 import workflow as krea2
     from ember.pipelines.krea2_v2 import handler as krea2_v2_handler
     from ember.pipelines.krea2_v2 import workflow as krea2_v2
@@ -173,7 +175,9 @@ def handler_modules() -> tuple:
     return (handlers, loras, runner,
             krea2_handler, krea2_v2_handler, krea2_v2_edit_handler,
             wan_handler, minimax_handler, zimage_handler, qwen21_handler,
-            krea2, krea2_v2, krea2_v2_edit, wan, minimax, zimage, qwen21)
+            anima_handler,
+            krea2, krea2_v2, krea2_v2_edit, wan, minimax, zimage, qwen21,
+            anima)
 
 
 class Namespace:
@@ -287,6 +291,7 @@ def patch(users, capture) -> None:
     # Qwen 2.1's is the same shape. Its two core nodes are asked for
     # through node_registered, patched above.
     _patch_all(users, "qwen21_missing", lambda *a, **k: [])
+    _patch_all(users, "anima_missing", lambda *a, **k: [])
     _patch_all(users, "node_registered", lambda *a, **k: True)
 
     _patch_all(users, "comfy_ensure_alive", lambda *a, **k: (True, ""))
@@ -343,6 +348,7 @@ def cases(module) -> dict:
     zimage_model = module.default_model(module.ZIMAGE_T2I)
     qwen21_model = module.default_model(module.QWEN21_EDIT)
     qwen21_t2i_model = module.default_model(module.QWEN21_T2I)
+    anima_model = module.default_model(module.ANIMA_T2I)
     image = _image()
 
     # Krea2: eight blank slots. The first three name LoRAs — two on, one
@@ -394,6 +400,12 @@ def cases(module) -> dict:
         v for i in range(4)
         for v in (*({2: (True, "hmbody-d-e10")}.get(i, (False, "None"))),
                   round(0.95 - i / 100, 2)))
+    # Anima: the same four slots over its own empty list, another row
+    # ticked, so a tail copied from Qwen 2.1 shows up.
+    anima_triples = tuple(
+        v for i in range(4)
+        for v in (*({3: (True, "hmbody-d-e10")}.get(i, (False, "None"))),
+                  round(0.9 - i / 100, 2)))
     # References of different shapes, so "Same as reference 1" has a shape
     # to take and the order is visible in the sizes.
     from PIL import Image
@@ -447,6 +459,27 @@ def cases(module) -> dict:
             "🪴 Creative", 61, "🔮 Flux (Dev/Schnell)", "step_cutoff",
             7, 23, 0.65, 140, 2,
         ) + v2_triples(module.KREA_V2_EDIT),
+
+        # Anima, the model card's graph at the BAS:NSFW record's 8 steps and
+        # CFG 1: no negative, so it is the positive's ConditioningZeroOut,
+        # at 2:3's 832×1216. Saves a preset, so its blob is checked against
+        # settings(). A Krea LoRA ticked on the stack is skipped — the
+        # feature's own list is empty.
+        "generate_anima": (
+            "masterpiece, best quality, 1girl, solo, red scarf, snowy "
+            "street, night, lanterns", "", "2:3 · 832×1216", anima_model,
+            8, 1.0, "euler", "simple", 8642097, False, 2, True, "Golden",
+        ) + anima_triples,
+
+        # With a negative and CFG 4.5 on er_sde/beta at 30 steps, the base
+        # model's own settings: the negative is encoded instead of zeroed.
+        # 16:9 is 1344×768.
+        "generate_anima_negative": (
+            "year 2025, newest, 1boy, solo, samurai, rain, katana",
+            "worst quality, low quality, score_1, score_2, score_3",
+            "16:9 · 1344×768", anima_model, 30, 4.5, "er_sde", "beta",
+            9753108, False, 1, False, "",
+        ) + anima_triples,
 
         "generate_wan_video": (
             image, "the waves roll in", "static, blurry",
@@ -563,6 +596,7 @@ CASE_HANDLERS = {"generate_zimage_upscale": "generate_zimage",
                  "generate_qwen21_ref_three": "generate_qwen21_ref",
                  "generate_qwen21_ref_ten": "generate_qwen21_ref",
                  "generate_qwen21_t2i_negative": "generate_qwen21_t2i",
+                 "generate_anima_negative": "generate_anima",
                  "generate_wan_video_smooth": "generate_wan_video",
                  "generate_wan_video_5b_smooth": "generate_wan_video"}
 
@@ -580,9 +614,10 @@ def check_settings(name, args, settings) -> None:
     import, because that one is a plain function. The V2 blob is built
     inline inside generate_v2, so the only way to see it is to run the
     handler — which is what happens here. The two MiniMax cases and the
-    first Z-Image and Qwen 2.1 Reference and Qwen 2.1 cases tick the
+    first Z-Image, Qwen 2.1 Reference, Qwen 2.1 and Anima cases tick the
     save-preset box, so their blobs (_minimax_settings, _zimage_settings,
-    _qwen21_settings, _qwen21_t2i_settings) are checked too.
+    _qwen21_settings, _qwen21_t2i_settings, _anima_settings) are checked
+    too.
 
     The inversion in the middle is worth reading twice. `Field.name` is
     the handler parameter name and `fields` is submission order, so

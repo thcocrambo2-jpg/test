@@ -5423,6 +5423,338 @@
         }
       ]
     },
+    "anima_t2i": {
+      "tab_id": "anima",
+      "controls": [
+        {
+          "type": "Textbox",
+          "label": "Prompt",
+          "value": "masterpiece, best quality, 1girl, solo, silver hair, blue eyes, school uniform, cherry blossoms, petals in the wind, looking at viewer, smile",
+          "lines": 5,
+          "placeholder": null,
+          "interactive": null,
+          "visible": true,
+          "elem_id": null
+        },
+        {
+          "type": "Textbox",
+          "label": "Negative prompt",
+          "value": null,
+          "lines": 3,
+          "placeholder": null,
+          "interactive": null,
+          "visible": true,
+          "elem_id": null
+        },
+        {
+          "type": "Dropdown",
+          "label": "Output size",
+          "value": "1:1 \u00b7 1024\u00d71024",
+          "interactive": null,
+          "visible": true,
+          "multiselect": null,
+          "elem_id": null,
+          "choices": [
+            [
+              "1:1 \u00b7 1024\u00d71024",
+              "1:1 \u00b7 1024\u00d71024"
+            ],
+            [
+              "4:5 \u00b7 896\u00d71152",
+              "4:5 \u00b7 896\u00d71152"
+            ],
+            [
+              "5:4 \u00b7 1152\u00d7896",
+              "5:4 \u00b7 1152\u00d7896"
+            ],
+            [
+              "2:3 \u00b7 832\u00d71216",
+              "2:3 \u00b7 832\u00d71216"
+            ],
+            [
+              "3:2 \u00b7 1216\u00d7832",
+              "3:2 \u00b7 1216\u00d7832"
+            ],
+            [
+              "9:16 \u00b7 768\u00d71344",
+              "9:16 \u00b7 768\u00d71344"
+            ],
+            [
+              "16:9 \u00b7 1344\u00d7768",
+              "16:9 \u00b7 1344\u00d7768"
+            ]
+          ]
+        },
+        {
+          "type": "Dropdown",
+          "label": "Model",
+          "value": "bas-nsfw-anima-v1-0",
+          "interactive": null,
+          "visible": true,
+          "multiselect": null,
+          "elem_id": null,
+          "choices": [
+            [
+              "bas-nsfw-anima-v1-0",
+              "bas-nsfw-anima-v1-0"
+            ]
+          ]
+        },
+        {
+          "type": "Slider",
+          "label": "Steps",
+          "value": 8,
+          "minimum": 1,
+          "maximum": 60,
+          "step": 1,
+          "interactive": null,
+          "visible": true,
+          "elem_id": null
+        },
+        {
+          "type": "Slider",
+          "label": "CFG",
+          "value": 1.0,
+          "minimum": 0.5,
+          "maximum": 8.0,
+          "step": 0.1,
+          "interactive": null,
+          "visible": true,
+          "elem_id": null
+        },
+        {
+          "type": "Dropdown",
+          "label": "Sampler",
+          "value": "euler",
+          "interactive": null,
+          "visible": true,
+          "multiselect": null,
+          "elem_id": null,
+          "choices": [
+            [
+              "euler",
+              "euler"
+            ],
+            [
+              "er_sde",
+              "er_sde"
+            ],
+            [
+              "euler_ancestral",
+              "euler_ancestral"
+            ],
+            [
+              "dpmpp_2m_sde_gpu",
+              "dpmpp_2m_sde_gpu"
+            ]
+          ]
+        },
+        {
+          "type": "Dropdown",
+          "label": "Scheduler",
+          "value": "simple",
+          "interactive": null,
+          "visible": true,
+          "multiselect": null,
+          "elem_id": null,
+          "choices": [
+            [
+              "simple",
+              "simple"
+            ],
+            [
+              "beta",
+              "beta"
+            ]
+          ]
+        },
+        {
+          "type": "Number",
+          "label": "Seed",
+          "value": 42,
+          "minimum": 0,
+          "maximum": null,
+          "step": 1,
+          "placeholder": null,
+          "interactive": null,
+          "visible": true,
+          "elem_id": null
+        },
+        {
+          "type": "Checkbox",
+          "label": "\ud83c\udfb2 Random seed",
+          "value": true,
+          "interactive": null,
+          "visible": true,
+          "elem_id": null
+        },
+        {
+          "type": "Slider",
+          "label": "Batch count",
+          "value": 1,
+          "minimum": 1,
+          "maximum": 20,
+          "step": 1,
+          "interactive": null,
+          "visible": true,
+          "elem_id": null
+        },
+        {
+          "type": "Checkbox",
+          "label": "\ud83d\udcbe Save these settings as a preset",
+          "value": false,
+          "interactive": null,
+          "visible": true,
+          "elem_id": null
+        },
+        {
+          "type": "Textbox",
+          "label": "Preset name",
+          "value": null,
+          "lines": 1,
+          "placeholder": null,
+          "interactive": null,
+          "visible": true,
+          "elem_id": null
+        },
+        {
+          "type": "Checkbox",
+          "label": "On",
+          "value": false,
+          "interactive": null,
+          "visible": true,
+          "elem_id": null
+        },
+        {
+          "type": "Dropdown",
+          "label": "LoRA 1",
+          "value": "None",
+          "interactive": null,
+          "visible": true,
+          "multiselect": null,
+          "elem_id": null,
+          "choices": [
+            [
+              "None",
+              "None"
+            ]
+          ]
+        },
+        {
+          "type": "Slider",
+          "label": "Strength",
+          "value": 1.0,
+          "minimum": 0.0,
+          "maximum": 2.0,
+          "step": 0.01,
+          "interactive": null,
+          "visible": true,
+          "elem_id": null
+        },
+        {
+          "type": "Checkbox",
+          "label": "On",
+          "value": false,
+          "interactive": null,
+          "visible": true,
+          "elem_id": null
+        },
+        {
+          "type": "Dropdown",
+          "label": "LoRA 2",
+          "value": "None",
+          "interactive": null,
+          "visible": true,
+          "multiselect": null,
+          "elem_id": null,
+          "choices": [
+            [
+              "None",
+              "None"
+            ]
+          ]
+        },
+        {
+          "type": "Slider",
+          "label": "Strength",
+          "value": 1.0,
+          "minimum": 0.0,
+          "maximum": 2.0,
+          "step": 0.01,
+          "interactive": null,
+          "visible": true,
+          "elem_id": null
+        },
+        {
+          "type": "Checkbox",
+          "label": "On",
+          "value": false,
+          "interactive": null,
+          "visible": true,
+          "elem_id": null
+        },
+        {
+          "type": "Dropdown",
+          "label": "LoRA 3",
+          "value": "None",
+          "interactive": null,
+          "visible": true,
+          "multiselect": null,
+          "elem_id": null,
+          "choices": [
+            [
+              "None",
+              "None"
+            ]
+          ]
+        },
+        {
+          "type": "Slider",
+          "label": "Strength",
+          "value": 1.0,
+          "minimum": 0.0,
+          "maximum": 2.0,
+          "step": 0.01,
+          "interactive": null,
+          "visible": true,
+          "elem_id": null
+        },
+        {
+          "type": "Checkbox",
+          "label": "On",
+          "value": false,
+          "interactive": null,
+          "visible": true,
+          "elem_id": null
+        },
+        {
+          "type": "Dropdown",
+          "label": "LoRA 4",
+          "value": "None",
+          "interactive": null,
+          "visible": true,
+          "multiselect": null,
+          "elem_id": null,
+          "choices": [
+            [
+              "None",
+              "None"
+            ]
+          ]
+        },
+        {
+          "type": "Slider",
+          "label": "Strength",
+          "value": 1.0,
+          "minimum": 0.0,
+          "maximum": 2.0,
+          "step": 0.01,
+          "interactive": null,
+          "visible": true,
+          "elem_id": null
+        }
+      ]
+    },
     "krea_edit": {
       "tab_id": "edit",
       "controls": [
@@ -11766,6 +12098,25 @@
       "keyword_only": []
     },
     "generate_qwen21_t2i": {
+      "positional": [
+        "prompt",
+        "negative",
+        "output_size",
+        "model",
+        "steps",
+        "cfg",
+        "sampler",
+        "scheduler",
+        "seed",
+        "randomize",
+        "batch_count",
+        "save_preset",
+        "preset_name"
+      ],
+      "varargs": "lora_slots",
+      "keyword_only": []
+    },
+    "generate_anima": {
       "positional": [
         "prompt",
         "negative",
