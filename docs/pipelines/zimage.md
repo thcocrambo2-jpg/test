@@ -1,8 +1,9 @@
-# Ember Lite — text to image, with an optional upscale
+# Ember Lite — text to image, with an optional start image and upscale
 
 The **⚡ Ember Lite** tab (`zimage_t2i`, at `/generate/ember-lite`): fast,
-realistic text-to-image on Z-Image Turbo, with an **Upscale 1.5x** tick that adds a second, tiled
-pass. For someone using the tab, and for someone changing the graph it
+realistic text-to-image on Z-Image Turbo, with an optional **Start
+image** that makes it image to image, and an **Upscale 1.5x** tick that
+adds a second, tiled pass. For someone using the tab, and for someone changing the graph it
 builds.
 
 The graph is built by
@@ -91,6 +92,41 @@ model stays alone on `gpu:0`. On one GPU those nodes are not added.
 
 So the only custom node pack the tab needs is ComfyUI_UltimateSDUpscale,
 and only for the tick.
+
+## The start image
+
+An optional picture in the **Start image** section, with a **Denoise**
+slider (0.05–1, default 0.35). With one, the run is image to image on
+the same model, text encoder and VAE: the graph's `EmptyLatentImage`
+becomes
+
+| Node | Values |
+| --- | --- |
+| `LoadImage` | the start image, uploaded to ComfyUI's input folder |
+| `VAEEncode` | that image and `ae.safetensors` |
+
+and the `KSampler` runs at the form's Denoise instead of 1. Everything
+else — the LoRA stack, the prompts, the upscale pass — is unchanged, and
+the upscale tiles at the start image's size. Without a start image the
+graph is the template's, and Denoise is ignored.
+
+Denoise is how much of the schedule is re-sampled. At 0.3–0.4 the
+picture's composition, pose and outfit stay and its surface — skin,
+light, grain — is repainted by Turbo; that is the refine pass over another
+model's render, such as a Krea 2 image, where the other model got the
+content right. Above about 0.6 Turbo starts redrawing the content too,
+and at 1 the start image is ignored. With 12 steps at 0.35, about four
+steps actually run.
+
+**Size.** The start image keeps its own shape at the Resolution's pixel
+count (times the multiplier), each side rounded to 16 — the VAE's 8 times
+the model's patch of 2. So a 1080×1920 Resolution and a 3:2 start image
+render at 1760×1168, rather than cropping or stretching it. The
+handler turns it upright from its EXIF orientation, puts transparency on
+white and resizes it with LANCZOS before the upload.
+
+The start image is kept with the run's recipe, like every other tab's
+upload; a preset stores Denoise but never the picture.
 
 ## The upscale pass
 
@@ -188,8 +224,8 @@ trigger words, so type them into the prompt.
 The tab has its own preset list, filed under `zimage_t2i`, with the save
 tickbox and no prompt-library publish — the Prompt Library only knows the
 Krea tabs. A preset carries the model, steps, CFG, resolution,
-multiplier, sampler, the Upscale tick, seed, randomize, batch count and
-the LoRA stack. See [presets](../features/presets.md).
+multiplier, sampler, the Upscale tick, seed, randomize, batch count,
+Denoise and the LoRA stack. See [presets](../features/presets.md).
 
 ## Related
 

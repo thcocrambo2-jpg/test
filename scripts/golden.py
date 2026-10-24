@@ -533,7 +533,7 @@ def cases(module) -> dict:
         "generate_zimage": (
             "a lighthouse in a storm, 35mm", "blurry, watermark",
             9012345, False, 11, 1.4, "1472×1140 (4:3)", 1.15, "euler",
-            zimage_model, False, 2, True, "Golden",
+            zimage_model, False, 2, True, "Golden", None, 0.42,
         ) + zimage_triples,
 
         # And on: the same graph plus 4xLSDIR and UltimateSDUpscale, tiled
@@ -541,7 +541,18 @@ def cases(module) -> dict:
         "generate_zimage_upscale": (
             "a lighthouse in a storm, 35mm", "",
             9123456, False, 13, 1.6, "1080×1920 (1080p portrait)", 0.9,
-            "dpmpp_2m", zimage_model, True, 2, False, "",
+            "dpmpp_2m", zimage_model, True, 2, False, "", None, 0.35,
+        ) + zimage_triples,
+
+        # With a start image: LoadImage and VAEEncode instead of the empty
+        # latent, the KSampler at the form's denoise. The 653×431 image
+        # keeps its shape at 1328×1328's area — 1634.6×1078.9, which the
+        # grid of 16 puts at 1632×1072 — and the upscale pass tiles at
+        # that size.
+        "generate_zimage_i2i": (
+            "a lighthouse in a storm, 35mm", "",
+            9234567, False, 12, 1.0, "1328×1328 (1:1)", 1.0, "er_sde",
+            zimage_model, True, 2, False, "", image, 0.38,
         ) + zimage_triples,
 
         # Qwen 2.1 Reference with one reference and "Same as reference 1":
@@ -593,6 +604,7 @@ def cases(module) -> dict:
 # more than one graph worth freezing. Every other case is named after its
 # handler.
 CASE_HANDLERS = {"generate_zimage_upscale": "generate_zimage",
+                 "generate_zimage_i2i": "generate_zimage",
                  "generate_qwen21_ref_three": "generate_qwen21_ref",
                  "generate_qwen21_ref_ten": "generate_qwen21_ref",
                  "generate_qwen21_t2i_negative": "generate_qwen21_t2i",

@@ -41,7 +41,7 @@ and LoRAs a licence can see.
 | [Krea 2](pipelines/krea2.md) | 🎨 Krea2 text-to-image and ✨ Krea2 Edit |
 | [Krea 2 V2](pipelines/krea2-v2.md) | 🔶 The V2 graph, turbo and raw |
 | [Krea 2 V2 Edit](pipelines/krea2-v2-edit.md) | The V2 graph with editing |
-| [Ember Lite](pipelines/zimage.md) | ⚡ Ember Lite (Z-Image Turbo) text-to-image, and the 1.5x upscale pass |
+| [Ember Lite](pipelines/zimage.md) | ⚡ Ember Lite (Z-Image Turbo) text-to-image, image to image from a start image, and the 1.5x upscale pass |
 | [Qwen Image 2.1](pipelines/qwen21.md) | 🧩 Qwen 2.1 Reference: a prompt and up to 10 reference images; 🌄 Qwen 2.1 text-to-image |
 | [Anima](pipelines/anima.md) | 🌸 Anima anime text-to-image, and why it is on no plan |
 | [Video](pipelines/wan.md) | Wan 2.2 image-to-video, and the parallel instance |

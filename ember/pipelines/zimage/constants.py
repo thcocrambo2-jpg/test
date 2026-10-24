@@ -104,6 +104,15 @@ ZIMAGE_DEFAULT_RESOLUTION = "1080×1920 (1080p portrait)"
 # with Python's round(), which is what its SimpleMath+ nodes do.
 ZIMAGE_DEFAULT_MULTIPLIER = 1.0
 
+# The optional start image. With one, the KSampler starts from its
+# VAEEncode instead of an empty latent and only re-samples the last
+# `denoise` of the schedule: low keeps the picture's content and repaints
+# its surface, 1 ignores it. 0.35 is the usual refine pass over another
+# model's render. The image keeps its own shape at the Resolution's pixel
+# count, on a grid of 16 (the VAE's 8 times the model's patch of 2).
+ZIMAGE_DEFAULT_DENOISE = 0.35
+ZIMAGE_INIT_GRID = 16
+
 # The KSampler's sampler list. The template runs er_sde on the "simple"
 # scheduler, which stays fixed.
 ZIMAGE_SAMPLERS = ["er_sde", "euler", "euler_ancestral", "dpmpp_2m",

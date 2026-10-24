@@ -6,7 +6,10 @@ ComfyUI throughout: UNETLoader, CLIPLoader(type="qwen_image"), VAELoader,
 LoraLoaderModelOnly, CLIPTextEncode ×2, EmptyLatentImage, KSampler,
 VAEDecode and SaveImage. The upscale pass adds UpscaleModelLoader and
 UltimateSDUpscale (the ComfyUI_UltimateSDUpscale pack), and only when the
-tab's tick asks for it — off, the graph has no trace of it.
+tab's tick asks for it — off, the graph has no trace of it. A start
+image swaps EmptyLatentImage for a core LoadImage and VAEEncode, and
+lowers the KSampler's denoise; without one, the graph has no trace of
+that either.
 
 What the template had and this leaves out, on purpose:
 
@@ -29,6 +32,7 @@ from ember.pipelines.common import chain_loras
 from ember.pipelines.zimage.constants import (
     ZIMAGE_CLIP_TYPE,
     ZIMAGE_HF_FILES,
+    ZIMAGE_INIT_GRID,
     ZIMAGE_SCHEDULER,
     ZIMAGE_TEXT_ENCODER,
     ZIMAGE_UPSCALE_HF_FILE,
@@ -68,6 +72,22 @@ def output_size(width: int, height: int, multiplier: float) -> tuple:
     return round(width * scale), round(height * scale)
 
 
+def init_size(image_width: int, image_height: int, width: int,
+              height: int) -> tuple:
+    """The size a start image is rendered at: its shape, the form's area.
+
+    The start image's aspect ratio at the pixel count of `width` ×
+    `height` (the Resolution times the multiplier), each side rounded to
+    ZIMAGE_INIT_GRID and never below it — so a refine pass over another
+    model's render keeps that render's framing rather than being cropped
+    or stretched to the Resolution's shape.
+    """
+    grid = ZIMAGE_INIT_GRID
+    scale = ((width * height) / (image_width * image_height)) ** 0.5
+    return (max(grid, round(image_width * scale / grid) * grid),
+            max(grid, round(image_height * scale / grid) * grid))
+
+
 def build_zimage_workflow(
     *,
     prompt: str,
@@ -81,6 +101,8 @@ def build_zimage_workflow(
     loras=(),
     unet_file: str,
     upscale: bool = False,
+    init_image: str = "",
+    denoise: float = 1.0,
     filename_prefix: str = "EmberLite",
 ) -> dict:
     """Build a Z-Image Turbo workflow in ComfyUI API format.
@@ -90,6 +112,12 @@ def build_zimage_workflow(
     is the diffusion model's file, resolved from the tab's catalogue model
     id. Both prompts are always encoded, as in the template: at CFG 1 the
     sampler ignores the negative, and above it the text is what counts.
+
+    With `init_image` — the start image's name in ComfyUI's input folder,
+    already at `width` × `height` — the latent is a LoadImage through
+    VAEEncode instead of EmptyLatentImage, and the KSampler runs at
+    `denoise`. Without one, `denoise` is ignored and the graph is the
+    template's, denoise 1.
 
     With `upscale`, the decoded image goes through 4xLSDIR and one
     UltimateSDUpscale pass at 1.5x, re-sampled by the same LoRA-patched
@@ -136,16 +164,27 @@ def build_zimage_workflow(
         "class_type": "CLIPTextEncode",
         "inputs": {"text": negative, "clip": clip_ref},
     }
-    wf["latent"] = {
-        "class_type": "EmptyLatentImage",
-        "inputs": {"width": int(width), "height": int(height), "batch_size": 1},
-    }
+    if init_image:
+        wf["init_image"] = {
+            "class_type": "LoadImage",
+            "inputs": {"image": init_image},
+        }
+        wf["latent"] = {
+            "class_type": "VAEEncode",
+            "inputs": {"pixels": ["init_image", 0], "vae": vae_ref},
+        }
+    else:
+        wf["latent"] = {
+            "class_type": "EmptyLatentImage",
+            "inputs": {"width": int(width), "height": int(height),
+                       "batch_size": 1},
+        }
     wf["sampler"] = {
         "class_type": "KSampler",
         "inputs": {
             "seed": int(seed), "steps": int(steps), "cfg": float(cfg),
             "sampler_name": sampler, "scheduler": ZIMAGE_SCHEDULER,
-            "denoise": 1.0,
+            "denoise": float(denoise) if init_image else 1.0,
             "model": model_ref, "positive": ["positive", 0],
             "negative": ["negative", 0], "latent_image": ["latent", 0],
         },

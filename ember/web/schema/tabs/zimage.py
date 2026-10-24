@@ -5,6 +5,7 @@ from ember.generation import handlers
 from ember.generation import runner
 from ember.licensing import presets
 from ember.pipelines.zimage.constants import (
+    ZIMAGE_DEFAULT_DENOISE,
     ZIMAGE_DEFAULT_MULTIPLIER,
     ZIMAGE_DEFAULT_NEGATIVE,
     ZIMAGE_DEFAULT_RESOLUTION,
@@ -39,7 +40,10 @@ Key = features.Key
 # tick in a section of its own, because it switches a whole second pass
 # on. Presets like the MiniMax tabs — its own list, and no prompt library
 # to publish to. The LoRA stack is Z-Image's own catalogue list, since
-# Krea LoRAs do not load on this model.
+# Krea LoRAs do not load on this model. The optional start image sits
+# in a closed section in the right column, above the result, like the
+# Video tab's start frame, so the tab reads as text to image until it is
+# opened.
 ZIMAGE_SCHEMA = TabSchema(
     model_registry=handlers.ZIMAGE_T2I,
     key=Key.ZIMAGE_T2I, handler=generate_zimage,
@@ -49,7 +53,9 @@ ZIMAGE_SCHEMA = TabSchema(
     category="generate", route="/generate/ember-lite",
     submit_label="Generate", preset_tab=presets.TAB_ZIMAGE,
     preset_note=GEN_PRESET_NOTE,
-    groups=(G_PROMPT, G_CORE, G_SAMPLER,
+    groups=(Group("start", "Start image", column="right", collapsible=True,
+                  default_open=False),
+            G_PROMPT, G_CORE, G_SAMPLER,
             Group("upscale", "Upscale", dense=True, collapsible=True),
             G_SEED, G_SAVE_PRESET),
     fields=(
@@ -85,6 +91,18 @@ ZIMAGE_SCHEMA = TabSchema(
                    "upscaled image is saved."),
         _batch_field(),
         *_preset_save_fields(),
+        # After the preset boxes rather than at the top of the list, so
+        # every control already in this tab's recipes keeps its position.
+        Field("image", "Start image (optional, paste with Ctrl+V)", "image",
+              None, group="start", column="right",
+              hint="Image to image: re-renders this picture with the "
+                   "prompt instead of starting from noise. It keeps its "
+                   "own shape at the Resolution's size."),
+        Field("denoise", "Denoise", "slider", ZIMAGE_DEFAULT_DENOISE,
+              lo=0.05, hi=1.0, step=0.01, group="start", column="right",
+              preset="denoise",
+              hint="Only with a start image. 0.3–0.4 keeps its content "
+                   "and repaints skin and light; 1 ignores it."),
         Field("lora_slots", "LoRA stack", "repeat",
               repeat=_blank_lora_tail(handlers.ZIMAGE_T2I)),
     ),
