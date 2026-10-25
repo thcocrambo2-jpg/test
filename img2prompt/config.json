@@ -9,6 +9,17 @@
   "agent_edits_negative": true,
   "base_prompt": "base_prompt.md",
   "lessons": "lessons.md",
-  "skip": ["img2.png", "img7.png"],
+  "skip": [
+    "img2.png",
+    "img7.png",
+    "img1113.png",
+    "p1.png",
+    "p2.png",
+    "p3.png",
+    "p123.png",
+    "p66.png",
+    "t1.png",
+    "t2.png"
+  ],
   "est_iteration_minutes": 13
 }

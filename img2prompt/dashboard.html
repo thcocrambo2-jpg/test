@@ -201,7 +201,11 @@ function render(data) {
            `avg iteration ${dur(avg.iterSec)}${avg.measured ? ` (${avg.sample} measured)` : " (estimate)"}`)
     + stat("Free RAM", ram, "while rendering");
 
-  $("current").innerHTML = row ? currentPanel(run, st, row, cur, avg) : `<h2>Current image</h2><div class="muted">${st.finished_at ? "All images finished." : "Between images."}</div>`;
+  // Two images can be mid-loop at once; the panel shows the one rendering.
+  const others = Object.values(st.active || {}).filter((a) => !cur || a.image !== cur.image);
+  const also = others.length ? `<div class="muted" style="margin-bottom:8px">Also active: ${others.map((a) =>
+    `<b>${esc(a.image)}</b> <span class="pill ${esc(a.phase)}">${esc(a.phase)}</span> iteration ${a.iteration} · ${dur(now() - a.phase_started_at)}`).join(" · ")}</div>` : "";
+  $("current").innerHTML = row ? currentPanel(run, st, row, cur, avg, also) : `<h2>Current image</h2><div class="muted">${st.finished_at ? "All images finished." : "Between images."}</div>`;
   $("rows").innerHTML = st.images.map((r) => tableRow(run, r)).join("");
 }
 
@@ -218,7 +222,7 @@ function verdictOf(st, base, judged) {
   return base + (/ i2i$/.test(st.tab || "") ? "verdict.json" : `iter${judged.n}_verdict.json`);
 }
 
-function currentPanel(run, st, row, cur, avg) {
+function currentPanel(run, st, row, cur, avg, also) {
   const base = `/runs/${encodeURIComponent(run)}/${encodeURIComponent(row.dir)}/`;
   const phaseFor = now() - cur.phase_started_at;
   let progress = "";
@@ -240,7 +244,7 @@ function currentPanel(run, st, row, cur, avg) {
   const diffs = last && last.differences && last.differences.length
     ? `<h2 style="margin-top:14px">What the judge says is still off (best render)</h2><ul class="diffs">${last.differences.map((d) => `<li>${esc(d)}</li>`).join("")}</ul>` : "";
   const cats = last && last.categories ? `<div class="cats">${Object.entries(last.categories).map(([k, v]) => `<span>${esc(k.replace(/_/g, " "))} <b>${esc(v)}</b></span>`).join("")}</div>` : "";
-  return `<h2>Current image — ${esc(row.name)}</h2>
+  return `<h2>Current image — ${esc(row.name)}</h2>${also}
     <div class="cur">
       <div class="ref"><img src="${base}${encodeURIComponent(row.reference.split("/").pop())}" alt="reference">
         <div class="muted" style="margin-top:6px">${row.width}×${row.height} → ${esc(row.aspect)} · seed ${row.seed}</div></div>

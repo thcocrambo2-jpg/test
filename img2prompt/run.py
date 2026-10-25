@@ -26,6 +26,7 @@ Files per image, under runs/<run>/<image stem>/:
 """
 
 import argparse
+import atexit
 import ctypes
 import json
 import math
@@ -107,14 +108,61 @@ def run_dir() -> Path:
     return RUNS / latest.read_text(encoding="utf-8").strip()
 
 
-def load(rdir: Path | None = None) -> tuple[Path, dict]:
+# Two images run at once (one writing or judging while the other renders),
+# so two run.py processes can read-modify-write state.json together. load()
+# takes state.lock and save() gives it back; a process that dies holding it
+# frees it at exit, and a lock older than LOCK_STALE is taken as abandoned.
+LOCK_STALE = 120
+LOCK_WAIT = 150
+_locks: dict[str, Path] = {}
+atexit.register(lambda: [p.unlink(missing_ok=True) for p in _locks.values()])
+
+
+def lock(rdir: Path) -> None:
+    path = rdir / "state.lock"
+    if str(path) in _locks:
+        return
+    deadline = time.time() + LOCK_WAIT
+    while True:
+        try:
+            os.close(os.open(path, os.O_CREAT | os.O_EXCL | os.O_WRONLY))
+            _locks[str(path)] = path
+            return
+        except FileExistsError:
+            try:
+                stale = time.time() - path.stat().st_mtime > LOCK_STALE
+            except FileNotFoundError:
+                continue
+            if stale:
+                path.unlink(missing_ok=True)
+                continue
+            if time.time() > deadline:
+                fail("state.json is locked by another run.py: %s" % path)
+            time.sleep(0.05)
+
+
+def unlock(rdir: Path) -> None:
+    path = _locks.pop(str(rdir / "state.lock"), None)
+    if path:
+        path.unlink(missing_ok=True)
+
+
+def load(rdir: Path | None = None, locked: bool = True) -> tuple[Path, dict]:
+    """Read state.json; locked=False for a read that is never saved."""
     rdir = rdir or run_dir()
-    return rdir, json.loads((rdir / "state.json").read_text(encoding="utf-8"))
+    if locked:
+        lock(rdir)
+    state = json.loads((rdir / "state.json").read_text(encoding="utf-8"))
+    if "active" not in state:  # a run from before two images at once
+        cur = state.get("current")
+        state["active"] = {cur["image"]: cur} if cur else {}
+    return rdir, state
 
 
 def save(rdir: Path, state: dict) -> None:
     """Write via a temp file so the dashboard never reads half a file."""
     state["updated_at"] = now()
+    sync_current(state)
     tmp = rdir / "state.json.tmp"
     tmp.write_text(json.dumps(state, indent=2, ensure_ascii=False),
                    encoding="utf-8")
@@ -123,6 +171,7 @@ def save(rdir: Path, state: dict) -> None:
     for attempt in range(50):
         try:
             os.replace(tmp, rdir / "state.json")
+            unlock(rdir)
             return
         except PermissionError:
             if attempt == 49:
@@ -151,9 +200,35 @@ def iteration(row: dict, n: int, create: bool = False) -> dict:
 
 
 def set_current(state: dict, image=None, n=None, phase=None, **extra) -> None:
-    state["current"] = ({"image": image, "iteration": n, "phase": phase,
+    """Mark what one image is doing now; with no image, clear them all."""
+    active = state.setdefault("active", {})
+    if image:
+        active[image] = {"image": image, "iteration": n, "phase": phase,
                          "phase_started_at": now(), **extra}
-                        if image else None)
+    else:
+        active.clear()
+    sync_current(state)
+
+
+def clear_current(state: dict, image: str) -> None:
+    state.setdefault("active", {}).pop(image, None)
+    sync_current(state)
+
+
+def active_entry(state: dict, image: str, n: int, phase: str) -> dict:
+    """The image's entry in state["active"], recreated if it went missing."""
+    if image not in state.setdefault("active", {}):
+        set_current(state, image, n, phase)
+    return state["active"][image]
+
+
+def sync_current(state: dict) -> None:
+    """state["current"] is the one image the dashboard shows in full: the
+    one rendering if any, else the one whose phase changed last."""
+    active = list((state.get("active") or {}).values())
+    state["current"] = (max(active, key=lambda e: (e["phase"] == "rendering",
+                                                  e["phase_started_at"]))
+                        if active else None)
 
 
 # ─────────────────────────────────────────────────────────── the API
@@ -317,12 +392,38 @@ def cmd_begin(args) -> None:
         # Resumed after an interruption: carry on from the last judged
         # iteration with the config it started with. The coordinator
         # starts a fresh writer on the revision step.
-        last = row["iterations"][-1]["n"]
-        best_n = row["best"]["iteration"]
+        # Resume after the last *judged* iteration. One rendered but not
+        # judged (or written but not rendered) is handed back as-is, so
+        # the chat judges (or renders) it instead of writing over it.
+        judged = [it["n"] for it in row["iterations"] if it.get("scores")]
+        last = judged[-1] if judged else 0
+        pending = [it for it in row["iterations"] if it["n"] > last]
+        best_n = row["best"]["iteration"] if row["best"] else None
+        if pending:
+            it = pending[0]
+            step = "judge" if it["renders"] else (
+                "render" if (idir / ("iter%d_prompt.txt" % it["n"])).exists()
+                else "write")
+            set_current(state, row["name"], it["n"],
+                        {"judge": "judging", "render": "writing",
+                         "write": "writing"}[step])
+            save(rdir, state)
+            out({"ok": True, "image": row["name"], "resumed": True,
+                 "next_step": step, "iteration": it["n"],
+                 "image_dir": str(idir), "reference": str(rdir / row["reference"]),
+                 "default_negative": str(idir / "default_negative.txt"),
+                 "config": row["config"], "aspect": row["aspect"],
+                 "seed": row["seed"], "best": row["best"],
+                 "best_prompt": (str(idir / ("iter%d_prompt.txt" % best_n))
+                                 if best_n else None),
+                 "verdict": (str(idir / ("iter%d_verdict.json" % last))
+                             if last else None)})
+            return
         set_current(state, row["name"], last + 1, "writing")
         iteration(row, last + 1, create=True)
         save(rdir, state)
         out({"ok": True, "image": row["name"], "resumed": True,
+             "next_step": "write",
              "image_dir": str(idir), "reference": str(rdir / row["reference"]),
              "default_negative": str(idir / "default_negative.txt"),
              "config": row["config"], "aspect": row["aspect"],
@@ -414,10 +515,14 @@ def cmd_render(args) -> None:
         ram = free_ram_gb()
         if ram is not None:
             lowest_ram = ram if lowest_ram is None else min(lowest_ram, ram)
-        rdir, state = load(rdir)  # the dashboard only reads, so no race
-        state["current"].update(job=job, status=mine["status"],
-                                progress=mine["progress"], step=mine["step"],
-                                backend_eta=mine["eta"], ram_free_gb=ram)
+        rdir, state = load(rdir)
+        # Queued behind the other image's render: time it from when it runs.
+        if mine["status"] in ("queued", "waiting"):
+            iteration(find(state, args.image), args.iter).update(
+                render_started_at=now())
+        active_entry(state, args.image, args.iter, "rendering").update(
+            job=job, status=mine["status"], progress=mine["progress"],
+            step=mine["step"], backend_eta=mine["eta"], ram_free_gb=ram)
         save(rdir, state)
         if mine["status"] in ("done", "failed", "cancelled"):
             break
@@ -515,7 +620,7 @@ def cmd_finish(args) -> None:
         (idir / "best_negative.txt").write_text(
             negative.read_text(encoding="utf-8") if negative.exists()
             else state["default_negative"], encoding="utf-8")
-    set_current(state)
+    clear_current(state, row["name"])
     if all(r["status"] != "pending" for r in state["images"]):
         state["finished_at"] = now()
     save(rdir, state)
@@ -525,11 +630,11 @@ def cmd_finish(args) -> None:
 
 
 def cmd_status(_args) -> None:
-    rdir, state = load()
+    rdir, state = load(locked=False)
     out({"run": str(rdir), "folder": state["folder"],
          "tab": (state.get("tab") or TAB), "preset": state["preset"],
          "overrides": (state.get("overrides") or {}),
-         "current": state["current"],
+         "active": list(state["active"].values()),
          "images": [{"name": r["name"], "status": r["status"],
                      "iterations": len([i for i in r["iterations"]
                                         if i["renders"]]),

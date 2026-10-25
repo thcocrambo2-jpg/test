@@ -2,10 +2,13 @@
 
     python img2prompt/oneoff.py <folder> [--tab zimage_t2i] [--preset Default]
         [--like reference.png | --size "3:4 (Portrait Standard)"]
-        [--seed N] [--steps N] [--batch N]
+        [--seed N] [--steps N] [--batch N] [--set key=value ...] [--out NAME]
 
 <folder> holds prompt.txt and, optionally, negative.txt (the tab default
-when absent). The tab and preset default to config.json's; steps default
+when absent). --set overrides any form value after the preset, e.g.
+--set lora.7.enabled=true --set lora.7.weight=0.7 (values parse as JSON
+where they can); --out names the renders NAME_1.png, ... instead of
+render_1.png. The tab and preset default to config.json's; steps default
 to config.json's on Krea and to the preset's own elsewhere. --like picks
 the tab's size choice nearest to that image's shape. Renders land in the
 folder as render_1.png, render_2.png, ... Long-running, so run it in the
@@ -13,6 +16,7 @@ background like `run.py render`.
 """
 
 import argparse
+import json
 import sys
 import time
 import urllib.parse
@@ -34,6 +38,13 @@ def main() -> None:
     parser.add_argument("--seed", type=int, default=1234567)
     parser.add_argument("--steps", type=int)
     parser.add_argument("--batch", type=int)
+    parser.add_argument("--set", action="append", default=[],
+                        metavar="KEY=VALUE", help="override a form value")
+    parser.add_argument("--out", default="render")
+    parser.add_argument("--prompt", default="prompt.txt",
+                        help="prompt file in the folder")
+    parser.add_argument("--negative", default="negative.txt",
+                        help="negative file in the folder")
     args = parser.parse_args()
 
     cfg = run.read_config()
@@ -55,12 +66,20 @@ def main() -> None:
     steps = args.steps or (int(cfg["steps"]) if tab == run.TAB else None)
     if steps:
         values["steps"] = steps
-    negative_file = folder / "negative.txt"
+    negative_file = folder / args.negative
     if negative_file.exists():
         values["negative"] = negative_file.read_text(encoding="utf-8").strip()
-    values.update(prompt=(folder / "prompt.txt").read_text("utf-8").strip(),
+    values.update(prompt=(folder / args.prompt).read_text("utf-8").strip(),
                   seed=args.seed, randomize=False,
                   batch_count=args.batch or int(cfg.get("batch_count", 1)))
+    for item in args.set:
+        key, _, raw = item.partition("=")
+        if key not in values:
+            run.fail("No form value %r on %s." % (key, tab))
+        try:
+            values[key] = json.loads(raw)
+        except ValueError:
+            values[key] = raw
 
     started = time.time()
     job = run.call("POST", "/tabs/%s/generate" % tab,
@@ -79,7 +98,7 @@ def main() -> None:
     saved = []
     for k, media in enumerate((shown.get("result") or {}).get("images") or [],
                               start=1):
-        target = folder / ("render_%d.png" % k)
+        target = folder / ("%s_%d.png" % (args.out, k))
         with urllib.request.urlopen(run.API.rsplit("/api/v1", 1)[0]
                                     + media["url"], timeout=120) as resp:
             target.write_bytes(resp.read())

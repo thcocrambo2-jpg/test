@@ -88,10 +88,29 @@ class Handler(BaseHTTPRequestHandler):
             self.send(404, b"not found", "text/plain")
             return
         ctype = mimetypes.guess_type(target.name)[0] or "application/octet-stream"
-        # Renders and references never change once written, so the page's
-        # 2-second redraw costs nothing; a text file may still be rewritten.
-        cache = "no-store" if ctype.startswith("text/") else "max-age=86400"
-        self.send(200, target.read_bytes(), ctype, cache)
+        if ctype.startswith("text/"):  # may still be rewritten
+            self.send(200, target.read_bytes(), ctype)
+            return
+        # An image is revalidated on every request: a sweep can put a new
+        # render under an old name, so a long max-age showed stale pictures.
+        # An unchanged file costs only a 304, so the 2-second redraw stays
+        # cheap.
+        st = target.stat()
+        etag = '"%x-%x"' % (st.st_mtime_ns, st.st_size)
+        if self.headers.get("if-none-match") == etag:
+            self.send_response(304)
+            self.send_header("etag", etag)
+            self.send_header("cache-control", "no-cache")
+            self.end_headers()
+            return
+        self.send_response(200)
+        self.send_header("content-type", ctype)
+        self.send_header("cache-control", "no-cache")
+        self.send_header("etag", etag)
+        body = target.read_bytes()
+        self.send_header("content-length", str(len(body)))
+        self.end_headers()
+        self.wfile.write(body)
 
 
 def main() -> None:
