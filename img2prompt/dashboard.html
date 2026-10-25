@@ -1,0 +1,515 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>img2prompt progress</title>
+<style>
+  :root {
+    --bg: #f6f5f2; --panel: #ffffff; --ink: #1d1d1b; --muted: #6b6a66;
+    --line: #e3e1db; --accent: #c2410c; --good: #15803d; --warn: #b45309;
+    --bad: #b91c1c; --chip: #efede8;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root { --bg: #161615; --panel: #1f1f1d; --ink: #ecebe7; --muted: #9c9a94;
+            --line: #33322f; --accent: #fb923c; --good: #4ade80; --warn: #fbbf24;
+            --bad: #f87171; --chip: #2a2927; }
+  }
+  * { box-sizing: border-box; }
+  body { margin: 0; background: var(--bg); color: var(--ink);
+         font: 14px/1.45 system-ui, -apple-system, "Segoe UI", sans-serif; }
+  main { max-width: 1280px; margin: 0 auto; padding: 20px 16px 48px; }
+  h1 { font-size: 20px; margin: 0; }
+  h2 { font-size: 13px; text-transform: uppercase; letter-spacing: .06em;
+       color: var(--muted); margin: 0 0 10px; font-weight: 600; }
+  .sub { color: var(--muted); font-size: 13px; margin-top: 2px; word-break: break-all; }
+  .panel { background: var(--panel); border: 1px solid var(--line);
+           border-radius: 10px; padding: 16px; margin-top: 16px; }
+  .stats { display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+           gap: 12px; margin-top: 16px; }
+  .stat { background: var(--panel); border: 1px solid var(--line);
+          border-radius: 10px; padding: 12px 14px; }
+  .stat .k { color: var(--muted); font-size: 12px; }
+  .stat .v { font-size: 22px; font-weight: 600; font-variant-numeric: tabular-nums; }
+  .stat .s { color: var(--muted); font-size: 12px; font-variant-numeric: tabular-nums; }
+  .pill { display: inline-block; padding: 2px 10px; border-radius: 99px;
+          background: var(--chip); font-size: 12px; font-weight: 600; }
+  .pill.rendering { color: var(--accent); } .pill.writing { color: var(--warn); }
+  .pill.judging { color: var(--good); }
+  .cur { display: grid; grid-template-columns: minmax(200px, 300px) 1fr; gap: 16px; }
+  @media (max-width: 720px) { .cur { grid-template-columns: 1fr; } }
+  .ref img { width: 100%; border-radius: 8px; display: block; }
+  .bar { height: 6px; background: var(--chip); border-radius: 99px; overflow: hidden; margin: 8px 0 4px; }
+  .bar > div { height: 100%; background: var(--accent); transition: width .5s; }
+  .renders { display: grid; grid-template-columns: repeat(auto-fill, minmax(130px, 1fr)); gap: 10px; }
+  .render { position: relative; border: 2px solid transparent; border-radius: 8px; overflow: hidden; }
+  .render.best { border-color: var(--good); }
+  .render img { width: 100%; display: block; cursor: zoom-in; }
+  .render .tag { position: absolute; left: 6px; top: 6px; background: rgba(0,0,0,.65);
+                 color: #fff; font-size: 11px; padding: 1px 6px; border-radius: 4px; }
+  .render .score { position: absolute; right: 6px; top: 6px; background: rgba(0,0,0,.65);
+                   color: #fff; font-size: 12px; font-weight: 700; padding: 1px 6px; border-radius: 4px; }
+  ul.diffs { margin: 6px 0 0; padding-left: 18px; }
+  .cats { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 8px; }
+  .cats span { background: var(--chip); border-radius: 6px; padding: 2px 8px; font-size: 12px; }
+  details { margin-top: 10px; } summary { cursor: pointer; color: var(--muted); }
+  pre { white-space: pre-wrap; font: 12px/1.5 ui-monospace, Consolas, monospace;
+        background: var(--chip); padding: 10px; border-radius: 6px; max-height: 260px; overflow: auto; }
+  .tablewrap { overflow-x: auto; }
+  table { width: 100%; border-collapse: collapse; font-variant-numeric: tabular-nums; }
+  th, td { text-align: left; padding: 8px; border-bottom: 1px solid var(--line); vertical-align: middle; }
+  th { color: var(--muted); font-weight: 600; font-size: 12px; }
+  td img { height: 56px; border-radius: 4px; display: block; }
+  .st-done { color: var(--good); } .st-running { color: var(--accent); }
+  .st-skipped, .st-failed { color: var(--bad); } .st-pending { color: var(--muted); }
+  .muted { color: var(--muted); }
+  .cfg { display: flex; flex-wrap: wrap; gap: 6px; }
+  .cfg span { background: var(--chip); border-radius: 6px; padding: 2px 8px; font-size: 12px; }
+  .histhead { display: flex; flex-wrap: wrap; gap: 8px 12px; align-items: center;
+              justify-content: space-between; margin-bottom: 10px; }
+  .histhead h2 { margin: 0; }
+  select { font: inherit; color: var(--ink); background: var(--panel);
+           border: 1px solid var(--line); border-radius: 6px; padding: 4px 8px; max-width: 100%; }
+  details.card { border: 1px solid var(--line); border-radius: 8px; padding: 10px 12px; margin-top: 10px; }
+  details.card > summary { list-style: none; display: flex; flex-wrap: wrap; gap: 6px 14px;
+                           align-items: center; color: var(--ink); }
+  details.card > summary::-webkit-details-marker { display: none; }
+  details.card > summary img { height: 48px; border-radius: 4px; }
+  details.card > summary .name { font-weight: 600; }
+  .hist { display: grid; grid-template-columns: minmax(160px, 240px) 1fr; gap: 16px; margin-top: 12px; }
+  @media (max-width: 720px) { .hist { grid-template-columns: 1fr; } }
+  .hist .ref img { width: 100%; border-radius: 8px; }
+  .iter { display: grid; grid-template-columns: 110px 1fr; gap: 12px; padding: 12px 0;
+          border-top: 1px solid var(--line); }
+  .iter:first-child { border-top: 0; padding-top: 0; }
+  .iter > img { width: 110px; border-radius: 6px; border: 2px solid transparent; cursor: zoom-in; }
+  .iter.best > img { border-color: var(--good); }
+  .iter .meta { display: flex; flex-wrap: wrap; gap: 4px 12px; font-variant-numeric: tabular-nums; }
+  .iter .meta b { font-size: 16px; }
+  .iter .why { color: var(--muted); margin-top: 2px; }
+  .iter .refine { display: inline-flex; align-items: center; gap: 6px; }
+  .iter .refine img { width: 44px; border-radius: 4px; cursor: zoom-in; }
+  .btns { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 6px; }
+  button { font: inherit; font-size: 12px; color: var(--ink); background: var(--chip);
+           border: 1px solid var(--line); border-radius: 6px; padding: 3px 10px; cursor: pointer; }
+  button:hover { border-color: var(--accent); }
+  .iter details { margin-top: 6px; }
+  #zoom { position: fixed; inset: 0; background: rgba(0,0,0,.85); display: none;
+          align-items: center; justify-content: center; gap: 12px; padding: 16px; z-index: 9; cursor: zoom-out; }
+  #zoom img { max-height: 92vh; max-width: 48vw; border-radius: 6px; }
+  #zoom figure { margin: 0; text-align: center; color: #fff; font-size: 13px; }
+  #zoom.three img { max-width: 31vw; }
+  @media (max-width: 720px) { #zoom img { max-width: 92vw; max-height: 45vh; } #zoom { flex-direction: column; }
+                              #zoom.three img { max-width: 92vw; max-height: 28vh; } }
+</style>
+</head>
+<body>
+<main>
+  <h1>img2prompt</h1>
+  <div class="sub" id="where">Waiting for a run…</div>
+  <div class="stats" id="stats"></div>
+  <section class="panel" id="current"></section>
+  <section class="panel">
+    <h2>Images</h2>
+    <div class="tablewrap"><table>
+      <thead><tr><th>Reference</th><th>Best</th><th>Image</th><th>Status</th>
+        <th>Iterations</th><th>Best score</th><th>Time</th></tr></thead>
+      <tbody id="rows"></tbody>
+    </table></div>
+  </section>
+  <section class="panel">
+    <div class="histhead">
+      <h2>Images</h2>
+      <select id="runpick" aria-label="Run"></select>
+    </div>
+    <div id="history" class="muted">No finished images yet.</div>
+  </section>
+  <section class="panel">
+    <h2>Live config <span class="muted" style="text-transform:none;letter-spacing:0">— re-read before each image</span></h2>
+    <div class="cfg" id="cfg"></div>
+  </section>
+</main>
+<div id="zoom"></div>
+<script>
+const $ = (id) => document.getElementById(id);
+const esc = (s) => String(s ?? "").replace(/[&<>"]/g, (c) => ({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;"}[c]));
+const now = () => Date.now() / 1000;
+
+function dur(sec) {
+  if (sec == null || !isFinite(sec)) return "—";
+  sec = Math.max(0, Math.round(sec));
+  const h = Math.floor(sec / 3600), m = Math.floor(sec % 3600 / 60), s = sec % 60;
+  return h ? `${h}h ${String(m).padStart(2, "0")}m` : m ? `${m}m ${String(s).padStart(2, "0")}s` : `${s}s`;
+}
+const clock = (sec) => sec == null ? "" : new Date((now() + sec) * 1000)
+  .toLocaleString([], {weekday: "short", hour: "2-digit", minute: "2-digit"});
+
+// Measured averages, with the config's guesses until something has finished.
+function averages(state, cfg) {
+  const iters = state.images.flatMap((r) => r.iterations).filter((i) => i.finished_at);
+  const iterSec = iters.length
+    ? iters.reduce((a, i) => a + (i.finished_at - i.started_at), 0) / iters.length
+    : (cfg.est_iteration_minutes || 26) * 60;
+  const finished = state.images.filter((r) => r.status === "done");
+  const perImage = finished.length
+    ? finished.reduce((a, r) => a + r.iterations.length, 0) / finished.length
+    : (cfg.min_iterations + cfg.max_iterations) / 2;
+  return {iterSec, perImage, measured: iters.length > 0, sample: iters.length};
+}
+
+function currentEta(row, avg) {
+  const c = row.config;
+  const done = row.iterations.filter((i) => i.finished_at).length;
+  const open = row.iterations.find((i) => !i.finished_at);
+  const openLeft = open ? Math.max(avg.iterSec - (now() - open.started_at), 0) : 0;
+  const after = (n) => openLeft + Math.max(n - done - (open ? 1 : 0), 0) * avg.iterSec;
+  const expected = Math.min(Math.max(Math.round(avg.perImage), c.min_iterations, done + (open ? 1 : 0)), c.max_iterations);
+  return {done, open, expected, eta: after(expected), lo: after(c.min_iterations), hi: after(c.max_iterations)};
+}
+
+function stat(k, v, s = "") {
+  return `<div class="stat"><div class="k">${k}</div><div class="v">${v}</div><div class="s">${s}</div></div>`;
+}
+
+function render(data) {
+  const cfg = data.config;
+  $("cfg").innerHTML = Object.entries(cfg).map(([k, v]) => `<span>${esc(k)}: <b>${esc(v)}</b></span>`).join("");
+  if (!data.state) { $("where").textContent = "No run yet."; return; }
+  const st = data.state, run = data.run, cur = st.current;
+  const avg = averages(st, cfg);
+  const total = st.images.length;
+  const closed = st.images.filter((r) => r.status !== "pending" && r.status !== "running").length;
+  const row = cur && st.images.find((r) => r.name === cur.image);
+  const ce = row && row.config ? currentEta(row, avg) : null;
+
+  // Pending images are costed with the live config, since that is what they will run with.
+  const perPending = Math.min(Math.max(avg.perImage, cfg.min_iterations), cfg.max_iterations);
+  const pending = st.images.filter((r) => r.status === "pending").length;
+  const totalEta = st.finished_at ? 0 : (ce ? ce.eta : 0) + pending * perPending * avg.iterSec;
+
+  $("where").innerHTML = `Folder <b>${esc(st.folder)}</b> · model <b>${esc(st.tab || "krea_v2_t2i")}</b> · preset <b>${esc(st.preset)}</b>${st.overrides && Object.keys(st.overrides).length ? ` · overrides <b>${esc(JSON.stringify(st.overrides))}</b>` : ""} · run ${esc(run)}`
+    + (st.finished_at ? ` · <span class="st-done">finished</span>` : "");
+  const ram = cur && cur.ram_free_gb != null ? cur.ram_free_gb + " GB" : "—";
+  $("stats").innerHTML =
+      stat("Images", `${closed} / ${total}`, `${pending} pending`)
+    + stat("Iteration", ce ? `${ce.open ? ce.open.n : ce.done} / ${row.config.max_iterations}`
+                           : "—", ce ? `min ${row.config.min_iterations} · stop at ${row.config.stop_score}` : "")
+    + stat("This image running", row ? dur(now() - row.started_at) : "—", row ? esc(row.name) : "")
+    + stat("This image ETA", ce ? dur(ce.eta) : "—", ce ? `range ${dur(ce.lo)} – ${dur(ce.hi)}` : "")
+    + stat("Whole run ETA", st.finished_at ? "done" : dur(totalEta), st.finished_at ? "" : "≈ " + clock(totalEta))
+    + stat("Run time", dur((st.finished_at || now()) - st.started_at),
+           `avg iteration ${dur(avg.iterSec)}${avg.measured ? ` (${avg.sample} measured)` : " (estimate)"}`)
+    + stat("Free RAM", ram, "while rendering");
+
+  $("current").innerHTML = row ? currentPanel(run, st, row, cur, avg) : `<h2>Current image</h2><div class="muted">${st.finished_at ? "All images finished." : "Between images."}</div>`;
+  $("rows").innerHTML = st.images.map((r) => tableRow(run, r)).join("");
+}
+
+// In a refine run, the Krea render a refine started from: krea<n>_1.png in
+// a per-image refine, iter0_1.png in the denoise sweep.
+function kreaOf(st, base, it) {
+  const name = st.krea_run ? `krea${it.n}_1.png`
+    : / i2i$/.test(st.tab || "") && it.n > 0 ? "iter0_1.png" : "";
+  return name ? ` data-krea="${base}${name}"` : "";
+}
+
+function verdictOf(st, base, judged) {
+  if (!judged) return "";
+  return base + (/ i2i$/.test(st.tab || "") ? "verdict.json" : `iter${judged.n}_verdict.json`);
+}
+
+function currentPanel(run, st, row, cur, avg) {
+  const base = `/runs/${encodeURIComponent(run)}/${encodeURIComponent(row.dir)}/`;
+  const phaseFor = now() - cur.phase_started_at;
+  let progress = "";
+  if (cur.phase === "rendering") {
+    const step = cur.step;
+    const pct = step ? 100 * step.step / step.total : 0;
+    progress = `<div class="bar"><div style="width:${pct}%"></div></div>
+      <div class="muted">${esc(cur.progress || cur.status || "queued")}${cur.backend_eta != null ? ` · backend ETA ${dur(cur.backend_eta)}` : ""}</div>`;
+  }
+  const last = [...row.iterations].reverse().find((i) => i.scores);
+  const scores = last ? last.scores : {};
+  const best = row.best && row.best.render;
+  const tiles = row.iterations.flatMap((it) => it.renders.map((name) => `
+    <div class="render ${name === best ? "best" : ""}">
+      <img src="${base}${encodeURIComponent(name)}" loading="lazy" data-ref="${base}${encodeURIComponent(row.reference.split("/").pop())}"${kreaOf(st, base, it)}>
+      <span class="tag">${esc(name.replace(".png", ""))}</span>
+      ${scores[name] != null ? `<span class="score">${scores[name].toFixed(1)}</span>` : ""}
+    </div>`)).join("");
+  const diffs = last && last.differences && last.differences.length
+    ? `<h2 style="margin-top:14px">What the judge says is still off (best render)</h2><ul class="diffs">${last.differences.map((d) => `<li>${esc(d)}</li>`).join("")}</ul>` : "";
+  const cats = last && last.categories ? `<div class="cats">${Object.entries(last.categories).map(([k, v]) => `<span>${esc(k.replace(/_/g, " "))} <b>${esc(v)}</b></span>`).join("")}</div>` : "";
+  return `<h2>Current image — ${esc(row.name)}</h2>
+    <div class="cur">
+      <div class="ref"><img src="${base}${encodeURIComponent(row.reference.split("/").pop())}" alt="reference">
+        <div class="muted" style="margin-top:6px">${row.width}×${row.height} → ${esc(row.aspect)} · seed ${row.seed}</div></div>
+      <div>
+        <div><span class="pill ${esc(cur.phase)}">${esc(cur.phase)}</span>
+          <span class="muted"> iteration ${cur.iteration} · ${dur(phaseFor)} in this phase</span></div>
+        ${progress}
+        <div style="margin-top:12px" class="renders">${tiles || '<span class="muted">No renders yet.</span>'}</div>
+        ${diffs}${cats}
+        <details><summary>Prompt of the best render so far</summary><pre id="bestprompt">…</pre></details>
+        ${row.iterations.map((it) => `
+        <details data-key="${esc(row.dir)}/${it.n}"><summary>Iteration ${it.n} prompt${it.negative_changed ? " + edited negative" : ""}${it.scores ? "" : it.renders.length ? " (rendered, not judged yet)" : " (being written)"}</summary>
+          <pre data-file="${base}iter${it.n}_prompt.txt">…</pre>
+          ${it.negative_changed ? `<div class="muted">Negative prompt</div><pre data-file="${base}iter${it.n}_negative.txt">…</pre>` : ""}
+        </details>`).join("")}
+      </div>
+    </div>`;
+}
+
+function tableRow(run, r) {
+  const base = `/runs/${encodeURIComponent(run)}/${encodeURIComponent(r.dir)}/`;
+  const ref = `<img src="${base}${encodeURIComponent(r.reference.split("/").pop())}" loading="lazy">`;
+  const best = r.best ? `<img src="${base}${encodeURIComponent(r.best.render)}" loading="lazy" data-ref="${base}${encodeURIComponent(r.reference.split("/").pop())}">` : "";
+  const time = r.started_at ? dur((r.finished_at || now()) - r.started_at) : "—";
+  const n = r.iterations.filter((i) => i.renders && i.renders.length).length;
+  return `<tr><td>${ref}</td><td>${best}</td><td>${esc(r.name)}${r.note ? `<div class="muted">${esc(r.note)}</div>` : ""}</td>
+    <td class="st-${esc(r.status)}">${esc(r.status)}</td><td>${n || "—"}</td>
+    <td>${r.best ? r.best.score.toFixed(1) + ` <span class="muted">(${esc(r.best.render.replace(".png", ""))})</span>` : "—"}</td><td>${time}</td></tr>`;
+}
+
+// A prompt file is written once, so each one is fetched once.
+const prompts = {};
+async function loadBestPrompt(data) {
+  const st = data.state, cur = st && st.current;
+  const row = cur && st.images.find((r) => r.name === cur.image);
+  const el = $("bestprompt");
+  if (!el) return;
+  if (!row || !row.best) { el.textContent = "No judged render yet."; return; }
+  const url = `/runs/${encodeURIComponent(data.run)}/${encodeURIComponent(row.dir)}/iter${row.best.iteration}_prompt.txt`;
+  if (!(url in prompts)) {
+    try { prompts[url] = await (await fetch(url)).text(); } catch { return; }
+  }
+  el.textContent = prompts[url];
+}
+
+// Fill every per-iteration <pre data-file>. A file that 404s is one the
+// writer has not finished yet, so it is asked for again next tick.
+async function loadIterationPrompts() {
+  for (const el of document.querySelectorAll("pre[data-file]")) {
+    const url = el.dataset.file;
+    if (!(url in prompts)) {
+      try {
+        const resp = await fetch(url);
+        if (!resp.ok) { el.textContent = "Not written yet."; continue; }
+        prompts[url] = await resp.text();
+      } catch { continue; }
+    }
+    el.textContent = prompts[url];
+  }
+}
+
+// ── Finished images: one card per closed image, in the run picked above.
+//
+// Rebuilt only when the set of closed images changes, so a card left open
+// stays open, and its texts are fetched when it is first opened.
+
+const texts = {};
+async function text(url) {
+  if (!(url in texts)) {
+    const resp = await fetch(url);
+    if (!resp.ok) throw new Error(resp.status);
+    texts[url] = await resp.text();
+  }
+  return texts[url];
+}
+
+let historyRun = "";   // "" follows the newest run
+let historySig = null;
+
+async function loadRuns() {
+  try {
+    const runs = await (await fetch("/api/runs", {cache: "no-store"})).json();
+    const pick = $("runpick");
+    const keep = pick.value;
+    pick.innerHTML = `<option value="">Current run</option>` + runs.map((r) =>
+      `<option value="${esc(r.run)}">${esc(r.run)} · ${esc(r.tab)} · ${esc(r.folder.split(/[\\/]/).pop())} · ${r.closed}/${r.images} done</option>`).join("");
+    pick.value = keep;
+  } catch {}
+}
+
+$("runpick").addEventListener("change", (e) => {
+  historyRun = e.target.value;
+  historySig = null;
+  tickHistory();
+});
+
+async function tickHistory(current) {
+  let data = current;
+  if (historyRun || !data) {
+    try {
+      data = await (await fetch("/api/state?run=" + encodeURIComponent(historyRun), {cache: "no-store"})).json();
+    } catch { return; }
+  }
+  if (!data.state) return;
+  // A Krea run's Z-Image refines live in "<run>-refine"; the server answers
+  // an unknown run with the newest one, so check the name that comes back.
+  let refine = null;
+  if (!/ i2i$/.test(data.state.tab || "")) {
+    try {
+      const r = await (await fetch("/api/state?run=" + encodeURIComponent(data.run + "-refine"), {cache: "no-store"})).json();
+      if (r.run === data.run + "-refine" && r.state) refine = r;
+    } catch {}
+  }
+  // Finished images, plus the one in progress so its renders show as they
+  // land; in-progress first, then newest finished.
+  const closed = data.state.images
+    .filter((r) => r.status !== "pending")
+    .sort((a, b) => (b.status === "running") - (a.status === "running")
+                    || (b.finished_at || 0) - (a.finished_at || 0));
+  const sig = data.run + "|" + closed.map((r) => r.name + r.status + r.finished_at + "/"
+    + r.iterations.reduce((a, i) => a + i.renders.length, 0)).join(",")
+    + "|" + (refine ? refine.state.images.map((r) => r.dir + r.status
+      + r.iterations.reduce((a, i) => a + i.renders.length, 0)).join(",") : "");
+  if (sig === historySig) return;
+  historySig = sig;
+  $("history").classList.toggle("muted", !closed.length);
+  $("history").innerHTML = closed.length
+    ? closed.map((r) => card(data.run, data.state, r, refine)).join("")
+    : "No finished images yet.";
+}
+
+function card(run, st, r, refine) {
+  // This image's Z-Image refines, when its Krea renders have been refined.
+  const rrow = refine && refine.state.images.find((x) => x.dir === r.dir);
+  const rbase = rrow ? `/runs/${encodeURIComponent(refine.run)}/${encodeURIComponent(r.dir)}/` : "";
+  const rjudged = rrow && [...rrow.iterations].reverse().find((i) => i.scores);
+  const rscores = rjudged ? rjudged.scores : {};
+  const refineOf = (it) => {
+    const ri = rrow && rrow.iterations.find((i) => i.n === it.n && i.renders.length);
+    return ri ? {url: rbase + encodeURIComponent(ri.renders[0]), name: ri.renders[0]} : null;
+  };
+  const base = `/runs/${encodeURIComponent(run)}/${encodeURIComponent(r.dir)}/`;
+  const refUrl = base + encodeURIComponent(r.reference.split("/").pop());
+  const its = r.iterations.filter((i) => i.renders && i.renders.length);
+  const judged = [...its].reverse().find((i) => i.scores);
+  // The last judge re-ranked every render, so its scores are the final ones.
+  const scores = judged ? judged.scores : {};
+  const best = r.best && r.best.render;
+  const renderSec = its.reduce((a, i) => a + (i.render_seconds || 0), 0);
+  const total = r.finished_at && r.started_at ? r.finished_at - r.started_at : null;
+  const bestImg = best ? `<img src="${base}${encodeURIComponent(best)}" alt="">` : "";
+  const rows = its.flatMap((it) => it.renders.map((name) => {
+    const negUrl = base + (it.negative_changed ? `iter${it.n}_negative.txt` : "default_negative.txt");
+    const promptUrl = base + `iter${it.n}_prompt.txt`;
+    const iterSec = it.finished_at ? it.finished_at - it.started_at : null;
+    const rf = refineOf(it);
+    const rfTag = rf ? `<span class="refine"><img src="${rf.url}" data-ref="${refUrl}" data-krea="${base}${encodeURIComponent(name)}" loading="lazy" alt="Z-Image refine">
+      Z-Image refine <b>${rscores[rf.name] != null ? rscores[rf.name].toFixed(1) : "—"}</b>${rrow.best && rrow.best.render === rf.name ? '<span class="st-done">★ best refine</span>' : ""}</span>` : "";
+    return `<div class="iter ${name === best ? "best" : ""}">
+      <img src="${base}${encodeURIComponent(name)}" data-ref="${refUrl}"${kreaOf(st, base, it)}${rf ? ` data-refine="${rf.url}"` : ""} loading="lazy" alt="${esc(name)}">
+      <div>
+        <div class="meta"><span>${it.n === 0 && it.denoise == null && /refine/.test(run) ? "Krea source" : "Iteration " + it.n}${it.denoise != null ? " · denoise " + it.denoise : ""}${it.renders.length > 1 ? " · " + esc(name) : ""}</span>
+          <b>${scores[name] != null ? scores[name].toFixed(1) : "—"}</b>${name === best ? '<span class="st-done">★ best</span>' : ""}
+          <span class="muted">render ${dur(it.render_seconds)} · iteration ${dur(iterSec)}${it.ram_free_gb != null ? ` · RAM low ${it.ram_free_gb} GB` : ""}</span>${rfTag}</div>
+        <div class="why" data-why="${esc(name)}"></div>
+        <div class="btns">
+          <button data-copy="${promptUrl}">Copy prompt</button>
+          <button data-copy="${negUrl}">Copy negative${it.negative_changed ? "" : " (default)"}</button>
+        </div>
+        <details><summary>Prompt</summary><pre data-lazy="${promptUrl}">…</pre></details>
+        <details><summary>Negative prompt${it.negative_changed ? " (edited)" : " (default)"}</summary><pre data-lazy="${negUrl}">…</pre></details>
+      </div>
+    </div>`;
+  })).join("");
+  const verdict = verdictOf(st, base, judged);
+  return `<details class="card" data-verdict="${verdict}">
+    <summary><img src="${refUrl}" alt="">${bestImg}
+      <span class="name">${esc(r.name)}</span>
+      <span class="st-${esc(r.status)}">${esc(r.status)}</span>
+      <span>${its.length} iteration${its.length === 1 ? "" : "s"}</span>
+      <span>best <b>${r.best ? r.best.score.toFixed(1) : "—"}</b></span>
+      ${rrow && rrow.best ? `<span>best Z-Image refine <b>${rrow.best.score.toFixed(1)}</b></span>` : ""}
+      <span class="muted">total ${dur(total)} · rendering ${dur(renderSec)}</span>
+      ${r.note ? `<span class="muted">${esc(r.note)}</span>` : ""}</summary>
+    <div class="hist">
+      <div class="ref"><img src="${refUrl}" alt="reference">
+        <div class="muted" style="margin-top:6px">${r.width}×${r.height} → ${esc(r.aspect || "")} · seed ${r.seed}</div>
+        <div class="cats" data-cats></div>
+      </div>
+      <div>${rows || '<span class="muted">No renders.</span>'}
+        <div data-diffs></div>
+      </div>
+    </div>
+  </details>`;
+}
+
+// Opening a card fills in the judge's notes; opening a <details> fills its text.
+document.addEventListener("toggle", async (e) => {
+  const el = e.target;
+  if (!el.open) return;
+  for (const pre of el.querySelectorAll(":scope > pre[data-lazy]")) {
+    try { pre.textContent = await text(pre.dataset.lazy); } catch { pre.textContent = "File not found."; }
+  }
+  if (el.classList.contains("card") && el.dataset.verdict && !el.dataset.filled) {
+    el.dataset.filled = "1";
+    try {
+      const v = JSON.parse(await text(el.dataset.verdict));
+      for (const row of v.ranking || []) {
+        const why = el.querySelector(`[data-why="${CSS.escape(row.render)}"]`);
+        if (why) why.textContent = row.why || "";
+      }
+      el.querySelector("[data-cats]").innerHTML = Object.entries(v.categories || {})
+        .map(([k, s]) => `<span>${esc(k.replace(/_/g, " "))} <b>${esc(s)}</b></span>`).join("");
+      if (v.differences && v.differences.length) {
+        el.querySelector("[data-diffs]").innerHTML = `<h2 style="margin-top:14px">Still different in the best render</h2>
+          <ul class="diffs">${v.differences.map((d) => `<li>${esc(d)}</li>`).join("")}</ul>`;
+      }
+    } catch {}
+  }
+}, true);
+
+document.addEventListener("click", async (e) => {
+  const btn = e.target.closest("button[data-copy]");
+  if (!btn) return;
+  const label = btn.textContent;
+  try {
+    await navigator.clipboard.writeText(await text(btn.dataset.copy));
+    btn.textContent = "Copied";
+  } catch { btn.textContent = "Copy failed"; }
+  setTimeout(() => { btn.textContent = label; }, 1200);
+});
+
+async function tick() {
+  try {
+    const data = await (await fetch("/api/state", {cache: "no-store"})).json();
+    tickHistory(data);
+    // The panel is rebuilt every tick; keep whatever the user had open.
+    const open = new Set([...document.querySelectorAll("#current details[open]")]
+      .map((d) => d.dataset.key || "best"));
+    render(data);
+    for (const d of document.querySelectorAll("#current details")) {
+      if (open.has(d.dataset.key || "best")) d.setAttribute("open", "");
+    }
+    loadBestPrompt(data);
+    loadIterationPrompts();
+  } catch (e) { $("where").textContent = "Dashboard server not answering…"; }
+}
+
+// Click a render to see it beside its reference (and, for a refine, the
+// Krea render it started from).
+document.addEventListener("click", (e) => {
+  const zoom = $("zoom");
+  if (e.target.closest("#zoom")) { zoom.style.display = "none"; return; }
+  const img = e.target.closest("img[data-ref]");
+  if (!img) return;
+  const fig = (src, label) => `<figure><img src="${src}"><figcaption>${label}</figcaption></figure>`;
+  // A refine names its Krea source; a Krea render names its refine.
+  const krea = img.dataset.krea || (img.dataset.refine && img.src);
+  const refined = img.dataset.krea ? img.src : img.dataset.refine;
+  zoom.classList.toggle("three", !!krea);
+  zoom.innerHTML = fig(img.dataset.ref, "Reference")
+    + (krea ? fig(krea, "Krea 2") + fig(refined, "Z-Image refine") : fig(img.src, "Render"));
+  zoom.style.display = "flex";
+});
+
+tick();
+setInterval(tick, 2000);
+loadRuns();
+setInterval(loadRuns, 30000);
+</script>
+</body>
+</html>

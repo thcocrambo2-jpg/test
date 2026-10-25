@@ -1,0 +1,4 @@
+# One folder per run: references, renders, prompts, verdicts.
+runs/
+# The backend's licence key and tokens.
+.env
