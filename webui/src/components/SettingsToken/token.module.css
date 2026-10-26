@@ -1,0 +1,123 @@
+/* The settings token group. Its frame, head and caret are the form's own
+ * group classes, so it reads as one more group at the end of the form. */
+
+.headRight {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--s-2);
+  min-width: 0;
+}
+
+.body {
+  gap: var(--s-5);
+}
+
+.block {
+  display: flex;
+  flex-direction: column;
+  gap: var(--s-2);
+  min-width: 0;
+}
+
+.label {
+  font-size: var(--t-xs);
+  font-weight: var(--fw-semibold);
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: var(--c-text-muted);
+}
+
+.token {
+  font-family: var(--font-mono);
+  font-size: var(--t-xs);
+  line-height: var(--lh-normal);
+  word-break: break-all;
+  max-height: 7.5em;
+  overflow: auto;
+  padding: var(--s-2) var(--s-3);
+  background: var(--c-bg-sunken);
+  border: 1px solid var(--c-border);
+  border-radius: var(--r-md);
+  user-select: all;
+}
+
+.prefix {
+  color: var(--c-accent);
+}
+
+.row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--s-2);
+}
+
+.count {
+  font-size: var(--t-xs);
+  color: var(--c-text-faint);
+  font-variant-numeric: tabular-nums;
+}
+
+.json {
+  margin: 0;
+  max-height: 320px;
+  overflow: auto;
+  padding: var(--s-3);
+  background: var(--c-bg-sunken);
+  border: 1px solid var(--c-border);
+  border-radius: var(--r-md);
+  font-size: var(--t-xs);
+  line-height: var(--lh-normal);
+  white-space: pre;
+}
+
+.paste {
+  width: 100%;
+  min-width: 0;
+  resize: vertical;
+  font-family: var(--font-mono);
+  font-size: var(--t-xs);
+  padding: var(--s-2) var(--s-3);
+  background: var(--c-input);
+  border: 1px solid var(--c-border);
+  border-radius: var(--r-md);
+}
+.paste:hover {
+  background: var(--c-input-hover);
+}
+
+.outcome {
+  display: flex;
+  flex-direction: column;
+  gap: var(--s-1);
+  padding: var(--s-2) var(--s-3);
+  border-radius: var(--r-md);
+  font-size: var(--t-sm);
+}
+.outcome ul {
+  padding-left: var(--s-4);
+  list-style: disc;
+}
+
+.ok {
+  background: var(--c-success-soft);
+  border: 1px solid var(--c-success-line);
+}
+.warn {
+  background: var(--c-warning-soft);
+  border: 1px solid var(--c-warning-line);
+}
+.error {
+  background: var(--c-error-soft);
+  border: 1px solid var(--c-error-line);
+}
+
+.hint {
+  font-size: var(--t-xs);
+  color: var(--c-text-faint);
+}
+
+/* The "Preset: …" line under a control that moved off its preset. */
+.presetWas {
+  color: var(--c-accent);
+}

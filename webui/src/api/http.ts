@@ -241,6 +241,14 @@ export const httpClient: ApiClient = {
     return body.values
   },
 
+  async applyToken(tabKey: string, token: Record<string, unknown>) {
+    const body = await send<{ values: Record<string, unknown>; notes?: string[] }>(
+      `/schema/${encodeURIComponent(tabKey)}/apply`,
+      { token },
+    )
+    return { values: body.values, notes: body.notes ?? [] }
+  },
+
   getPrompts(query: PromptQuery) {
     const params = new URLSearchParams()
     for (const [key, value] of Object.entries(query)) {

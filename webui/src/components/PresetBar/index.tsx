@@ -41,6 +41,12 @@ import s from './preset.module.css'
  * controls for. Which is why `presetTab` is a presets tab id and not this
  * tab's own key.
  */
+/** Where a tab's chosen preset's values are kept, for whoever measures
+ *  changes against them. */
+export function presetValuesKey(tabKey: string): string {
+  return `preset.values.${tabKey}`
+}
+
 export function PresetBar({
   schema,
   onApply,
@@ -68,12 +74,21 @@ export function PresetBar({
    * not: the prompt stayed and everything under it snapped back. */
   const [chosen, setChosen] = useTabState(`preset.chosen.${schema.key}`, '')
   const [applied, setApplied] = useTabState(`preset.applied.${schema.key}`, false)
+  /* What the chosen preset set, as the server answered it — the baseline
+   * the settings token and the "Preset:" hints measure changes against. */
+  const [, setBaseline] = useTabState<Record<string, unknown> | null>(
+    presetValuesKey(schema.key),
+    null,
+  )
   const [busy, setBusy] = useState(false)
   const toast = useToast()
 
   async function apply(name: string, isDefault = false) {
     setChosen(name)
-    if (!name) return
+    if (!name) {
+      setBaseline(null)
+      return
+    }
     setBusy(true)
     try {
       const values = await api.applyPreset(schema.key, name)
@@ -84,6 +99,7 @@ export function PresetBar({
         return
       }
       onApply(values)
+      setBaseline(values)
       toast(`Loaded the “${name}” preset`)
     } catch (error) {
       toast(error instanceof Error ? error.message : String(error))

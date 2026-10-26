@@ -3,6 +3,7 @@ import type { MediaItem, TabSchema } from '@/api/types'
 import { isLive, useQueue, type Job } from '@/store/queue'
 import { Alert, Button, Card, EmptyState, Pill, ProgressBar, Skeleton } from '@/components/ui'
 import { Lightbox } from '@/features/gallery/Lightbox'
+import { useImageToken } from '@/components/SettingsToken'
 import { cx, useCopy, useEta } from '@/lib/util'
 import s from './tabs.module.css'
 
@@ -151,6 +152,7 @@ export function OutputPanel({
 
 function Tile({ item, onOpen }: { item: MediaItem; onOpen: () => void }) {
   const { copied, copy } = useCopy()
+  const settings = useImageToken(item)
   return (
     <div
       className={s.tile}
@@ -185,6 +187,20 @@ function Tile({ item, onOpen }: { item: MediaItem; onOpen: () => void }) {
         >
           {copied ? 'Copied' : 'Path'}
         </Button>
+        {settings.can && (
+          <Button
+            size="sm"
+            variant="ghost"
+            loading={settings.busy}
+            onClick={(event) => {
+              event.stopPropagation()
+              void settings.copy()
+            }}
+            title="Copy the settings this image was made with, as a token"
+          >
+            {settings.copied ? 'Copied' : 'Settings'}
+          </Button>
+        )}
       </div>
     </div>
   )

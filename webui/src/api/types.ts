@@ -77,6 +77,10 @@ export interface Field {
   /** An images field with a `min`: what the submit bar says, under a
    *  disabled button, while the field holds fewer pictures than that. */
   emptyNote?: string
+  /** `false` for a control that is not a setting — the publish and
+   *  save-preset tickboxes. Absent means true. Recipes and settings tokens
+   *  both leave these out, so loading one cannot re-arm a publish. */
+  record?: boolean
 }
 
 /** How a tab's LoRA tail is shaped.
@@ -606,6 +610,12 @@ export interface ApiClient {
   applyPreset(tabKey: string, preset: string): Promise<Record<string, unknown>>
   applyRecipe(tabKey: string, pathId: string): Promise<Record<string, unknown>>
   applySettings(tabKey: string, settings: Record<string, unknown>): Promise<Record<string, unknown>>
+  /** A decoded settings token, guarded by the pod. `notes` names every
+   *  value that could not go in and every number that was clamped. */
+  applyToken(
+    tabKey: string,
+    token: Record<string, unknown>,
+  ): Promise<{ values: Record<string, unknown>; notes: string[] }>
   getPrompts(query: PromptQuery): Promise<PromptPage>
   getRecipe(pathId: string): Promise<{ recipe: StoredRecipe | null; canLoad?: boolean }>
   getAutoPromptConfig(tabKey: string): Promise<AutoPromptConfig>

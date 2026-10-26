@@ -6,6 +6,7 @@ import { useSchemas } from '@/api/queries'
 import type { MediaItem, TabSchema } from '@/api/types'
 import { Button, Pill, useToast } from '@/components/ui'
 import { useHandoff } from '@/store/handoff'
+import { useImageToken } from '@/components/SettingsToken'
 import { cx, fileName, relativeTime, saveFile, useCopy } from '@/lib/util'
 import {
   CheckIcon,
@@ -89,6 +90,7 @@ export function Lightbox({
    * whatever the phone was holding before. */
   const toast = useToast()
   const reuse = useReuse(item)
+  const settings = useImageToken(item)
   const [saving, setSaving] = useState(false)
   const still = item !== undefined && item.kind !== 'video'
   const view = useImageView(item?.url ?? '', item?.width ?? 0, item?.height ?? 0)
@@ -235,6 +237,19 @@ export function Lightbox({
             >
               <span aria-hidden="true">▶️</span>
               <span className={s.btnLabel}>Load these settings</span>
+            </Button>
+          )}
+          {settings.can && (
+            <Button
+              size="sm"
+              variant="ghost"
+              loading={settings.busy}
+              onClick={() => void settings.copy()}
+              aria-label="Copy the settings this was made with, as a token"
+              title="Copy the settings this was made with, as a token"
+            >
+              {settings.copied ? <CheckIcon /> : <CopyIcon />}
+              <span className={s.btnLabel}>{settings.copied ? 'Copied' : 'Copy settings'}</span>
             </Button>
           )}
           {item.prompt && (

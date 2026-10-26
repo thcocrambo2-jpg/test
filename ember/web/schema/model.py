@@ -316,6 +316,10 @@ class Field:
             row["collapsed"] = True
         if self.empty_note:
             row["emptyNote"] = self.empty_note
+        # Only when off: the settings token leaves these out for the reason
+        # the recipe does — loading one must never re-arm a publish.
+        if not self.record:
+            row["record"] = False
         return row
 
 
@@ -524,6 +528,91 @@ class TabSchema:
             if ok:
                 values[field_key] = value
         return values
+
+    def token_values(self, data) -> tuple[dict, list]:
+        """A decoded settings token -> (values safe to write back, notes).
+
+        The token is the browser's (webui/src/lib/settingsToken.ts): every
+        recorded control by *field name*, and the LoRA stack as
+        `[id, weight, enabled]` rows. By name rather than by label and
+        position like a recipe, so a token survives a relabelled control,
+        and the LoRAs by id rather than by slot, so it survives the V2
+        tabs' rows moving when a LoRA is added to the feature's list.
+
+        Guarded as `restore` guards a recipe, but nothing is skipped
+        quietly: every value that could not go in, and every number that
+        was clamped, comes back as a sentence in `notes`.
+
+        Every slot not named by the token goes back to its default, so a
+        token loads the whole stack and not a merge with whatever was on
+        the tab before.
+        """
+        if not isinstance(data, dict):
+            return {}, ["That token holds no settings."]
+        given = data.get("values")
+        given = given if isinstance(given, dict) else {}
+        values, notes = {}, []
+        for f in self.named():
+            if not f.record or f.kind in ("image", "images"):
+                continue
+            if f.name not in given:
+                continue
+            raw = given[f.name]
+            ok, value = f.restore(raw)
+            if not ok:
+                notes.append("%s: %r is not an option here, left at the "
+                              "default." % (f.label, raw))
+                continue
+            if (f.kind in ("number", "slider")
+                    and isinstance(raw, (int, float)) and value != raw):
+                notes.append("%s: %s is out of range here, set to %s."
+                             % (f.label, raw, value))
+            values[f.name] = value
+
+        tail = self.tail()
+        if tail is not None:
+            parts = {p.name: p for p in tail.parts}
+            defaults = tail.rows()
+            for index, row in enumerate(defaults):
+                for name, value in row.items():
+                    values[tail.value_key(index, name)] = value
+            used = set()
+            rows = data.get("loras")
+            for row in rows if isinstance(rows, list) else []:
+                if not (isinstance(row, (list, tuple)) and row):
+                    continue
+                lora = row[0]
+                if lora not in parts["name"].options() or lora == assets.NONE:
+                    notes.append("LoRA %s is not on this tab's list, skipped."
+                                 % lora)
+                    continue
+                # Its own row first (the V2 tabs have one per LoRA), then
+                # any blank one (the Krea2 family's eight).
+                slot = next((i for i, d in enumerate(defaults)
+                             if i not in used and d.get("name") == lora), None)
+                if slot is None:
+                    slot = next((i for i, d in enumerate(defaults)
+                                 if i not in used
+                                 and d.get("name") == assets.NONE), None)
+                if slot is None:
+                    notes.append("LoRA %s: no free slot left, skipped." % lora)
+                    continue
+                used.add(slot)
+                values[tail.value_key(slot, "name")] = lora
+                if "weight" in parts and len(row) > 1:
+                    ok, weight = parts["weight"].restore(row[1])
+                    if ok:
+                        values[tail.value_key(slot, "weight")] = weight
+                if "enabled" in parts:
+                    values[tail.value_key(slot, "enabled")] = (
+                        bool(row[2]) if len(row) > 2 else True)
+
+        # The seed comes back as it was, and Random seed comes back on: a
+        # token is "these settings", and the next Generate makes another
+        # picture from them. Untick it to get that exact frame again.
+        if self.field("randomize") is not None:
+            values["randomize"] = True
+        return values, notes
 
     def _controls(self):
         """(label, value key, Field) for every control, in submission order."""

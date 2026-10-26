@@ -56,7 +56,7 @@ def _mount_tab(api: APIRouter, schema) -> None:
     @api.post("/schema/%s/apply" % key, dependencies=gate,
               name="apply_" + key)
     def apply(body: dict = Body(default={})):
-        """A preset name or a stored recipe -> values for the form.
+        """A preset name, a stored recipe or a settings token -> values.
 
         Server-side, and it has to be: guarding a value means knowing
         whether this pod has that LoRA file and what this build's slider
@@ -127,7 +127,19 @@ def _mount_tab(api: APIRouter, schema) -> None:
         if "settings" in body:
             return {"values": schema.preset_values(body.get("settings") or {}),
                     "applied": None}
-        raise HTTPException(400, "Send a preset name, a recipe or settings.")
+        if "token" in body:
+            # A settings token, already decoded by the browser — it is only
+            # base64 over deflate, and the browser has both built in. What
+            # it cannot know is this pod's LoRA list and ranges.
+            data = body.get("token")
+            if isinstance(data, dict) and str(data.get("tab")) != key:
+                raise HTTPException(
+                    400, "That token belongs to another tab (%s)."
+                         % data.get("tab"))
+            values, notes = schema.token_values(data)
+            return {"values": values, "notes": notes, "applied": None}
+        raise HTTPException(
+            400, "Send a preset name, a recipe, settings or a token.")
 
     @api.get("/tabs/%s/display" % key, dependencies=gate,
              name="display_" + key)

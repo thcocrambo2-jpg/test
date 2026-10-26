@@ -4,9 +4,12 @@ import { useAppCatalog, useModels } from '@/api/queries'
 import { useImageSize } from '@/components/fields'
 import { TwoColumn } from '@/components/TwoColumn'
 import { SchemaForm } from '@/components/SchemaForm'
-import { PresetBar } from '@/components/PresetBar'
+import { PresetBar, presetValuesKey } from '@/components/PresetBar'
+import { SettingsToken } from '@/components/SettingsToken'
+import t from '@/components/SettingsToken/token.module.css'
 import { Button, Inline } from '@/components/ui'
 import { defaultsFor } from '@/lib/schema'
+import { changedFromPreset, showValue } from '@/lib/settingsToken'
 import { useActiveJob, useJobsForTab, useQueue, isLive } from '@/store/queue'
 import { useHandoff } from '@/store/handoff'
 import { useTabState } from '@/store/tabState'
@@ -135,6 +138,14 @@ export function GenerateTab({ schema }: { schema: TabSchema }) {
     : undefined
   const firstSize = useImageSize(firstImage)
 
+  /* What the chosen preset set, kept by PresetBar. A control that has moved
+   * off it says what the preset had, under it, so a tweak is visible
+   * without opening the settings token. */
+  const [presetValues] = useTabState<Record<string, unknown> | null>(
+    presetValuesKey(schema.key),
+    null,
+  )
+
   const hints = useMemo(() => {
     const out: Record<string, ReactNode> = {}
     const row = models.find((candidate) => candidate.id === values.model)
@@ -142,8 +153,26 @@ export function GenerateTab({ schema }: { schema: TabSchema }) {
     if (sizeRule && values[sizeRule.field] === sizeRule.choice) {
       out[sizeRule.field] = sizeHint(sizeRule, firstSize)
     }
+    for (const [name, [was]] of Object.entries(changedFromPreset(schema, values, presetValues))) {
+      const field = schema.fields.find((candidate) => candidate.name === name)
+      if (!field) continue
+      const shown = showValue(schema, name, was)
+      const note = (
+        <span className={t.presetWas}>
+          Preset: {shown.length > 40 ? `${shown.slice(0, 40)}…` : shown}
+        </span>
+      )
+      const before = out[name] ?? field.hint
+      out[name] = before ? (
+        <>
+          {before} {note}
+        </>
+      ) : (
+        note
+      )
+    }
     return Object.keys(out).length > 0 ? out : undefined
-  }, [models, values, sizeRule, firstSize])
+  }, [models, values, sizeRule, firstSize, schema, presetValues])
 
   // A handoff — the Prompt Library's Use button, the Gallery's "load these
   // settings" — is drained on arrival and applied *over the defaults*, never
@@ -339,6 +368,9 @@ export function GenerateTab({ schema }: { schema: TabSchema }) {
             hints={hints}
             placement={lift ? 'rest' : 'all'}
           />
+          {/* Last in the form, so it reads as "everything above, as one
+            * line". Keyed for the reason SchemaForm is. */}
+          <SettingsToken key={`token.${schema.key}`} schema={schema} values={values} />
           <div className={s.submitBar}>
             <Button
               variant="primary"
