@@ -4,7 +4,8 @@
 
 Read-only. Serves dashboard.html, a run's state.json (the newest, or
 ?run=<name>) plus the live config.json, the list of runs, and the files
-under runs/. Every number on the page comes from state.json, which only
+under runs/. /i2v lists a run's image-to-video prompts (each image
+folder's i2v.json). Every number on the page comes from state.json, which only
 run.py writes.
 """
 
@@ -41,6 +42,13 @@ class Handler(BaseHTTPRequestHandler):
         elif path == "/api/state":
             run = parse_qs(url.query).get("run", [None])[0]
             self.send(200, json.dumps(self.state(run)).encode("utf-8"),
+                      "application/json")
+        elif path == "/i2v":
+            self.send(200, (HERE / "i2v.html").read_bytes(),
+                      "text/html; charset=utf-8")
+        elif path == "/api/i2v":
+            run = parse_qs(url.query).get("run", [None])[0]
+            self.send(200, json.dumps(self.i2v(run)).encode("utf-8"),
                       "application/json")
         elif path == "/api/runs":
             self.send(200, json.dumps(self.runs()).encode("utf-8"),
@@ -81,6 +89,42 @@ class Handler(BaseHTTPRequestHandler):
         except (OSError, ValueError):
             return {"run": None, "config": config}
         return {"run": name, "config": config, "state": state}
+
+    def i2v(self, run: str | None = None) -> dict:
+        """The i2v.json prompts of `run`, or of the newest run that has any.
+
+        Each card shows the image the prompt was written for: the i2v.json
+        "source" when it names one, else the run's best render.
+        """
+        runs = [d for d in sorted(RUNS.iterdir(), reverse=True)
+                if d.is_dir() and any(d.glob("*/i2v.json"))]
+        names = [d.name for d in runs]
+        if run not in names:
+            run = names[0] if names else None
+        if run is None:
+            return {"run": None, "runs": names, "items": []}
+        try:
+            state = json.loads((RUNS / run / "state.json").read_text("utf-8"))
+        except (OSError, ValueError):
+            state = {"images": []}
+        best = {r["dir"]: r["best"]["render"]
+                for r in state["images"] if r.get("best")}
+        order = [r["dir"] for r in state["images"]]
+        items = []
+        for f in (RUNS / run).glob("*/i2v.json"):
+            try:
+                data = json.loads(f.read_text("utf-8"))
+            except (OSError, ValueError):
+                continue
+            d = f.parent.name
+            image = data.get("source") or best.get(d) or "reference.png"
+            items.append({"dir": d, "image": "%s/%s/%s" % (run, d, image),
+                          "kind": data.get("kind", ""),
+                          "idea": data.get("idea", ""),
+                          "prompt": data.get("prompt", "")})
+        items.sort(key=lambda i: order.index(i["dir"])
+                   if i["dir"] in order else len(order))
+        return {"run": run, "runs": names, "items": items}
 
     def file(self, rel: str) -> None:
         target = (RUNS / rel).resolve()

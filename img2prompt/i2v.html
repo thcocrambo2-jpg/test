@@ -1,0 +1,115 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Image-to-video prompts</title>
+<style>
+  :root {
+    --bg: #f6f5f2; --panel: #ffffff; --ink: #1d1d1b; --muted: #6b6a66;
+    --line: #e3e1db; --accent: #c2410c; --good: #15803d; --bad: #b91c1c; --chip: #efede8;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root { --bg: #161615; --panel: #1f1f1d; --ink: #ecebe7; --muted: #9c9a94;
+            --line: #33322f; --accent: #fb923c; --good: #4ade80; --bad: #f87171; --chip: #2a2927; }
+  }
+  * { box-sizing: border-box; }
+  body { margin: 0; background: var(--bg); color: var(--ink);
+         font: 14px/1.45 system-ui, -apple-system, "Segoe UI", sans-serif; }
+  main { max-width: 1280px; margin: 0 auto; padding: 20px 16px 48px; }
+  h1 { font-size: 20px; margin: 0; }
+  a { color: var(--accent); }
+  .top { display: flex; flex-wrap: wrap; gap: 8px 14px; align-items: center; justify-content: space-between; }
+  .sub { color: var(--muted); font-size: 13px; margin-top: 2px; }
+  .bar { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 14px; }
+  select, button { font: inherit; font-size: 13px; color: var(--ink); background: var(--chip);
+                   border: 1px solid var(--line); border-radius: 6px; padding: 4px 10px; cursor: pointer; }
+  button:hover { border-color: var(--accent); }
+  button.on { border-color: var(--accent); color: var(--accent); font-weight: 600; }
+  .card { display: grid; grid-template-columns: minmax(160px, 260px) 1fr; gap: 16px;
+          background: var(--panel); border: 1px solid var(--line); border-radius: 10px;
+          padding: 14px; margin-top: 14px; }
+  @media (max-width: 720px) { .card { grid-template-columns: 1fr; } }
+  .card img { width: 100%; border-radius: 8px; display: block; cursor: zoom-in; }
+  .head { display: flex; flex-wrap: wrap; gap: 6px 10px; align-items: center; }
+  .head .name { font-weight: 600; word-break: break-all; }
+  .pill { display: inline-block; padding: 2px 10px; border-radius: 99px; background: var(--chip);
+          font-size: 12px; font-weight: 600; }
+  .pill.nsfw { color: var(--bad); } .pill.sfw-dance { color: var(--accent); } .pill.sfw-closeup { color: var(--good); }
+  .idea { color: var(--muted); }
+  pre { white-space: pre-wrap; font: 12px/1.5 ui-monospace, Consolas, monospace; background: var(--chip);
+        padding: 10px; border-radius: 6px; max-height: 420px; overflow: auto; margin: 8px 0 0; }
+  .muted { color: var(--muted); }
+  #zoom { position: fixed; inset: 0; background: rgba(0,0,0,.85); display: none; align-items: center;
+          justify-content: center; padding: 16px; z-index: 9; cursor: zoom-out; }
+  #zoom img { max-height: 94vh; max-width: 94vw; border-radius: 6px; }
+</style>
+</head>
+<body>
+<main>
+  <div class="top">
+    <div>
+      <h1>Image-to-video prompts</h1>
+      <div class="sub" id="where">Loading…</div>
+    </div>
+    <div><a href="/">← img2prompt dashboard</a> <select id="runpick" aria-label="Run"></select></div>
+  </div>
+  <div class="bar" id="filters"></div>
+  <div id="list"></div>
+</main>
+<div id="zoom"><img alt=""></div>
+<script>
+const KINDS = {"": "All", "sfw-dance": "Dance", "sfw-closeup": "Close-up", "nsfw": "NSFW"};
+let data = null, filter = "";
+const esc = s => String(s).replace(/[&<>"]/g, c => ({"&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;"}[c]));
+
+async function load(run) {
+  const r = await fetch("/api/i2v" + (run ? "?run=" + encodeURIComponent(run) : ""));
+  data = await r.json();
+  const pick = document.getElementById("runpick");
+  pick.innerHTML = data.runs.map(n => `<option${n === data.run ? " selected" : ""}>${esc(n)}</option>`).join("");
+  draw();
+}
+
+function draw() {
+  const items = data.items.filter(i => !filter || i.kind === filter);
+  document.getElementById("where").textContent = data.run
+    ? `${data.run} · ${data.items.length} prompts · 10 s · 704×1056`
+    : "No i2v.json prompts in any run yet.";
+  document.getElementById("filters").innerHTML = Object.entries(KINDS).map(([k, label]) => {
+    const n = k ? data.items.filter(i => i.kind === k).length : data.items.length;
+    return `<button data-k="${k}" class="${k === filter ? "on" : ""}">${label} (${n})</button>`;
+  }).join("");
+  document.getElementById("list").innerHTML = items.map((i, n) => `
+    <div class="card">
+      <img src="/runs/${i.image.split("/").map(encodeURIComponent).join("/")}" loading="lazy" alt="">
+      <div>
+        <div class="head">
+          <span class="name">${esc(i.dir)}</span>
+          <span class="pill ${esc(i.kind)}">${esc(KINDS[i.kind] || i.kind)}</span>
+          <span class="idea">${esc(i.idea)}</span>
+          <button data-copy="${n}">Copy prompt</button>
+          <a href="/runs/${i.image.split("/").map(encodeURIComponent).join("/")}" download>Download image</a>
+        </div>
+        <pre>${esc(i.prompt)}</pre>
+      </div>
+    </div>`).join("") || `<p class="muted">Nothing here.</p>`;
+  document.querySelectorAll("[data-copy]").forEach(b => b.onclick = async () => {
+    const text = items[+b.dataset.copy].prompt;
+    try { await navigator.clipboard.writeText(text); }
+    catch { const t = document.createElement("textarea"); t.value = text; document.body.append(t);
+            t.select(); document.execCommand("copy"); t.remove(); }
+    b.textContent = "Copied ✓"; setTimeout(() => b.textContent = "Copy prompt", 1500);
+  });
+  document.querySelectorAll("[data-k]").forEach(b => b.onclick = () => { filter = b.dataset.k; draw(); });
+  document.querySelectorAll(".card > img").forEach(im => im.onclick = () => {
+    const z = document.getElementById("zoom"); z.querySelector("img").src = im.src; z.style.display = "flex";
+  });
+}
+
+document.getElementById("zoom").onclick = e => e.currentTarget.style.display = "none";
+document.getElementById("runpick").onchange = e => load(e.target.value);
+load(new URLSearchParams(location.search).get("run"));
+</script>
+</body>
+</html>
