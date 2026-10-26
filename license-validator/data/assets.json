@@ -76,7 +76,7 @@
     },
     {
       "id": "realism-engine-v3-1",
-      "name": "Realism Engine v3.1",
+      "name": "Ideogram 4",
       "file": "realism_engine_krea2_v3.1.safetensors",
       "source": {
         "kind": "civitai",
@@ -711,6 +711,146 @@
       "trigger": "Penis",
       "enabled": true,
       "sort_order": 440
+    },
+    {
+      "id": "realistic-slider-v1-0",
+      "name": "Realistic Slider v1.0",
+      "file": "real_3d_krea2_loraholic.safetensors",
+      "source": {
+        "kind": "civitai",
+        "version": 3066073
+      },
+      "mirror": null,
+      "default_strength": 1.0,
+      "trigger": "",
+      "enabled": true,
+      "sort_order": 450
+    },
+    {
+      "id": "cutifyier-v2",
+      "name": "Cutifyier v2",
+      "file": "cutifier_krea2.safetensors",
+      "source": {
+        "kind": "civitai",
+        "version": 3107521
+      },
+      "mirror": null,
+      "default_strength": 1.0,
+      "trigger": "",
+      "enabled": true,
+      "sort_order": 460
+    },
+    {
+      "id": "bloomgirls-v1-0",
+      "name": "BloomGirls UltraRealism v1.0",
+      "file": "krea2-bloomgirls-realism-step00004000.safetensors",
+      "source": {
+        "kind": "civitai",
+        "version": 3191538
+      },
+      "mirror": null,
+      "default_strength": 1.0,
+      "trigger": "bl00m",
+      "enabled": true,
+      "sort_order": 470
+    },
+    {
+      "id": "nsfw-unlocked-v2",
+      "name": "NSFW Unlocked V2",
+      "file": "Minimax_H3_Unlocked_V2.safetensors",
+      "source": {
+        "kind": "civitai",
+        "version": 3354822
+      },
+      "mirror": null,
+      "default_strength": 1.0,
+      "trigger": "",
+      "enabled": true,
+      "sort_order": 480
+    },
+    {
+      "id": "vbvr-pro",
+      "name": "VBVR Pro",
+      "file": "H3_VBVR_Pro_attn_only.safetensors",
+      "source": {
+        "kind": "civitai",
+        "version": 3306139
+      },
+      "mirror": null,
+      "default_strength": 1.0,
+      "trigger": "",
+      "enabled": true,
+      "sort_order": 490
+    },
+    {
+      "id": "hm1girl-v1-0",
+      "name": "HM1Girl v1.0",
+      "file": "HM1Girl-V1.safetensors",
+      "source": {
+        "kind": "civitai",
+        "version": 3362360
+      },
+      "mirror": null,
+      "default_strength": 1.0,
+      "trigger": "hm1girl",
+      "enabled": true,
+      "sort_order": 500
+    },
+    {
+      "id": "yarn-tiny4k",
+      "name": "YARN Tiny4K",
+      "file": "YARN_Tiny4K.safetensors",
+      "source": {
+        "kind": "civitai",
+        "version": 3301264
+      },
+      "mirror": null,
+      "default_strength": 1.0,
+      "trigger": "",
+      "enabled": true,
+      "sort_order": 510
+    },
+    {
+      "id": "yarn-showybeauty",
+      "name": "YARN ShowyBeauty",
+      "file": "YARN_ShowyBeauty.safetensors",
+      "source": {
+        "kind": "civitai",
+        "version": 3377170
+      },
+      "mirror": null,
+      "default_strength": 1.0,
+      "trigger": "",
+      "enabled": true,
+      "sort_order": 520
+    },
+    {
+      "id": "krea2-lowres-v2",
+      "name": "Krea2 LowRes",
+      "file": "PornMaster_Krea2_Low_Resolution_Slider_V2.safetensors",
+      "source": {
+        "kind": "civitai",
+        "version": 3264200
+      },
+      "mirror": null,
+      "default_strength": 1.0,
+      "trigger": "A low-resolution photo taken with an early mobile phone; the photo was taken in an amateur, candid manner.",
+      "enabled": true,
+      "sort_order": 530
+    },
+    {
+      "id": "doggyside-mh3-v1-0",
+      "name": "DoggySide",
+      "file": "MMH3_NSFW_Doggystyle_Sex_3354622_epoch_20.safetensors",
+      "source": {
+        "kind": "civitai",
+        "version": 3362792
+      },
+      "mirror": null,
+      "default_strength": 1.0,
+      "trigger": "",
+      "enabled": true,
+      "sort_order": 540
     }
   ],
   "models": [
@@ -832,7 +972,14 @@
         "desi-realism-v1",
         "pawg",
         "private-style-v1-1",
-        "knp-v4-3-exp"
+        "knp-v4-3-exp",
+        "realistic-slider-v1-0",
+        "cutifyier-v2",
+        "bloomgirls-v1-0",
+        "hm1girl-v1-0",
+        "yarn-tiny4k",
+        "yarn-showybeauty",
+        "krea2-lowres-v2"
       ]
     },
     "krea_edit": {
@@ -864,7 +1011,14 @@
         "desi-realism-v1",
         "pawg",
         "private-style-v1-1",
-        "knp-v4-3-exp"
+        "knp-v4-3-exp",
+        "realistic-slider-v1-0",
+        "cutifyier-v2",
+        "bloomgirls-v1-0",
+        "hm1girl-v1-0",
+        "yarn-tiny4k",
+        "yarn-showybeauty",
+        "krea2-lowres-v2"
       ]
     },
     "krea_v2_t2i": {
@@ -897,7 +1051,14 @@
         "desi-realism-v1",
         "pawg",
         "private-style-v1-1",
-        "knp-v4-3-exp"
+        "knp-v4-3-exp",
+        "realistic-slider-v1-0",
+        "cutifyier-v2",
+        "bloomgirls-v1-0",
+        "hm1girl-v1-0",
+        "yarn-tiny4k",
+        "yarn-showybeauty",
+        "krea2-lowres-v2"
       ]
     },
     "krea_v2_edit": {
@@ -930,7 +1091,14 @@
         "desi-realism-v1",
         "pawg",
         "private-style-v1-1",
-        "knp-v4-3-exp"
+        "knp-v4-3-exp",
+        "realistic-slider-v1-0",
+        "cutifyier-v2",
+        "bloomgirls-v1-0",
+        "hm1girl-v1-0",
+        "yarn-tiny4k",
+        "yarn-showybeauty",
+        "krea2-lowres-v2"
       ]
     },
     "qwen21_edit": {
@@ -979,7 +1147,10 @@
         "humanmotion-v1-0",
         "fingering-v1",
         "perfect-fingering-v1-0",
-        "mysticxxx-mmh3-v4"
+        "mysticxxx-mmh3-v4",
+        "nsfw-unlocked-v2",
+        "vbvr-pro",
+        "doggyside-mh3-v1-0"
       ]
     },
     "minimax_t2v": {
@@ -995,7 +1166,10 @@
         "humanmotion-v1-0",
         "fingering-v1",
         "perfect-fingering-v1-0",
-        "mysticxxx-mmh3-v4"
+        "mysticxxx-mmh3-v4",
+        "nsfw-unlocked-v2",
+        "vbvr-pro",
+        "doggyside-mh3-v1-0"
       ]
     }
   }
