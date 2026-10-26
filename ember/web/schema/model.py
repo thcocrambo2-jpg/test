@@ -533,8 +533,9 @@ class TabSchema:
         """A decoded settings token -> (values safe to write back, notes).
 
         The token is the browser's (webui/src/lib/settingsToken.ts): every
-        recorded control by *field name*, and the LoRA stack as
-        `[id, weight, enabled]` rows. By name rather than by label and
+        recorded control by *field name*, and the switched-on LoRAs as
+        `[id, weight]` rows (older tokens: `[id, weight, enabled]` for every
+        LoRA, which reads the same way). By name rather than by label and
         position like a recipe, so a token survives a relabelled control,
         and the LoRAs by id rather than by slot, so it survives the V2
         tabs' rows moving when a LoRA is added to the feature's list.

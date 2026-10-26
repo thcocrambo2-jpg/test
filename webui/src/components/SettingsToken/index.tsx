@@ -323,7 +323,7 @@ function useTokenLoader() {
     offer(target.key, values)
     navigate(target.route)
 
-    const loras = (data.loras ?? []).filter((row) => row[2]).length
+    const loras = (data.loras ?? []).filter((row) => row[2] !== false).length
     const extra = [...notes]
     if (data.preset && !presetName) {
       extra.push(`The preset “${data.preset}” is gone; every setting still loaded.`)

@@ -20,15 +20,19 @@ import type { TabSchema } from '@/api/types'
  * What goes in is what a recipe records (`record` on the field): every
  * control by name, except the publish and save-preset tickboxes and the
  * uploaded pictures, which are files and not settings. The LoRA stack goes in
- * by id rather than by slot, as `[id, weight, enabled]` for every slot that
- * names one, so a token outlives a LoRA being added to the tab's list. The
+ * by id rather than by slot, as `[id, weight]` for every LoRA that is
+ * switched on, so a token outlives a LoRA being added to the tab's list. A
+ * LoRA that is off changes nothing about the picture, and every slot a token
+ * does not name loads at its default, which is off — so they stay out. The
  * pod guards the way back in (`TabSchema.token_values`), because only the pod
  * knows its own LoRA list and ranges.
  */
 
 export const TOKEN_PREFIX = 'ember1'
 
-export type LoraRow = [id: string, weight: number, enabled: boolean]
+/** A switched-on LoRA. Tokens from before this carried a third element,
+ *  `enabled`, and every LoRA; the pod still reads those. */
+export type LoraRow = [id: string, weight: number, enabled?: boolean]
 
 export interface TokenData {
   /** The tab's feature key, as `schema.key`. */
@@ -117,12 +121,8 @@ export function tokenData(
     const rows: LoraRow[] = []
     for (let index = 0; index < lora.count; index += 1) {
       const name = String(values[`${lora.key}.${index}.name`] ?? NONE)
-      if (name === NONE) continue
-      rows.push([
-        name,
-        Number(values[`${lora.key}.${index}.weight`] ?? lora.weightDefault),
-        Boolean(values[`${lora.key}.${index}.enabled`]),
-      ])
+      if (name === NONE || !values[`${lora.key}.${index}.enabled`]) continue
+      rows.push([name, Number(values[`${lora.key}.${index}.weight`] ?? lora.weightDefault)])
     }
     data.loras = rows
   }
@@ -236,11 +236,8 @@ export function readable(schema: TabSchema, data: TokenData): Record<string, unk
         }
       : 'none',
     settings,
-    loras: (data.loras ?? []).map(([id, weight, on]) => ({
-      name: names[id] ?? id,
-      id,
-      strength: weight,
-      on,
-    })),
+    loras: (data.loras ?? [])
+      .filter(([, , on]) => on !== false)
+      .map(([id, weight]) => ({ name: names[id] ?? id, id, strength: weight })),
   }
 }
