@@ -37,6 +37,10 @@ MINIMAX_TEXT_ENCODER = "qwen3vl_32b_minimax_h3_int8_convrot.safetensors"  # ~27.
 MINIMAX_VIDEO_VAE = "minimax_h3_video_vae_fp16.safetensors"               # ~5.2 GB
 MINIMAX_AUDIO_VAE = "minimax_h3_audio_vae_fp32.safetensors"               # ~0.6 GB
 # The repo's layout is ComfyUI's, so these download straight into place.
+# The built-in setup's files in that repo. The diffusion model among them is
+# a catalogue model now (MINIMAX_BUILTIN_MODEL below, or the licence
+# server's records), fetched by the "catalog" download group, so the
+# "minimax" group fetches only what every H3 checkpoint shares.
 MINIMAX_HF_FILES = [
     f"diffusion_models/{MINIMAX_UNET}",
     f"text_encoders/{MINIMAX_TEXT_ENCODER}",
@@ -59,6 +63,25 @@ MINIMAX_TURBO_LORA_STRENGTH = 0.8
 # the same commit that moved to this 8-step v1.0 LoRA. So the sigmas go to
 # the sampler as the scheduler makes them.
 MINIMAX_DEFAULTS = {"steps": 8, "sampler": "euler", "scheduler": "simple"}
+
+# The checkpoint both tabs ran before the model became a catalogue entry,
+# as a catalogue record. Used whenever the licence server lists no model
+# for a MiniMax feature — an older server, or a database not yet given
+# one — so the tabs keep running exactly what they always did. The id is
+# the one the database record uses, so a preset or recipe that names it
+# means the same model either way. Another H3 checkpoint is a database
+# record of this shape (ember/licensing/catalog.py), and appears in the
+# tabs' Model dropdown on the next start.
+MINIMAX_BUILTIN_MODEL = {
+    "id": "minimax-h3-int8",
+    "name": "MiniMax H3 int8 (template default)",
+    "file": MINIMAX_UNET,
+    "source": {"kind": "hf", "repo": MINIMAX_HF_REPO,
+               "path": f"diffusion_models/{MINIMAX_UNET}"},
+    "variant": "turbo",
+    "steps": MINIMAX_DEFAULTS["steps"],
+    "cfg": 1.0,
+}
 
 # Geometry. 24 fps, and the frame count has to sit on the model's "17k + 5"
 # grid: 124 frames is 5 s and the node's default, 362 is 15 s and the top

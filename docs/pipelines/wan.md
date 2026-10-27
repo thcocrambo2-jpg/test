@@ -21,6 +21,13 @@ which only Smooth motion uses.
 
 ## The two families
 
+The **Model** dropdown offers the Wan checkpoints the catalogue lists for
+`wan_i2v`; until the licence server lists any, the two below are built
+in (`wan22-i2v-a14b-fp8` and `wan22-ti2v-5b-fp16`) — see
+[catalogue.md](catalogue.md#tabs-with-built-in-models). Each record says
+which family it is with `arch`, and a 14B names its low-noise expert in
+`parts.low`. Another checkpoint of either family is a database record.
+
 - **14B two-expert (I2V A14B)** — two 14 B fp8 "expert" models: a
   high-noise model for the early sampler steps and a low-noise one for
   the late ones, ~14.3 GB each, at 16 fps. Best quality. Two modes mirror

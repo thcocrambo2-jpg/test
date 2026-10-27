@@ -179,7 +179,7 @@ export const SEED_PRESETS = [
     is_default: true,
     sort_order: 0,
     settings: {
-      // No `model`: these tabs have no Model control (MODELLESS_TABS).
+      // No `model`: the tabs keep the one they have (OPTIONAL_MODEL_TABS).
       steps: 8,
       // Note the em dash — character for character, like every label.
       resolution: "Standard (0.7 MP — the template default)",

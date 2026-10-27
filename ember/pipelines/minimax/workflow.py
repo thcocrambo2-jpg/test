@@ -71,10 +71,14 @@ from ember.pipelines.minimax.constants import (
 )
 
 
-def _required() -> dict:
-    """Local path of every file both tabs load, by the name a message uses."""
+def _required(unet: str = MINIMAX_UNET) -> dict:
+    """Local path of every file both tabs load, by the name a message uses.
+
+    `unet` is the chosen checkpoint's file (a catalogue model's `file`);
+    everything else is shared by every H3 checkpoint.
+    """
     return {
-        "diffusion model": MODELS_DIR / "diffusion_models" / MINIMAX_UNET,
+        "diffusion model": MODELS_DIR / "diffusion_models" / unet,
         "text encoder": MODELS_DIR / "text_encoders" / MINIMAX_TEXT_ENCODER,
         "video VAE": MODELS_DIR / "vae" / MINIMAX_VIDEO_VAE,
         "audio VAE": MODELS_DIR / "vae" / MINIMAX_AUDIO_VAE,
@@ -82,14 +86,15 @@ def _required() -> dict:
     }
 
 
-def minimax_missing() -> list[str]:
+def minimax_missing(unet: str = MINIMAX_UNET) -> list[str]:
     """Which of the five files are not on disk yet, by human name."""
-    return [name for name, path in _required().items() if not path.exists()]
+    return [name for name, path in _required(unet).items()
+            if not path.exists()]
 
 
-def minimax_models_available() -> bool:
+def minimax_models_available(unet: str = MINIMAX_UNET) -> bool:
     """True once every file the graph loads has been downloaded."""
-    return not minimax_missing()
+    return not minimax_missing(unet)
 
 
 def frames_for(seconds: float) -> int:
@@ -261,6 +266,7 @@ def build_minimax_video_workflow(
     image_name: str | None = None,
     loras=(),
     filename_prefix: str = "minimax/MiniMaxH3",
+    unet: str = MINIMAX_UNET,
 ) -> dict:
     """Build the MiniMax H3 graph in ComfyUI API format.
 
@@ -278,11 +284,14 @@ def build_minimax_video_workflow(
     `loras` is a sequence of (filename, strength) pairs, already resolved
     (loras._resolve_lora_slots) — applied in order, ahead of the turbo
     LoRA, as the template chains them.
+
+    `unet` is the checkpoint's file — the chosen catalogue model's. Every
+    H3 checkpoint runs this same graph with the same encoder and VAEs.
     """
     wf = {
         "unet": {
             "class_type": "UNETLoader",
-            "inputs": {"unet_name": MINIMAX_UNET, "weight_dtype": "default"},
+            "inputs": {"unet_name": unet, "weight_dtype": "default"},
         },
         "clip": {
             "class_type": "CLIPLoader",

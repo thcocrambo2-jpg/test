@@ -127,7 +127,11 @@ class Field:
     lines: int | None = None
     placeholder: str | None = None
     hint: str | None = None
-    show_if: tuple | None = None     # (other field name, value it must hold)
+    # (other field name, value it must hold). The value may be a list —
+    # shown when the other field holds any of them — or a callable
+    # returning one, read late: Wan's Mode shows for every 14B model, and
+    # which ids those are is the catalogue's to say.
+    show_if: tuple | None = None
     wide: bool = False
     # Folds away entirely rather than showing its first few rows.
     #
@@ -157,6 +161,11 @@ class Field:
     # The handler refuses the same case with its own message; this saves
     # the round trip.
     empty_note: str | None = None
+    # {old value: current value}, or a callable returning one, for a choice
+    # field whose values were renamed: what a recipe, preset or open form
+    # from before still carries is read as the value it became, on submit
+    # and on restore. Wan's Model held its labels before it held ids.
+    aliases: Any = None
 
     def options(self) -> tuple:
         """This field's choices, resolved. Empty for a non-choice field."""
@@ -165,6 +174,12 @@ class Field:
     def initial(self):
         """The value a fresh form starts on."""
         return _resolve(self.default)
+
+    def unalias(self, value):
+        """`value`, or what it was renamed to (see `aliases`)."""
+        if self.aliases is None or not isinstance(value, str):
+            return value
+        return dict(_resolve(self.aliases) or {}).get(value, value)
 
     def choice_labels(self) -> dict | None:
         """{value: label} for an id-valued choice field, else None."""
@@ -214,7 +229,7 @@ class Field:
                 return int(round(number))
             return number
         if kind in ("select", "radio"):
-            text = "" if value is None else str(value)
+            text = "" if value is None else str(self.unalias(value))
             options = self.options()
             if options and text not in options and not self.allow_custom:
                 raise Invalid(self.name, "%r is not one of the choices" % text)
@@ -269,6 +284,7 @@ class Field:
                 number = int(round(number))
             return True, number
         if kind in ("select", "radio"):
+            value = self.unalias(value)
             options = self.options()
             if value in options or (self.allow_custom and value):
                 return True, value
@@ -309,7 +325,10 @@ class Field:
         if self.hint:
             row["hint"] = self.hint
         if self.show_if:
-            row["showIf"] = {"field": self.show_if[0], "equals": self.show_if[1]}
+            equals = _resolve(self.show_if[1])
+            if isinstance(equals, tuple):
+                equals = list(equals)
+            row["showIf"] = {"field": self.show_if[0], "equals": equals}
         if self.wide:
             row["wide"] = True
         if self.collapsed:
@@ -510,21 +529,28 @@ class TabSchema:
         """A stored recipe's fields -> the values it is safe to write back.
 
         Guarded per ui._recipe_update: an unknown choice leaves the
-        control alone and an out-of-range number is clamped. A row whose
-        label no longer matches the control at that position is skipped
-        outright — the recipe was written by a build whose controls sat in
-        a different order, and guessing is worse than leaving one control
-        where it is.
+        control alone and an out-of-range number is clamped.
+
+        Matched by label, in order: each control takes the next row with
+        its label, and a control no row names (one added since — MiniMax's
+        Model) is left at its default without moving the rest. A recipe
+        from before a control was added therefore still restores every
+        other control; matched by position, the new control would shift
+        every row after it onto the wrong one and all of them would be
+        dropped. In order rather than by label alone because the LoRA
+        stack repeats "On" and "Strength" once per slot.
         """
         values = {}
-        controls = list(self._controls())
-        for index, (label, field_key, control) in enumerate(controls):
-            row = rows[index] if index < len(rows) else None
-            if not (isinstance(row, (list, tuple)) and len(row) >= 2):
+        rows = [row for row in rows
+                if isinstance(row, (list, tuple)) and len(row) >= 2]
+        at = 0
+        for label, field_key, control in self._controls():
+            index = next((i for i in range(at, len(rows))
+                          if rows[i][0] == label), None)
+            if index is None:
                 continue
-            if row[0] != label:
-                continue
-            ok, value = control.restore(row[1])
+            at = index + 1
+            ok, value = control.restore(rows[index][1])
             if ok:
                 values[field_key] = value
         return values

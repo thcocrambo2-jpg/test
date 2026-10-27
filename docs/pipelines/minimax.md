@@ -81,10 +81,13 @@ LoRAs the catalogue lists for that tab's feature. The rows are built
 off; the tabs' `Default` preset, applied on load, is what switches the
 usual ones on. Slots left at `None` drop out of the chain.
 
-These are the only tabs whose catalogue entry lists **LoRAs and no
-models**: their weights are fixed in `constants.py`, so there is no Model
-dropdown. The licence server permits the empty `models` list through
-`LORA_ONLY_FEATURES` — see [catalogue.md](catalogue.md#tabs-with-loras-and-no-models).
+The **Model** dropdown offers the H3 checkpoints the catalogue lists for
+the tab's feature. Until the licence server lists any, it offers the
+built-in one (`minimax-h3-int8`, the template's int8 build), so a
+database without MiniMax models still runs exactly what the tabs always
+did — see [catalogue.md](catalogue.md#tabs-with-built-in-models). Every H3
+checkpoint shares the text encoder, the two VAEs and the turbo LoRA; only
+the diffusion model changes.
 
 The shipped LoRA records name a Hugging Face `mirror` alongside their
 CivitAI `source`, so the mirror is tried first at the pinned revision and
@@ -99,8 +102,9 @@ LoRA list, so a stack that works on one works on the other — the way
 ✨ Krea2 Edit reads 🎨 Krea2's presets. Unlike the Edit tabs, both are
 generation tabs, so both read the list *and* can save to it (admin only).
 
-A preset carries steps, resolution, duration, sampler, seed, batch count
-and the LoRA stack — no `model`, since these tabs have none. One saved
+A preset carries the model, steps, resolution, duration, sampler, seed,
+batch count and the LoRA stack. Presets saved before the tabs had a Model
+dropdown carry no `model`, and leave the dropdown where it is. One saved
 from 🎞️ MiniMax T2V also carries its aspect ratio, which 🎥 MiniMax I2V
 skips (the image sets its shape). Its Match image resolution is likewise
 left alone on T2V, which does not offer it.
@@ -226,5 +230,6 @@ first thing to try.
 
 ## Related
 
-- [catalogue.md](catalogue.md) — the LoRA records and the LoRA-only rule.
+- [catalogue.md](catalogue.md) — the model and LoRA records, and the
+  built-in model.
 - [wan.md](wan.md) — the other video pipeline.

@@ -41,21 +41,33 @@ merge of Anima Base and the Anima Turbo LoRA, 8 steps at CFG 1), and no
 LoRAs yet. Its record is never mirrored: see
 [anima.md](anima.md#licence).
 
-## Tabs with LoRAs and no models
+## Tabs with built-in models
 
-The two MiniMax tabs list LoRAs and leave `models` empty. Their weights
-are fixed — the diffusion model, the text encoder, the two VAEs and the
-turbo LoRA are named in
-[`ember/pipelines/minimax/constants.py`](../../ember/pipelines/minimax/constants.py),
-not chosen from a dropdown — so there is nothing for a Model dropdown to
-offer and the tab renders without one.
+The MiniMax and Wan tabs ran fixed weights before their models were
+catalogue records, so the app carries those as **built-in models**:
+`MINIMAX_BUILTIN_MODEL` in
+[`ember/pipelines/minimax/constants.py`](../../ember/pipelines/minimax/constants.py)
+and `WAN_BUILTIN_MODELS` in
+[`ember/pipelines/wan/constants.py`](../../ember/pipelines/wan/constants.py).
+When the catalogue lists no model for `minimax_i2v`, `minimax_t2v` or
+`wan_i2v` — an older server, or a database not yet given one — the pod
+offers the built-in ones instead (`Catalogue.builtin`), so the tab runs
+exactly what it always did. The database records use the same ids, so a
+preset, recipe or token that names one means the same model either way.
+
+Once a feature lists any model, its Model dropdown offers exactly that
+list, like every other tab, and another checkpoint is a database record —
+see [catalogue data](../../license-validator/docs/catalogue-data.md#adding-a-minimax-or-wan-checkpoint).
+Every H3 checkpoint shares one graph, encoder, VAEs and turbo LoRA; a Wan
+record says which graph it runs with `arch` (`14b` or `5b`), and a 14B
+names its low-noise expert in `parts.low`.
 
 The licence server would otherwise refuse an empty `models` list, because
 for every other tab an empty list means a tab that cannot run anything.
-`LORA_ONLY_FEATURES` in the server's `src/assets.js` holds
-`minimax_i2v` and `minimax_t2v`, and `emptyModelsProblem` skips its rule
-for exactly those two. Only an *empty array* is waived: a missing or
-malformed list is still reported, on every feature.
+`BUILTIN_MODEL_FEATURES` in the server's `src/assets.js` holds those three
+keys, and `emptyModelsProblem` skips its rule for exactly those. Only an
+*empty array* is waived: a missing or malformed list is still reported, on
+every feature.
 
 See [minimax.md](minimax.md) for what those LoRAs do in the graph.
 

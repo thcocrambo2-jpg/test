@@ -1,12 +1,17 @@
 """The Wan 2.2 image-to-video tab."""
 
+from dataclasses import replace
+
 from ember import features
 from ember.generation import runner
+from ember.licensing import catalog
 from ember.pipelines.krea2.constants import SAMPLERS
 from ember.pipelines.wan.constants import (
+    WAN_ARCH_5B,
     WAN_DEFAULT_NEGATIVE,
     WAN_DEFAULT_RESOLUTION,
     WAN_INTERPOLATE_DEFAULT,
+    WAN_LEGACY_MODEL_VALUES,
     WAN_MAX_SECONDS,
     WAN_MODE_DEFAULTS,
     WAN_RESOLUTIONS,
@@ -18,6 +23,8 @@ from ember.web.schema.fields import (
     G_SEED,
     VIDEO_KEYS,
     _batch_field,
+    _model_field,
+    _model_negative,
     _seed_fields,
 )
 from ember.web.schema.model import Field, Group, TabSchema
@@ -25,14 +32,27 @@ from ember.web.schema.model import Field, Group, TabSchema
 Key = features.Key
 
 
-# The Wan tab's two radio lists. They name model families rather than
-# files, and the strings are what generate_wan_video branches on (`_is_wan_5b`, `mode.startswith("turbo")`) — so they
-# are wire values, not labels, and cannot be reworded freely.
-WAN_MODEL_CHOICES = ["14B two-expert (best quality, 16 fps)",
-                     "5B TI2V (lighter, 24 fps)"]
+# The Model dropdown offers the feature's catalogue models — the built-in
+# 14B and 5B when the licence server lists none — so another Wan
+# checkpoint is a database record, not a build. Its values are model ids;
+# they were these two labels before, and recipes and open forms still carry
+# them, which `aliases` reads as the ids they became.
+WAN_FEATURE = str(Key.WAN_I2V)
+
+
+def _wan_14b_ids() -> list:
+    """The models Mode applies to: every one that is not a 5B."""
+    return [model.id for model in catalog.feature_models(WAN_FEATURE)
+            if model.arch != WAN_ARCH_5B]
+
+
+# The Mode radio's strings are what generate_wan_video branches on
+# (`mode.startswith("turbo")`) — wire values, not labels, so they cannot be
+# reworded freely.
 WAN_MODE_CHOICES = ["Turbo (Lightning, 4 steps)", "Raw (20 steps)"]
 
 WAN_SCHEMA = TabSchema(
+    model_registry=WAN_FEATURE,
     key=Key.WAN_I2V, handler=generate_wan_video,
     lane=runner.WAN_LANE, prompt_field="prompt",
     result_keys=VIDEO_KEYS, tab_id="video", output="video",
@@ -50,14 +70,15 @@ WAN_SCHEMA = TabSchema(
                           "push-in, wind in the hair"),
         Field("negative",
               "Negative prompt (only used when CFG > 1, i.e. Raw mode)",
-              "textarea", WAN_DEFAULT_NEGATIVE, lines=2, group="prompt", collapsed=True),
-        Field("model", "Model", "radio", WAN_MODEL_CHOICES[0],
-              choices=WAN_MODEL_CHOICES, group="core", wide=True),
+              "textarea", _model_negative(WAN_FEATURE, WAN_DEFAULT_NEGATIVE),
+              lines=2, group="prompt", collapsed=True),
+        replace(_model_field(WAN_FEATURE),
+                aliases=WAN_LEGACY_MODEL_VALUES, preset=None),
         Field("mode", "Mode (14B only — the 5B has no Lightning)",
               "radio",
               WAN_MODE_CHOICES[0 if WAN_VARIANT == "turbo" else 1],
               choices=WAN_MODE_CHOICES, group="core", wide=True,
-              show_if=("model", WAN_MODEL_CHOICES[0])),
+              show_if=("model", _wan_14b_ids)),
         *_seed_fields(),
         Field("steps", "Steps", "slider",
               WAN_MODE_DEFAULTS[WAN_VARIANT]["steps"], lo=1, hi=40,

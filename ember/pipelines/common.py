@@ -50,8 +50,11 @@ def model_defaults(model) -> tuple[int, float]:
 
 
 def model_file_available(model) -> bool:
-    """True once the model record's UNet file has been downloaded."""
-    return (MODELS_DIR / "diffusion_models" / model.file).exists()
+    """True once the model record's UNet file — and any parts it has, such
+    as Wan 14B's second expert — have been downloaded."""
+    files = [model.file, *(part.file for _role, part in model.parts)]
+    return all((MODELS_DIR / "diffusion_models" / name).exists()
+               for name in files)
 
 
 def lora_file_available(lora) -> bool:

@@ -60,6 +60,26 @@ def _model_field(feature):
                  group="core", preset="model", wide=True)
 
 
+# feature -> the negative prompt its tab starts on when the model names
+# none. Filled by _model_negative as the tabs are defined; read by
+# tabschema's /catalog rows, so the browser can swap a negative in when the
+# Model changes.
+NEGATIVE_FALLBACKS: dict = {}
+
+
+def _model_negative(feature, fallback=""):
+    """A tab's Negative prompt default: its default model's `negative`, or
+    `fallback` — what the tab always started on — when the model names
+    none. Read late, like every catalogue-derived default."""
+    NEGATIVE_FALLBACKS[str(feature)] = fallback
+
+    def default():
+        models = assets.feature_models(feature)
+        return models[0].negative if models and models[0].negative else fallback
+
+    return default
+
+
 def _model_setting(feature, key):
     """The feature's default model's `steps` or `cfg`, read late."""
     return lambda: runner.model_settings(feature)[key]

@@ -106,6 +106,7 @@ from ember.pipelines.qwen21.constants import (
 )
 from ember.pipelines.wan.constants import (
     WAN_5B_DEFAULTS,
+    WAN_ARCH_5B,
     WAN_5B_FPS,
     WAN_FPS,
     WAN_MAX_SECONDS,
@@ -115,6 +116,7 @@ from ember.pipelines.wan.constants import (
 # `Invalid` is named here because this is where the API meets the schema:
 # api.py answers 422 on `tabschema.Invalid`, and the submit path it wraps
 # is TabSchema.submit.
+from ember.web.schema.fields import NEGATIVE_FALLBACKS
 from ember.web.schema.model import Invalid, TabSchema
 from ember.web.schema.tabs.anima import ANIMA_SCHEMA
 from ember.web.schema.tabs.krea2 import KREA2_EDIT_SCHEMA, KREA2_SCHEMA
@@ -125,7 +127,7 @@ from ember.web.schema.tabs.minimax import (
     MINIMAX_T2V_SCHEMA,
 )
 from ember.web.schema.tabs.qwen21 import QWEN21_REF_SCHEMA, QWEN21_T2I_SCHEMA
-from ember.web.schema.tabs.wan import WAN_MODEL_CHOICES, WAN_SCHEMA
+from ember.web.schema.tabs.wan import WAN_SCHEMA
 from ember.web.schema.tabs.zimage import ZIMAGE_SCHEMA
 
 Key = features.Key
@@ -237,6 +239,12 @@ def _model_rows(feature):
             "available": bool(model_file_available(model)),
             "info": info,
         })
+        # The negative prompt picking this model switches the tab to — its
+        # own, or the tab's default when it names none. Only for a tab
+        # with a Negative prompt box (fields.NEGATIVE_FALLBACKS).
+        if str(feature) in NEGATIVE_FALLBACKS:
+            rows[-1]["negative"] = (model.negative
+                                    or NEGATIVE_FALLBACKS[str(feature)])
     return rows
 
 
@@ -257,16 +265,18 @@ def catalog() -> dict:
             s.model_registry: _model_rows(s.model_registry)
             for s in entitled() if s.model_registry
         },
-        # The Wan tab's model radio disables the mode radio for the 5B —
-        # it has no Lightning distillation — and both radios reset Steps
-        # and CFG. `is5b` is the same substring test _is_wan_5b makes, so
-        # the browser and the handler agree on which model is which.
+        # The Wan tab's Mode does nothing for a 5B — it has no Lightning
+        # distillation. `modeless` names those models by id: the catalogue
+        # models whose `arch` is 5B, which is what generate_wan_video
+        # branches on, so the browser and the handler agree.
         "wan": {
             "modes": WAN_MODE_DEFAULTS,
             "fiveB": dict(WAN_5B_DEFAULTS, fps=WAN_5B_FPS),
             "fps": WAN_FPS,
             "maxSeconds": WAN_MAX_SECONDS,
-            "modeless": WAN_MODEL_CHOICES[1],
+            "modeless": [model.id for model
+                         in assets.feature_models(str(Key.WAN_I2V))
+                         if model.arch == WAN_ARCH_5B],
             "resolutions": {k: v for k, v in WAN_RESOLUTIONS.items()},
         },
         "resolutions": {k: list(v) for k, v in RESOLUTION_PRESETS.items()},

@@ -28,6 +28,7 @@ from ember.web.schema.fields import (
     VIDEO_KEYS,
     _batch_field,
     _blank_lora_tail,
+    _model_field,
     _preset_save_fields,
     _seed_fields,
 )
@@ -41,6 +42,11 @@ Key = features.Key
 # minus its upload — which is why the two field lists are the same
 # list with `image` swapped for `aspect`. Both run on the main lane:
 # see runner._run_wan_jobs on why they never ride the Wan instance.
+# The Model dropdown offers the feature's catalogue models — the built-in
+# H3 int8 when the licence server lists none — so another H3 checkpoint is
+# a database record, not a build. It comes after the prompt and, like
+# every new control, does not shift what older recipes restore: those are
+# matched by label in order (TabSchema.restore_recipe).
 # No negative prompt and no CFG, because the model is guidance-distilled
 # like Flux; the prompt carries the sound as well as the motion, since
 # every clip comes back with a soundtrack. The LoRA stack is each tab's
@@ -51,6 +57,7 @@ Key = features.Key
 # Both carry the Auto prompt panel, which writes the Prompt box from a
 # short idea before the click — see ember/pipelines/minimax/autoprompt.py.
 MINIMAX_I2V_SCHEMA = TabSchema(
+    model_registry=handlers.MINIMAX_I2V,
     key=Key.MINIMAX_I2V, handler=generate_minimax_video,
     lane=runner.COMFY_LANE, prompt_field="prompt",
     result_keys=VIDEO_KEYS, tab_id="minimax_i2v", output="video",
@@ -70,6 +77,7 @@ MINIMAX_I2V_SCHEMA = TabSchema(
               "", lines=4, group="prompt",
               placeholder="she looks up and laughs, rain against the "
                           "window, a kettle starting to whistle"),
+        _model_field(handlers.MINIMAX_I2V),
         *_seed_fields(),
         Field("steps", "Steps", "slider", MINIMAX_DEFAULTS["steps"],
               lo=1, hi=40, step=1, group="sampling", preset="steps",
@@ -94,6 +102,7 @@ MINIMAX_I2V_SCHEMA = TabSchema(
 )
 
 MINIMAX_T2V_SCHEMA = TabSchema(
+    model_registry=handlers.MINIMAX_T2V,
     key=Key.MINIMAX_T2V, handler=generate_minimax_t2v,
     lane=runner.COMFY_LANE, prompt_field="prompt",
     result_keys=VIDEO_KEYS, tab_id="minimax_t2v", output="video",
@@ -111,6 +120,7 @@ MINIMAX_T2V_SCHEMA = TabSchema(
               placeholder="a kettle on a gas hob comes to the boil and "
                           "whistles, steam catching the window light, "
                           "slow push-in"),
+        _model_field(handlers.MINIMAX_T2V),
         Field("aspect", "Aspect ratio", "select", MINIMAX_DEFAULT_ASPECT,
               choices=list(MINIMAX_ASPECT_RATIOS), group="core",
               preset="aspect", wide=True),

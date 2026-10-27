@@ -1,5 +1,5 @@
-"""The model and LoRA catalogue — what each Krea, Z-Image, Qwen 2.1 and
-MiniMax feature offers.
+"""The model and LoRA catalogue — what each Krea, Z-Image, Qwen 2.1,
+Anima, MiniMax and Wan feature offers.
 
 The licence server holds three collections: `loras` and `models` (one
 record per file, keyed by a readable id) and `feature_assets` (per
@@ -28,6 +28,16 @@ With none of them the catalogue is empty: the Krea, Z-Image and Qwen 2.1
 tabs report that they have no models, the MiniMax tabs offer no LoRAs but still run, and the
 tabs that do not use it are unaffected.
 
+Built-in models
+---------------
+MiniMax and Wan ran fixed weights before their models were catalogue
+entries, and a server or database that predates that still lists none for
+them. So those features carry the records they always ran, in each
+pipeline's constants (`BUILTIN`), and fall back to them whenever the
+catalogue lists no model for the feature. The ids are the ones the
+database records use, so whatever names one — a preset, a recipe, a
+token — means the same model before and after the database has it.
+
 Stdlib-only, like the rest of this package — it runs before the pip
 install that the heavier modules wait for.
 """
@@ -43,6 +53,9 @@ from pathlib import Path
 
 from ember import settings
 from ember.logs import log
+# Data modules: they import nothing, so this package stays stdlib-only.
+from ember.pipelines.minimax.constants import MINIMAX_BUILTIN_MODEL
+from ember.pipelines.wan.constants import WAN_BUILTIN_MODELS
 from ember.settings import (
     BASE_DIR,
     CATALOG_FILE_ENV as FILE_ENV,
@@ -79,6 +92,15 @@ class Lora:
 
 
 @dataclass(frozen=True)
+class Part:
+    """One more file a model needs beside its `file` — Wan 14B's second
+    expert. Downloaded to diffusion_models/ like the model itself."""
+    file: str
+    source: dict
+    mirror: dict | None = None
+
+
+@dataclass(frozen=True)
 class Model:
     id: str
     name: str
@@ -92,6 +114,17 @@ class Model:
     # switches a LoRA on (V2's raw), else None.
     turbo_lora: dict | None = None
     trigger: str = ""
+    # Which graph the model runs, for a feature with more than one (Wan:
+    # "14b" or "5b"). Empty where a feature has a single graph.
+    arch: str = ""
+    # Extra files by role, e.g. {"low": Part} — Wan 14B's low-noise expert.
+    parts: tuple = ()                     # ((role, Part), ...)
+    # The negative prompt this model's tab starts on, and switches to when
+    # the model is picked. Empty: the tab's own default.
+    negative: str = ""
+
+    def part(self, role: str) -> "Part | None":
+        return next((part for name, part in self.parts if name == role), None)
 
 
 @dataclass(frozen=True)
@@ -100,10 +133,14 @@ class Catalogue:
     models: dict = field(default_factory=dict)     # id -> Model, in order
     features: dict = field(default_factory=dict)   # key -> (model ids, lora ids)
     origin: str = "empty"
+    # key -> (Model, ...): what a feature runs when the catalogue lists no
+    # model for it. See "Built-in models" in the module docstring.
+    builtin: dict = field(default_factory=dict)
 
     def feature_models(self, key: str) -> tuple:
         ids = self.features.get(str(key), ((), ()))[0]
-        return tuple(self.models[i] for i in ids if i in self.models)
+        listed = tuple(self.models[i] for i in ids if i in self.models)
+        return listed or self.builtin.get(str(key), ())
 
     def feature_loras(self, key: str) -> tuple:
         ids = self.features.get(str(key), ((), ()))[1]
@@ -113,7 +150,13 @@ class Catalogue:
         return self.loras.get(lora_id) if isinstance(lora_id, str) else None
 
     def model(self, model_id) -> Model | None:
-        return self.models.get(model_id) if isinstance(model_id, str) else None
+        if not isinstance(model_id, str):
+            return None
+        found = self.models.get(model_id)
+        if found is None:
+            found = next((m for models in self.builtin.values()
+                          for m in models if m.id == model_id), None)
+        return found
 
 
 # ── Parsing ────────────────────────────────────────────────────────────
@@ -178,6 +221,72 @@ def _usable(raw, kind: str) -> bool:
     return True
 
 
+def _parts(value, rid: str) -> tuple | None:
+    """A model's `parts` from the wire, or None when any part is unusable.
+
+    All or nothing: a two-expert model missing its second expert cannot
+    run, so a record with a bad part is dropped whole rather than offered
+    half-built.
+    """
+    if value in (None, {}):
+        return ()
+    if not isinstance(value, dict):
+        log.warning("Catalogue: skipping model %r — its parts are not "
+                    "{role: {file, source}}.", rid)
+        return None
+    out = []
+    for role, raw in value.items():
+        if not (isinstance(role, str) and ID_RE.match(role)
+                and isinstance(raw, dict)
+                and isinstance(raw.get("file"), str)
+                and FILE_RE.match(raw["file"])
+                and _source_ok(raw.get("source"))):
+            log.warning("Catalogue: skipping model %r — its part %r is not "
+                        "a plain .safetensors file with a CivitAI or Hugging "
+                        "Face source.", rid, role)
+            return None
+        out.append((role, Part(file=raw["file"], source=dict(raw["source"]),
+                               mirror=_mirror(raw.get("mirror")))))
+    return tuple(out)
+
+
+def _model(raw: dict) -> Model | None:
+    """One model record, already checked by `_usable`, or None if its parts
+    are not usable."""
+    rid = _record_id(raw)
+    parts = _parts(raw.get("parts"), rid)
+    if parts is None:
+        return None
+    turbo = raw.get("turbo_lora")
+    if isinstance(turbo, dict) and isinstance(turbo.get("lora"), str):
+        turbo = {"lora": turbo["lora"],
+                 "strength": _number(turbo.get("strength"), float, 1.0)}
+    else:
+        turbo = None
+    return Model(
+        id=rid,
+        name=str(raw.get("name") or rid),
+        file=raw["file"],
+        source=dict(raw["source"]),
+        mirror=_mirror(raw.get("mirror")),
+        variant=str(raw.get("variant") or "turbo"),
+        steps=_number(raw.get("steps"), int, 10),
+        cfg=_number(raw.get("cfg"), float, 1.0),
+        turbo_lora=turbo,
+        trigger=str(raw.get("trigger") or ""),
+        arch=str(raw.get("arch") or ""),
+        parts=parts,
+        negative=str(raw.get("negative") or ""),
+    )
+
+
+def _builtin() -> dict:
+    """Each feature's built-in models, parsed the way a served record is."""
+    minimax = (_model(MINIMAX_BUILTIN_MODEL),)
+    wan = tuple(_model(raw) for raw in WAN_BUILTIN_MODELS)
+    return {"minimax_i2v": minimax, "minimax_t2v": minimax, "wan_i2v": wan}
+
+
 def parse(document: dict, origin: str) -> Catalogue:
     """A catalogue from the wire/file shape. Bad records are dropped, loudly."""
     loras = {}
@@ -198,25 +307,9 @@ def parse(document: dict, origin: str) -> Catalogue:
     for raw in document.get("models") or []:
         if not _usable(raw, "model"):
             continue
-        rid = _record_id(raw)
-        turbo = raw.get("turbo_lora")
-        if isinstance(turbo, dict) and isinstance(turbo.get("lora"), str):
-            turbo = {"lora": turbo["lora"],
-                     "strength": _number(turbo.get("strength"), float, 1.0)}
-        else:
-            turbo = None
-        models[rid] = Model(
-            id=rid,
-            name=str(raw.get("name") or rid),
-            file=raw["file"],
-            source=dict(raw["source"]),
-            mirror=_mirror(raw.get("mirror")),
-            variant=str(raw.get("variant") or "turbo"),
-            steps=_number(raw.get("steps"), int, 10),
-            cfg=_number(raw.get("cfg"), float, 1.0),
-            turbo_lora=turbo,
-            trigger=str(raw.get("trigger") or ""),
-        )
+        model = _model(raw)
+        if model is not None:
+            models[model.id] = model
     features = {}
     for key, lists in (document.get("features") or {}).items():
         if not isinstance(lists, dict):
@@ -225,7 +318,7 @@ def parse(document: dict, origin: str) -> Catalogue:
         lora_ids = tuple(i for i in lists.get("loras") or [] if i in loras)
         features[str(key)] = (model_ids, lora_ids)
     return Catalogue(loras=loras, models=models, features=features,
-                     origin=origin)
+                     origin=origin, builtin=_builtin())
 
 
 # ── Loading ────────────────────────────────────────────────────────────
@@ -304,6 +397,11 @@ def load(instance_id: str | None = None) -> Catalogue:
         _current = result
     log.info("Catalogue — %d model(s), %d LoRA(s) from %s",
              len(result.models), len(result.loras), origin)
+    for key in sorted(result.builtin):
+        if not result.features.get(key, ((), ()))[0]:
+            log.info("Catalogue lists no model for %s — using the built-in "
+                     "one(s): %s", key,
+                     ", ".join(m.id for m in result.builtin[key]))
     return result
 
 

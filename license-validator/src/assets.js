@@ -47,6 +47,13 @@ export const MODEL_VARIANTS = ["turbo", "raw"];
 // answer and end up as dropdown labels.
 const MAX_NAME_CHARS = 120;
 const MAX_TRIGGER_CHARS = 500;
+// A model's default negative prompt. Wan's built-in one is ~600 characters;
+// this is the room the prompt library gives a negative.
+const MAX_NEGATIVE_CHARS = 4000;
+// A model's `arch` — which graph it runs, for a feature with more than one
+// (Wan: "14b" or "5b"). Shaped like an id, and checked as nothing more:
+// the pod decides what each one means.
+const ARCH_RE = /^[a-z0-9][a-z0-9-]{0,31}$/;
 
 const isNumber = (value) => typeof value === "number" && Number.isFinite(value);
 const isObject = (value) =>
@@ -181,6 +188,36 @@ const MODEL_RULES = {
         : `turbo_lora.strength ${show(value.strength)} must be a number`)
     );
   },
+  // Which graph the model runs, for a feature with more than one. "" is
+  // none, which is every single-graph feature.
+  arch: (value) =>
+    value === "" || (typeof value === "string" && ARCH_RE.test(value))
+      ? null
+      : `arch ${show(value)} must be a short lower-case name like "14b", or ""`,
+  // Files the model needs beside `file`, by role: Wan 14B's second expert
+  // is {low: {file, source}}. Each is downloaded like `file` and checked
+  // like it; a pod drops a model whose parts it cannot use.
+  parts: (value) => {
+    if (!isObject(value)) return "parts must be {role: {file, source, mirror?}}";
+    for (const [role, part] of Object.entries(value)) {
+      const bad = idProblem(role, `parts role ${show(role)}`);
+      if (bad) return bad;
+      if (!isObject(part)) return `parts.${role} must be {file, source, mirror?}`;
+      const extra = Object.keys(part).filter(
+        (k) => !["file", "source", "mirror"].includes(k),
+      );
+      if (extra.length) return `parts.${role} has unknown field(s): ${extra.join(", ")}`;
+      const problem =
+        fileProblem(part.file) ||
+        sourceProblem(part.source) ||
+        (part.mirror === undefined ? null : mirrorProblem(part.mirror));
+      if (problem) return `parts.${role}: ${problem}`;
+    }
+    return null;
+  },
+  // The negative prompt the model's tab starts on and switches to when it
+  // is picked. "" leaves the tab's own default.
+  negative: (value) => stringProblem(value, "negative", MAX_NEGATIVE_CHARS),
 };
 
 export const LORA_FIELDS = Object.keys(LORA_RULES);
@@ -251,15 +288,15 @@ export function featureProblem(key) {
 // fixed set of weights named in the app's
 // ember/pipelines/minimax/constants.py, so an empty `models` list is what
 // they are rather than a tab with nothing to run.
-export const LORA_ONLY_FEATURES = new Set(["minimax_i2v", "minimax_t2v"]);
+export const BUILTIN_MODEL_FEATURES = new Set(["minimax_i2v", "minimax_t2v", "wan_i2v"]);
 
 /**
  * The "a tab needs a model" rule for one feature's `models` list, or null.
  * Only an empty array breaks it — a missing or malformed list is
- * idListProblems' to report — and never on a LORA_ONLY_FEATURES tab.
+ * idListProblems' to report — and never on a BUILTIN_MODEL_FEATURES tab.
  */
 export function emptyModelsProblem(feature, list) {
-  if (!Array.isArray(list) || list.length || LORA_ONLY_FEATURES.has(feature)) {
+  if (!Array.isArray(list) || list.length || BUILTIN_MODEL_FEATURES.has(feature)) {
     return null;
   }
   return "models must list at least one model (the first is the default)";
@@ -297,11 +334,11 @@ export function idListProblems(list, known, what) {
 // disabled LoRA still exists and may come back; a preset naming it is not
 // wrong, it just has one slot the tab will leave empty for now.
 
-// Preset tabs with no Model control. The MiniMax tabs run fixed weights
-// that are not catalogue models (their feature's `models` is empty), so
-// their blob carries no `model` at all — and one that does is refused,
-// since nothing on the tab could apply it.
-export const MODELLESS_TABS = ["minimax_i2v"];
+// Preset tabs whose blob may leave `model` out. The MiniMax tabs ran fixed
+// weights before their model was a catalogue entry, so their older presets
+// carry none; the tab then keeps the model it has. One that does carry a
+// model must name a real one, as everywhere else.
+export const OPTIONAL_MODEL_TABS = ["minimax_i2v"];
 
 /**
  * What is wrong with a settings blob's model and LoRA rows, or null.
@@ -309,8 +346,8 @@ export const MODELLESS_TABS = ["minimax_i2v"];
  * `ids` is `{models: Set, loras: Set}` — see assetIds(). `tab` is the
  * preset tab the blob is for, when there is one (a prompt has none).
  *
- *   settings.model   required, an existing model id — absent on a
- *                    MODELLESS_TABS tab
+ *   settings.model   an existing model id — required, except on an
+ *                    OPTIONAL_MODEL_TABS tab, where it may be left out
  *   settings.loras   optional; when present an array of rows, each exactly
  *                    [on: boolean, lora id | null, weight: number]
  *
@@ -321,11 +358,8 @@ export const MODELLESS_TABS = ["minimax_i2v"];
 export function settingsProblem(settings, ids, tab = null) {
   if (!isObject(settings)) return "settings must be an object.";
   const { model, loras } = settings;
-  if (MODELLESS_TABS.includes(tab)) {
-    if (model !== undefined) {
-      return `settings.model: the ${tab} tab has no model to set.`;
-    }
-  } else if (typeof model !== "string" || !ids.models.has(model)) {
+  const optional = OPTIONAL_MODEL_TABS.includes(tab) && model === undefined;
+  if (!optional && (typeof model !== "string" || !ids.models.has(model))) {
     return `settings.model ${show(model)} is not a model id.`;
   }
   if (loras === undefined) return null;
@@ -392,6 +426,9 @@ export function modelWire(row) {
     cfg: row.cfg ?? 1.0,
     turbo_lora: row.turbo_lora ?? null,
     trigger: row.trigger || "",
+    arch: row.arch || "",
+    parts: row.parts ?? {},
+    negative: row.negative || "",
   };
 }
 

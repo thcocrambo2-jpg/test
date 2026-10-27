@@ -6,10 +6,14 @@ import uuid
 from ember.comfy.client import wan_client
 from ember.comfy.server import ensure_alive as comfy_ensure_alive
 from ember.comfy.server import node_registered
+from ember import features
 from ember.generation.runner import _png_bytes, _run_tag, _run_wan_jobs
+from ember.pipelines.common import resolve_model
 from ember.pipelines.wan.constants import (
     WAN_5B_DEFAULTS,
     WAN_5B_FPS,
+    WAN_ARCH_5B,
+    WAN_LEGACY_MODEL_VALUES,
     WAN_FPS,
     WAN_MODE_DEFAULTS,
     WAN_RESOLUTIONS,
@@ -52,8 +56,13 @@ def _seconds_to_frames(seconds: float, fps: int) -> int:
     return max(17, int(round(float(seconds) * fps / 4)) * 4 + 1)
 
 
-def _is_wan_5b(model) -> bool:
-    return "5b" in str(model).lower()
+def _wan_model(model_id):
+    """The catalogue model for the Model value — the built-in pair when the
+    licence server lists none (catalog.py). A label from before the value
+    was an id is read as the id it became; an id the feature does not list
+    falls back to its first model (resolve_model)."""
+    model_id = WAN_LEGACY_MODEL_VALUES.get(model_id, model_id)
+    return resolve_model(str(features.Key.WAN_I2V), model_id)
 
 
 def _interpolation_problem() -> str:
@@ -87,16 +96,27 @@ def generate_wan_video(image, prompt, negative, model, mode, seed, randomize,
     if image is None:
         yield [], None, "❌ Upload an image first.", 0
         return
-    use_5b = _is_wan_5b(model)
-    if use_5b and not wan_5b_available():
-        yield [], None, ("❌ The Wan 2.2 5B model is not downloaded yet — "
-                         "restart the app so the download step can fetch "
-                         "it, or switch Model to 14B."), 0
+    entry = _wan_model(model)
+    if entry is None:                       # cannot happen: there is a built-in
+        yield [], None, ("❌ No Wan model is configured — restart the app "
+                         "once the licence server can be reached."), 0
         return
-    if not use_5b and not wan_models_available():
-        yield [], None, ("❌ The Wan 2.2 14B models are not downloaded yet — "
-                         "restart the app so the download step can fetch "
-                         "them, or switch Model to 5B."), 0
+    use_5b = entry.arch == WAN_ARCH_5B
+    low = entry.part("low")
+    if use_5b and not wan_5b_available(entry.file):
+        yield [], None, (f"❌ Wan model “{entry.name}” is not downloaded yet "
+                         "— restart the app so the download step can fetch "
+                         "it, or pick another Model."), 0
+        return
+    if not use_5b and low is None:
+        yield [], None, (f"❌ Wan model “{entry.name}” is a two-expert 14B "
+                         "model with no low-noise expert listed — its "
+                         "catalogue record needs parts.low."), 0
+        return
+    if not use_5b and not wan_models_available(entry.file, low.file):
+        yield [], None, (f"❌ Wan model “{entry.name}” is not downloaded yet "
+                         "— restart the app so the download step can fetch "
+                         "it, or pick another Model."), 0
         return
     turbo = not use_5b and str(mode).lower().startswith("turbo")
     if turbo and not wan_lightning_available():
@@ -143,7 +163,9 @@ def generate_wan_video(image, prompt, negative, model, mode, seed, randomize,
         # the tag can go on it — see _run_tag. Videos land in wan/, and
         # that subfolder has its own counter to be knocked backwards.
         "filename_prefix": f"{wan_prefix}_{_run_tag()}",
-        **({} if use_5b else {"lightning": turbo}),
+        **({"unet": entry.file} if use_5b else
+           {"lightning": turbo, "unet_high": entry.file,
+            "unet_low": low.file}),
     } for i in range(int(batch_count))]
     for videos, latest, status in _run_wan_jobs(jobs, builder=builder):
         yield videos, latest, notice + status, base_seed

@@ -25,6 +25,7 @@ from ember.web.schema.fields import (
     _batch_field,
     _blank_slots,
     _model_field,
+    _model_negative,
     _model_setting,
     _preset_save_fields,
     _seed_fields,
@@ -57,7 +58,8 @@ ANIMA_SCHEMA = TabSchema(
               "eyes, school uniform, cherry blossoms, petals in the wind, "
               "looking at viewer, smile",
               lines=5, group="prompt"),
-        Field("negative", "Negative prompt", "textarea", "", lines=3,
+        Field("negative", "Negative prompt", "textarea",
+              _model_negative(handlers.ANIMA_T2I, ""), lines=3,
               group="prompt", collapsed=True,
               hint=_CFG_NOTE + " The model card suggests: "
                    + ANIMA_NEGATIVE_HINT + "."),

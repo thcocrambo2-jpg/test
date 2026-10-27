@@ -33,6 +33,10 @@ WAN_5B_UNET = "wan2.2_ti2v_5B_fp16.safetensors"
 WAN_5B_VAE = "wan2.2_vae.safetensors"
 
 # Repo-relative → local (all under split_files/ upstream, flattened locally).
+# The built-in setup's files. The diffusion models among them are catalogue
+# models now (WAN_BUILTIN_MODELS below, or the licence server's records),
+# fetched by the "catalog" download group, so the "wan" group fetches only
+# what every checkpoint of a family shares.
 WAN_HF_FILES = [
     f"diffusion_models/{WAN_HIGH_UNET}",
     f"diffusion_models/{WAN_LOW_UNET}",
@@ -106,6 +110,56 @@ WAN_VARIANT = "turbo"
 # The 5B model has no Lightning distillation — one "standard" schedule
 # (the official template: 20 steps, CFG 5, shift 8, 24 fps).
 WAN_5B_DEFAULTS = {"steps": 20, "cfg": 5.0, "shift": 8.0}
+
+# Which graph a Wan checkpoint runs — a catalogue model's `arch`. The 14B
+# family is two experts (the record's `file` is the high-noise one and its
+# `parts["low"]` the low-noise one) on the Wan 2.1 VAE, with Lightning;
+# the 5B is one dense model on the Wan 2.2 VAE, with none.
+WAN_ARCH_14B = "14b"
+WAN_ARCH_5B = "5b"
+
+
+def _wan_source(file):
+    return {"kind": "hf", "repo": WAN_HF_REPO,
+            "path": f"split_files/diffusion_models/{file}"}
+
+
+# The two checkpoints the tab ran before the model became a catalogue
+# entry, as catalogue records. Used whenever the licence server lists no
+# model for wan_i2v — an older server, or a database not yet given one —
+# so the tab keeps running exactly what it always did. The ids are the
+# ones the database records use.
+WAN_BUILTIN_MODELS = [
+    {
+        "id": "wan22-i2v-a14b-fp8",
+        "name": "Wan 2.2 14B two-expert fp8 (best quality, 16 fps)",
+        "file": WAN_HIGH_UNET,
+        "source": _wan_source(WAN_HIGH_UNET),
+        "parts": {"low": {"file": WAN_LOW_UNET,
+                          "source": _wan_source(WAN_LOW_UNET)}},
+        "arch": WAN_ARCH_14B,
+        "variant": "turbo",
+        "steps": WAN_MODE_DEFAULTS["turbo"]["steps"],
+        "cfg": WAN_MODE_DEFAULTS["turbo"]["cfg"],
+    },
+    {
+        "id": "wan22-ti2v-5b-fp16",
+        "name": "Wan 2.2 5B TI2V fp16 (lighter, 24 fps)",
+        "file": WAN_5B_UNET,
+        "source": _wan_source(WAN_5B_UNET),
+        "arch": WAN_ARCH_5B,
+        "variant": "raw",
+        "steps": WAN_5B_DEFAULTS["steps"],
+        "cfg": WAN_5B_DEFAULTS["cfg"],
+    },
+]
+
+# What the Model control held before it held ids: these two labels were its
+# values, and recipes and old forms still carry them.
+WAN_LEGACY_MODEL_VALUES = {
+    "14B two-expert (best quality, 16 fps)": "wan22-i2v-a14b-fp8",
+    "5B TI2V (lighter, 24 fps)": "wan22-ti2v-5b-fp16",
+}
 
 WAN_FPS = 16                  # the A14B models are trained at 16 fps
 WAN_5B_FPS = 24               # TI2V 5B is trained at 24 fps

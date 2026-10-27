@@ -513,7 +513,7 @@ def cases(module) -> dict:
         # which is the one arithmetic here that is easy to get subtly
         # wrong and impossible to see in a finished clip.
         "generate_minimax_video": (
-            image, "the tide comes in and the gulls cry",
+            image, "the tide comes in and the gulls cry", "minimax-h3-int8",
             7890123, False, 9, "Native 768p (short edge 768, slower)", 7,
             "dpmpp_2m", 2, True, "Golden",
         ) + minimax_triples({0: (True, "hmnsfw-aio-v2-5"),
@@ -521,8 +521,8 @@ def cases(module) -> dict:
                              2: (True, "hmmisdog")}),
 
         "generate_minimax_t2v": (
-            "a kettle comes to the boil and whistles", "16:9 (Widescreen)",
-            8901234, False, 11, "Standard (0.7 MP — the template default)", 6,
+            "a kettle comes to the boil and whistles", "minimax-h3-int8",
+            "16:9 (Widescreen)", 8901234, False, 11, "Standard (0.7 MP — the template default)", 6,
             "euler_ancestral", 2, True, "Golden",
         ) + minimax_triples({0: (False, "hmbrst"),
                              1: (True, "hmcshot-v1-0")}),

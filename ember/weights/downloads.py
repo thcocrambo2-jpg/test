@@ -418,9 +418,12 @@ def download_catalog() -> None:
 
     What to fetch is the union of the catalogue lists of the features that
     need this group and are on — the four Krea tabs, Z-Image, both Qwen 2.1
-    tabs, Anima, and the two MiniMax tabs, which list LoRAs only. A tab that is off contributes nothing, so
-    a V2-only licence never downloads a model only Krea2 offers, and vice
-    versa.
+    tabs, Anima, the two MiniMax tabs and Wan. MiniMax and Wan fall back to
+    their built-in models when the catalogue lists none (catalog.py), so
+    their checkpoints come through here either way. A tab that is off
+    contributes nothing, so a V2-only licence never downloads a model only
+    Krea2 offers, and vice versa. A model's `parts` (Wan 14B's second
+    expert) come with it.
 
     Each file once. The same LoRA sits in every tab's list and two model
     records may share one file (same weights, different steps/CFG), so the
@@ -434,27 +437,33 @@ def download_catalog() -> None:
     """
     keys = features.enabled_needing("catalog")
     cat = catalog.get()
-    wanted: dict[str, tuple] = {}          # relpath -> (record, subdir, kind)
+    # relpath -> (record, subdir, what to call it in a log line)
+    wanted: dict[str, tuple] = {}
     for key in keys:
         for model in cat.feature_models(key):
             wanted.setdefault(f"diffusion_models/{model.file}",
-                              (model, "diffusion_models", "model"))
+                              (model, "diffusion_models", f"model {model.id}"))
+            for role, part in model.parts:
+                wanted.setdefault(f"diffusion_models/{part.file}",
+                                  (part, "diffusion_models",
+                                   f"model {model.id} ({role})"))
     for key in keys:
         for lora in cat.feature_loras(key):
-            wanted.setdefault(f"loras/{lora.file}", (lora, "loras", "LoRA"))
+            wanted.setdefault(f"loras/{lora.file}",
+                              (lora, "loras", f"LoRA {lora.id}"))
     if not wanted:
         log.warning("The catalogue lists no models or LoRAs for %s — "
                     "nothing to download for those tabs.",
                     ", ".join(keys) or "(no enabled feature)")
         return
     log.info("Catalogue files for %s: %d", ", ".join(keys), len(wanted))
-    for relpath, (record, subdir, kind) in wanted.items():
+    for relpath, (record, subdir, what) in wanted.items():
         try:
             fetch_catalog_file(record, subdir)
         except Exception as exc:
-            log.error("Catalogue %s %s (%s) unavailable (%s) — that "
+            log.error("Catalogue %s (%s) unavailable (%s) — that "
                       "dropdown choice will refuse to run until a later run "
-                      "fetches it.", kind, record.id, relpath, exc)
+                      "fetches it.", what, relpath, exc)
 
 
 def download_v2_models() -> None:
@@ -513,15 +522,29 @@ def download_edit_lora() -> None:
                   "stay disabled until it downloads on a later run.", exc)
 
 
-def download_wan_models() -> None:
-    """Fetch the Wan 2.2 image-to-video models (~48 GB).
+def _shared(relpaths) -> list:
+    """A pipeline's file list without its diffusion models.
 
-    The models from Comfy-Org's repack, the turbo LoRAs from lightx2v's
-    repo, whose root they sit at, and the RIFE checkpoint Smooth motion
-    uses (~21 MB) from a community copy, into the folder the frame
-    interpolation pack's ckpts/ is linked to.
+    The Wan and MiniMax checkpoints are catalogue models, fetched by the
+    "catalog" group whichever ones the licence server lists; what their own
+    groups still fetch is the encoder, VAEs and LoRAs every checkpoint
+    shares.
     """
-    for relpath in WAN_HF_FILES:
+    return [relpath for relpath in relpaths
+            if not relpath.startswith("diffusion_models/")]
+
+
+def download_wan_models() -> None:
+    """Fetch what every Wan 2.2 checkpoint shares (~9 GB).
+
+    The text encoder and both VAEs from Comfy-Org's repack, the turbo
+    LoRAs from lightx2v's repo, whose root they sit at, and the RIFE
+    checkpoint Smooth motion uses (~21 MB) from a community copy, into the
+    folder the frame interpolation pack's ckpts/ is linked to. The
+    checkpoints themselves (~39 GB for the built-in two) are catalogue
+    models, fetched by the "catalog" group.
+    """
+    for relpath in _shared(WAN_HF_FILES):
         try:
             fetch_repackaged_file(WAN_HF_REPO, relpath)
         except Exception as exc:
@@ -548,7 +571,9 @@ def download_wan_models() -> None:
 
 
 def download_minimax_models() -> None:
-    """Fetch the MiniMax H3 weights (~56 GB) — both MiniMax tabs share them.
+    """Fetch what every MiniMax H3 checkpoint shares (~35 GB) — both
+    MiniMax tabs share them. The checkpoint itself (~21 GB for the built-in
+    one) is a catalogue model, fetched by the "catalog" group.
 
     Every item is independent, the same posture as the Wan downloader: a
     missing file degrades only the two MiniMax tabs, which name what they
@@ -556,7 +581,7 @@ def download_minimax_models() -> None:
     download straight into place; the turbo LoRA sits at the root of
     lightx2v's repo and has to be placed under loras/ by hand.
     """
-    for relpath in MINIMAX_HF_FILES:
+    for relpath in _shared(MINIMAX_HF_FILES):
         try:
             fetch_hf_repo_file(MINIMAX_HF_REPO, relpath)
         except Exception as exc:

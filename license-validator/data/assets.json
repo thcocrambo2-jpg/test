@@ -4,7 +4,7 @@
     "Also the offline catalogue: POST /v1/catalog answers in this same shape, and the pod reads this file when EMBER_CATALOG_FILE points at it (dry runs and tests).",
     "ids are what presets and prompts store. Never change or reuse one.",
     "Each feature's lists are what its tab offers, in dropdown order; the first model is the default. An id may appear in any number of features.",
-    "A LoRA-only feature (minimax_i2v, minimax_t2v — src/assets.js LORA_ONLY_FEATURES) has an empty models list: its tab runs a fixed graph and offers LoRAs alone.",
+    "A feature with built-in models (minimax_i2v, minimax_t2v, wan_i2v — src/assets.js BUILTIN_MODEL_FEATURES) may have an empty models list: its tab then runs the built-in models the app carries (MINIMAX_BUILTIN_MODEL, WAN_BUILTIN_MODELS), whose ids the database records use.",
     "An empty loras list is allowed: the tab's LoRA stack then offers \"None\" alone until LoRAs are added to the list."
   ],
   "loras": [
@@ -940,6 +940,69 @@
       "turbo_lora": null,
       "trigger": "anime, anime coloring, anime screenshot",
       "enabled": true
+    },
+    {
+      "id": "minimax-h3-int8",
+      "name": "MiniMax H3 int8 (template default)",
+      "file": "minimax_h3_fl2va_pruned_int8_convrot.safetensors",
+      "source": {
+        "kind": "hf",
+        "repo": "Comfy-Org/MiniMax-H3",
+        "path": "diffusion_models/minimax_h3_fl2va_pruned_int8_convrot.safetensors"
+      },
+      "mirror": null,
+      "variant": "turbo",
+      "steps": 8,
+      "cfg": 1.0,
+      "turbo_lora": null,
+      "trigger": "",
+      "enabled": true
+    },
+    {
+      "id": "wan22-i2v-a14b-fp8",
+      "name": "Wan 2.2 14B two-expert fp8 (best quality, 16 fps)",
+      "file": "wan2.2_i2v_high_noise_14B_fp8_scaled.safetensors",
+      "source": {
+        "kind": "hf",
+        "repo": "Comfy-Org/Wan_2.2_ComfyUI_Repackaged",
+        "path": "split_files/diffusion_models/wan2.2_i2v_high_noise_14B_fp8_scaled.safetensors"
+      },
+      "mirror": null,
+      "variant": "turbo",
+      "steps": 4,
+      "cfg": 1.0,
+      "turbo_lora": null,
+      "trigger": "",
+      "arch": "14b",
+      "parts": {
+        "low": {
+          "file": "wan2.2_i2v_low_noise_14B_fp8_scaled.safetensors",
+          "source": {
+            "kind": "hf",
+            "repo": "Comfy-Org/Wan_2.2_ComfyUI_Repackaged",
+            "path": "split_files/diffusion_models/wan2.2_i2v_low_noise_14B_fp8_scaled.safetensors"
+          }
+        }
+      },
+      "enabled": true
+    },
+    {
+      "id": "wan22-ti2v-5b-fp16",
+      "name": "Wan 2.2 5B TI2V fp16 (lighter, 24 fps)",
+      "file": "wan2.2_ti2v_5B_fp16.safetensors",
+      "source": {
+        "kind": "hf",
+        "repo": "Comfy-Org/Wan_2.2_ComfyUI_Repackaged",
+        "path": "split_files/diffusion_models/wan2.2_ti2v_5B_fp16.safetensors"
+      },
+      "mirror": null,
+      "variant": "raw",
+      "steps": 20,
+      "cfg": 5.0,
+      "turbo_lora": null,
+      "trigger": "",
+      "arch": "5b",
+      "enabled": true
     }
   ],
   "features": {
@@ -1135,7 +1198,9 @@
       ]
     },
     "minimax_i2v": {
-      "models": [],
+      "models": [
+        "minimax-h3-int8"
+      ],
       "loras": [
         "hmnsfw-aio-v2-5",
         "vgna",
@@ -1154,7 +1219,9 @@
       ]
     },
     "minimax_t2v": {
-      "models": [],
+      "models": [
+        "minimax-h3-int8"
+      ],
       "loras": [
         "hmnsfw-aio-v2-5",
         "vgna",
@@ -1171,6 +1238,13 @@
         "vbvr-pro",
         "doggyside-mh3-v1-0"
       ]
+    },
+    "wan_i2v": {
+      "models": [
+        "wan22-i2v-a14b-fp8",
+        "wan22-ti2v-5b-fp16"
+      ],
+      "loras": []
     }
   }
 }

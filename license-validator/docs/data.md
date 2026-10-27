@@ -200,8 +200,8 @@ the same operation.
   created_at: ISODate, updated_at: ISODate }
 ```
 
-An empty `models` list is legal only for a LoRA-only feature — see
-[Catalogue data](catalogue-data.md). `npm run remove-feature` deletes a
+An empty `models` list is legal only for a feature with built-in models
+(MiniMax, Wan) — see [Catalogue data](catalogue-data.md). `npm run remove-feature` deletes a
 feature's `feature_assets` document along with its catalogue row; the
 `loras` and `models` records are shared and stay.
 

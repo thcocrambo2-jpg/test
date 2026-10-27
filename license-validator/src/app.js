@@ -58,7 +58,7 @@ import {
   emptyModelsProblem,
   featureProblem,
   idListProblems,
-  LORA_ONLY_FEATURES,
+  BUILTIN_MODEL_FEATURES,
   loraProblems,
   loraWire,
   modelProblems,
@@ -1686,9 +1686,10 @@ app.post(
 
     const { feature_assets } = await collections();
     // A feature's first write must say what it runs, or it would be
-    // created with the empty model list refused just above. A LoRA-only
-    // tab runs a fixed graph, so its empty model list is the right one.
-    if (lists.models === undefined && !LORA_ONLY_FEATURES.has(feature) &&
+    // created with the empty model list refused just above. A tab with
+    // built-in models (MiniMax, Wan) runs those when it lists none, so an
+    // empty model list is fine there.
+    if (lists.models === undefined && !BUILTIN_MODEL_FEATURES.has(feature) &&
         !(await feature_assets.findOne({ _id: feature }))) {
       return badRequest(
         res,

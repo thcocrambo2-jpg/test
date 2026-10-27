@@ -303,6 +303,16 @@ export function GenerateTab({ schema }: { schema: TabSchema }) {
         if (schema.fields.some((field) => field.name === 'prompt')) {
           next.prompt = swapTrigger(String(previous.prompt ?? ''), row, models)
         }
+        // The negative prompt follows the model, but only while it is the
+        // one the outgoing model brought: a negative somebody wrote stays.
+        const outgoing = models.find((candidate) => candidate.id === previous.model)
+        if (
+          row.negative !== undefined &&
+          outgoing?.negative !== undefined &&
+          previous.negative === outgoing.negative
+        ) {
+          next.negative = row.negative
+        }
         return next
       })
     },

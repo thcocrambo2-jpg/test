@@ -34,6 +34,7 @@ export type FieldColumn = 'left' | 'right'
  *  read in the same place as the control. */
 export interface FieldCondition {
   field: string
+  /** A list means any of them: Wan's Mode shows for every 14B model. */
   equals: unknown
 }
 
@@ -253,6 +254,10 @@ export interface ModelRow {
   available: boolean
   /** The markdown line shown under the Model dropdown. */
   info: string
+  /** The negative prompt picking this model switches the tab to — the
+   *  model's own, or the tab's default when it names none. Absent on a tab
+   *  with no Negative prompt box. */
+  negative?: string
 }
 
 /** Everything the forms need that is not a field: each feature's models, keyed
@@ -266,9 +271,9 @@ export interface AppCatalog {
     fiveB: Record<string, number>
     fps: number
     maxSeconds: number
-    /** The model whose radio has no turbo/raw split — the 5B has no
-     *  Lightning distillation, so Mode does not apply to it. */
-    modeless: string
+    /** The model ids Mode does not apply to — the 5Bs have no Lightning
+     *  distillation, so they have no turbo/raw split. */
+    modeless: string[]
     resolutions: Record<string, number>
   }
   resolutions: Record<string, number[]>

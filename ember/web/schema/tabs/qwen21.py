@@ -33,6 +33,7 @@ from ember.web.schema.fields import (
     _batch_field,
     _blank_slots,
     _model_field,
+    _model_negative,
     _model_setting,
     _preset_save_fields,
     _seed_fields,
@@ -81,7 +82,8 @@ QWEN21_REF_SCHEMA = TabSchema(
               "Late afternoon sun, candid 35 mm photo, shallow depth of "
               "field.",
               lines=5, group="prompt"),
-        Field("negative", "Negative prompt", "textarea", "", lines=3,
+        Field("negative", "Negative prompt", "textarea",
+              _model_negative(handlers.QWEN21_EDIT, ""), lines=3,
               group="prompt", collapsed=True, hint=_CFG_NOTE),
         Field("output_size", "Output size", "select",
               QWEN21_DEFAULT_OUTPUT_SIZE, choices=list(QWEN21_OUTPUT_SIZES),
@@ -138,7 +140,8 @@ QWEN21_T2I_SCHEMA = TabSchema(
               "noodle bar, rainy night, reflections on wet pavement, "
               "35 mm photo",
               lines=5, group="prompt"),
-        Field("negative", "Negative prompt", "textarea", "", lines=3,
+        Field("negative", "Negative prompt", "textarea",
+              _model_negative(handlers.QWEN21_T2I, ""), lines=3,
               group="prompt", collapsed=True, hint=_CFG_NOTE),
         Field("output_size", "Output size", "select",
               QWEN21_T2I_DEFAULT_SIZE, choices=list(QWEN21_T2I_SIZES),

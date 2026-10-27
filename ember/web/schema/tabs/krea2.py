@@ -25,6 +25,7 @@ from ember.web.schema.fields import (
     _batch_field,
     _blank_lora_tail,
     _model_field,
+    _model_negative,
     _model_setting,
     _reference_fields,
     _save_fields,
@@ -50,7 +51,8 @@ KREA2_SCHEMA = TabSchema(
         Field("prompt", "Prompt", "textarea",
               "A photorealistic golden-hour portrait, natural skin "
               "texture, shallow depth of field", lines=5, group="prompt"),
-        Field("negative", "Negative prompt", "textarea", "", lines=3,
+        Field("negative", "Negative prompt", "textarea",
+              _model_negative(handlers.KREA_T2I, ""), lines=3,
               group="prompt", collapsed=True, hint=_CFG_NOTE),
         *_seed_fields(),
         Field("steps", "Steps", "slider",
@@ -97,7 +99,8 @@ KREA2_EDIT_SCHEMA = TabSchema(
               "remove clothes exposing her naked average natural shaped "
               "tits. dont change her face",
               lines=5, group="prompt"),
-        Field("negative", "Negative prompt", "textarea", "", lines=3,
+        Field("negative", "Negative prompt", "textarea",
+              _model_negative(handlers.KREA_EDIT, ""), lines=3,
               group="prompt", collapsed=True, hint=_CFG_NOTE),
         *_seed_fields(),
         Field("steps", "Steps", "slider",

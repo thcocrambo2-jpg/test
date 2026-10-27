@@ -58,8 +58,9 @@ one.
 they share one preset list, filed under `minimax_i2v`. Both are
 generation tabs, so both read it and both have the save tickbox (without
 the publish one — there is no prompt library behind them). A MiniMax
-preset has **no `model`**: the licence server's `MODELLESS_TABS` accepts
-a blob without one for this tab, and refuses one that has one. A preset
+preset carries its `model`; ones saved before the tabs had a Model
+dropdown have none, which the licence server's `OPTIONAL_MODEL_TABS`
+accepts for this tab, and which leave the dropdown alone. A preset
 saved from T2V carries an aspect ratio that I2V skips. See
 [minimax.md](../pipelines/minimax.md#presets).
 

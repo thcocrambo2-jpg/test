@@ -12,7 +12,10 @@ Three collections, all keyed by a readable string id:
   `enabled` / `sort_order`.
 - `models` — one record per model *setting*: `file`, `source`, `mirror`,
   `variant`, `steps`, `cfg` and the `turbo_lora` its recipe switches on.
-  Two records may share a file.
+  Two records may share a file. Three optional fields: `arch` (which graph
+  it runs, where a feature has more than one — Wan's `14b` or `5b`),
+  `parts` (more files it needs, by role — Wan 14B's `low`-noise expert) and
+  `negative` (the negative prompt its tab switches to when it is picked).
 - `feature_assets` — per feature key, the ordered model ids and LoRA ids that
   tab's dropdowns hold. The first model is the tab's default. An id may sit in
   any number of features.
@@ -21,27 +24,73 @@ Three collections, all keyed by a readable string id:
 orphans every preset that names it. Fix a label with `name`, never with
 the id. To retire a record, switch it off.
 
-## LoRA-only features
+## Features with built-in models
 
-Not every tab has a Model dropdown. `LORA_ONLY_FEATURES` in
-[`../src/assets.js`](../src/assets.js) is the set of feature keys that
-offer LoRAs and no models:
+`BUILTIN_MODEL_FEATURES` in [`../src/assets.js`](../src/assets.js) is the
+set of feature keys whose `models` list may be empty:
 
 ```js
-export const LORA_ONLY_FEATURES = new Set(["minimax_i2v", "minimax_t2v"]);
+export const BUILTIN_MODEL_FEATURES = new Set(["minimax_i2v", "minimax_t2v", "wan_i2v"]);
 ```
 
-The MiniMax tabs run one fixed graph over one fixed set of weights, named
-in [`../../ember/pipelines/minimax/constants.py`](../../ember/pipelines/minimax/constants.py),
-and stack LoRAs on top of it. An empty `models` list is what those tabs
-*are*, not a tab with nothing to run.
+The MiniMax and Wan tabs ran fixed weights before their models were
+catalogue entries, and the app still carries those as built-in records
+(`MINIMAX_BUILTIN_MODEL` and `WAN_BUILTIN_MODELS` in each pipeline's
+`constants.py`). A pod runs them whenever the catalogue lists no model for
+the feature, so an empty `models` list there is a working tab, not one
+with nothing to run. The database records use the built-in ids, so
+listing them changes nothing about what saved settings mean:
+
+| Feature | Built-in model ids |
+|---|---|
+| `minimax_i2v`, `minimax_t2v` | `minimax-h3-int8` |
+| `wan_i2v` | `wan22-i2v-a14b-fp8` (`arch` `14b`, `parts.low`), `wan22-ti2v-5b-fp16` (`arch` `5b`) |
+
+Once a feature lists any model, it offers exactly its list, in order, and
+the first is the default. So listing a second checkpoint means listing the
+built-in one too, if it should stay on offer.
 
 `emptyModelsProblem(feature, list)`, in the same module, is the rule that
 encodes it: an empty `models` array is an error for any other feature and
-fine for these two. A missing or malformed list is not its business —
+fine for these three. A missing or malformed list is not its business —
 `idListProblems()` reports that. Every path that can set a feature's model
 list goes through it: `POST /v1/admin/feature-assets`, `npm run assets`
 and `npm run seed-assets`.
+
+## Adding a MiniMax or Wan checkpoint
+
+Each checkpoint is a `models` record. Every H3 checkpoint runs the same
+graph with the same text encoder, VAEs and turbo LoRA, so a MiniMax record
+is just its file:
+
+```js
+{ _id: "minimax-h3-bf16", name: "MiniMax H3 bf16",
+  file: "minimax_h3_fl2va_pruned_bf16.safetensors",
+  source: { kind: "hf", repo: "Comfy-Org/MiniMax-H3",
+            path: "diffusion_models/minimax_h3_fl2va_pruned_bf16.safetensors" },
+  variant: "turbo", steps: 8, cfg: 1 }
+```
+
+A Wan record says which graph it runs. A 14B is two experts — `file` is
+the high-noise one and `parts.low` the low-noise one; a 5B is one file:
+
+```js
+{ _id: "wan22-i2v-a14b-other", name: "Wan 2.2 14B (another build)",
+  file: "…high_noise….safetensors", source: { kind: "hf", repo, path },
+  parts: { low: { file: "…low_noise….safetensors", source: { kind: "hf", repo, path } } },
+  arch: "14b", variant: "turbo", steps: 4, cfg: 1 }
+```
+
+Then list it, keeping the built-in record first if it should stay the
+default:
+
+```bash
+npm run assets -- --feature minimax_i2v --add-model minimax-h3-bf16
+npm run assets -- --feature minimax_t2v --add-model minimax-h3-bf16
+```
+
+The pod downloads every model its enabled features list, parts included,
+at its next start, and the tab's Model dropdown offers it.
 
 ## Ember Lite's lists
 

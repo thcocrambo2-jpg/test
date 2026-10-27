@@ -45,21 +45,27 @@ from ember.pipelines.wan.constants import (
 RIFE_NODE = WAN_RIFE_NODES[2]
 
 
-def wan_models_available() -> bool:
-    """True once every file the 14B I2V workflow needs has been downloaded."""
+def wan_models_available(high: str = WAN_HIGH_UNET,
+                         low: str = WAN_LOW_UNET) -> bool:
+    """True once every file the 14B I2V workflow needs has been downloaded.
+
+    `high` and `low` are a 14B checkpoint's two experts — a catalogue
+    model's `file` and its `parts["low"]`."""
     required = [
-        MODELS_DIR / "diffusion_models" / WAN_HIGH_UNET,
-        MODELS_DIR / "diffusion_models" / WAN_LOW_UNET,
+        MODELS_DIR / "diffusion_models" / high,
+        MODELS_DIR / "diffusion_models" / low,
         MODELS_DIR / "text_encoders" / WAN_TEXT_ENCODER,
         MODELS_DIR / "vae" / WAN_VAE,
     ]
     return all(p.exists() for p in required)
 
 
-def wan_5b_available() -> bool:
-    """True once every file the 5B TI2V workflow needs has been downloaded."""
+def wan_5b_available(unet: str = WAN_5B_UNET) -> bool:
+    """True once every file the 5B TI2V workflow needs has been downloaded.
+
+    `unet` is a 5B checkpoint's file — a catalogue model's `file`."""
     required = [
-        MODELS_DIR / "diffusion_models" / WAN_5B_UNET,
+        MODELS_DIR / "diffusion_models" / unet,
         MODELS_DIR / "text_encoders" / WAN_TEXT_ENCODER,
         MODELS_DIR / "vae" / WAN_5B_VAE,
     ]
@@ -119,6 +125,8 @@ def build_wan_i2v_workflow(
     interpolate: bool = False,
     image_name: str,
     filename_prefix: str = "wan/Wan22I2V",
+    unet_high: str = WAN_HIGH_UNET,
+    unet_low: str = WAN_LOW_UNET,
 ) -> dict:
     """Build a Wan 2.2 I2V A14B workflow in ComfyUI API format.
 
@@ -129,16 +137,17 @@ def build_wan_i2v_workflow(
     fps, the training length). The two experts swap at steps // 2, the
     split the official template uses for both the 4- and 20-step
     schedules. `interpolate` runs RIFE at WAN_RIFE_MULTIPLIER, so the clip
-    is saved at 64 fps.
+    is saved at 64 fps. `unet_high` and `unet_low` are the chosen 14B
+    checkpoint's two experts.
     """
     wf = {
         "unet_high": {
             "class_type": "UNETLoader",
-            "inputs": {"unet_name": WAN_HIGH_UNET, "weight_dtype": "default"},
+            "inputs": {"unet_name": unet_high, "weight_dtype": "default"},
         },
         "unet_low": {
             "class_type": "UNETLoader",
-            "inputs": {"unet_name": WAN_LOW_UNET, "weight_dtype": "default"},
+            "inputs": {"unet_name": unet_low, "weight_dtype": "default"},
         },
         "clip": {
             "class_type": "CLIPLoader",
@@ -268,6 +277,7 @@ def build_wan_5b_workflow(
     interpolate: bool = False,
     image_name: str,
     filename_prefix: str = "wan/Wan22TI2V5B",
+    unet: str = WAN_5B_UNET,
 ) -> dict:
     """Build a Wan 2.2 TI2V 5B image-to-video workflow (ComfyUI API format).
 
@@ -278,12 +288,13 @@ def build_wan_5b_workflow(
     — width/height must be multiples of 32) and runs at 24 fps; 121
     frames ≈ 5 s. There is no Lightning distillation for this model, so
     there is no turbo/raw split. `interpolate` runs RIFE at
-    WAN_5B_RIFE_MULTIPLIER, so the clip is saved at 48 fps.
+    WAN_5B_RIFE_MULTIPLIER, so the clip is saved at 48 fps. `unet` is the
+    chosen 5B checkpoint's file.
     """
     wf = {
         "unet": {
             "class_type": "UNETLoader",
-            "inputs": {"unet_name": WAN_5B_UNET, "weight_dtype": "default"},
+            "inputs": {"unet_name": unet, "weight_dtype": "default"},
         },
         "clip": {
             "class_type": "CLIPLoader",

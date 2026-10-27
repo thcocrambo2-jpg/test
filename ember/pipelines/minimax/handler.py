@@ -12,6 +12,7 @@ from ember.generation.loras import (
 )
 from ember.generation.runner import _png_bytes, _run_tag, _run_wan_jobs
 from ember.licensing import presets
+from ember.pipelines.common import resolve_model
 from ember.pipelines.minimax.constants import MINIMAX_FPS
 from ember.pipelines.minimax.workflow import (
     aspect_size as minimax_aspect_size,
@@ -25,26 +26,37 @@ from ember.pipelines.minimax.workflow import (
 )
 
 
-def _minimax_note() -> str | None:
-    """Why MiniMax cannot run yet, or None when every weight is on disk."""
-    if minimax_models_available():
-        return None
-    return ("❌ The MiniMax H3 weights are not downloaded yet (missing: %s) — "
-            "restart the app so the download step can fetch them."
-            % ", ".join(minimax_missing()))
+def _minimax_model(feature, model_id):
+    """(model record, why it cannot run or None) for the Model value.
+
+    resolve_model falls back to the feature's first model for an id it
+    does not list, so there is always a record here: the catalogue's, or
+    the built-in one when the catalogue lists none (catalog.py).
+    """
+    model = resolve_model(feature, model_id)
+    if model is None:                       # cannot happen: there is a built-in
+        return None, ("❌ No MiniMax model is configured — restart the app "
+                      "once the licence server can be reached.")
+    if minimax_models_available(model.file):
+        return model, None
+    return model, ("❌ The MiniMax H3 weights for “%s” are not downloaded yet "
+                   "(missing: %s) — restart the app so the download step can "
+                   "fetch them."
+                   % (model.name, ", ".join(minimax_missing(model.file))))
 
 
-def _minimax_settings(seed, randomize, steps, resolution, seconds, sampler,
-                      batch_count, lora_slots, aspect=None) -> dict:
+def _minimax_settings(model, seed, randomize, steps, resolution, seconds,
+                      sampler, batch_count, lora_slots, aspect=None) -> dict:
     """The MiniMax tabs' controls as a preset stores them.
 
-    The UI values, LoRA ids and all — the same shape as _krea_settings,
-    minus the model (these tabs have no Model control) and plus the clip
-    length. `aspect` only on the text tab, the one control the two tabs do
-    not share; the image tab skips it when it applies a preset.
-    scripts/golden.py checks this against tabschema's settings().
+    The UI values, model and LoRA ids and all — the same shape as
+    _krea_settings, plus the clip length. `aspect` only on the text tab,
+    the one control the two tabs do not share; the image tab skips it when
+    it applies a preset. scripts/golden.py checks this against tabschema's
+    settings().
     """
     settings = {
+        "model": model,
         "steps": int(steps),
         "resolution": resolution,
         "seconds": int(round(float(seconds))),
@@ -62,7 +74,8 @@ def _minimax_settings(seed, randomize, steps, resolution, seconds, sampler,
 
 
 def _minimax_jobs(*, prompt, base_seed, steps, width, height, seconds,
-                  sampler, batch_count, prefix, loras, image_name=None) -> list:
+                  sampler, batch_count, prefix, loras, unet,
+                  image_name=None) -> list:
     """The per-clip job dicts both MiniMax tabs hand to _run_wan_jobs.
 
     One function because the two tabs differ in exactly one key —
@@ -75,27 +88,28 @@ def _minimax_jobs(*, prompt, base_seed, steps, width, height, seconds,
         "width": width, "height": height,
         "length": minimax_frames(seconds), "fps": MINIMAX_FPS,
         "sampler": sampler, "image_name": image_name, "loras": loras,
+        "unet": unet,
         # Clips land in minimax/, a subfolder with a counter of its own to
         # be knocked backwards — see _run_tag.
         "filename_prefix": f"minimax/{prefix}_{_run_tag()}",
     } for i in range(int(batch_count))]
 
 
-def generate_minimax_video(image, prompt, seed, randomize, steps, resolution,
-                           seconds, sampler, batch_count, save_preset,
-                           preset_name, *lora_slots):
+def generate_minimax_video(image, prompt, model, seed, randomize, steps,
+                           resolution, seconds, sampler, batch_count,
+                           save_preset, preset_name, *lora_slots):
     """MiniMax I2V tab: animate an uploaded image into a clip with sound."""
     if image is None:
         yield [], None, "❌ Upload an image first.", 0
         return
-    note = _minimax_note()
+    entry, note = _minimax_model(MINIMAX_I2V, model)
     if note:
         yield [], None, note, 0
         return
     notice = _save_preset(presets.TAB_MINIMAX, save_preset, preset_name,
-                          _minimax_settings(seed, randomize, steps, resolution,
-                                            seconds, sampler, batch_count,
-                                            lora_slots))
+                          _minimax_settings(entry.id, seed, randomize, steps,
+                                            resolution, seconds, sampler,
+                                            batch_count, lora_slots))
     image = image.convert("RGB")
     width, height = minimax_resolve_size(*image.size, resolution)
     if minimax_matches_image(resolution):
@@ -119,29 +133,30 @@ def generate_minimax_video(image, prompt, seed, randomize, steps, resolution,
     jobs = _minimax_jobs(prompt=prompt, base_seed=base_seed, steps=steps,
                          width=width, height=height, seconds=seconds,
                          sampler=sampler, batch_count=batch_count,
-                         prefix="MiniMaxI2V", loras=loras,
+                         prefix="MiniMaxI2V", loras=loras, unet=entry.file,
                          image_name=image_name)
     for videos, latest, status in _run_wan_jobs(
             jobs, builder=build_minimax_video_workflow, comfy_client=client):
         yield videos, latest, notice + status, base_seed
 
 
-def generate_minimax_t2v(prompt, aspect, seed, randomize, steps, resolution,
-                         seconds, sampler, batch_count, save_preset,
-                         preset_name, *lora_slots):
+def generate_minimax_t2v(prompt, model, aspect, seed, randomize, steps,
+                         resolution, seconds, sampler, batch_count,
+                         save_preset, preset_name, *lora_slots):
     """MiniMax T2V tab: a clip with sound from the prompt alone."""
     if not (prompt or "").strip():
         yield [], None, ("❌ Write a prompt first — there is no image for "
                          "this tab to go on."), 0
         return
-    note = _minimax_note()
+    entry, note = _minimax_model(MINIMAX_T2V, model)
     if note:
         yield [], None, note, 0
         return
     notice = _save_preset(presets.TAB_MINIMAX, save_preset, preset_name,
-                          _minimax_settings(seed, randomize, steps, resolution,
-                                            seconds, sampler, batch_count,
-                                            lora_slots, aspect=aspect))
+                          _minimax_settings(entry.id, seed, randomize, steps,
+                                            resolution, seconds, sampler,
+                                            batch_count, lora_slots,
+                                            aspect=aspect))
     width, height = minimax_aspect_size(aspect, resolution)
     base_seed = random.randint(0, 2**32 - 1) if randomize else int(seed)
     loras, skipped = _resolve_lora_slots(MINIMAX_T2V, lora_slots)
@@ -149,7 +164,7 @@ def generate_minimax_t2v(prompt, aspect, seed, randomize, steps, resolution,
     jobs = _minimax_jobs(prompt=prompt, base_seed=base_seed, steps=steps,
                          width=width, height=height, seconds=seconds,
                          sampler=sampler, batch_count=batch_count,
-                         prefix="MiniMaxT2V", loras=loras)
+                         prefix="MiniMaxT2V", loras=loras, unet=entry.file)
     for videos, latest, status in _run_wan_jobs(
             jobs, builder=build_minimax_video_workflow, comfy_client=client):
         yield videos, latest, notice + status, base_seed

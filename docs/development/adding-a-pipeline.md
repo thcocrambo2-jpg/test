@@ -113,8 +113,9 @@ then re-seeded into the licence database. The database is the source of
 truth; the JSON is the seed document, and it is also what
 `check_schema.py` reads when `EMBER_CATALOG_FILE` is unset.
 
-**If the tab has LoRAs but no models**, add its key to
-`LORA_ONLY_FEATURES` in
+**If the tab should run before the database lists a model for it**, give
+it built-in models (as MiniMax and Wan do, in their `constants.py`, wired
+into `catalog._builtin()`) and add its key to `BUILTIN_MODEL_FEATURES` in
 [`license-validator/src/assets.js`](../../license-validator/src/assets.js).
 Otherwise `emptyModelsProblem()` refuses the empty `models` list — the
 default rule is that a tab needs at least one model, and the first one in
@@ -186,7 +187,9 @@ and they land on the touch points cleanly enough to read as a map.
 
 **`4994d9a` — "Let the MiniMax tabs carry a LoRA list with no models"**
 is the licence server alone. Both MiniMax keys go into
-`LORA_ONLY_FEATURES`; `emptyModelsProblem()` learns to skip them; the
+`LORA_ONLY_FEATURES` (since renamed `BUILTIN_MODEL_FEATURES`, when the
+tabs' models became catalogue records); `emptyModelsProblem()` learns to
+skip them; the
 seed document gains the LoRA records and the two features' lists; the
 validation in `app.js` and the seeding scripts follow. Nothing in the app
 changed, and nothing could have, because the server has to be able to

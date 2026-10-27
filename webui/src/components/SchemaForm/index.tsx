@@ -53,7 +53,9 @@ export interface SchemaFormProps {
 /** Whether a field's `showIf` is satisfied. */
 function visible(field: Field, values: Record<string, unknown>): boolean {
   if (!field.showIf) return true
-  return values[field.showIf.field] === field.showIf.equals
+  const { equals } = field.showIf
+  const held = values[field.showIf.field]
+  return Array.isArray(equals) ? equals.includes(held) : held === equals
 }
 
 export function SchemaForm({

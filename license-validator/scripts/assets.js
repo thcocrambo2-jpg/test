@@ -45,7 +45,7 @@ import {
   featureProblem,
   idListProblems,
   idProblem,
-  LORA_ONLY_FEATURES,
+  BUILTIN_MODEL_FEATURES,
   loraProblems,
   modelProblems,
 } from "../src/assets.js";
@@ -244,10 +244,11 @@ for (const [flag, field, collection, what, adding] of listEdits) {
   if (badKey) die(badKey);
 
   const doc = await feature_assets.findOne({ _id: feature });
-  if (!doc && field === "loras" && !LORA_ONLY_FEATURES.has(feature)) {
+  if (!doc && field === "loras" && !BUILTIN_MODEL_FEATURES.has(feature)) {
     // Creating it with LoRAs alone would leave it with no model, which is
     // a tab with nothing to run. A feature starts with its default model —
-    // unless it is a LoRA-only tab, whose graph is fixed.
+    // unless it is a tab with built-in models (MiniMax, Wan), which runs
+    // those when it lists none.
     die(`${feature} has no lists yet — --add-model its default model first`);
   }
   const current = [...(doc?.[field] || [])];

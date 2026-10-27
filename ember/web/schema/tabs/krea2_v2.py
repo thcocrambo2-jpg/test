@@ -24,6 +24,7 @@ from ember.web.schema.fields import (
     _CFG_NOTE,
     _batch_field,
     _model_field,
+    _model_negative,
     _save_fields,
     _seed_fields,
     _stack_slots,
@@ -56,7 +57,8 @@ KREA2_V2_SCHEMA = TabSchema(
         Field("prompt", "Prompt", "textarea", "", lines=5,
               group="prompt"),
         Field("negative", "Negative prompt", "textarea",
-              V2_DEFAULT_NEGATIVE, lines=3, group="prompt",
+              _model_negative(handlers.KREA_V2_T2I, V2_DEFAULT_NEGATIVE),
+              lines=3, group="prompt",
               collapsed=True, hint=_CFG_NOTE),
         # The seed the source workflow shipped with, kept as-is.
         *_seed_fields(default=370102505887178),

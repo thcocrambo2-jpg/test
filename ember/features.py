@@ -168,12 +168,14 @@ FEATURES = (
     # catalogue record, like Z-Image's, and so are its LoRAs.
     Feature(Key.QWEN21_EDIT, "🧩 Qwen 2.1 Reference",
             needs=("qwen21", "catalog")),
-    Feature(Key.WAN_I2V, "🎬 Wan Video", needs=("wan",)),
+    # "catalog" for its checkpoints, which are catalogue models — the
+    # built-in pair when the licence server lists none (catalog.py).
+    Feature(Key.WAN_I2V, "🎬 Wan Video", needs=("wan", "catalog")),
     # Two tabs, one graph, one download. The core MiniMax node takes an
     # optional first frame, so text-to-video is image-to-video without the
     # upload — sold as two features, but the weights they need are the same
     # ~56 GB, which is why both name the one group. "catalog" is for their
-    # LoRA lists, fetched per tab like the Krea tabs'.
+    # checkpoints and LoRA lists, fetched per tab like the Krea tabs'.
     Feature(Key.MINIMAX_I2V, "🎥 MiniMax I2V",
             needs=("minimax", "catalog")),
     Feature(Key.MINIMAX_T2V, "🎞️ MiniMax T2V",
