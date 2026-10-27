@@ -47,6 +47,7 @@ import time
 from dataclasses import dataclass
 
 from ember import features
+from ember.licensing import catalog
 from ember.licensing import server
 from ember.logs import log
 from ember.settings import LICENSE_API_URL, LICENSE_KEY
@@ -136,6 +137,36 @@ class Catalogue:
     def for_tab(self, tab: str) -> tuple[Preset, ...]:
         """This tab's presets, in the order the server sorted them."""
         return tuple(row for row in self.presets if row.tab == tab)
+
+    def offered(self, tab: str) -> tuple[Preset, ...]:
+        """This tab's presets that can run here: `for_tab`, less every one
+        naming a model this pod's catalogue does not offer for the tab.
+
+        A preset for a model switched off in the database (or not listed
+        for the feature) would load its LoRAs and steps over whatever model
+        the tab is on, so it is not offered at all. A preset that names no
+        model (MiniMax ones saved before the Model dropdown) runs on any.
+        """
+        ids = {model.id for model in catalog.feature_models(tab)}
+        return tuple(row for row in self.for_tab(tab)
+                     if not isinstance(row.settings.get("model"), str)
+                     or row.settings["model"] in ids)
+
+    def default_for(self, tab: str) -> Preset | None:
+        """The preset a tab starts on, among `offered`.
+
+        The default flag is one per model (the licence server's
+        setDefault), so a tab offering two models can hold two flagged
+        presets: the one for the tab's default model — the first in its
+        catalogue list — wins. With that model's preset switched off or its
+        model gone, any other flagged preset still on offer; else none.
+        """
+        rows = [row for row in self.offered(tab) if row.is_default]
+        models = catalog.feature_models(tab)
+        first = models[0].id if models else None
+        return (next((row for row in rows
+                      if row.settings.get("model") == first), None)
+                or (rows[0] if rows else None))
 
 
 # ── Read ───────────────────────────────────────────────────────────────

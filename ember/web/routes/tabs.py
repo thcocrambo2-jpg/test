@@ -212,7 +212,7 @@ def _preset_settings(tab, name):
     """One preset's settings blob by name, or None if it is not on offer."""
     if not tab or not name:
         return None
-    for row in presets.catalogue().for_tab(tab):
+    for row in presets.catalogue().offered(tab):
         if row.name == name:
             return row.settings
     return None

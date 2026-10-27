@@ -12,10 +12,14 @@ Three collections, all keyed by a readable string id:
   `enabled` / `sort_order`.
 - `models` — one record per model *setting*: `file`, `source`, `mirror`,
   `variant`, `steps`, `cfg` and the `turbo_lora` its recipe switches on.
-  Two records may share a file. Three optional fields: `arch` (which graph
+  Two records may share a file. Optional fields: `arch` (which graph
   it runs, where a feature has more than one — Wan's `14b` or `5b`),
-  `parts` (more files it needs, by role — Wan 14B's `low`-noise expert) and
-  `negative` (the negative prompt its tab switches to when it is picked).
+  `parts` (more files it needs, by role — Wan 14B's `low`-noise expert),
+  `negative` (the negative prompt its tab switches to when it is picked),
+  and the sampling its tab switches to — `sampler`, `scheduler` (ComfyUI
+  names, `""` for the tab's own), `shift` (`{video, audio}` or null) and
+  `turbo_strength` (a number ≥ 0 or null). Only the MiniMax tabs read the
+  last four today.
 - `feature_assets` — per feature key, the ordered model ids and LoRA ids that
   tab's dropdowns hold. The first model is the tab's default. An id may sit in
   any number of features.
@@ -60,8 +64,8 @@ and `npm run seed-assets`.
 ## Adding a MiniMax or Wan checkpoint
 
 Each checkpoint is a `models` record. Every H3 checkpoint runs the same
-graph with the same text encoder, VAEs and turbo LoRA, so a MiniMax record
-is just its file:
+graph with the same text encoder and VAEs, so a MiniMax record is just its
+file — plus its recipe, when it is not the template's:
 
 ```js
 { _id: "minimax-h3-bf16", name: "MiniMax H3 bf16",
@@ -69,6 +73,19 @@ is just its file:
   source: { kind: "hf", repo: "Comfy-Org/MiniMax-H3",
             path: "diffusion_models/minimax_h3_fl2va_pruned_bf16.safetensors" },
   variant: "turbo", steps: 8, cfg: 1 }
+```
+
+A checkpoint with turbo merged in turns the tabs' turbo LoRA off and
+names the sampling it wants; the tabs fill in euler, simple, 12/3 and 0.8
+for whatever it leaves out:
+
+```js
+{ _id: "eros-max-beta5", name: "H3 Eros Max beta5 turbo-hybrid int8",
+  file: "10Eros_Max_h3_TURBO-hybrid_beta5_int8.safetensors",
+  source: { kind: "hf", repo: "TenStrip/10Eros-Max",
+            path: "10Eros_Max_h3_TURBO-hybrid_beta5_int8.safetensors" },
+  variant: "turbo", steps: 6, cfg: 1,
+  sampler: "lcm", scheduler: "simple", turbo_strength: 0 }
 ```
 
 A Wan record says which graph it runs. A 14B is two experts — `file` is

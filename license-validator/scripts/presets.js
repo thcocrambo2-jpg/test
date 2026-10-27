@@ -41,7 +41,7 @@ import { readFileSync } from "node:fs";
 import { ObjectId } from "mongodb";
 
 import { collections, ensureIndexes } from "../src/db.js";
-import { checkSettings } from "../src/assets.js";
+import { checkSettings, defaultScope } from "../src/assets.js";
 
 const PRESET_TABS = [
   "krea_t2i", "krea_v2_t2i", "minimax_i2v", "zimage_t2i", "qwen21_edit",
@@ -216,11 +216,9 @@ if (opts.enable || opts.disable) {
 
 if (opts.default) {
   const row = await target(opts.default, "--default");
-  // A property of the tab, so setting it here clears it everywhere else.
-  await presets.updateMany(
-    { tab: row.tab, _id: { $ne: row._id } },
-    { $set: { is_default: false } },
-  );
+  // A property of the tab and model, so setting it here clears it on the
+  // tab's other presets for the same model (assets.defaultScope).
+  await presets.updateMany(defaultScope(row), { $set: { is_default: false } });
   await presets.updateOne({ _id: row._id }, { $set: { is_default: true } });
   if (row.enabled !== true) {
     console.log("  ⚠️  this preset is disabled — --enable it to have any effect");

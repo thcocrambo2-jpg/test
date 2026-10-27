@@ -12,8 +12,11 @@ from ember.generation.loras import (
 )
 from ember.generation.runner import _png_bytes, _run_tag, _run_wan_jobs
 from ember.licensing import presets
-from ember.pipelines.common import resolve_model
-from ember.pipelines.minimax.constants import MINIMAX_FPS
+from ember.pipelines.common import model_file_available, resolve_model
+from ember.pipelines.minimax.constants import (
+    MINIMAX_FPS,
+    MINIMAX_SAMPLING_DEFAULTS,
+)
 from ember.pipelines.minimax.workflow import (
     aspect_size as minimax_aspect_size,
     build_minimax_video_workflow,
@@ -22,8 +25,26 @@ from ember.pipelines.minimax.workflow import (
     matches_image as minimax_matches_image,
     minimax_missing,
     minimax_models_available,
+    model_defaults as minimax_model_defaults,
     resolve_size as minimax_resolve_size,
 )
+
+
+def _minimax_model_info_text(entry) -> str:
+    """The line under a MiniMax tab's Model dropdown: its recipe."""
+    d = minimax_model_defaults(entry)
+    info = f"defaults: {d['steps']} steps, {d['sampler']} / {d['scheduler']}"
+    if d["turbo_strength"] > 0:
+        info += f" · turbo LoRA {d['turbo_strength']:g}"
+    else:
+        info += " · turbo merged in, so the turbo LoRA is off"
+    if (d["shift_video"], d["shift_audio"]) != (
+            MINIMAX_SAMPLING_DEFAULTS["shift_video"],
+            MINIMAX_SAMPLING_DEFAULTS["shift_audio"]):
+        info += f" · shift {d['shift_video']:g} / {d['shift_audio']:g}"
+    if not model_file_available(entry):
+        info += " · ⚠️ **not downloaded yet** — restart the app to fetch it"
+    return info
 
 
 def _minimax_model(feature, model_id):
@@ -46,7 +67,9 @@ def _minimax_model(feature, model_id):
 
 
 def _minimax_settings(model, seed, randomize, steps, resolution, seconds,
-                      sampler, batch_count, lora_slots, aspect=None) -> dict:
+                      sampler, scheduler, shift_video, shift_audio,
+                      turbo_strength, batch_count, lora_slots,
+                      aspect=None) -> dict:
     """The MiniMax tabs' controls as a preset stores them.
 
     The UI values, model and LoRA ids and all — the same shape as
@@ -61,6 +84,10 @@ def _minimax_settings(model, seed, randomize, steps, resolution, seconds,
         "resolution": resolution,
         "seconds": int(round(float(seconds))),
         "sampler": sampler,
+        "scheduler": scheduler,
+        "shift_video": float(shift_video),
+        "shift_audio": float(shift_audio),
+        "turbo_strength": float(turbo_strength),
         "seed": int(seed or 0),
         "randomize": bool(randomize),
         "batch_count": int(batch_count),
@@ -74,7 +101,8 @@ def _minimax_settings(model, seed, randomize, steps, resolution, seconds,
 
 
 def _minimax_jobs(*, prompt, base_seed, steps, width, height, seconds,
-                  sampler, batch_count, prefix, loras, unet,
+                  sampler, scheduler, shift_video, shift_audio,
+                  turbo_strength, batch_count, prefix, loras, unet,
                   image_name=None) -> list:
     """The per-clip job dicts both MiniMax tabs hand to _run_wan_jobs.
 
@@ -87,7 +115,10 @@ def _minimax_jobs(*, prompt, base_seed, steps, width, height, seconds,
         "prompt": prompt or "", "seed": base_seed + i, "steps": int(steps),
         "width": width, "height": height,
         "length": minimax_frames(seconds), "fps": MINIMAX_FPS,
-        "sampler": sampler, "image_name": image_name, "loras": loras,
+        "sampler": sampler, "scheduler": scheduler,
+        "shift_video": float(shift_video), "shift_audio": float(shift_audio),
+        "turbo_strength": float(turbo_strength),
+        "image_name": image_name, "loras": loras,
         "unet": unet,
         # Clips land in minimax/, a subfolder with a counter of its own to
         # be knocked backwards — see _run_tag.
@@ -96,8 +127,10 @@ def _minimax_jobs(*, prompt, base_seed, steps, width, height, seconds,
 
 
 def generate_minimax_video(image, prompt, model, seed, randomize, steps,
-                           resolution, seconds, sampler, batch_count,
-                           save_preset, preset_name, *lora_slots):
+                           resolution, seconds, sampler, scheduler,
+                           shift_video, shift_audio, turbo_strength,
+                           batch_count, save_preset, preset_name,
+                           *lora_slots):
     """MiniMax I2V tab: animate an uploaded image into a clip with sound."""
     if image is None:
         yield [], None, "❌ Upload an image first.", 0
@@ -109,6 +142,8 @@ def generate_minimax_video(image, prompt, model, seed, randomize, steps,
     notice = _save_preset(presets.TAB_MINIMAX, save_preset, preset_name,
                           _minimax_settings(entry.id, seed, randomize, steps,
                                             resolution, seconds, sampler,
+                                            scheduler, shift_video,
+                                            shift_audio, turbo_strength,
                                             batch_count, lora_slots))
     image = image.convert("RGB")
     width, height = minimax_resolve_size(*image.size, resolution)
@@ -132,7 +167,10 @@ def generate_minimax_video(image, prompt, model, seed, randomize, steps,
     notice += _skipped_note(skipped)
     jobs = _minimax_jobs(prompt=prompt, base_seed=base_seed, steps=steps,
                          width=width, height=height, seconds=seconds,
-                         sampler=sampler, batch_count=batch_count,
+                         sampler=sampler, scheduler=scheduler,
+                         shift_video=shift_video, shift_audio=shift_audio,
+                         turbo_strength=turbo_strength,
+                         batch_count=batch_count,
                          prefix="MiniMaxI2V", loras=loras, unet=entry.file,
                          image_name=image_name)
     for videos, latest, status in _run_wan_jobs(
@@ -141,8 +179,10 @@ def generate_minimax_video(image, prompt, model, seed, randomize, steps,
 
 
 def generate_minimax_t2v(prompt, model, aspect, seed, randomize, steps,
-                         resolution, seconds, sampler, batch_count,
-                         save_preset, preset_name, *lora_slots):
+                         resolution, seconds, sampler, scheduler,
+                         shift_video, shift_audio, turbo_strength,
+                         batch_count, save_preset, preset_name,
+                         *lora_slots):
     """MiniMax T2V tab: a clip with sound from the prompt alone."""
     if not (prompt or "").strip():
         yield [], None, ("❌ Write a prompt first — there is no image for "
@@ -155,6 +195,8 @@ def generate_minimax_t2v(prompt, model, aspect, seed, randomize, steps,
     notice = _save_preset(presets.TAB_MINIMAX, save_preset, preset_name,
                           _minimax_settings(entry.id, seed, randomize, steps,
                                             resolution, seconds, sampler,
+                                            scheduler, shift_video,
+                                            shift_audio, turbo_strength,
                                             batch_count, lora_slots,
                                             aspect=aspect))
     width, height = minimax_aspect_size(aspect, resolution)
@@ -163,7 +205,10 @@ def generate_minimax_t2v(prompt, model, aspect, seed, randomize, steps,
     notice += _skipped_note(skipped)
     jobs = _minimax_jobs(prompt=prompt, base_seed=base_seed, steps=steps,
                          width=width, height=height, seconds=seconds,
-                         sampler=sampler, batch_count=batch_count,
+                         sampler=sampler, scheduler=scheduler,
+                         shift_video=shift_video, shift_audio=shift_audio,
+                         turbo_strength=turbo_strength,
+                         batch_count=batch_count,
                          prefix="MiniMaxT2V", loras=loras, unet=entry.file)
     for videos, latest, status in _run_wan_jobs(
             jobs, builder=build_minimax_video_workflow, comfy_client=client):

@@ -96,6 +96,10 @@ from ember.pipelines.krea2.constants import (
 from ember.pipelines.krea2 import handler as krea2
 from ember.pipelines.krea2_v2.constants import V2_ASPECT_RATIOS
 from ember.pipelines.krea2_v2 import handler as krea2_v2
+from ember.pipelines.minimax import handler as minimax
+from ember.pipelines.minimax.workflow import (
+    model_defaults as minimax_model_defaults,
+)
 from ember.pipelines.krea2_v2.workflow import (
     model_defaults as v2_model_defaults,
 )
@@ -205,20 +209,28 @@ _SIZE_FROM_IMAGE = {
 # The V2 family's rows carry one more default than the Krea2 family's:
 # whether the model's recipe switches its turbo LoRA on.
 _V2_FEATURES = (handlers.KREA_V2_T2I, handlers.KREA_V2_EDIT)
+# The MiniMax rows carry their Sampling controls too (sampler, scheduler,
+# shift, turbo strength): a checkpoint with turbo merged in runs a recipe
+# of its own, and the browser deals a row's defaults into the controls of
+# the same name when the model is picked.
+_MINIMAX_FEATURES = (handlers.MINIMAX_I2V, handlers.MINIMAX_T2V)
 
 
 def _model_rows(feature):
     """One feature's model list, flattened for the browser.
 
-    `defaults` is (steps, cfg) for Krea2 / Krea2 Edit and (steps, cfg,
-    turbo_lora) for the V2 tabs, because the two families genuinely
+    `defaults` is (steps, cfg) for Krea2 / Krea2 Edit, (steps, cfg,
+    turbo_lora) for the V2 tabs and the whole Sampling group for MiniMax, because the two families genuinely
     differ and pretending otherwise would mean the browser guessing which
     of the two a row means. `id` is the dropdown's value; `name` its label.
     """
     v2 = feature in _V2_FEATURES
     rows = []
     for model in assets.feature_models(feature):
-        if v2:
+        if feature in _MINIMAX_FEATURES:
+            defaults = minimax_model_defaults(model)
+            info = minimax._minimax_model_info_text(model)
+        elif v2:
             steps, cfg, turbo = v2_model_defaults(model)
             defaults = {"steps": steps, "cfg": cfg, "turbo_lora": turbo}
             info = krea2_v2._v2_model_info_text(model)

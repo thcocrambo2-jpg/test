@@ -973,6 +973,26 @@
       "enabled": true
     },
     {
+      "id": "eros-max-beta5",
+      "name": "H3 Eros Max beta5 turbo-hybrid int8",
+      "file": "10Eros_Max_h3_TURBO-hybrid_beta5_int8.safetensors",
+      "source": {
+        "kind": "hf",
+        "repo": "TenStrip/10Eros-Max",
+        "path": "10Eros_Max_h3_TURBO-hybrid_beta5_int8.safetensors"
+      },
+      "mirror": null,
+      "variant": "turbo",
+      "steps": 6,
+      "cfg": 1.0,
+      "turbo_lora": null,
+      "trigger": "",
+      "sampler": "lcm",
+      "scheduler": "simple",
+      "turbo_strength": 0,
+      "enabled": true
+    },
+    {
       "id": "wan22-i2v-a14b-fp8",
       "name": "Wan 2.2 14B two-expert fp8 (best quality, 16 fps)",
       "file": "wan2.2_i2v_high_noise_14B_fp8_scaled.safetensors",
@@ -1213,7 +1233,8 @@
     },
     "minimax_i2v": {
       "models": [
-        "minimax-h3-int8"
+        "minimax-h3-int8",
+        "eros-max-beta5"
       ],
       "loras": [
         "hmnsfw-aio-v2-5",
@@ -1235,7 +1256,8 @@
     },
     "minimax_t2v": {
       "models": [
-        "minimax-h3-int8"
+        "minimax-h3-int8",
+        "eros-max-beta5"
       ],
       "loras": [
         "hmnsfw-aio-v2-5",

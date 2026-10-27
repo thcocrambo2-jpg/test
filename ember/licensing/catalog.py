@@ -75,6 +75,7 @@ FETCH_TIMEOUT = 15
 ID_RE = re.compile(r"^[a-z0-9][a-z0-9-]{0,62}$")
 FILE_RE = re.compile(r"^[A-Za-z0-9][A-Za-z0-9._-]{0,199}\.safetensors$")
 REPO_RE = re.compile(r"^[A-Za-z0-9][\w.-]*/[\w.-]+$")
+SAMPLING_NAME_RE = re.compile(r"^[a-z0-9_]{1,40}$")
 
 # What an empty LoRA slot is called in the forms. Stored as null.
 NONE = "None"
@@ -122,6 +123,14 @@ class Model:
     # The negative prompt this model's tab starts on, and switches to when
     # the model is picked. Empty: the tab's own default.
     negative: str = ""
+    # The sampling the model's tab switches to when it is picked, for the
+    # tabs that read them (MiniMax). "" / None: the tab's own default.
+    sampler: str = ""
+    scheduler: str = ""
+    shift: tuple | None = None            # (video, audio)
+    # The MiniMax turbo LoRA's strength for this model — 0 for a checkpoint
+    # with turbo merged in. None: the tab's own (0.8).
+    turbo_strength: float | None = None
 
     def part(self, role: str) -> "Part | None":
         return next((part for name, part in self.parts if name == role), None)
@@ -197,6 +206,19 @@ def _number(value, cast, default):
         return default
 
 
+def _sampling_name(value) -> str:
+    """A model's sampler or scheduler name, or "" when it names none."""
+    return value if isinstance(value, str) and SAMPLING_NAME_RE.match(value) else ""
+
+
+def _shift(value) -> tuple | None:
+    """A model's {video, audio} shift as (video, audio), or None."""
+    if not isinstance(value, dict):
+        return None
+    pair = tuple(_number(value.get(key), float, 0.0) for key in ("video", "audio"))
+    return pair if all(v > 0 for v in pair) else None
+
+
 def _record_id(raw: dict) -> str:
     return str(raw.get("id") or raw.get("_id") or "")
 
@@ -263,6 +285,9 @@ def _model(raw: dict) -> Model | None:
                  "strength": _number(turbo.get("strength"), float, 1.0)}
     else:
         turbo = None
+    turbo_strength = raw.get("turbo_strength")
+    turbo_strength = (None if turbo_strength is None
+                      else max(0.0, _number(turbo_strength, float, 0.0)))
     return Model(
         id=rid,
         name=str(raw.get("name") or rid),
@@ -277,6 +302,10 @@ def _model(raw: dict) -> Model | None:
         arch=str(raw.get("arch") or ""),
         parts=parts,
         negative=str(raw.get("negative") or ""),
+        sampler=_sampling_name(raw.get("sampler")),
+        scheduler=_sampling_name(raw.get("scheduler")),
+        shift=_shift(raw.get("shift")),
+        turbo_strength=turbo_strength,
     )
 
 

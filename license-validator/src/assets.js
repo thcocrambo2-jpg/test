@@ -54,6 +54,9 @@ const MAX_NEGATIVE_CHARS = 4000;
 // (Wan: "14b" or "5b"). Shaped like an id, and checked as nothing more:
 // the pod decides what each one means.
 const ARCH_RE = /^[a-z0-9][a-z0-9-]{0,31}$/;
+// A model's own sampler or scheduler — a ComfyUI name like "lcm" or
+// "simple". Checked for shape only: the pod offers what its ComfyUI has.
+const SAMPLING_NAME_RE = /^[a-z0-9_]{1,40}$/;
 
 const isNumber = (value) => typeof value === "number" && Number.isFinite(value);
 const isObject = (value) =>
@@ -218,6 +221,38 @@ const MODEL_RULES = {
   // The negative prompt the model's tab starts on and switches to when it
   // is picked. "" leaves the tab's own default.
   negative: (value) => stringProblem(value, "negative", MAX_NEGATIVE_CHARS),
+  // The sampler and scheduler the model's tab switches to when it is
+  // picked. "" leaves the tab's own default. Only the MiniMax tabs read
+  // them today.
+  sampler: (value) =>
+    value === "" || (typeof value === "string" && SAMPLING_NAME_RE.test(value))
+      ? null
+      : `sampler ${show(value)} must be a ComfyUI sampler name like "lcm", or ""`,
+  scheduler: (value) =>
+    value === "" || (typeof value === "string" && SAMPLING_NAME_RE.test(value))
+      ? null
+      : `scheduler ${show(value)} must be a ComfyUI scheduler name like "simple", or ""`,
+  // MiniMax H3's two flow shifts, {video, audio}. null leaves the model's
+  // own (12 and 3).
+  shift: (value) => {
+    if (value === null) return null;
+    if (!isObject(value)) return "shift must be {video, audio} or null";
+    const extra = Object.keys(value).filter((k) => k !== "video" && k !== "audio");
+    if (extra.length) return `shift has unknown field(s): ${extra.join(", ")}`;
+    for (const key of ["video", "audio"]) {
+      if (!isNumber(value[key]) || value[key] <= 0) {
+        return `shift.${key} ${show(value[key])} must be a number > 0`;
+      }
+    }
+    return null;
+  },
+  // The strength of the MiniMax tabs' always-on turbo LoRA for this
+  // model: 0 for a checkpoint with turbo merged in. null leaves the
+  // tab's own (0.8).
+  turbo_strength: (value) =>
+    value === null || (isNumber(value) && value >= 0)
+      ? null
+      : `turbo_strength ${show(value)} must be a number ≥ 0, or null`,
 };
 
 export const LORA_FIELDS = Object.keys(LORA_RULES);
@@ -341,6 +376,26 @@ export function idListProblems(list, known, what) {
 export const OPTIONAL_MODEL_TABS = ["minimax_i2v"];
 
 /**
+ * The presets that share one preset's default flag: the same tab *and*
+ * the same model. One default per model rather than per tab, so a tab
+ * offering two models (MiniMax's stock H3 and Eros Max) can open on the
+ * right one for whichever is its default — the pod picks the flagged
+ * preset of the tab's first model (presets.Catalogue.default_for), and
+ * falls back to another flagged one when that model is switched off.
+ * Presets that name no model share one flag between them.
+ *
+ * A Mongo filter, for clearing the flag on the others before setting it.
+ */
+export function defaultScope(row) {
+  const model = row.settings?.model;
+  return {
+    tab: row.tab,
+    _id: { $ne: row._id },
+    "settings.model": typeof model === "string" ? model : { $exists: false },
+  };
+}
+
+/**
  * What is wrong with a settings blob's model and LoRA rows, or null.
  *
  * `ids` is `{models: Set, loras: Set}` — see assetIds(). `tab` is the
@@ -429,6 +484,10 @@ export function modelWire(row) {
     arch: row.arch || "",
     parts: row.parts ?? {},
     negative: row.negative || "",
+    sampler: row.sampler || "",
+    scheduler: row.scheduler || "",
+    shift: row.shift ?? null,
+    turbo_strength: row.turbo_strength ?? null,
   };
 }
 

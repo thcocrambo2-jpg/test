@@ -63,6 +63,7 @@ import {
   loraWire,
   modelProblems,
   modelWire,
+  defaultScope,
 } from "./assets.js";
 import { allFeatures, isFeatureEnabled, sortByRegistry } from "./features.js";
 import {
@@ -1188,18 +1189,17 @@ function presetWire(row) {
 }
 
 /**
- * Make one preset the default for its tab, taking the flag off the others.
+ * Make one preset the default for its tab and model, taking the flag off
+ * the others that share it (assets.defaultScope).
  *
  * The same shape as promote() for builds, and for the same reason: "which
- * one is the default" is a property of the tab, not of the document, so it
- * is only ever true in one place and setting it is one operation.
+ * one is the default" is a property of the tab and model, not of the
+ * document, so it is only ever true in one place and setting it is one
+ * operation.
  */
-async function setDefault(presets, tab, id) {
-  await presets.updateMany(
-    { tab, _id: { $ne: id } },
-    { $set: { is_default: false } },
-  );
-  await presets.updateOne({ _id: id }, { $set: { is_default: true } });
+async function setDefault(presets, row) {
+  await presets.updateMany(defaultScope(row), { $set: { is_default: false } });
+  await presets.updateOne({ _id: row._id }, { $set: { is_default: true } });
 }
 
 /** The shared body checks for a preset write. Returns {error} or {value}. */
@@ -1393,7 +1393,7 @@ app.post(
     // change to every other preset on the tab, so it cannot ride along in
     // the upsert above.
     if (req.body.is_default === true) {
-      await setDefault(presets, row.tab, row._id);
+      await setDefault(presets, row);
       row.is_default = true;
     }
     console.log(`preset   admin ${row._id} tab=${row.tab} name="${row.name}"`);
@@ -1431,7 +1431,7 @@ app.post(
     // enabling it: the two flags answer different questions, and quietly
     // switching one on because the other was set is the kind of help that
     // makes a state impossible to reason about.
-    if (req.body.is_default === true) await setDefault(presets, row.tab, _id);
+    if (req.body.is_default === true) await setDefault(presets, row);
     else if (req.body.is_default === false) {
       await presets.updateOne({ _id }, { $set: { is_default: false } });
     }

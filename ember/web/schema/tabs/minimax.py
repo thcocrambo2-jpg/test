@@ -3,6 +3,7 @@
 from ember import features
 from ember.generation import handlers
 from ember.generation import runner
+from ember.licensing import catalog
 from ember.licensing import presets
 from ember.pipelines.krea2.constants import SAMPLERS
 from ember.pipelines.minimax.constants import (
@@ -10,16 +11,18 @@ from ember.pipelines.minimax.constants import (
     MINIMAX_DEFAULT_ASPECT,
     MINIMAX_DEFAULT_RESOLUTION,
     MINIMAX_DEFAULT_SECONDS,
-    MINIMAX_DEFAULTS,
     MINIMAX_MAX_SECONDS,
     MINIMAX_MIN_SECONDS,
     MINIMAX_RESOLUTIONS,
+    MINIMAX_SAMPLING_DEFAULTS,
+    MINIMAX_SCHEDULERS,
     MINIMAX_T2V_RESOLUTIONS,
 )
 from ember.pipelines.minimax.handler import (
     generate_minimax_t2v,
     generate_minimax_video,
 )
+from ember.pipelines.minimax.workflow import model_defaults
 from ember.web.schema.fields import (
     G_PROMPT,
     G_SAVE_PRESET,
@@ -56,6 +59,70 @@ Key = features.Key
 # which the image tab simply skips.
 # Both carry the Auto prompt panel, which writes the Prompt box from a
 # short idea before the click — see ember/pipelines/minimax/autoprompt.py.
+# The Sampling controls start on the default model's recipe and follow the
+# Model dropdown (model_defaults, sent in the /catalog rows): Eros Max's
+# turbo-hybrid record turns the Turbo LoRA to 0 and asks for LCM, the
+# built-in one names nothing and gets the template's. A preset, recipe or
+# token that names a model but none of these takes that model's
+# (TabSchema.model_follows), so one saved before the controls existed
+# still runs its model the way it was saved.
+MINIMAX_SAMPLERS = SAMPLERS + ["uni_pc", "lcm"]
+
+
+def _minimax_default(feature, key):
+    """The feature's default model's value for one Sampling control."""
+    def default():
+        models = catalog.feature_models(feature)
+        return (model_defaults(models[0])[key] if models
+                else MINIMAX_SAMPLING_DEFAULTS[key])
+    return default
+
+
+def _minimax_follows(feature):
+    """model id -> the Sampling values picking that model sets, or {}."""
+    def follows(model_id):
+        model = next((m for m in catalog.feature_models(feature)
+                      if m.id == model_id), None)
+        return model_defaults(model) if model is not None else {}
+    return follows
+
+
+def _sampling_fields(feature):
+    """Steps through Turbo LoRA, the two tabs' shared Sampling group."""
+    return (
+        Field("steps", "Steps", "slider", _minimax_default(feature, "steps"),
+              lo=1, hi=40, step=1, group="sampling", preset="steps",
+              hint="Picking a model sets these to its recipe."),
+    )
+
+
+def _recipe_fields(feature):
+    """Sampler through Turbo LoRA, after Duration in submission order."""
+    return (
+        Field("sampler", "Sampler", "select",
+              _minimax_default(feature, "sampler"),
+              choices=MINIMAX_SAMPLERS, group="sampling",
+              preset="sampler", wide=True),
+        Field("scheduler", "Scheduler", "select",
+              _minimax_default(feature, "scheduler"),
+              choices=MINIMAX_SCHEDULERS, group="sampling",
+              preset="scheduler"),
+        Field("shift_video", "Shift (video)", "slider",
+              _minimax_default(feature, "shift_video"),
+              lo=1, hi=20, step=0.5, group="sampling", preset="shift_video",
+              hint="12 is the model's own."),
+        Field("shift_audio", "Shift (audio)", "slider",
+              _minimax_default(feature, "shift_audio"),
+              lo=1, hi=20, step=0.5, group="sampling", preset="shift_audio",
+              hint="3 is the model's own."),
+        Field("turbo_strength", "Turbo LoRA", "slider",
+              _minimax_default(feature, "turbo_strength"),
+              lo=0, hi=1.5, step=0.05, group="sampling",
+              preset="turbo_strength",
+              hint="0 for a checkpoint with turbo merged in."),
+    )
+
+
 MINIMAX_I2V_SCHEMA = TabSchema(
     model_registry=handlers.MINIMAX_I2V,
     key=Key.MINIMAX_I2V, handler=generate_minimax_video,
@@ -66,6 +133,7 @@ MINIMAX_I2V_SCHEMA = TabSchema(
     category="video", route="/video/minimax", submit_label="Animate",
     autoprompt=True, preset_tab=presets.TAB_MINIMAX,
     preset_note=MINIMAX_PRESET_NOTE,
+    model_follows=_minimax_follows(handlers.MINIMAX_I2V),
     groups=(Group("inputs", "Start frame", column="right"), G_PROMPT,
             Group("core", "Output", dense=True),
             Group("sampling", "Sampling", dense=True), G_SEED,
@@ -79,9 +147,7 @@ MINIMAX_I2V_SCHEMA = TabSchema(
                           "window, a kettle starting to whistle"),
         _model_field(handlers.MINIMAX_I2V),
         *_seed_fields(),
-        Field("steps", "Steps", "slider", MINIMAX_DEFAULTS["steps"],
-              lo=1, hi=40, step=1, group="sampling", preset="steps",
-              hint="The turbo LoRA is tuned for 8."),
+        *_sampling_fields(handlers.MINIMAX_I2V),
         Field("resolution", "Resolution (keeps the source aspect)",
               "radio", MINIMAX_DEFAULT_RESOLUTION,
               choices=list(MINIMAX_RESOLUTIONS), group="core",
@@ -91,9 +157,7 @@ MINIMAX_I2V_SCHEMA = TabSchema(
               hi=MINIMAX_MAX_SECONDS, step=1.0, group="sampling",
               preset="seconds", wide=True,
               hint="Snapped to the model's frame grid at 24 fps."),
-        Field("sampler", "Sampler", "select", MINIMAX_DEFAULTS["sampler"],
-              choices=SAMPLERS + ["uni_pc"], group="sampling",
-              preset="sampler", wide=True),
+        *_recipe_fields(handlers.MINIMAX_I2V),
         _batch_field(hi=10),
         *_preset_save_fields(),
         Field("lora_slots", "LoRA stack", "repeat",
@@ -111,6 +175,7 @@ MINIMAX_T2V_SCHEMA = TabSchema(
     submit_label="Generate",
     autoprompt=True, preset_tab=presets.TAB_MINIMAX,
     preset_note=MINIMAX_PRESET_NOTE,
+    model_follows=_minimax_follows(handlers.MINIMAX_T2V),
     groups=(G_PROMPT, Group("core", "Output", dense=True),
             Group("sampling", "Sampling", dense=True), G_SEED,
             G_SAVE_PRESET),
@@ -125,9 +190,7 @@ MINIMAX_T2V_SCHEMA = TabSchema(
               choices=list(MINIMAX_ASPECT_RATIOS), group="core",
               preset="aspect", wide=True),
         *_seed_fields(),
-        Field("steps", "Steps", "slider", MINIMAX_DEFAULTS["steps"],
-              lo=1, hi=40, step=1, group="sampling", preset="steps",
-              hint="The turbo LoRA is tuned for 8."),
+        *_sampling_fields(handlers.MINIMAX_T2V),
         Field("resolution", "Resolution", "radio",
               MINIMAX_DEFAULT_RESOLUTION,
               choices=MINIMAX_T2V_RESOLUTIONS, group="core",
@@ -137,9 +200,7 @@ MINIMAX_T2V_SCHEMA = TabSchema(
               hi=MINIMAX_MAX_SECONDS, step=1.0, group="sampling",
               preset="seconds", wide=True,
               hint="Snapped to the model's frame grid at 24 fps."),
-        Field("sampler", "Sampler", "select", MINIMAX_DEFAULTS["sampler"],
-              choices=SAMPLERS + ["uni_pc"], group="sampling",
-              preset="sampler", wide=True),
+        *_recipe_fields(handlers.MINIMAX_T2V),
         _batch_field(hi=10),
         *_preset_save_fields(),
         Field("lora_slots", "LoRA stack", "repeat",

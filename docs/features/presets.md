@@ -60,7 +60,9 @@ generation tabs, so both read it and both have the save tickbox (without
 the publish one — there is no prompt library behind them). A MiniMax
 preset carries its `model`; ones saved before the tabs had a Model
 dropdown have none, which the licence server's `OPTIONAL_MODEL_TABS`
-accepts for this tab, and which leave the dropdown alone. A preset
+accepts for this tab, and which leave the dropdown alone. One that names
+a model but not the Sampling controls added since (scheduler, shift,
+turbo LoRA) takes that model's recipe for them. A preset
 saved from T2V carries an aspect ratio that I2V skips. See
 [minimax.md](../pipelines/minimax.md#presets).
 
@@ -172,10 +174,22 @@ Two flags decide what customers see:
   dropdowns immediately and the row stays put, so `--enable` brings it
   back with nothing retyped. `--delete` is for the preset that should
   never have existed.
-- **`is_default`** — at most one per tab, and it is the one a **fresh
-  page load applies**, to that tab and to its Edit tab. Setting it on one
-  clears it on every other preset for that tab, so there is only ever one
-  answer to "what does this tab open on".
+- **`is_default`** — at most one per tab *and model*, and the one a
+  **fresh page load applies**, to that tab and to its Edit tab. Setting it
+  on one clears it on the tab's other presets for the same model
+  (`defaultScope` in the server's `src/assets.js`). A tab offering two
+  models can therefore hold two flagged presets, and the pod opens on the
+  one for the tab's default model — the first in its catalogue list —
+  falling back to another flagged preset still on offer
+  (`presets.Catalogue.default_for`). So on MiniMax, "Default - H3" is the
+  default while stock H3 is listed first, and "Eros Default" once stock H3
+  is switched off.
+
+A pod also leaves out every preset naming a model it does not offer for
+the tab (`Catalogue.offered`): a preset for a model switched off in the
+database would otherwise load its LoRAs and steps over whatever the tab
+is on. Older builds see every enabled preset and take the first flagged
+one in the server's order (`sort_order`, then name).
 
 `npm run seed-presets` writes each tab's usual settings as a preset
 called `Default` on each tab and marks it `is_default`. On the V2 tabs

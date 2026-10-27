@@ -59,9 +59,17 @@ Three of the template's nodes were left out on purpose:
 
 There is **no negative prompt and no CFG**: like Flux, the model is
 guidance-distilled and runs through a `BasicGuider`. The 8-step turbo
-LoRA is always on at 0.8 — the template titles it "Always On, Don't
-Touch" — and the sampler block is that LoRA's recipe: `BasicScheduler`
-`simple`, euler, no guidance.
+LoRA is on at 0.8 — the template titles it "Always On, Don't Touch" — and
+the sampler block is that LoRA's recipe: `BasicScheduler` `simple`,
+euler, no guidance.
+
+Those are the defaults, and the built-in model's recipe. A checkpoint's
+record can name its own (see [Model recipes](#model-recipes)): Eros Max's
+turbo-hybrid has turbo merged in, so it runs the turbo LoRA at **0**,
+which leaves the node out. The flow shift is the H3 model's own, **12
+video / 3 audio** (ComfyUI's `supported_models`); a `MiniMaxH3SigmaShift`
+node goes in after the LoRAs only when the controls ask for another, so a
+graph at the defaults is the template's, node for node.
 
 ## The LoRA stack
 
@@ -69,8 +77,9 @@ The template puts a character LoRA in rgthree's Power Lora Loader. Here
 that became a chain of core `LoraLoaderModelOnly` nodes — the same
 translation the V2 tab makes of it, which is why the pack is not
 installed. The chain sits exactly where the template has the loader:
-**between the diffusion model and the turbo LoRA**, so the turbo LoRA is
-always last.
+**between the diffusion model and the turbo LoRA**, so the turbo LoRA,
+when it is on, is last — followed only by the shift node, when there is
+one.
 
 The template also routes CLIP through its loader, but a character LoRA
 carries no text-encoder weights, so a model-only chain is the same graph.
@@ -86,8 +95,36 @@ the tab's feature. Until the licence server lists any, it offers the
 built-in one (`minimax-h3-int8`, the template's int8 build), so a
 database without MiniMax models still runs exactly what the tabs always
 did — see [catalogue.md](catalogue.md#tabs-with-built-in-models). Every H3
-checkpoint shares the text encoder, the two VAEs and the turbo LoRA; only
-the diffusion model changes.
+checkpoint shares the text encoder and the two VAEs; the diffusion model
+changes, and so may its recipe.
+
+## Model recipes
+
+A MiniMax model record may name four optional fields, and picking the
+model sets the tab's Sampling controls to them:
+
+| Field | Control | When the record leaves it out |
+|---|---|---|
+| `sampler` | Sampler | euler |
+| `scheduler` | Scheduler | simple |
+| `shift` `{video, audio}` | Shift (video), Shift (audio) | 12 / 3, the model's own |
+| `turbo_strength` | Turbo LoRA | 0.8 |
+
+`steps` is the record's as before. The `/catalog` rows always carry all
+six values, the defaults filled in, because the browser leaves a control
+alone for a key a row does not send — and switching from a turbo-merged
+checkpoint back to one that names nothing must turn the turbo LoRA back
+on. The line under the Model dropdown says the recipe.
+
+| Model | Recipe |
+|---|---|
+| `minimax-h3-int8` (built-in) | 8 steps, euler / simple, turbo LoRA 0.8 |
+| `eros-max-beta5` | 6 steps, lcm / simple, turbo LoRA 0 (merged in) |
+
+`eros-max-beta5` is TenStrip's `10Eros_Max_h3_TURBO-hybrid_beta5_int8`,
+downloaded from Hugging Face (`TenStrip/10Eros-Max`, the repo root). Its
+author's other recipes need `beta57`, a RES4LYF scheduler that is not
+installed, so the Scheduler control offers core ComfyUI's only.
 
 The shipped LoRA records name a Hugging Face `mirror` alongside their
 CivitAI `source`, so the mirror is tried first at the pinned revision and
@@ -102,9 +139,17 @@ LoRA list, so a stack that works on one works on the other — the way
 ✨ Krea2 Edit reads 🎨 Krea2's presets. Unlike the Edit tabs, both are
 generation tabs, so both read the list *and* can save to it (admin only).
 
-A preset carries the model, steps, resolution, duration, sampler, seed,
-batch count and the LoRA stack. Presets saved before the tabs had a Model
-dropdown carry no `model`, and leave the dropdown where it is. One saved
+A preset carries the model, steps, resolution, duration, sampler,
+scheduler, both shifts, the turbo LoRA's strength, seed, batch count and
+the LoRA stack. Presets saved before the tabs had a Model dropdown carry
+no `model`, and leave the dropdown where it is.
+
+A preset, recipe or settings token that names a model but not one of the
+Sampling controls takes that model's value for it
+(`TabSchema.model_follows`), rather than keeping whatever the tab held.
+So a preset saved on the built-in model before the Turbo LoRA control
+existed still runs that model with turbo on, even when it is loaded over
+Eros Max. One that names no model leaves the Sampling controls alone too. One saved
 from 🎞️ MiniMax T2V also carries its aspect ratio, which 🎥 MiniMax I2V
 skips (the image sets its shape). Its Match image resolution is likewise
 left alone on T2V, which does not offer it.
@@ -115,8 +160,10 @@ The `Default` preset switches on `hmnsfw-aio-v2-5`, `vgna`, `hmbrst`,
 
 ## What the tabs expose
 
-Steps (default 8), Duration 5–15 s, Sampler, Batch count, and a
-Resolution radio.
+Steps (default 8), Duration 5–15 s, Sampler, Scheduler, Shift (video),
+Shift (audio), Turbo LoRA, Batch count, and a Resolution radio. Steps
+and the Sampling controls start on the default model's recipe and follow
+the Model dropdown.
 
 - ***Standard*** (the default) is the template's 0.7 MP
   `ResolutionSelector`.

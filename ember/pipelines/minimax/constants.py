@@ -62,7 +62,25 @@ MINIMAX_TURBO_LORA_STRENGTH = 0.8
 # for the old 4-step v0.1 turbo LoRA, and the template switched it off in
 # the same commit that moved to this 8-step v1.0 LoRA. So the sigmas go to
 # the sampler as the scheduler makes them.
+#
+# These are the tabs' defaults and the built-in model's recipe. Another
+# checkpoint's record may name its own (catalog.Model: sampler, scheduler,
+# shift, turbo_strength), and picking it switches the controls to those —
+# Eros Max's turbo-hybrid has turbo merged in, so its record turns the LoRA
+# off. The shift is the H3 model's own (ComfyUI's supported_models: 12
+# video, 3 audio); the graph only adds a MiniMaxH3SigmaShift node when the
+# controls ask for something else, so the default graph is the template's.
 MINIMAX_DEFAULTS = {"steps": 8, "sampler": "euler", "scheduler": "simple"}
+# The whole Sampling group the tabs show, the three above plus the shift
+# and the turbo LoRA's strength.
+MINIMAX_SAMPLING_DEFAULTS = {**MINIMAX_DEFAULTS,
+                             "shift_video": 12.0, "shift_audio": 3.0,
+                             "turbo_strength": MINIMAX_TURBO_LORA_STRENGTH}
+# Core ComfyUI schedulers only: beta57, which some H3 checkpoints suggest,
+# is RES4LYF's, and that pack is not installed for these tabs.
+MINIMAX_SCHEDULERS = ["simple", "beta", "normal", "sgm_uniform", "karras",
+                      "exponential", "ddim_uniform", "linear_quadratic",
+                      "kl_optimal"]
 
 # The checkpoint both tabs ran before the model became a catalogue entry,
 # as a catalogue record. Used whenever the licence server lists no model

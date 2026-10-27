@@ -409,6 +409,14 @@ class TabSchema:
     # a Field because it is not a handler argument: what it produces is the
     # prompt, which already is one.
     autoprompt: bool = False
+    # model id -> {field name: value} that picking that model sets — the
+    # MiniMax tabs' Sampling controls. When given, a preset, recipe or
+    # token that names a model but not one of these fills it from that
+    # model (`_follow_model`), rather than leaving whatever the tab held:
+    # a stock-model preset saved before the Turbo LoRA control existed,
+    # loaded while a turbo-merged checkpoint was on screen, would otherwise
+    # run the stock model with turbo off.
+    model_follows: Callable | None = None
 
     # ── derived ─────────────────────────────────────────────────────
 
@@ -553,7 +561,7 @@ class TabSchema:
             ok, value = control.restore(rows[index][1])
             if ok:
                 values[field_key] = value
-        return values
+        return self._follow_model(values)
 
     def token_values(self, data) -> tuple[dict, list]:
         """A decoded settings token -> (values safe to write back, notes).
@@ -605,6 +613,8 @@ class TabSchema:
                     entries.append((row[0], row[1] if len(row) > 1 else None,
                                     bool(row[2]) if len(row) > 2 else True))
             values.update(self._place_loras(entries, notes))
+
+        values = self._follow_model(values)
 
         # The seed comes back as it was, and Random seed comes back on: a
         # token is "these settings", and the next Generate makes another
@@ -718,6 +728,25 @@ class TabSchema:
                 entries.append((stored["name"], stored.get("weight"),
                                 bool(stored.get("enabled"))))
             values.update(self._place_loras(entries, []))
+        return self._follow_model(values)
+
+    def _follow_model(self, values: dict) -> dict:
+        """`values` plus what its model sets, for the keys it does not carry.
+
+        Only for a tab with `model_follows`, and only when `values` names a
+        model — a blob that names none leaves the dropdown alone, so it
+        leaves what follows the dropdown alone too. Each value goes through
+        its control's guard like everything else that is restored.
+        """
+        if self.model_follows is None or "model" not in values:
+            return values
+        for name, value in self.model_follows(values["model"]).items():
+            control = self.field(name)
+            if name in values or control is None:
+                continue
+            ok, guarded = control.restore(value)
+            if ok:
+                values[name] = guarded
         return values
 
     def _place_loras(self, entries, notes: list) -> dict:

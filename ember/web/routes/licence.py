@@ -47,17 +47,21 @@ def register(api: APIRouter) -> None:
         applied wherever those dials exist — which includes the matching
         Edit tab. Checked against the list rather than trusted, so this
         cannot be pointed at an arbitrary string.
+
+        Only the presets whose model this pod offers, and the default is
+        the flagged one for the tab's default model — see
+        presets.Catalogue.offered and default_for.
         """
         if tab not in presets.TABS:
             raise HTTPException(404, "No presets for that tab.")
         cat = presets.catalogue(force=force)
-        rows = cat.for_tab(tab)
+        rows = cat.offered(tab)
+        default = cat.default_for(tab)
         return {
             "presets": [{"id": row.id, "name": row.name,
                          "description": row.description,
-                         "isDefault": row.is_default} for row in rows],
-            "default": next((row.name for row in rows if row.is_default),
-                            None),
+                         "isDefault": row is default} for row in rows],
+            "default": default.name if default else None,
             "error": cat.error,
             "revision": jobqueue.preset_revision(tab),
         }

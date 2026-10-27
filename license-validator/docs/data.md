@@ -155,7 +155,7 @@ The same blob shape as a prompt, under a name, per tab.
 { _id: ObjectId, tab: "krea_t2i", name: "Portrait",
   settings: { ... },                 // validated exactly like a prompt's
   enabled: true,                     // off = still stored, no longer offered
-  is_default: false,                 // at most one per tab
+  is_default: false,                 // at most one per tab and model
   sort_order: 0,
   created_by: "EMBER-...",           // the licence that saved it
   created_at: ISODate, updated_at: ISODate }
@@ -164,8 +164,9 @@ The same blob shape as a prompt, under a name, per tab.
 `(tab, name)` is unique. A pod saving a preset whose name is taken gets
 `"Portrait (2)"` and is told which name it got; naming an existing preset
 is the admin route's job, where that is the whole point of the call.
-Setting `is_default` clears it from every other preset on the same tab in
-the same operation.
+Setting `is_default` clears it from every other preset on the same tab
+*for the same model* (`settings.model`; presets naming none share one
+flag) in the same operation — `defaultScope` in `src/assets.js`.
 
 ## `loras` — `_id` is the LoRA id
 

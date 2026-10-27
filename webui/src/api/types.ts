@@ -240,16 +240,17 @@ export interface AutoPromptRequest {
  *  different steps and CFG), and a name is free text somebody can edit.
  *
  *  `defaults` is per-family: (steps, cfg) for Krea2 and Krea2 Edit,
- *  (steps, cfg, turbo_lora) for the V2 tabs. The families genuinely differ
- *  and pretending otherwise would mean guessing which of the two a row
- *  means. */
+ *  (steps, cfg, turbo_lora) for the V2 tabs, and the whole Sampling group
+ *  for MiniMax (steps, sampler, scheduler, shift_video, shift_audio,
+ *  turbo_strength). The families genuinely differ and pretending otherwise
+ *  would mean guessing which of them a row means. */
 export interface ModelRow {
   id: string
   name: string
   file: string | null
   variant: string
   trigger: string
-  defaults: Record<string, number | boolean | null>
+  defaults: Record<string, number | string | boolean | null>
   /** Whether the weights are on this pod's disk. Only the server knows. */
   available: boolean
   /** The markdown line shown under the Model dropdown. */

@@ -40,8 +40,15 @@ checkout that predates it at startup.
 
 There is no negative prompt and no CFG: like Flux, the model is
 guidance-distilled and runs through a BasicGuider. The 8-step turbo LoRA
-is always on — the template titles it "Always On, Don't Touch" — and the
-scheduler block below is that LoRA's recipe.
+is on at 0.8 — the template titles it "Always On, Don't Touch" — and the
+scheduler block below is that LoRA's recipe. A checkpoint with turbo
+merged in (Eros Max's turbo-hybrid) runs it at 0, which leaves the node
+out; its record says so (catalog.Model.turbo_strength), and picking it
+sets the tab's Turbo LoRA control.
+
+The flow shift is the model's own, 12 video and 3 audio, unless the tab
+asks for another; only then does a MiniMaxH3SigmaShift node go in, so a
+graph at the defaults is the template's, node for node.
 """
 
 import math
@@ -62,6 +69,7 @@ from ember.pipelines.minimax.constants import (
     MINIMAX_NATIVE_MAX_PIXELS,
     MINIMAX_NATIVE_SHORT_EDGE,
     MINIMAX_RESOLUTIONS,
+    MINIMAX_SAMPLING_DEFAULTS,
     MINIMAX_STANDARD_MEGAPIXELS,
     MINIMAX_TEXT_ENCODER,
     MINIMAX_TURBO_LORA,
@@ -83,6 +91,29 @@ def _required(unet: str = MINIMAX_UNET) -> dict:
         "video VAE": MODELS_DIR / "vae" / MINIMAX_VIDEO_VAE,
         "audio VAE": MODELS_DIR / "vae" / MINIMAX_AUDIO_VAE,
         "turbo LoRA": MODELS_DIR / "loras" / MINIMAX_TURBO_LORA,
+    }
+
+
+def model_defaults(model) -> dict:
+    """What picking this catalogue model sets the MiniMax controls to.
+
+    Its own steps and sampling where its record names them, the tabs'
+    defaults (MINIMAX_DEFAULTS) where it does not — never a gap, because
+    the browser leaves a control alone for a missing key, and switching
+    from a model that turns turbo off back to one that names nothing must
+    turn it back on.
+    """
+    shift = model.shift or (MINIMAX_SAMPLING_DEFAULTS["shift_video"],
+                            MINIMAX_SAMPLING_DEFAULTS["shift_audio"])
+    return {
+        "steps": int(model.steps),
+        "sampler": model.sampler or MINIMAX_DEFAULTS["sampler"],
+        "scheduler": model.scheduler or MINIMAX_DEFAULTS["scheduler"],
+        "shift_video": float(shift[0]),
+        "shift_audio": float(shift[1]),
+        "turbo_strength": float(MINIMAX_SAMPLING_DEFAULTS["turbo_strength"]
+                                if model.turbo_strength is None
+                                else model.turbo_strength),
     }
 
 
@@ -263,6 +294,10 @@ def build_minimax_video_workflow(
     length: int = 124,
     fps: int = 24,
     sampler: str = "euler",
+    scheduler: str = MINIMAX_DEFAULTS["scheduler"],
+    shift_video: float = MINIMAX_SAMPLING_DEFAULTS["shift_video"],
+    shift_audio: float = MINIMAX_SAMPLING_DEFAULTS["shift_audio"],
+    turbo_strength: float = MINIMAX_TURBO_LORA_STRENGTH,
     image_name: str | None = None,
     loras=(),
     filename_prefix: str = "minimax/MiniMaxH3",
@@ -287,6 +322,11 @@ def build_minimax_video_workflow(
 
     `unet` is the checkpoint's file — the chosen catalogue model's. Every
     H3 checkpoint runs this same graph with the same encoder and VAEs.
+
+    `turbo_strength` 0 leaves the turbo LoRA out (a checkpoint with turbo
+    merged in), and a shift other than the model's own 12/3 adds a
+    MiniMaxH3SigmaShift after the LoRAs; at the defaults neither changes
+    the graph.
     """
     wf = {
         "unet": {
@@ -334,15 +374,27 @@ def build_minimax_video_workflow(
         }
         model_ref = [node, 0]
 
-    # Always on. The scheduler settings below are this LoRA's recipe, so
-    # there is no raw mode to switch it off for — see the module docstring.
-    wf["turbo"] = {
-        "class_type": "LoraLoaderModelOnly",
-        "inputs": {"lora_name": MINIMAX_TURBO_LORA,
-                   "strength_model": float(MINIMAX_TURBO_LORA_STRENGTH),
-                   "model": model_ref},
-    }
-    model_ref = ["turbo", 0]
+    # On unless the checkpoint carries turbo itself — see the module
+    # docstring. The scheduler settings below are this LoRA's recipe.
+    if float(turbo_strength) > 0:
+        wf["turbo"] = {
+            "class_type": "LoraLoaderModelOnly",
+            "inputs": {"lora_name": MINIMAX_TURBO_LORA,
+                       "strength_model": float(turbo_strength),
+                       "model": model_ref},
+        }
+        model_ref = ["turbo", 0]
+
+    # The model's own shift is 12/3, so the node only goes in for another.
+    if (float(shift_video), float(shift_audio)) != (
+            float(MINIMAX_SAMPLING_DEFAULTS["shift_video"]),
+            float(MINIMAX_SAMPLING_DEFAULTS["shift_audio"])):
+        wf["shift"] = {
+            "class_type": "MiniMaxH3SigmaShift",
+            "inputs": {"model": model_ref, "shift_video": float(shift_video),
+                       "shift_audio": float(shift_audio)},
+        }
+        model_ref = ["shift", 0]
 
     conditioning = {
         "clip": clip_ref, "vae": vae_ref, "prompt": prompt,
@@ -375,7 +427,7 @@ def build_minimax_video_workflow(
     wf["sigmas"] = {
         "class_type": "BasicScheduler",
         "inputs": {"model": model_ref,
-                   "scheduler": MINIMAX_DEFAULTS["scheduler"],
+                   "scheduler": scheduler,
                    "steps": int(steps), "denoise": 1.0},
     }
     wf["sample"] = {

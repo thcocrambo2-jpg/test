@@ -515,7 +515,7 @@ def cases(module) -> dict:
         "generate_minimax_video": (
             image, "the tide comes in and the gulls cry", "minimax-h3-int8",
             7890123, False, 9, "Native 768p (short edge 768, slower)", 7,
-            "dpmpp_2m", 2, True, "Golden",
+            "dpmpp_2m", "simple", 12.0, 3.0, 0.8, 2, True, "Golden",
         ) + minimax_triples({0: (True, "hmnsfw-aio-v2-5"),
                              1: (False, "vgna"),
                              2: (True, "hmmisdog")}),
@@ -523,9 +523,29 @@ def cases(module) -> dict:
         "generate_minimax_t2v": (
             "a kettle comes to the boil and whistles", "minimax-h3-int8",
             "16:9 (Widescreen)", 8901234, False, 11, "Standard (0.7 MP — the template default)", 6,
-            "euler_ancestral", 2, True, "Golden",
+            "euler_ancestral", "simple", 12.0, 3.0, 0.8, 2, True, "Golden",
         ) + minimax_triples({0: (False, "hmbrst"),
                              1: (True, "hmcshot-v1-0")}),
+
+        # Eros Max's turbo-hybrid at its own recipe: LCM, turbo LoRA at 0,
+        # so the graph has no turbo node and the LoRA chain feeds the
+        # guider directly; the shift is the model's own, so no shift node.
+        "generate_minimax_video_eros": (
+            image, "she turns to the window as the rain starts",
+            "eros-max-beta5", 7890321, False, 6,
+            "Standard (0.7 MP — the template default)", 5,
+            "lcm", "simple", 12.0, 3.0, 0.0, 1, False, "",
+        ) + minimax_triples({0: (True, "mysticxxx-mmh3-v4")}),
+
+        # A shift other than the model's 12/3 and another scheduler: the
+        # MiniMaxH3SigmaShift node goes in after the turbo LoRA, and the
+        # scheduler reaches BasicScheduler.
+        "generate_minimax_t2v_shift": (
+            "waves break on a pebble beach at dusk", "minimax-h3-int8",
+            "16:9 (Widescreen)", 8901432, False, 8,
+            "Standard (0.7 MP — the template default)", 5,
+            "euler", "beta", 8.0, 6.0, 0.7, 1, False, "",
+        ) + minimax_triples({}),
 
         # Z-Image, the Upscale tick off: the template's Turbo graph and
         # nothing else. 1472×1140 at 1.15 is 1692.8×1311.0, which the
@@ -610,7 +630,9 @@ CASE_HANDLERS = {"generate_zimage_upscale": "generate_zimage",
                  "generate_qwen21_t2i_negative": "generate_qwen21_t2i",
                  "generate_anima_negative": "generate_anima",
                  "generate_wan_video_smooth": "generate_wan_video",
-                 "generate_wan_video_5b_smooth": "generate_wan_video"}
+                 "generate_wan_video_5b_smooth": "generate_wan_video",
+                 "generate_minimax_video_eros": "generate_minimax_video",
+                 "generate_minimax_t2v_shift": "generate_minimax_t2v"}
 
 
 def check_settings(name, args, settings) -> None:
