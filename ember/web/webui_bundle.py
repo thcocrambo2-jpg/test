@@ -12,7 +12,7 @@
 # it and fails the build when it no longer matches, which is what stops a
 # stale front end from shipping.
 SOURCE_HASH = 'sha256:06835341a1df4bc616cc4d82c49df890a4768bac60004cd67f4f76f595c857e7'
-BUILT_AT = '2026-10-27T10:41:51Z'
+BUILT_AT = '2026-10-27T10:57:35Z'
 
 # name -> (gzip bytes, media type, ETag). Served by ember/web/spa.py,
 # which hands the gzip stream to the browser as-is whenever it will take it.
