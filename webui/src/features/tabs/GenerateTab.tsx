@@ -17,8 +17,8 @@ import { Button, Inline, useToast } from '@/components/ui'
 import { defaultsFor } from '@/lib/schema'
 import {
   changedFromPreset,
-  decodeToken,
-  isBareToken,
+  hasToken,
+  readToken,
   showValue,
 } from '@/lib/settingsToken'
 import { useActiveJob, useJobsForTab, useQueue, isLive } from '@/store/queue'
@@ -323,7 +323,7 @@ export function GenerateTab({ schema }: { schema: TabSchema }) {
   const fromToken = useCallback(
     async (text: string) => {
       try {
-        const data = await decodeToken(text)
+        const { data, extra } = await readToken(text)
         const target =
           data.tab === schema.key ? schema : schemas?.find((candidate) => candidate.key === data.tab)
         if (!target) {
@@ -331,13 +331,14 @@ export function GenerateTab({ schema }: { schema: TabSchema }) {
           return
         }
         const before = snapshotTab(target.key)
-        const outcome = await loadToken(target, data)
+        const outcome = await loadToken(target, data, extra)
         const where = target.key === schema.key ? '' : ` into ${target.label}`
+        const around = extra ? ' (other text ignored)' : ''
         const notes = outcome.notes.length
         toast(
           notes > 0
-            ? `Settings loaded${where} · ${notes} note${notes === 1 ? '' : 's'} in Settings token`
-            : `Settings loaded${where}`,
+            ? `Settings loaded${where}${around} · ${notes} note${notes === 1 ? '' : 's'} in Settings token`
+            : `Settings loaded${where}${around}`,
           {
             label: 'Undo',
             run: () => {
@@ -355,7 +356,7 @@ export function GenerateTab({ schema }: { schema: TabSchema }) {
   )
   const onPromptPaste = useCallback(
     (text: string) => {
-      if (!isBareToken(text)) return false
+      if (!hasToken(text)) return false
       void fromToken(text)
       return true
     },
@@ -366,7 +367,7 @@ export function GenerateTab({ schema }: { schema: TabSchema }) {
     // Somebody who got a token into the box another way — dropped it in,
     // typed it — means the settings, not a prompt made of base64.
     const prompt = String(values[schema.promptField] ?? '')
-    if (isBareToken(prompt)) {
+    if (hasToken(prompt)) {
       await fromToken(prompt)
       return
     }

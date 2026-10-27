@@ -7,7 +7,7 @@ import { presetValuesKey } from '@/components/PresetBar'
 import { Button, Pill, Segmented, useToast } from '@/components/ui'
 import { defaultsFor } from '@/lib/schema'
 import {
-  decodeToken,
+  readToken,
   encodeToken,
   readable,
   tokenData,
@@ -67,7 +67,11 @@ export function SettingsToken({
   const [token, setToken] = useState('')
   const [outcome, setOutcome] = useTabState<Outcome | null>(outcomeKey(schema.key), null)
   const [loading, setLoading] = useState(false)
-  const [elsewhere, setElsewhere] = useState<{ schema: TabSchema; data: TokenData } | null>(null)
+  const [elsewhere, setElsewhere] = useState<{
+    schema: TabSchema
+    data: TokenData
+    extra: boolean
+  } | null>(null)
   const tokenCopy = useCopy()
   const jsonCopy = useCopy()
   const toast = useToast()
@@ -100,8 +104,9 @@ export function SettingsToken({
     setOutcome(null)
     setElsewhere(null)
     let decoded: TokenData
+    let extra = false
     try {
-      decoded = await decodeToken(pasted)
+      ;({ data: decoded, extra } = await readToken(pasted))
     } catch (error) {
       setOutcome({
         tone: 'error',
@@ -120,16 +125,16 @@ export function SettingsToken({
         })
         return
       }
-      setElsewhere({ schema: target, data: decoded })
+      setElsewhere({ schema: target, data: decoded, extra })
       return
     }
-    await run(schema, decoded)
+    await run(schema, decoded, extra)
   }
 
-  async function run(target: TabSchema, decoded: TokenData) {
+  async function run(target: TabSchema, decoded: TokenData, extra: boolean) {
     setLoading(true)
     try {
-      await load(target, decoded)
+      await load(target, decoded, extra)
       if (target.key !== schema.key) setPasted('')
     } catch (error) {
       setOutcome({
@@ -253,7 +258,7 @@ export function SettingsToken({
                     onClick={() => {
                       const target = elsewhere
                       setElsewhere(null)
-                      void run(target.schema, target.data)
+                      void run(target.schema, target.data, target.extra)
                     }}
                   >
                     Open {elsewhere.schema.label} and load it
@@ -321,7 +326,14 @@ export function useTokenLoader() {
   const offer = useHandoff((state) => state.offer)
   const navigate = useNavigate()
 
-  return async function load(target: TabSchema, data: TokenData): Promise<Outcome> {
+  /** `ignoredText`: the token came with other words around it — a note
+   *  saved beside it in a spreadsheet — which were left out. Said in
+   *  passing, not as a warning: that is the normal way to keep tokens. */
+  return async function load(
+    target: TabSchema,
+    data: TokenData,
+    ignoredText = false,
+  ): Promise<Outcome> {
     const { values, notes } = await api.applyToken(target.key, data as unknown as Record<string, unknown>)
 
     let presetName = ''
@@ -357,7 +369,8 @@ export function useTokenLoader() {
       title:
         `Loaded ${Object.keys(data.values).length} settings and ${loras} active ` +
         `LoRA${loras === 1 ? '' : 's'}` +
-        (presetName ? `, based on “${presetName}”.` : '.'),
+        (presetName ? `, based on “${presetName}”.` : '.') +
+        (ignoredText ? ' Other text around the token was ignored.' : ''),
       notes: extra,
     }
     writeTabState<Outcome | null>(outcomeKey(target.key), null, () => outcome)

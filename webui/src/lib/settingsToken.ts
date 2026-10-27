@@ -3,7 +3,7 @@ import type { TabSchema } from '@/api/types'
 /*
  * A tab's whole form as one line of text, and back.
  *
- * `ember1.<tabId>.<data>`, where `data` is the JSON below, deflated and
+ * `ember1.<tabId>.<data>;`, where `data` is the JSON below, deflated and
  * base64url-encoded. Deflate because most of a form is repetition — field
  * names, LoRA ids, the boilerplate negative prompt — and base64url because
  * the result has to survive a chat message, a note or a spreadsheet cell as
@@ -16,6 +16,11 @@ import type { TabSchema } from '@/api/types'
  * The tab id sits in the clear so a token says what it is for at a glance,
  * and pasting one into the wrong tab can offer the right one. `ember1` is the
  * format's version: a later shape gets a new prefix and this one still reads.
+ *
+ * The `;` closes it. Nothing in base64url is a `;`, so wherever a token is
+ * kept — a spreadsheet cell with a note, a chat message — the token is
+ * exactly `ember1.` up to the first `;`, and anything glued on after it,
+ * even with no space, is plainly not part of it.
  *
  * What goes in is what a recipe records (`record` on the field): every
  * control by name, except the publish and save-preset tickboxes and the
@@ -155,28 +160,77 @@ async function pipe(bytes: Uint8Array<ArrayBuffer>, stream: GenericTransformStre
 export async function encodeToken(schema: TabSchema, data: TokenData): Promise<string> {
   const json = new TextEncoder().encode(JSON.stringify(data))
   const packed = await pipe(json, new CompressionStream('deflate-raw'))
-  return `${TOKEN_PREFIX}.${schema.tabId}.${toBase64Url(packed)}`
+  return `${TOKEN_PREFIX}.${schema.tabId}.${toBase64Url(packed)};`
 }
 
 export class TokenError extends Error {}
 
-/** Whether `text` is a settings token and nothing else.
+/* A token found inside other text.
  *
- *  What the Prompt box asks of a paste, and Generate of the prompt, before
- *  treating it as settings rather than as words. A token inside a sentence
- *  is not one: somebody writing a prompt that happens to contain one keeps
- *  their text. Line breaks are allowed, as `decodeToken` allows them. */
-export function isBareToken(text: string): boolean {
-  return /^\s*ember1\.[A-Za-z0-9_-]+\.[A-Za-z0-9_\-\s]+$/.test(text) && /\S{16}/.test(text)
+ * With its closing `;`, a token is `ember1.` up to that `;`, and whitespace
+ * inside that stretch is dropped, so one a chat app wrapped over lines is
+ * whole again. Everything outside the stretch is somebody's note.
+ *
+ * Without the `;` — copied short, or typed out — it ends at the first
+ * character base64url does not use: a space, a line break, a quote, a full
+ * stop. No whitespace is rejoined then, or the next word of a note would be
+ * glued onto the data.
+ *
+ * Both readings are offered, closed first, because a token without its `;`
+ * may still have one further on, in the note. The 16-character floor keeps a
+ * prompt that merely mentions "ember1." from counting. */
+const START = `${TOKEN_PREFIX}.`
+const CLOSED = /^ember1\.([A-Za-z0-9_-]+)\.([A-Za-z0-9_-]{16,})$/
+const OPEN = /^ember1\.([A-Za-z0-9_-]+)\.([A-Za-z0-9_-]{16,})/
+
+interface Candidate {
+  data: string
+  closed: boolean
+  /** Whether anything but whitespace sits outside the token. */
+  extra: boolean
 }
 
-/** A pasted token — or the JSON "Copy JSON" gave — back into its data.
+function candidates(text: string): Candidate[] {
+  const start = text.indexOf(START)
+  if (start < 0) return []
+  const out: Candidate[] = []
+  const before = text.slice(0, start)
+  const semi = text.indexOf(';', start)
+  if (semi >= 0) {
+    const match = CLOSED.exec(text.slice(start, semi).replace(/\s+/g, ''))
+    if (match) {
+      out.push({ data: match[2], closed: true, extra: (before + text.slice(semi + 1)).trim() !== '' })
+    }
+  }
+  const match = OPEN.exec(text.slice(start))
+  if (match) {
+    out.push({
+      data: match[2],
+      closed: false,
+      extra: (before + text.slice(start + match[0].length)).trim() !== '',
+    })
+  }
+  return out
+}
+
+/** Whether `text` holds a settings token anywhere in it.
  *
- *  Whitespace anywhere is ignored, because a long token pasted out of a chat
- *  app often arrives wrapped. */
-export async function decodeToken(text: string): Promise<TokenData> {
+ *  What the Prompt box asks of a paste or a Replace, and Generate of the
+ *  prompt, before treating it as settings rather than as words. */
+export function hasToken(text: string): boolean {
+  return candidates(text).length > 0
+}
+
+/** A pasted token — or the JSON "Copy JSON" gave — back into its data, and
+ *  whether there was other text around it that was left out.
+ *
+ *  The token may sit anywhere in the text: "my note ember1.…; more notes"
+ *  loads the token and drops the rest, since the token carries its own
+ *  prompt. */
+export async function readToken(text: string): Promise<{ data: TokenData; extra: boolean }> {
   const trimmed = text.trim()
   let data: unknown
+  let extra = false
   if (trimmed.startsWith('{')) {
     try {
       data = JSON.parse(trimmed)
@@ -184,22 +238,39 @@ export async function decodeToken(text: string): Promise<TokenData> {
       throw new TokenError('That JSON does not parse. Copy it again in full.')
     }
   } else {
-    const match = /^ember1\.([A-Za-z0-9_-]+)\.([A-Za-z0-9_-]+)$/.exec(trimmed.replace(/\s+/g, ''))
-    if (!match) {
+    const found = candidates(trimmed)
+    if (found.length === 0) {
       throw new TokenError(`That is not a settings token. One starts with ${TOKEN_PREFIX}.`)
     }
-    try {
-      const json = await pipe(fromBase64Url(match[2]), new DecompressionStream('deflate-raw'))
-      data = JSON.parse(new TextDecoder().decode(json))
-    } catch {
-      throw new TokenError('That token is cut off or damaged. Copy it again in full.')
+    for (const candidate of found) {
+      try {
+        const json = await pipe(fromBase64Url(candidate.data), new DecompressionStream('deflate-raw'))
+        data = JSON.parse(new TextDecoder().decode(json))
+        extra = candidate.extra
+        break
+      } catch {
+        /* the next reading, if there is one */
+      }
+    }
+    if (data === undefined) {
+      // Without its `;`, letters stuck straight onto the end read as part of
+      // the token, and that is the likelier cause than damage.
+      throw new TokenError(
+        found.some((candidate) => candidate.closed)
+          ? 'That token is cut off or damaged. Copy it again in full.'
+          : 'That token is cut off, or has text stuck to its end. Copy it again with its closing ;',
+      )
     }
   }
   const shaped = data as Partial<TokenData> | null
   if (!shaped || typeof shaped.tab !== 'string' || typeof shaped.values !== 'object') {
     throw new TokenError('That token holds no settings.')
   }
-  return shaped as TokenData
+  return { data: shaped as TokenData, extra }
+}
+
+export async function decodeToken(text: string): Promise<TokenData> {
+  return (await readToken(text)).data
 }
 
 /** One value as a person reads it: a model or LoRA by name, a tick as on/off. */
