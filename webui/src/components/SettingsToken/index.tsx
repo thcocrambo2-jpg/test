@@ -16,7 +16,7 @@ import {
 } from '@/lib/settingsToken'
 import { copyText, cx, useCopy } from '@/lib/util'
 import { useHandoff } from '@/store/handoff'
-import { useTabState, writeTabState } from '@/store/tabState'
+import { readTabState, useTabState, writeTabState } from '@/store/tabState'
 import f from '@/components/SchemaForm/form.module.css'
 import s from './token.module.css'
 
@@ -37,11 +37,17 @@ import s from './token.module.css'
 
 type View = 'readable' | 'raw'
 
-interface Outcome {
+export interface Outcome {
   tone: 'ok' | 'warn' | 'error'
   title: string
   notes: string[]
 }
+
+/** Where a tab keeps the last load's result. Per tab and outside the
+ *  component, because a token for another tab is loaded *from* this one and
+ *  its result belongs to the panel of the tab it went to. */
+const outcomeKey = (tabKey: string) => `token.outcome.${tabKey}`
+const openKey = (tabKey: string) => `token.open.${tabKey}`
 
 export function SettingsToken({
   schema,
@@ -50,7 +56,7 @@ export function SettingsToken({
   schema: TabSchema
   values: Record<string, unknown>
 }) {
-  const [open, setOpen] = useTabState(`token.open.${schema.key}`, false)
+  const [open, setOpen] = useTabState(openKey(schema.key), false)
   const [view, setView] = useTabState<View>('token.view', 'readable')
   const [chosen] = useTabState(`preset.chosen.${schema.key}`, '')
   const [baseline] = useTabState<Record<string, unknown> | null>(
@@ -59,7 +65,7 @@ export function SettingsToken({
   )
   const [pasted, setPasted] = useTabState(`token.pasted.${schema.key}`, '')
   const [token, setToken] = useState('')
-  const [outcome, setOutcome] = useState<Outcome | null>(null)
+  const [outcome, setOutcome] = useTabState<Outcome | null>(outcomeKey(schema.key), null)
   const [loading, setLoading] = useState(false)
   const [elsewhere, setElsewhere] = useState<{ schema: TabSchema; data: TokenData } | null>(null)
   const tokenCopy = useCopy()
@@ -89,13 +95,6 @@ export function SettingsToken({
       clearTimeout(timer)
     }
   }, [open, schema, data])
-
-  // A different tab is a different form; what was said about the last
-  // one's paste does not apply to this one.
-  useEffect(() => {
-    setOutcome(null)
-    setElsewhere(null)
-  }, [schema.key])
 
   async function loadPasted() {
     setOutcome(null)
@@ -130,7 +129,7 @@ export function SettingsToken({
   async function run(target: TabSchema, decoded: TokenData) {
     setLoading(true)
     try {
-      setOutcome(await load(target, decoded))
+      await load(target, decoded)
       if (target.key !== schema.key) setPasted('')
     } catch (error) {
       setOutcome({
@@ -289,14 +288,36 @@ export function SettingsToken({
   }
 }
 
+/** The state a token load writes for one tab, so Undo can put it back.
+ *
+ *  The form, the preset dropdown and its baseline, whether the default
+ *  preset has landed, and the panel's last result. A slot that held nothing
+ *  goes back to holding nothing, which reads as its default. */
+export function snapshotTab(tabKey: string): [string, unknown][] {
+  return [
+    `form.${tabKey}`,
+    `preset.chosen.${tabKey}`,
+    presetValuesKey(tabKey),
+    `preset.applied.${tabKey}`,
+    outcomeKey(tabKey),
+  ].map((key) => [key, readTabState<unknown>(key, undefined)])
+}
+
+export function restoreTab(snapshot: [string, unknown][]): void {
+  for (const [key, value] of snapshot) writeTabState<unknown>(key, undefined, () => value)
+}
+
 /** Load a decoded token into a tab, taking you there if it is another one.
+ *
+ *  Its result is filed on that tab's panel, which is opened when something
+ *  was skipped, so the notes are there to read wherever the load came from.
  *
  *  Also points the tab's preset dropdown at the preset the token started
  *  from, with that preset's values as the baseline, so "changed from preset"
  *  still means something after the load. A preset since deleted leaves the
  *  dropdown empty. Marks the tab's default preset as already applied, or it
  *  would land on a tab being opened for the first time over the token. */
-function useTokenLoader() {
+export function useTokenLoader() {
   const offer = useHandoff((state) => state.offer)
   const navigate = useNavigate()
 
@@ -331,7 +352,7 @@ function useTokenLoader() {
     if (target.fields.some((field) => field.type === 'image' || field.type === 'images')) {
       extra.push('Tokens carry no pictures, so add the input image again.')
     }
-    return {
+    const outcome: Outcome = {
       tone: extra.length > 0 ? 'warn' : 'ok',
       title:
         `Loaded ${Object.keys(data.values).length} settings and ${loras} active ` +
@@ -339,6 +360,9 @@ function useTokenLoader() {
         (presetName ? `, based on “${presetName}”.` : '.'),
       notes: extra,
     }
+    writeTabState<Outcome | null>(outcomeKey(target.key), null, () => outcome)
+    if (extra.length > 0) writeTabState(openKey(target.key), false, () => true)
+    return outcome
   }
 }
 

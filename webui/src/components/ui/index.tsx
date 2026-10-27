@@ -403,12 +403,20 @@ export function Modal({
 
 // ------------------------------------------------------------------- toasts
 
+/** A button inside a toast — in practice Undo. A toast carrying one stays
+ *  up longer, long enough to read it and reach the button. */
+export interface ToastAction {
+  label: string
+  run: () => void
+}
+
 interface Toast {
   id: number
   text: string
+  action?: ToastAction
 }
 
-const ToastContext = createContext<(text: string) => void>(() => {})
+const ToastContext = createContext<(text: string, action?: ToastAction) => void>(() => {})
 
 export function useToast() {
   return useContext(ToastContext)
@@ -417,10 +425,13 @@ export function useToast() {
 export function ToastHost({ children }: { children: ReactNode }) {
   const [toasts, setToasts] = useState<Toast[]>([])
 
-  function push(text: string) {
+  function push(text: string, action?: ToastAction) {
     const id = Date.now() + Math.random()
-    setToasts((current) => [...current, { id, text }])
-    setTimeout(() => setToasts((current) => current.filter((t) => t.id !== id)), 2600)
+    setToasts((current) => [...current, { id, text, action }])
+    setTimeout(
+      () => setToasts((current) => current.filter((t) => t.id !== id)),
+      action ? 6000 : 2600,
+    )
   }
 
   return (
@@ -432,6 +443,18 @@ export function ToastHost({ children }: { children: ReactNode }) {
             {toasts.map((toast) => (
               <div key={toast.id} className={s.toast}>
                 {toast.text}
+                {toast.action && (
+                  <button
+                    type="button"
+                    className={s.toastAction}
+                    onClick={() => {
+                      setToasts((current) => current.filter((t) => t.id !== toast.id))
+                      toast.action?.run()
+                    }}
+                  >
+                    {toast.action.label}
+                  </button>
+                )}
               </div>
             ))}
           </div>,

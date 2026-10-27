@@ -1,15 +1,26 @@
 import { useCallback, useEffect, useMemo, useState, type ReactNode } from 'react'
 import type { ModelRow, SizeFromImage, TabSchema } from '@/api/types'
-import { useAppCatalog, useModels } from '@/api/queries'
+import { useNavigate } from 'react-router-dom'
+import { useAppCatalog, useModels, useSchemas } from '@/api/queries'
 import { useImageSize } from '@/components/fields'
 import { TwoColumn } from '@/components/TwoColumn'
 import { SchemaForm } from '@/components/SchemaForm'
 import { PresetBar, presetValuesKey } from '@/components/PresetBar'
-import { SettingsToken } from '@/components/SettingsToken'
+import {
+  restoreTab,
+  SettingsToken,
+  snapshotTab,
+  useTokenLoader,
+} from '@/components/SettingsToken'
 import t from '@/components/SettingsToken/token.module.css'
-import { Button, Inline } from '@/components/ui'
+import { Button, Inline, useToast } from '@/components/ui'
 import { defaultsFor } from '@/lib/schema'
-import { changedFromPreset, showValue } from '@/lib/settingsToken'
+import {
+  changedFromPreset,
+  decodeToken,
+  isBareToken,
+  showValue,
+} from '@/lib/settingsToken'
 import { useActiveJob, useJobsForTab, useQueue, isLive } from '@/store/queue'
 import { useHandoff } from '@/store/handoff'
 import { useTabState } from '@/store/tabState'
@@ -298,7 +309,67 @@ export function GenerateTab({ schema }: { schema: TabSchema }) {
     [models, schema, set, setValues],
   )
 
+  /* A settings token pasted into the Prompt box — or left there and
+   * submitted — loads the whole form instead of becoming the prompt.
+   *
+   * Through the same loader as the Settings token panel, so it replaces the
+   * form rather than merging into it, and a token for another tab takes you
+   * there. The toast carries Undo, which puts back everything the load
+   * wrote on the tab it went to and returns you here if it moved you. */
+  const loadToken = useTokenLoader()
+  const { data: schemas } = useSchemas()
+  const navigate = useNavigate()
+  const toast = useToast()
+  const fromToken = useCallback(
+    async (text: string) => {
+      try {
+        const data = await decodeToken(text)
+        const target =
+          data.tab === schema.key ? schema : schemas?.find((candidate) => candidate.key === data.tab)
+        if (!target) {
+          toast('That token is for a tab this licence does not include.')
+          return
+        }
+        const before = snapshotTab(target.key)
+        const outcome = await loadToken(target, data)
+        const where = target.key === schema.key ? '' : ` into ${target.label}`
+        const notes = outcome.notes.length
+        toast(
+          notes > 0
+            ? `Settings loaded${where} · ${notes} note${notes === 1 ? '' : 's'} in Settings token`
+            : `Settings loaded${where}`,
+          {
+            label: 'Undo',
+            run: () => {
+              restoreTab(before)
+              if (target.key !== schema.key) navigate(schema.route)
+              toast('Back as it was.')
+            },
+          },
+        )
+      } catch (error) {
+        toast(error instanceof Error ? error.message : String(error))
+      }
+    },
+    [schema, schemas, loadToken, navigate, toast],
+  )
+  const onPromptPaste = useCallback(
+    (text: string) => {
+      if (!isBareToken(text)) return false
+      void fromToken(text)
+      return true
+    },
+    [fromToken],
+  )
+
   const submit = useCallback(async () => {
+    // Somebody who got a token into the box another way — dropped it in,
+    // typed it — means the settings, not a prompt made of base64.
+    const prompt = String(values[schema.promptField] ?? '')
+    if (isBareToken(prompt)) {
+      await fromToken(prompt)
+      return
+    }
     setSubmitting(true)
     try {
       await submitJob({
@@ -314,7 +385,7 @@ export function GenerateTab({ schema }: { schema: TabSchema }) {
       // impossible.
       setSubmitting(false)
     }
-  }, [schema, submitJob, values])
+  }, [schema, submitJob, values, fromToken])
 
   // The shortcut the footer advertises. Bound while this tab is mounted and
   // unbound when it is not, so it always runs the tab you are looking at.
@@ -357,6 +428,7 @@ export function GenerateTab({ schema }: { schema: TabSchema }) {
                 column={column}
                 hints={hints}
                 placement="stackFirst"
+                onPromptPaste={onPromptPaste}
               />
             ))}
           <SchemaForm
@@ -367,6 +439,7 @@ export function GenerateTab({ schema }: { schema: TabSchema }) {
             column="left"
             hints={hints}
             placement={lift ? 'rest' : 'all'}
+            onPromptPaste={onPromptPaste}
           />
           {/* Last in the form, so it reads as "everything above, as one
             * line". Keyed for the reason SchemaForm is. */}
@@ -410,6 +483,7 @@ export function GenerateTab({ schema }: { schema: TabSchema }) {
             column="right"
             hints={hints}
             placement={lift ? 'rest' : 'all'}
+            onPromptPaste={onPromptPaste}
           />
           <OutputPanel schema={schema} job={job} runs={runs} />
         </>

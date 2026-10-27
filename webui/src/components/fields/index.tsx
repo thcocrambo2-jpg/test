@@ -90,9 +90,13 @@ export function TextAreaField({
   lines = 3,
   mono,
   collapsed,
+  onPasteText,
 }: Common & {
   value: string
   onChange: (next: string) => void
+  /** Offered every paste first. Answer true to say it was dealt with, and
+   *  the text is not pasted into the box. The Prompt box's settings token. */
+  onPasteText?: (text: string) => boolean
   placeholder?: string
   lines?: number
   mono?: boolean
@@ -154,6 +158,12 @@ export function TextAreaField({
         placeholder={placeholder}
         onChange={(event) => history.onChange(event.target.value)}
         onKeyDown={history.onKeyDown}
+        onPaste={
+          onPasteText &&
+          ((event) => {
+            if (onPasteText(event.clipboardData.getData('text'))) event.preventDefault()
+          })
+        }
       />
       {/* Under the box rather than in `trailing`, so it travels with the
         * control on a narrow screen — which is the width that needs it, a

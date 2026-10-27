@@ -160,6 +160,16 @@ export async function encodeToken(schema: TabSchema, data: TokenData): Promise<s
 
 export class TokenError extends Error {}
 
+/** Whether `text` is a settings token and nothing else.
+ *
+ *  What the Prompt box asks of a paste, and Generate of the prompt, before
+ *  treating it as settings rather than as words. A token inside a sentence
+ *  is not one: somebody writing a prompt that happens to contain one keeps
+ *  their text. Line breaks are allowed, as `decodeToken` allows them. */
+export function isBareToken(text: string): boolean {
+  return /^\s*ember1\.[A-Za-z0-9_-]+\.[A-Za-z0-9_\-\s]+$/.test(text) && /\S{16}/.test(text)
+}
+
 /** A pasted token — or the JSON "Copy JSON" gave — back into its data.
  *
  *  Whitespace anywhere is ignored, because a long token pasted out of a chat

@@ -9,6 +9,7 @@ import { useHandoff } from '@/store/handoff'
 import { useImageToken } from '@/components/SettingsToken'
 import { cx, fileName, relativeTime, saveFile, useCopy } from '@/lib/util'
 import {
+  BracesIcon,
   CheckIcon,
   CopyIcon,
   DownloadIcon,
@@ -239,19 +240,6 @@ export function Lightbox({
               <span className={s.btnLabel}>Load these settings</span>
             </Button>
           )}
-          {settings.can && (
-            <Button
-              size="sm"
-              variant="ghost"
-              loading={settings.busy}
-              onClick={() => void settings.copy()}
-              aria-label="Copy the settings this was made with, as a token"
-              title="Copy the settings this was made with, as a token"
-            >
-              {settings.copied ? <CheckIcon /> : <CopyIcon />}
-              <span className={s.btnLabel}>{settings.copied ? 'Copied' : 'Copy settings'}</span>
-            </Button>
-          )}
           {item.prompt && (
             <Button
               size="sm"
@@ -266,6 +254,21 @@ export function Lightbox({
               title={promptCopy.copied ? 'Prompt copied' : 'Copy prompt'}
             >
               {promptCopy.copied ? <CheckIcon /> : <CopyIcon />}
+            </Button>
+          )}
+          {/* Beside Copy prompt, since it is the other half of "take this
+            * picture's recipe away with you": the words, and everything. */}
+          {settings.can && (
+            <Button
+              size="sm"
+              variant="ghost"
+              iconOnly
+              loading={settings.busy}
+              onClick={() => void settings.copy()}
+              aria-label="Copy settings token"
+              title={settings.copied ? 'Settings token copied' : 'Copy settings token'}
+            >
+              {settings.copied ? <CheckIcon /> : <BracesIcon />}
             </Button>
           )}
           <Button

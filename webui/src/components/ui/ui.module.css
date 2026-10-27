@@ -531,6 +531,9 @@
 }
 
 .toast {
+  display: flex;
+  align-items: center;
+  gap: var(--s-3);
   background: var(--c-elevated);
   border: 1px solid var(--c-border);
   box-shadow: var(--sh-lg);
@@ -538,4 +541,18 @@
   padding: var(--s-2) var(--s-5);
   font-size: var(--t-sm);
   animation: rise var(--d-base) var(--e-out);
+}
+
+/* The host lets clicks through to the page; a toast's own button must not. */
+.toastAction {
+  pointer-events: auto;
+  background: none;
+  border: none;
+  padding: 0;
+  color: var(--c-accent);
+  font-weight: var(--fw-semibold);
+  cursor: pointer;
+}
+.toastAction:hover {
+  text-decoration: underline;
 }

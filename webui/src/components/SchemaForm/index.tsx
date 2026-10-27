@@ -45,6 +45,9 @@ export interface SchemaFormProps {
    * the schema has a `stackFirst` group: that group alone at the top of the
    * page, and the `rest` where the column always sits. */
   placement?: 'all' | 'stackFirst' | 'rest'
+  /* Handed every paste into the tab's prompt field — `schema.promptField`
+   * and no other box. True means it was handled and is not pasted. */
+  onPromptPaste?: (text: string) => boolean
 }
 
 /** Whether a field's `showIf` is satisfied. */
@@ -60,6 +63,7 @@ export function SchemaForm({
   column,
   hints,
   placement = 'all',
+  onPromptPaste,
 }: SchemaFormProps) {
   const groups = (schema.groups ?? []).filter((group) =>
     placement === 'all'
@@ -80,6 +84,7 @@ export function SchemaForm({
         values={values}
         setValue={setValue}
         hint={hints?.[field.name] ?? field.hint}
+        onPasteText={field.name === schema.promptField ? onPromptPaste : undefined}
       />
     )
   }
@@ -209,11 +214,13 @@ function FieldRenderer({
   values,
   setValue,
   hint,
+  onPasteText,
 }: {
   field: Field
   values: Record<string, unknown>
   setValue: (name: string, value: unknown) => void
   hint?: ReactNode
+  onPasteText?: (text: string) => boolean
 }) {
   const value = values[field.name]
   const set = (next: unknown) => setValue(field.name, next)
@@ -241,6 +248,7 @@ function FieldRenderer({
           collapsed={field.collapsed}
           value={String(value ?? '')}
           onChange={set}
+          onPasteText={onPasteText}
         />
       )
     case 'number':

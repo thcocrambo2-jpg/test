@@ -43,6 +43,17 @@ export function CopyIcon() {
   )
 }
 
+/** Curly braces, for "copy the settings token" — settings as data. Not
+ *  sliders: the view tools' toggle beside it already draws those. */
+export function BracesIcon() {
+  return (
+    <svg className={cx(s.btnIcon, s.btnIconAlone)} viewBox="0 0 24 24" aria-hidden="true">
+      <path d="M9 4H8a2 2 0 0 0-2 2v4a2 2 0 0 1-2 2 2 2 0 0 1 2 2v4a2 2 0 0 0 2 2h1" />
+      <path d="M15 4h1a2 2 0 0 1 2 2v4a2 2 0 0 0 2 2 2 2 0 0 0-2 2v4a2 2 0 0 1-2 2h-1" />
+    </svg>
+  )
+}
+
 /** The tick that stands in for it for a moment after a copy lands. */
 export function CheckIcon() {
   return (
