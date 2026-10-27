@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useId, useRef, useState, type ReactNode } from 'react'
 import { cx } from '@/lib/util'
 import { useUndoHistory } from '@/lib/undo'
-import { Button } from '@/components/ui'
+import { Button, useToast } from '@/components/ui'
 import { RecentStrip } from './RecentStrip'
 import s from './fields.module.css'
 
@@ -119,6 +119,34 @@ export function TextAreaField({
   const rows = expanded ? Math.max(lines, 14) : lines
   const history = useUndoHistory(value ?? '', onChange)
   const characters = (value ?? '').length
+  const toast = useToast()
+
+  /* Replace: the clipboard instead of everything in the box, in one tap —
+   * on a phone, selecting a long prompt to paste over it is the slow part.
+   *
+   * Offered to `onPasteText` first, exactly as a paste is, so a settings
+   * token on the clipboard loads the form from the Prompt box rather than
+   * landing in it as text.
+   *
+   * Reading the clipboard is something the browser has to allow: only over
+   * https or on localhost, and some browsers ask first. Where it will not,
+   * the toast says so and how to paste instead, and the box is untouched. */
+  async function replaceFromClipboard() {
+    let text: string
+    try {
+      if (!navigator.clipboard?.readText) throw new Error('unavailable')
+      text = await navigator.clipboard.readText()
+    } catch {
+      toast('This browser will not let the page read the clipboard. Long-press the box and paste.')
+      return
+    }
+    if (!text) {
+      toast('The clipboard is empty.')
+      return
+    }
+    if (onPasteText?.(text)) return
+    history.replace(text)
+  }
   return (
     <FieldShell
       id={id}
@@ -197,6 +225,21 @@ export function TextAreaField({
           <svg viewBox="0 0 24 24" aria-hidden="true">
             <path d="m15 14 5-5-5-5" />
             <path d="M20 9h-8a6 6 0 0 0 0 12h3" />
+          </svg>
+        </button>
+        <button
+          type="button"
+          className={s.undoBtn}
+          title="Replace with clipboard"
+          aria-label="Replace with clipboard"
+          onPointerDown={(event) => event.preventDefault()}
+          onClick={() => void replaceFromClipboard()}
+        >
+          <svg viewBox="0 0 24 24" aria-hidden="true">
+            <rect x="8" y="3" width="8" height="4" rx="1" />
+            <path d="M16 5h2a2 2 0 0 1 2 2v12a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V7a2 2 0 0 1 2-2h2" />
+            <path d="M9 14h6" />
+            <path d="m12 11 3 3-3 3" />
           </svg>
         </button>
         {/* Goes through the history like any other edit, so a clear is one

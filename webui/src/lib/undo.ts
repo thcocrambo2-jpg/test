@@ -38,6 +38,8 @@ export type UndoHistory = {
   undo: () => void
   redo: () => void
   clear: () => void
+  /** The whole value at once, as one undo step — Clear, and Replace. */
+  replace: (next: string) => void
   canUndo: boolean
   canRedo: boolean
 }
@@ -118,18 +120,22 @@ export function useUndoHistory(
   )
 
   // Always its own entry, never folded into the typing burst before it, so
-  // one undo brings back exactly what the clear threw away.
-  const clear = useCallback(() => {
-    if (stack.current[at.current] === '') return
-    stack.current.length = at.current + 1
-    stack.current.push('')
-    if (stack.current.length > DEPTH) stack.current.shift()
-    at.current = stack.current.length - 1
-    typedAt.current = 0
-    applying.current = true
-    setValue('')
-    bump((n) => n + 1)
-  }, [setValue])
+  // one undo brings back exactly what a clear or a replace threw away.
+  const replace = useCallback(
+    (next: string) => {
+      if (stack.current[at.current] === next) return
+      stack.current.length = at.current + 1
+      stack.current.push(next)
+      if (stack.current.length > DEPTH) stack.current.shift()
+      at.current = stack.current.length - 1
+      typedAt.current = 0
+      applying.current = true
+      setValue(next)
+      bump((n) => n + 1)
+    },
+    [setValue],
+  )
+  const clear = useCallback(() => replace(''), [replace])
 
   const onKeyDown = useCallback(
     (event: React.KeyboardEvent<HTMLTextAreaElement>) => {
@@ -153,6 +159,7 @@ export function useUndoHistory(
     undo: () => step(-1),
     redo: () => step(1),
     clear,
+    replace,
     canUndo: at.current > 0,
     canRedo: at.current < stack.current.length - 1,
   }
