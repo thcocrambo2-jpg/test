@@ -8,7 +8,10 @@ import { Alert, Button, Card, EmptyState, Pill, Segmented, Skeleton, useToast } 
 import { TextField } from '@/components/fields'
 import { useHandoff } from '@/store/handoff'
 import { useTabState } from '@/store/tabState'
-import { useCopy } from '@/lib/util'
+import { copyText, useCopy } from '@/lib/util'
+import { defaultsFor } from '@/lib/schema'
+import { encodeToken, tokenData } from '@/lib/settingsToken'
+import { BracesIcon, CheckIcon } from '@/features/gallery/icons'
 import s from './library.module.css'
 
 /*
@@ -145,6 +148,8 @@ function PromptTile({ card }: { card: PromptCard }) {
   const toast = useToast()
   const [busy, setBusy] = useState(false)
   const { copied, copy } = useCopy()
+  const [tokenBusy, setTokenBusy] = useState(false)
+  const [tokenCopied, setTokenCopied] = useState(false)
 
   const target: TabSchema | undefined = useMemo(
     () => schemas?.find((schema) => schema.key === card.tab),
@@ -172,6 +177,34 @@ function PromptTile({ card }: { card: PromptCard }) {
     }
   }
 
+  /* The card as a settings token, built on demand rather than stored: the
+   * same guarded settings Use writes, plus the two prompt boxes, over the
+   * tab's defaults, encoded exactly as the tab's own Settings token panel
+   * would. Built, so it is always in the current token format. */
+  async function copyToken() {
+    if (!target) return
+    setTokenBusy(true)
+    try {
+      const values = await api.applySettings(target.key, card.settings)
+      const form = {
+        ...defaultsFor(target),
+        ...values,
+        prompt: card.prompt,
+        negative: card.negative ?? '',
+      }
+      if (await copyText(await encodeToken(target, tokenData(target, form)))) {
+        setTokenCopied(true)
+        setTimeout(() => setTokenCopied(false), 1600)
+      } else {
+        toast('Could not reach the clipboard.')
+      }
+    } catch (error) {
+      toast(error instanceof Error ? error.message : String(error))
+    } finally {
+      setTokenBusy(false)
+    }
+  }
+
   return (
     <Card
       title={card.title || 'Untitled'}
@@ -192,6 +225,21 @@ function PromptTile({ card }: { card: PromptCard }) {
           >
             {copied ? 'Copied' : 'Copy'}
           </Button>
+          {/* Needs the tab, like Use: the settings are guarded against
+            * this pod's own lists on the way into the token. */}
+          {target && (
+            <Button
+              size="sm"
+              variant="ghost"
+              iconOnly
+              loading={tokenBusy}
+              onClick={() => void copyToken()}
+              aria-label="Copy settings token"
+              title={tokenCopied ? 'Settings token copied' : 'Copy settings token'}
+            >
+              {tokenCopied ? <CheckIcon /> : <BracesIcon />}
+            </Button>
+          )}
           {target ? (
             <Button size="sm" variant="primary" loading={busy} onClick={() => void use()}>
               Use

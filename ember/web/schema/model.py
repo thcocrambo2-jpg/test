@@ -572,41 +572,13 @@ class TabSchema:
 
         tail = self.tail()
         if tail is not None:
-            parts = {p.name: p for p in tail.parts}
-            defaults = tail.rows()
-            for index, row in enumerate(defaults):
-                for name, value in row.items():
-                    values[tail.value_key(index, name)] = value
-            used = set()
             rows = data.get("loras")
+            entries = []
             for row in rows if isinstance(rows, list) else []:
-                if not (isinstance(row, (list, tuple)) and row):
-                    continue
-                lora = row[0]
-                if lora not in parts["name"].options() or lora == assets.NONE:
-                    notes.append("LoRA %s is not on this tab's list, skipped."
-                                 % lora)
-                    continue
-                # Its own row first (the V2 tabs have one per LoRA), then
-                # any blank one (the Krea2 family's eight).
-                slot = next((i for i, d in enumerate(defaults)
-                             if i not in used and d.get("name") == lora), None)
-                if slot is None:
-                    slot = next((i for i, d in enumerate(defaults)
-                                 if i not in used
-                                 and d.get("name") == assets.NONE), None)
-                if slot is None:
-                    notes.append("LoRA %s: no free slot left, skipped." % lora)
-                    continue
-                used.add(slot)
-                values[tail.value_key(slot, "name")] = lora
-                if "weight" in parts and len(row) > 1:
-                    ok, weight = parts["weight"].restore(row[1])
-                    if ok:
-                        values[tail.value_key(slot, "weight")] = weight
-                if "enabled" in parts:
-                    values[tail.value_key(slot, "enabled")] = (
-                        bool(row[2]) if len(row) > 2 else True)
+                if isinstance(row, (list, tuple)) and row:
+                    entries.append((row[0], row[1] if len(row) > 1 else None,
+                                    bool(row[2]) if len(row) > 2 else True))
+            values.update(self._place_loras(entries, notes))
 
         # The seed comes back as it was, and Random seed comes back on: a
         # token is "these settings", and the next Generate makes another
@@ -676,11 +648,13 @@ class TabSchema:
         survive), so every lookup goes through a type check first.
 
         One difference from the guarded scalars, and it is deliberate,
-        lifted from ui._lora_updates: a LoRA id this tab does not offer
-        becomes "None" **explicitly**, and its row off, rather than being
-        left alone. The slots are being reset to a whole other recipe, and
-        a leftover LoRA from whatever was loaded before would silently join
-        it. A stored null is an empty slot and comes back as "None".
+        lifted from ui._lora_updates: the whole stack is reset, not left
+        alone where the blob is silent. Every slot goes back to its default
+        before the stored LoRAs are placed (by id; `_place_loras`), because
+        the slots are being set to a whole other recipe, and a leftover LoRA
+        from whatever was loaded before would silently join it. A LoRA id
+        this tab does not offer is dropped, and a stored null is an empty
+        slot.
         """
         if not isinstance(settings, dict):
             return {}
@@ -703,33 +677,74 @@ class TabSchema:
 
         tail = self.tail()
         if tail is not None:
+            # Stored as rows in the parts' own order, [enabled, id, weight],
+            # one per slot the tab had *when it was saved*. Read by id, not
+            # by position: see `_place_loras`.
             rows = settings.get("loras")
-            rows = rows if isinstance(rows, list) else []
-            defaults = tail.rows()
-            for index in range(tail.count()):
-                row = rows[index] if index < len(rows) else None
-                row = list(row) if isinstance(row, (list, tuple)) else []
-                known = None
-                for offset, part in enumerate(tail.parts):
-                    key = tail.value_key(index, part.name)
-                    stored = row[offset] if offset < len(row) else None
-                    if part.name == "name":
-                        if stored is None:            # an empty slot
-                            known, values[key] = True, assets.NONE
-                            continue
-                        known = stored in part.options()
-                        values[key] = stored if known else assets.NONE
-                    elif part.name == "enabled":
-                        values[key] = bool(stored) if known is not False else False
-                    else:
-                        ok, value = part.restore(stored)
-                        values[key] = value if ok else defaults[index][part.name]
-                # `enabled` is submitted before `name`, so the "this tab
-                # does not offer that id" answer is only known after the
-                # loop. Re-applied here rather than by reordering the
-                # parts, which are submission order and cannot move.
-                if known is False and "enabled" in [p.name for p in tail.parts]:
-                    values[tail.value_key(index, "enabled")] = False
+            names = [part.name for part in tail.parts]
+            entries = []
+            for row in rows if isinstance(rows, list) else []:
+                if not isinstance(row, (list, tuple)):
+                    continue
+                stored = dict(zip(names, row))
+                if stored.get("name") is None:        # an empty slot
+                    continue
+                entries.append((stored["name"], stored.get("weight"),
+                                bool(stored.get("enabled"))))
+            values.update(self._place_loras(entries, []))
+        return values
+
+    def _place_loras(self, entries, notes: list) -> dict:
+        """(id, weight, enabled) rows -> the LoRA stack's values, by id.
+
+        Every slot starts at its default (off, at its own strength) and each
+        entry goes on **its own row** if the tab has one (the V2 tabs: one
+        row per LoRA in the feature's list), else the first free blank one
+        (the Krea2 family's eight). So a stack saved when the list was
+        shorter, or in another order, comes back with every LoRA on its own
+        row and the ones added since still there, off.
+
+        It used to go by position: row n of what was saved into row n of
+        the tab, and every row past the end of it emptied. The V2 presets
+        on the licence server were saved with 5, 11, 26 and 28 rows; the
+        list has 32 now, so loading any of them (the Default does, on every
+        fresh tab) blanked 21 to 27 rows and moved up to 8 LoRAs onto other
+        LoRAs' rows. What switched on, and how strongly, was right
+        throughout; the stack just stopped showing what it held.
+
+        An id this tab does not offer is skipped with a note, as is one with
+        no slot left for it. A repeated id takes the next free blank slot.
+        """
+        tail = self.tail()
+        parts = {part.name: part for part in tail.parts}
+        defaults = tail.rows()
+        values = {}
+        for index, row in enumerate(defaults):
+            for name, value in row.items():
+                values[tail.value_key(index, name)] = value
+        used = set()
+        for lora, weight, enabled in entries:
+            if lora not in parts["name"].options() or lora == assets.NONE:
+                notes.append("LoRA %s is not on this tab's list, skipped."
+                             % lora)
+                continue
+            slot = next((i for i, d in enumerate(defaults)
+                         if i not in used and d.get("name") == lora), None)
+            if slot is None:
+                slot = next((i for i, d in enumerate(defaults)
+                             if i not in used
+                             and d.get("name") == assets.NONE), None)
+            if slot is None:
+                notes.append("LoRA %s: no free slot left, skipped." % lora)
+                continue
+            used.add(slot)
+            values[tail.value_key(slot, "name")] = lora
+            if "weight" in parts and weight is not None:
+                ok, restored = parts["weight"].restore(weight)
+                if ok:
+                    values[tail.value_key(slot, "weight")] = restored
+            if "enabled" in parts:
+                values[tail.value_key(slot, "enabled")] = bool(enabled)
         return values
 
     # ── 5. the positional call ──────────────────────────────────────
