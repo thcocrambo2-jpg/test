@@ -851,6 +851,20 @@
       "trigger": "",
       "enabled": true,
       "sort_order": 540
+    },
+    {
+      "id": "messy-bj",
+      "name": "MessyBJ",
+      "file": "MessyBlowjob_v1_H3.safetensors",
+      "source": {
+        "kind": "civitai",
+        "version": 3399472
+      },
+      "mirror": null,
+      "default_strength": 1.0,
+      "trigger": "",
+      "enabled": true,
+      "sort_order": 542
     }
   ],
   "models": [
@@ -1215,7 +1229,8 @@
         "mysticxxx-mmh3-v4",
         "nsfw-unlocked-v2",
         "vbvr-pro",
-        "doggyside-mh3-v1-0"
+        "doggyside-mh3-v1-0",
+        "messy-bj"
       ]
     },
     "minimax_t2v": {
@@ -1236,7 +1251,8 @@
         "mysticxxx-mmh3-v4",
         "nsfw-unlocked-v2",
         "vbvr-pro",
-        "doggyside-mh3-v1-0"
+        "doggyside-mh3-v1-0",
+        "messy-bj"
       ]
     },
     "wan_i2v": {
