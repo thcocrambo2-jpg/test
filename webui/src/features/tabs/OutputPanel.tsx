@@ -4,7 +4,7 @@ import { isLive, useQueue, type Job } from '@/store/queue'
 import { Alert, Button, Card, EmptyState, Pill, ProgressBar, Skeleton } from '@/components/ui'
 import { Lightbox } from '@/features/gallery/Lightbox'
 import { useImageToken } from '@/components/SettingsToken'
-import { BracesIcon, CheckIcon } from '@/features/gallery/icons'
+import { TokenMenu } from '@/features/gallery/TokenMenu'
 import { cx, useCopy, useEta } from '@/lib/util'
 import s from './tabs.module.css'
 
@@ -188,22 +188,7 @@ function Tile({ item, onOpen }: { item: MediaItem; onOpen: () => void }) {
         >
           {copied ? 'Copied' : 'Path'}
         </Button>
-        {settings.can && (
-          <Button
-            size="sm"
-            variant="ghost"
-            iconOnly
-            loading={settings.busy}
-            onClick={(event) => {
-              event.stopPropagation()
-              void settings.copy()
-            }}
-            aria-label="Copy settings token"
-            title={settings.copied ? 'Settings token copied' : 'Copy settings token'}
-          >
-            {settings.copied ? <CheckIcon /> : <BracesIcon />}
-          </Button>
-        )}
+        {settings.can && <TokenMenu settings={settings} />}
       </div>
     </div>
   )

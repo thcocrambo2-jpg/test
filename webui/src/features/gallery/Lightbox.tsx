@@ -9,7 +9,6 @@ import { useHandoff } from '@/store/handoff'
 import { useImageToken } from '@/components/SettingsToken'
 import { cx, fileName, relativeTime, saveFile, useCopy } from '@/lib/util'
 import {
-  BracesIcon,
   CheckIcon,
   CopyIcon,
   DownloadIcon,
@@ -22,6 +21,7 @@ import {
   ZoomInIcon,
   ZoomOutIcon,
 } from './icons'
+import { TokenMenu } from './TokenMenu'
 import { useImageView } from './useImageView'
 import { useSwipe } from './useSwipe'
 import s from './gallery.module.css'
@@ -258,19 +258,7 @@ export function Lightbox({
           )}
           {/* Beside Copy prompt, since it is the other half of "take this
             * picture's recipe away with you": the words, and everything. */}
-          {settings.can && (
-            <Button
-              size="sm"
-              variant="ghost"
-              iconOnly
-              loading={settings.busy}
-              onClick={() => void settings.copy()}
-              aria-label="Copy settings token"
-              title={settings.copied ? 'Settings token copied' : 'Copy settings token'}
-            >
-              {settings.copied ? <CheckIcon /> : <BracesIcon />}
-            </Button>
-          )}
+          {settings.can && <TokenMenu settings={settings} />}
           <Button
             size="sm"
             variant="ghost"

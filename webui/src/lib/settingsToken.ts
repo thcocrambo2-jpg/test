@@ -1,5 +1,6 @@
 import type { TabSchema } from '@/api/types'
 import { decode as fromBase32768, encode as toBase32768 } from 'base32768'
+import { saveBlob } from '@/lib/util'
 
 /*
  * A tab's whole form as one line of text, and back.
@@ -166,6 +167,66 @@ export async function encodeToken(schema: TabSchema, data: TokenData): Promise<s
   const json = new TextEncoder().encode(JSON.stringify(data))
   const packed = await pipe(json, new CompressionStream('deflate-raw'))
   return `${TOKEN_PREFIX}.${schema.tabId}.${toBase32768(packed)};`
+}
+
+/** Telegram splits a message longer than this, in characters. */
+export const MESSAGE_LIMIT = 4096
+
+/* A token as a file, for when one message will not hold it.
+ *
+ * Telegram takes a .txt as a document: never split, never read as
+ * formatting. The file holds the token and nothing else, so opening it and
+ * copying everything gives a token that pastes straight back. */
+
+/** `ember-<parts>.txt`, each part cut down to what a filename can hold. */
+export function tokenFileName(...parts: (string | undefined)[]): string {
+  const slug = parts
+    .filter(Boolean)
+    .map((part) => part!.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, ''))
+    .filter(Boolean)
+  return `ember-${slug.join('-')}.txt`
+}
+
+function tokenFile(token: string, name: string): File {
+  return new File([`${token}\n`], name, { type: 'text/plain' })
+}
+
+export function saveToken(token: string, name: string): void {
+  saveBlob(tokenFile(token, name), name)
+}
+
+let shareable: boolean | undefined
+
+/** Whether this browser can hand a file to the system share sheet.
+ *
+ *  Only in a secure context — HTTPS or localhost — so a pod reached over
+ *  plain HTTP says no, and Download is the way there. */
+export function canShareFiles(): boolean {
+  if (shareable === undefined) {
+    try {
+      shareable =
+        typeof navigator.canShare === 'function' &&
+        navigator.canShare({ files: [tokenFile('', 'token.txt')] })
+    } catch {
+      shareable = false
+    }
+  }
+  return shareable
+}
+
+/** Open the share sheet with the token as a file. False when it could not
+ *  open; backing out of the sheet is not a failure.
+ *
+ *  Call it straight from the click, with the token already built: Safari
+ *  only opens the sheet while the tap still counts as the user's, and an
+ *  await before this — a fetch, a deflate — can use that up. */
+export async function shareToken(token: string, name: string): Promise<boolean> {
+  try {
+    await navigator.share({ files: [tokenFile(token, name)] })
+    return true
+  } catch (error) {
+    return error instanceof DOMException && error.name === 'AbortError'
+  }
 }
 
 export class TokenError extends Error {}

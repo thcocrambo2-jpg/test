@@ -165,7 +165,12 @@ export function fileName(id: string): string {
 export async function saveFile(url: string, name: string): Promise<void> {
   const response = await fetch(url)
   if (!response.ok) throw new Error(`${response.status} ${response.statusText}`)
-  const href = URL.createObjectURL(await response.blob())
+  saveBlob(await response.blob(), name)
+}
+
+/** Hand the browser something already in memory, as a file called `name`. */
+export function saveBlob(blob: Blob, name: string): void {
+  const href = URL.createObjectURL(blob)
   const anchor = document.createElement('a')
   anchor.href = href
   anchor.download = name

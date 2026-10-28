@@ -13,9 +13,15 @@ import {
   tokenData,
   TokenError,
   TOKEN_PREFIX,
+  MESSAGE_LIMIT,
+  canShareFiles,
+  saveToken,
+  shareToken,
+  tokenFileName,
   type TokenData,
 } from '@/lib/settingsToken'
-import { copyText, cx, useCopy } from '@/lib/util'
+import { DownloadIcon, ShareIcon } from '@/features/gallery/icons'
+import { copyText, cx, fileName, useCopy } from '@/lib/util'
 import { useHandoff } from '@/store/handoff'
 import { readTabState, useTabState, writeTabState } from '@/store/tabState'
 import f from '@/components/SchemaForm/form.module.css'
@@ -85,6 +91,16 @@ export function SettingsToken({
     [schema, values, chosen, baseline],
   )
   const changes = Object.keys(data.changed ?? {}).length
+  const shareable = canShareFiles()
+
+  /** `ember-krea2v2-test-1-2026-10-28-1542.txt`: the tab, the preset, and
+   *  when, so a folder of them sorts and says what each one is. */
+  function fileFor() {
+    const now = new Date()
+    const two = (n: number) => String(n).padStart(2, '0')
+    const stamp = `${now.getFullYear()}-${two(now.getMonth() + 1)}-${two(now.getDate())}-${two(now.getHours())}${two(now.getMinutes())}`
+    return tokenFileName(schema.tabId, chosen, stamp)
+  }
 
   // Encoding is async (CompressionStream) and a slider drag is a stream of
   // changes, so it waits for the form to settle — and only while open.
@@ -185,31 +201,69 @@ export function SettingsToken({
                 '…'
               )}
             </div>
-            <div className={s.row}>
-              <Button
-                size="sm"
-                variant="primary"
-                disabled={!token}
-                onClick={() => {
-                  void tokenCopy.copy(token).then((landed) => {
-                    if (!landed) toastFail()
-                  })
-                }}
-              >
-                {tokenCopy.copied ? 'Copied' : 'Copy token'}
-              </Button>
-              <Button
-                size="sm"
-                onClick={() => {
-                  void jsonCopy.copy(JSON.stringify(data, null, 2)).then((landed) => {
-                    if (!landed) toastFail()
-                  })
-                }}
-              >
-                {jsonCopy.copied ? 'Copied' : 'Copy JSON'}
-              </Button>
-              <span className={s.count}>{token.length} characters</span>
+            {/* Two halves so a phone can stack them: sending the token, then
+              * the rest (token.module.css). */}
+            <div className={s.actions}>
+              <div className={s.send}>
+                <Button
+                  size="sm"
+                  variant="primary"
+                  disabled={!token}
+                  onClick={() => {
+                    void tokenCopy.copy(token).then((landed) => {
+                      if (!landed) toastFail()
+                    })
+                  }}
+                >
+                  {tokenCopy.copied ? 'Copied' : 'Copy token'}
+                </Button>
+                <Button
+                  size="sm"
+                  disabled={!token}
+                  onClick={() => saveToken(token, fileFor())}
+                  title="Save the token as a .txt file"
+                >
+                  <DownloadIcon />
+                  Download
+                </Button>
+                {shareable && (
+                  <Button
+                    size="sm"
+                    disabled={!token}
+                    onClick={() => {
+                      void shareToken(token, fileFor()).then((opened) => {
+                        if (!opened) toast('Could not open the share sheet.')
+                      })
+                    }}
+                    title="Send the token as a .txt file"
+                  >
+                    <ShareIcon />
+                    Share…
+                  </Button>
+                )}
+              </div>
+              <span className={s.sep} aria-hidden />
+              <div className={s.rest}>
+                <Button
+                  size="sm"
+                  onClick={() => {
+                    void jsonCopy.copy(JSON.stringify(data, null, 2)).then((landed) => {
+                      if (!landed) toastFail()
+                    })
+                  }}
+                >
+                  {jsonCopy.copied ? 'Copied' : 'Copy JSON'}
+                </Button>
+                <span className={s.count}>{token.length.toLocaleString()} characters</span>
+              </div>
             </div>
+            {token.length > MESSAGE_LIMIT && (
+              <div className={s.long}>
+                <strong>Longer than one Telegram message ({MESSAGE_LIMIT.toLocaleString()}).</strong>{' '}
+                {shareable ? 'Share or Download sends' : 'Download it and send'} it as a file
+                instead, which stays whole.
+              </div>
+            )}
             <Segmented<View>
               value={view}
               onChange={setView}
@@ -386,40 +440,68 @@ export function useTokenLoader() {
   }
 }
 
-/** "Copy settings" for one generated file: its recipe, as a token.
+/** The settings token of one generated file: its recipe, as a token.
  *
  *  Built from the recipe rather than the form, so it is the settings that
  *  picture was made with — seed included — even after the form has moved
- *  on. Nothing to copy for a file with no recipe. */
+ *  on. Nothing to copy for a file with no recipe.
+ *
+ *  `prepare` builds it ahead of the click — the token menu calls it on
+ *  opening — because Share has to be called while the tap still counts as
+ *  the user's, and a recipe fetch and a deflate in between can use that up.
+ *  Copy is safer for it too; Safari holds the clipboard to the same rule. */
 export function useImageToken(item: MediaItem | undefined) {
   const { data: schemas } = useSchemas()
   const toast = useToast()
   const [busy, setBusy] = useState(false)
   const [copied, setCopied] = useState(false)
+  const [built, setBuilt] = useState<{ id: string; token: string } | null>(null)
   const schema = schemas?.find((candidate) => candidate.key === item?.tab)
+  // Held against the file it was built for, so flipping to the next picture
+  // in the lightbox never hands over the last one's token.
+  const token = built && built.id === item?.id ? built.token : null
+  const name = item ? tokenFileName(fileName(item.id).replace(/\.[^.]+$/, '')) : ''
 
-  async function copy() {
-    if (!item || !schema) return
+  /** The token, or null with the reason already said. */
+  async function prepare(): Promise<string | null> {
+    if (token) return token
+    if (!item || !schema) return null
     setBusy(true)
     try {
       const values = await api.applyRecipe(schema.key, item.id)
       if (Object.keys(values).length === 0) {
         toast('No settings on file for that one.')
-        return
+        return null
       }
-      const token = await encodeToken(schema, tokenData(schema, { ...defaultsFor(schema), ...values }))
-      if (await copyText(token)) {
-        setCopied(true)
-        setTimeout(() => setCopied(false), 1600)
-      } else {
-        toast('Could not reach the clipboard.')
-      }
+      const next = await encodeToken(schema, tokenData(schema, { ...defaultsFor(schema), ...values }))
+      setBuilt({ id: item.id, token: next })
+      return next
     } catch (error) {
       toast(error instanceof Error ? error.message : String(error))
+      return null
     } finally {
       setBusy(false)
     }
   }
 
-  return { can: Boolean(item && schema), busy, copied, copy }
+  async function copy() {
+    const ready = await prepare()
+    if (ready === null) return
+    if (await copyText(ready)) {
+      setCopied(true)
+      setTimeout(() => setCopied(false), 1600)
+    } else {
+      toast('Could not reach the clipboard.')
+    }
+  }
+
+  function download() {
+    if (token) saveToken(token, name)
+  }
+
+  async function share() {
+    if (token && !(await shareToken(token, name))) toast('Could not open the share sheet.')
+  }
+
+  return { can: Boolean(item && schema), busy, copied, token, prepare, copy, download, share }
 }

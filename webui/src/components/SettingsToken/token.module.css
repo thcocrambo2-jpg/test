@@ -52,6 +52,61 @@
   gap: var(--s-2);
 }
 
+/* Copy token, Download, Share | Copy JSON, the count. One wrapping row on
+ * a wide screen; on a phone, sending the token gets a row of its own with
+ * thumb-sized buttons, Copy token taking the spare width. */
+.actions,
+.send,
+.rest {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--s-2);
+}
+
+.sep {
+  width: 1px;
+  align-self: stretch;
+  margin: 2px;
+  background: var(--c-border);
+}
+
+@media (max-width: 720px) {
+  .actions {
+    flex-direction: column;
+    align-items: stretch;
+  }
+
+  .send {
+    display: grid;
+    grid-auto-flow: column;
+    grid-template-columns: 1fr;
+    grid-auto-columns: auto;
+  }
+
+  .send button {
+    height: 36px;
+    font-size: var(--t-sm);
+  }
+
+  .sep {
+    display: none;
+  }
+
+  .rest {
+    justify-content: space-between;
+  }
+}
+
+/* A token past one Telegram message: send the file instead. */
+.long {
+  padding: var(--s-2) var(--s-3);
+  border-radius: var(--r-md);
+  font-size: var(--t-xs);
+  background: var(--c-info-soft);
+  border: 1px solid var(--c-info-line);
+}
+
 .count {
   font-size: var(--t-xs);
   color: var(--c-text-faint);

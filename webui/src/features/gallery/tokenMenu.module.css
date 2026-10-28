@@ -1,0 +1,175 @@
+/* The settings token menu on a picture — see TokenMenu.tsx. */
+
+.anchor {
+  display: inline-flex;
+}
+
+.trigger {
+  padding: 0 6px;
+  gap: 2px;
+}
+
+.triggerOpen {
+  background: var(--c-panel-hover);
+  color: var(--c-text);
+}
+
+.caret {
+  font-size: 8px;
+  opacity: 0.7;
+}
+
+/* Fixed to the button by TokenMenu, above the lightbox. */
+.menu {
+  position: fixed;
+  z-index: var(--z-confirm);
+  min-width: 232px;
+  display: flex;
+  flex-direction: column;
+  padding: 4px;
+  background: var(--c-elevated);
+  border: 1px solid var(--c-border-strong);
+  border-radius: var(--r-md);
+  box-shadow: var(--sh-lg);
+  line-height: var(--lh-normal);
+  animation: rise var(--d-fast) var(--e-out);
+}
+
+@keyframes rise {
+  from {
+    opacity: 0;
+    transform: translateY(-4px);
+  }
+}
+
+.head {
+  display: flex;
+  justify-content: space-between;
+  gap: var(--s-3);
+  padding: 6px 10px 4px;
+  font-size: var(--t-2xs);
+  font-weight: var(--fw-semibold);
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: var(--c-text-faint);
+}
+
+.head span {
+  text-transform: none;
+  letter-spacing: 0;
+  font-weight: var(--fw-normal);
+  font-variant-numeric: tabular-nums;
+}
+
+.item {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  height: 32px;
+  padding: 0 10px;
+  border: 0;
+  border-radius: var(--r-sm);
+  background: none;
+  color: var(--c-text);
+  font-size: var(--t-sm);
+  text-align: left;
+  cursor: pointer;
+}
+
+.item:hover:not(:disabled),
+.item:focus-visible {
+  background: var(--c-panel-hover);
+}
+
+.item:disabled {
+  opacity: 0.48;
+  cursor: progress;
+}
+
+/* The icons keep a gap for a word beside them on a button; here the row's
+   own gap does that. */
+.item svg {
+  margin-right: 0;
+}
+
+.item small {
+  margin-left: auto;
+  font-size: var(--t-2xs);
+  color: var(--c-text-faint);
+}
+
+/* ------------------------------------------------------------ the phone */
+
+.scrim {
+  position: fixed;
+  inset: 0;
+  z-index: var(--z-confirm);
+  display: flex;
+  align-items: flex-end;
+  background: var(--c-overlay);
+  line-height: var(--lh-normal);
+  animation: fade var(--d-base) var(--e-out);
+}
+
+@keyframes fade {
+  from {
+    opacity: 0;
+  }
+}
+
+.sheet {
+  width: 100%;
+  display: flex;
+  flex-direction: column;
+  padding: 8px 8px calc(22px + env(safe-area-inset-bottom));
+  background: var(--c-elevated);
+  border-top: 1px solid var(--c-border-strong);
+  border-radius: 16px 16px 0 0;
+}
+
+.grab {
+  width: 36px;
+  height: 4px;
+  margin: 2px 0 8px;
+  align-self: center;
+  border-radius: 2px;
+  background: var(--c-border-strong);
+}
+
+.sheet .item {
+  height: 48px;
+  gap: 14px;
+  padding: 0 14px;
+  font-size: var(--t-md);
+}
+
+.sheet .item svg {
+  width: 18px;
+  height: 18px;
+}
+
+.cancel {
+  margin-top: 6px;
+  height: 44px;
+  border: 1px solid var(--c-border);
+  border-radius: var(--r-md);
+  background: var(--c-panel);
+  color: var(--c-text);
+  font-size: var(--t-md);
+  cursor: pointer;
+}
+
+/* The header's marks are the whole button on a phone; the caret is room
+   it does not have. */
+@media (max-width: 720px) {
+  .caret {
+    display: none;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .menu,
+  .scrim {
+    animation: none;
+  }
+}
