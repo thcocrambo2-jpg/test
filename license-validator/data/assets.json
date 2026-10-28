@@ -865,6 +865,48 @@
       "trigger": "",
       "enabled": true,
       "sort_order": 542
+    },
+    {
+      "id": "motion-booster-v0-2",
+      "name": "Motion Booster V0.2 (Faster! Harder!)",
+      "file": "H3_Motion_BoosterV2.safetensors",
+      "source": {
+        "kind": "civitai",
+        "version": 3228867
+      },
+      "mirror": null,
+      "default_strength": 1.0,
+      "trigger": "dynv2",
+      "enabled": true,
+      "sort_order": 550
+    },
+    {
+      "id": "deepthroat-v0-2",
+      "name": "Daring's Deepthroat v0.2",
+      "file": "deepthroat_v02.safetensors",
+      "source": {
+        "kind": "civitai",
+        "version": 3226989
+      },
+      "mirror": null,
+      "default_strength": 1.0,
+      "trigger": "",
+      "enabled": true,
+      "sort_order": 560
+    },
+    {
+      "id": "brstplay-v2-0",
+      "name": "Breast Play & Jiggle v2.0",
+      "file": "breastplayjiggle_h3_v2.safetensors",
+      "source": {
+        "kind": "civitai",
+        "version": 3278283
+      },
+      "mirror": null,
+      "default_strength": 1.0,
+      "trigger": "",
+      "enabled": true,
+      "sort_order": 570
     }
   ],
   "models": [
@@ -1251,7 +1293,10 @@
         "nsfw-unlocked-v2",
         "vbvr-pro",
         "doggyside-mh3-v1-0",
-        "messy-bj"
+        "messy-bj",
+        "motion-booster-v0-2",
+        "deepthroat-v0-2",
+        "brstplay-v2-0"
       ]
     },
     "minimax_t2v": {
@@ -1274,7 +1319,10 @@
         "nsfw-unlocked-v2",
         "vbvr-pro",
         "doggyside-mh3-v1-0",
-        "messy-bj"
+        "messy-bj",
+        "motion-booster-v0-2",
+        "deepthroat-v0-2",
+        "brstplay-v2-0"
       ]
     },
     "wan_i2v": {
