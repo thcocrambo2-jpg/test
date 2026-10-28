@@ -129,8 +129,9 @@ def _mount_tab(api: APIRouter, schema) -> None:
                     "applied": None}
         if "token" in body:
             # A settings token, already decoded by the browser — it is only
-            # base64 over deflate, and the browser has both built in. What
-            # it cannot know is this pod's LoRA list and ranges.
+            # base32768 (base64url for an ember1 token) over deflate, which
+            # the browser undoes itself. What it cannot know is this pod's
+            # LoRA list and ranges.
             data = body.get("token")
             if isinstance(data, dict) and str(data.get("tab")) != key:
                 raise HTTPException(

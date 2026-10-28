@@ -208,6 +208,12 @@ export function GenerateTab({ schema }: { schema: TabSchema }) {
   // extra pass and a later remount does not re-apply it over what has been
   // typed since.
   //
+  // The one exception is a picture the handoff does not bring. A settings
+  // token and a library entry carry none, so the image you had uploaded
+  // went back to its default — empty — the moment you pasted a token over
+  // it. A picture is the input, not a setting, so it stays unless the
+  // handoff brings its own (the Gallery's, from the run's kept source).
+  //
   // It also retires the tab's default preset, which is applied once per tab
   // and asynchronously — see `shouldApplyDefault` below.
   const take = useHandoff((state) => state.take)
@@ -216,8 +222,16 @@ export function GenerateTab({ schema }: { schema: TabSchema }) {
     if (!handed) return
     take(schema.key)
     HANDED_OFF.add(schema.key)
-    setValues({ ...defaults, ...handed })
-  }, [handed, schema.key, defaults, take, setValues])
+    setValues((previous) => {
+      const next = { ...defaults, ...handed }
+      for (const field of schema.fields) {
+        if (field.type !== 'image' && field.type !== 'images') continue
+        if (field.name in handed || previous[field.name] == null) continue
+        next[field.name] = previous[field.name]
+      }
+      return next
+    })
+  }, [handed, schema.key, schema.fields, defaults, take, setValues])
 
   /* Whether the tab's default preset may still land.
    *

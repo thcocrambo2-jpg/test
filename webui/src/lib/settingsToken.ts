@@ -1,25 +1,37 @@
 import type { TabSchema } from '@/api/types'
+import { decode as fromBase32768, encode as toBase32768 } from 'base32768'
 
 /*
  * A tab's whole form as one line of text, and back.
  *
- * `ember1.<tabId>.<data>;`, where `data` is the JSON below, deflated and
- * base64url-encoded. Deflate because most of a form is repetition — field
- * names, LoRA ids, the boilerplate negative prompt — and base64url because
- * the result has to survive a chat message, a note or a spreadsheet cell as
- * one unbroken word. Both are built into the browser, so this costs no
- * library. Not a JWT: that is the same base64 *without* the compression plus
- * a signature, so it is longer, and the signature would need a secret. A
+ * `ember2.<tabId>.<data>;`, where `data` is the JSON below, deflated and
+ * base32768-encoded. Deflate because most of a form is repetition — field
+ * names, LoRA ids, the boilerplate negative prompt — and it is built into
+ * the browser. Not a JWT: that is base64 *without* the compression plus a
+ * signature, so it is longer, and the signature would need a secret. A
  * token only fills a form somebody looks at before pressing Generate, so
  * nothing about it needs proving.
  *
- * The tab id sits in the clear so a token says what it is for at a glance,
- * and pasting one into the wrong tab can offer the right one. `ember1` is the
- * format's version: a later shape gets a new prefix and this one still reads.
+ * base32768 because tokens travel through Telegram, which counts a message
+ * in characters and splits anything over 4096 into several. base32768 packs
+ * 15 bits into each character where base64url packs 6, so the same deflated
+ * bytes take 2.5x fewer characters: a form carrying 13,000 characters of
+ * prompt and negative is a 3,269-character token rather than an
+ * 8,147-character one. Its characters are CJK-looking letters, so it is
+ * longer in *bytes* — that does not matter to a chat app, but keep it out of
+ * anything sized in bytes. It also has no `_`, `*`, `~` or backtick, which
+ * Telegram reads as formatting: an `ember1` token lost every `_` that
+ * happened to pair up into "italics", and deflate does not survive one
+ * missing character.
  *
- * The `;` closes it. Nothing in base64url is a `;`, so wherever a token is
+ * The tab id sits in the clear so a token says what it is for at a glance,
+ * and pasting one into the wrong tab can offer the right one. `ember2` is the
+ * format's version. `ember1` — the same JSON, deflated, in base64url — still
+ * reads; a later shape gets a new prefix and these two keep reading.
+ *
+ * The `;` closes it. Neither alphabet has a `;`, so wherever a token is
  * kept — a spreadsheet cell with a note, a chat message — the token is
- * exactly `ember1.` up to the first `;`, and anything glued on after it,
+ * exactly `ember2.` up to the first `;`, and anything glued on after it,
  * even with no space, is plainly not part of it.
  *
  * What goes in is what a recipe records (`record` on the field): every
@@ -33,7 +45,7 @@ import type { TabSchema } from '@/api/types'
  * knows its own LoRA list and ranges.
  */
 
-export const TOKEN_PREFIX = 'ember1'
+export const TOKEN_PREFIX = 'ember2'
 
 /** A switched-on LoRA. Tokens from before this carried a third element,
  *  `enabled`, and every LoRA; the pod still reads those. */
@@ -139,14 +151,7 @@ export function tokenData(
   return data
 }
 
-function toBase64Url(bytes: Uint8Array): string {
-  let text = ''
-  for (let i = 0; i < bytes.length; i += 0x8000) {
-    text += String.fromCharCode(...bytes.subarray(i, i + 0x8000))
-  }
-  return btoa(text).replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '')
-}
-
+/** `ember1` data, which still loads. */
 function fromBase64Url(text: string): Uint8Array<ArrayBuffer> {
   const plain = atob(text.replace(/-/g, '+').replace(/_/g, '/'))
   return Uint8Array.from(plain, (char) => char.charCodeAt(0))
@@ -160,30 +165,43 @@ async function pipe(bytes: Uint8Array<ArrayBuffer>, stream: GenericTransformStre
 export async function encodeToken(schema: TabSchema, data: TokenData): Promise<string> {
   const json = new TextEncoder().encode(JSON.stringify(data))
   const packed = await pipe(json, new CompressionStream('deflate-raw'))
-  return `${TOKEN_PREFIX}.${schema.tabId}.${toBase64Url(packed)};`
+  return `${TOKEN_PREFIX}.${schema.tabId}.${toBase32768(packed)};`
 }
 
 export class TokenError extends Error {}
 
 /* A token found inside other text.
  *
- * With its closing `;`, a token is `ember1.` up to that `;`, and whitespace
+ * With its closing `;`, a token is `ember2.` up to that `;`, and whitespace
  * inside that stretch is dropped, so one a chat app wrapped over lines is
  * whole again. Everything outside the stretch is somebody's note.
  *
  * Without the `;` — copied short, or typed out — it ends at the first
- * character base64url does not use: a space, a line break, a quote, a full
- * stop. No whitespace is rejoined then, or the next word of a note would be
- * glued onto the data.
+ * character its alphabet does not use: a space, a line break, a quote, a
+ * full stop. No whitespace is rejoined then, or the next word of a note
+ * would be glued onto the data. base32768 draws only on blocks from U+0180
+ * to U+A85F, so its class leaves out all of ASCII, Latin-1's « » and é, and
+ * the punctuation blocks (curly quotes, the ellipsis, the CJK full stop) —
+ * everything a note is likely to put straight after a token.
  *
  * Both readings are offered, closed first, because a token without its `;`
  * may still have one further on, in the note. The 16-character floor keeps a
- * prompt that merely mentions "ember1." from counting. */
-const START = `${TOKEN_PREFIX}.`
-const CLOSED = /^ember1\.([A-Za-z0-9_-]+)\.([A-Za-z0-9_-]{16,})$/
-const OPEN = /^ember1\.([A-Za-z0-9_-]+)\.([A-Za-z0-9_-]{16,})/
+ * prompt that merely mentions "ember2." from counting. */
+const START = /ember[12]\./
+const DATA = {
+  ember1: '[A-Za-z0-9_-]',
+  ember2: '[\\u0180-\\u1fff\\u2070-\\u2fff\\u3040-\\ua8ff]',
+}
+type Version = keyof typeof DATA
+const CLOSED = Object.fromEntries(
+  Object.entries(DATA).map(([v, c]) => [v, new RegExp(`^${v}\\.([A-Za-z0-9_-]+)\\.(${c}{16,})$`)]),
+) as Record<Version, RegExp>
+const OPEN = Object.fromEntries(
+  Object.entries(DATA).map(([v, c]) => [v, new RegExp(`^${v}\\.([A-Za-z0-9_-]+)\\.(${c}{16,})`)]),
+) as Record<Version, RegExp>
 
 interface Candidate {
+  version: Version
   data: string
   closed: boolean
   /** Whether anything but whitespace sits outside the token. */
@@ -191,20 +209,23 @@ interface Candidate {
 }
 
 function candidates(text: string): Candidate[] {
-  const start = text.indexOf(START)
-  if (start < 0) return []
+  const found = START.exec(text)
+  if (!found) return []
+  const start = found.index
+  const version = found[0].slice(0, -1) as Version
   const out: Candidate[] = []
   const before = text.slice(0, start)
   const semi = text.indexOf(';', start)
   if (semi >= 0) {
-    const match = CLOSED.exec(text.slice(start, semi).replace(/\s+/g, ''))
+    const match = CLOSED[version].exec(text.slice(start, semi).replace(/\s+/g, ''))
     if (match) {
-      out.push({ data: match[2], closed: true, extra: (before + text.slice(semi + 1)).trim() !== '' })
+      out.push({ version, data: match[2], closed: true, extra: (before + text.slice(semi + 1)).trim() !== '' })
     }
   }
-  const match = OPEN.exec(text.slice(start))
+  const match = OPEN[version].exec(text.slice(start))
   if (match) {
     out.push({
+      version,
       data: match[2],
       closed: false,
       extra: (before + text.slice(start + match[0].length)).trim() !== '',
@@ -224,7 +245,7 @@ export function hasToken(text: string): boolean {
 /** A pasted token — or the JSON "Copy JSON" gave — back into its data, and
  *  whether there was other text around it that was left out.
  *
- *  The token may sit anywhere in the text: "my note ember1.…; more notes"
+ *  The token may sit anywhere in the text: "my note ember2.…; more notes"
  *  loads the token and drops the rest, since the token carries its own
  *  prompt. */
 export async function readToken(text: string): Promise<{ data: TokenData; extra: boolean }> {
@@ -244,7 +265,8 @@ export async function readToken(text: string): Promise<{ data: TokenData; extra:
     }
     for (const candidate of found) {
       try {
-        const json = await pipe(fromBase64Url(candidate.data), new DecompressionStream('deflate-raw'))
+        const bytes = candidate.version === 'ember1' ? fromBase64Url(candidate.data) : fromBase32768(candidate.data)
+        const json = await pipe(bytes, new DecompressionStream('deflate-raw'))
         data = JSON.parse(new TextDecoder().decode(json))
         extra = candidate.extra
         break

@@ -12,6 +12,7 @@ import {
   readable,
   tokenData,
   TokenError,
+  TOKEN_PREFIX,
   type TokenData,
 } from '@/lib/settingsToken'
 import { copyText, cx, useCopy } from '@/lib/util'
@@ -31,8 +32,9 @@ import s from './token.module.css'
  *
  * Loading goes through the pod (`TabSchema.token_values`) and then the
  * handoff store, which is exactly the Gallery's "Load these settings": it
- * replaces the whole form rather than merging into it, and works the same
- * whether the token is for this tab or another one.
+ * replaces the whole form rather than merging into it — all but an uploaded
+ * picture, which a token cannot carry — and works the same whether the
+ * token is for this tab or another one.
  */
 
 type View = 'readable' | 'raw'
@@ -231,7 +233,7 @@ export function SettingsToken({
               className={s.paste}
               rows={3}
               spellCheck={false}
-              placeholder={`Paste a token (ember1.${schema.tabId}.…) or its JSON`}
+              placeholder={`Paste a token (${TOKEN_PREFIX}.${schema.tabId}.…) or its JSON`}
               value={pasted}
               onChange={(event) => setPasted(event.target.value)}
             />
@@ -279,7 +281,8 @@ export function SettingsToken({
               </div>
             )}
             <p className={s.hint}>
-              Loading replaces the whole form with the token's settings. Random seed is
+              Loading replaces the whole form with the token's settings, except an
+              uploaded image, which a token cannot carry and so stays. Random seed is
               switched on; untick it to make the exact same image again.
             </p>
           </div>
@@ -361,8 +364,12 @@ export function useTokenLoader() {
     if (data.preset && !presetName) {
       extra.push(`The preset “${data.preset}” is gone; every setting still loaded.`)
     }
-    if (target.fields.some((field) => field.type === 'image' || field.type === 'images')) {
-      extra.push('Tokens carry no pictures, so add the input image again.')
+    // A picture already on the tab stays (GenerateTab's handoff), so this is
+    // only for a picture field that is still empty.
+    const held = readTabState<Record<string, unknown>>(`form.${target.key}`, {})
+    const empty = (value: unknown) => value == null || (Array.isArray(value) && value.length === 0)
+    if (target.fields.some((field) => (field.type === 'image' || field.type === 'images') && empty(held[field.name]))) {
+      extra.push('Tokens carry no pictures, so add the input image.')
     }
     const outcome: Outcome = {
       tone: extra.length > 0 ? 'warn' : 'ok',
