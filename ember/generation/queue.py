@@ -254,6 +254,62 @@ def cancel(job_id: str) -> str:
     return f"🛑 Stopping “{title}” …"
 
 
+MOVES = ("top", "up", "down", "bottom")
+
+
+def move(job_id: str, *, to: str | None = None,
+         before: str | None = None) -> str:
+    """Change where a waiting job stands in its lane's line.
+
+    `to` is one of MOVES; `before` is the id of another waiting job in the
+    same lane to land in front of, which is what a drag drops on. Returns
+    a line for the status box, empty when the job is already there.
+
+    Only waiting jobs move, and only among the waiting jobs of their own
+    lane. A running job is already on the GPU, and putting a video job
+    ahead of an image job that a different worker serves changes nothing.
+
+    The waiting jobs keep the slots they hold in _JOBS and only trade
+    places between them, so nothing else in the list is disturbed: not
+    the finished history, and not another lane's order. _claim reads the
+    same list under the same lock, so a move either lands before the
+    worker looks or finds the job already started — never half of each.
+    """
+    with _WAKE:
+        job = next((j for j in _JOBS if j.id == job_id), None)
+        if job is None:
+            return "⚠️ That job is no longer in the queue."
+        if job.status != QUEUED:
+            return f"⚠️ “{job.title}” has already started — it can't be moved."
+        slots = [i for i, j in enumerate(_JOBS)
+                 if j.lane == job.lane and j.status == QUEUED]
+        line = [_JOBS[i] for i in slots]
+        start = line.index(job)
+        line.remove(job)
+        if before is not None:
+            anchor = next((j for j in line if j.id == before), None)
+            if anchor is None:
+                return "⚠️ The queue changed under that move — try again."
+            target = line.index(anchor)
+        elif to in MOVES:
+            target = {"top": 0, "up": start - 1, "down": start + 1,
+                      "bottom": len(line)}[to]
+        else:
+            return f"⚠️ Unknown move: {to!r}."
+        target = max(0, min(len(line), target))
+        line.insert(target, job)
+        if target == start:
+            return ""
+        for slot, item in zip(slots, line):
+            _JOBS[slot] = item
+        _stamp(job)
+    log.info("Moved job %s to #%d in the %s lane", job_id, target + 1,
+             job.lane)
+    if target == 0:
+        return f"⤒ “{job.title}” runs next."
+    return f"↕️ Moved “{job.title}” to #{target + 1}."
+
+
 def clear_finished() -> str:
     """Drop every finished job from the list.
 
@@ -309,12 +365,21 @@ def snapshot() -> tuple[int, list[JobView], int, int]:
 
 
 def _view(job: Job) -> JobView:
-    """One row. Caller holds _LOCK."""
+    """One row. Caller holds _LOCK.
+
+    `place` is the job's position in its own lane's line, in list order,
+    which is the order _claim takes them in. Not submit time — a moved
+    job is out of submit order — and not across lanes, which counted
+    image jobs into the place of a video job they were not holding up.
+    """
     place = 0
     if job.status == QUEUED:
-        place = 1 + sum(1 for other in _JOBS
-                        if other.status == QUEUED
-                        and other.submitted < job.submitted)
+        place = 1
+        for other in _JOBS:
+            if other is job:
+                break
+            if other.status == QUEUED and other.lane == job.lane:
+                place += 1
     return JobView(id=job.id, lane=job.lane, tab=job.tab,
                    tab_label=job.tab_label, title=job.title,
                    status=job.status, progress=job.progress,

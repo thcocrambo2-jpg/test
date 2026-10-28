@@ -1,10 +1,11 @@
-"""The job queue as the browser sees it: read it, cancel one, clear it.
+"""The job queue as the browser sees it: read it, cancel one, move one,
+clear it.
 
 Running a job is `ember.generation.queue`'s business, and shaping a
-snapshot into JSON is `common._queue_json`. This is only the three routes.
+snapshot into JSON is `common._queue_json`. This is only the four routes.
 """
 
-from fastapi import APIRouter, Depends
+from fastapi import APIRouter, Body, Depends
 
 from ember.generation import queue as jobqueue
 from ember.logs import log
@@ -27,6 +28,17 @@ def register(api: APIRouter) -> None:
     def cancel(job_id: str):
         message = jobqueue.cancel(job_id)
         log.info("Queue: %s", message)
+        return {"message": message, "queue": _queue_json()}
+
+    @api.post("/jobs/{job_id}/move", dependencies=[Depends(require_auth)])
+    def move(job_id: str, body: dict = Body(default={})):
+        """{"to": "top"|"up"|"down"|"bottom"} or {"before": <job id>}."""
+        before = body.get("before")
+        message = jobqueue.move(
+            job_id, to=body.get("to"),
+            before=str(before) if before is not None else None)
+        if message:
+            log.info("Queue: %s", message)
         return {"message": message, "queue": _queue_json()}
 
     @api.post("/jobs/clear", dependencies=[Depends(require_auth)])

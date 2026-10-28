@@ -221,6 +221,12 @@ export const httpClient: ApiClient = {
     await send<unknown>(`/jobs/${encodeURIComponent(jobId)}/cancel`)
   },
 
+  moveJob: (jobId, target) =>
+    send<{ message: string; queue: QueueSnapshot }>(
+      `/jobs/${encodeURIComponent(jobId)}/move`,
+      target,
+    ),
+
   async clearFinished() {
     await send<unknown>('/jobs/clear')
   },

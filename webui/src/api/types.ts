@@ -380,6 +380,10 @@ export interface QueueSnapshot {
   jobs: QueueJob[]
 }
 
+/** Where a waiting job should go: a step, an end, or in front of another
+ *  waiting job of the same lane — which is what a drag drops on. */
+export type JobMove = { to: 'top' | 'up' | 'down' | 'bottom' } | { before: string }
+
 /** One tab's latest yield, keyed by that tab's `resultKeys`. */
 export interface DisplayResult {
   images?: MediaItem[]
@@ -592,6 +596,9 @@ export interface ApiClient {
   deleteMedia(id: string): Promise<void>
   submit(schema: TabSchema, values: SubmitValues): Promise<SubmitResult>
   cancel(jobId: string): Promise<void>
+  /** Reorder a waiting job within its lane's line. `message` is empty when
+   *  the job was already there, and starts with ⚠️ when it was refused. */
+  moveJob(jobId: string, target: JobMove): Promise<{ message: string; queue: QueueSnapshot }>
   clearFinished(): Promise<void>
   getQueue(): Promise<QueueSnapshot>
   /** Delete a selection in one request. Partial success is normal — the

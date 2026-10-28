@@ -3,6 +3,7 @@ import { useShallow } from 'zustand/react/shallow'
 import { api } from '@/api/client'
 import type {
   DisplayResult,
+  JobMove,
   MediaItem,
   QueueJob,
   StreamEvent,
@@ -39,6 +40,9 @@ export type JobStatus = 'queued' | 'running' | 'done' | 'error' | 'cancelled'
 
 export interface Job {
   id: string
+  /** The server worker that runs it. Waiting jobs only trade places within
+   *  their own lane; '' until the first snapshot names it. */
+  lane: string
   tabKey: string
   tabLabel: string
   status: JobStatus
@@ -101,6 +105,9 @@ interface QueueState {
     values: SubmitValues
   }): Promise<string>
   cancel(id: string): void
+  /** Reorder a waiting job. Resolves to the server's line when the move was
+   *  refused (it started first, say), else to ''. */
+  move(id: string, target: JobMove): Promise<string>
   dismissError(id: string): void
   remove(id: string): void
   clearFinished(): void
@@ -164,6 +171,7 @@ function merge(row: QueueJob, previous: Job | undefined): Job {
   const status = STATUS[row.status] ?? 'queued'
   return {
     id: row.id,
+    lane: row.lane,
     tabKey: row.tab,
     tabLabel: row.tabLabel,
     status: row.error ? 'error' : status,
@@ -515,6 +523,7 @@ export const useQueue = create<QueueState>((set, get) => {
           jobs: trim([
             {
               id: result.jobId,
+              lane: '',
               tabKey: schema.key,
               tabLabel: schema.label,
               status: 'queued',
@@ -546,6 +555,7 @@ export const useQueue = create<QueueState>((set, get) => {
           jobs: trim([
             {
               id,
+              lane: '',
               tabKey: schema.key,
               tabLabel: schema.label,
               status: 'error',
@@ -575,6 +585,24 @@ export const useQueue = create<QueueState>((set, get) => {
       const job = get().jobs.find((candidate) => candidate.id === id)
       if (!job || job.status === 'done' || job.status === 'error') return
       void api.cancel(id).catch(() => {})
+    },
+
+    async move(id, target) {
+      // Drawn at once, so a drop lands where it was dropped instead of
+      // snapping back until the server answers. The answer carries the
+      // whole queue and replaces this guess either way.
+      set((state) => ({ jobs: reorder(state.jobs, id, target) }))
+      try {
+        const { message, queue } = await api.moveJob(id, target)
+        onEvent({ type: 'queue', queue })
+        return message.startsWith('⚠️') ? message : ''
+      } catch (error) {
+        void api
+          .getQueue()
+          .then((snapshot) => onEvent({ type: 'queue', queue: snapshot }))
+          .catch(() => {})
+        return error instanceof Error ? error.message : String(error)
+      }
     },
 
     dismissError(id) {
@@ -619,6 +647,41 @@ export function useJobsForTab(tabKey: string): Job[] {
 
 export function isLive(job: Job): boolean {
   return job.status === 'queued' || job.status === 'running'
+}
+
+/** One lane's waiting jobs in the order they will run — the reverse of the
+ *  store, which reads newest first. */
+export function waitingLine(jobs: Job[], lane: string): Job[] {
+  return jobs.filter((job) => job.status === 'queued' && job.lane === lane).reverse()
+}
+
+/** `queue.move` on the browser's copy, for the optimistic redraw. The same
+ *  rule: the lane's waiting jobs keep the slots they hold and only trade
+ *  places, so nothing else in the list moves. */
+function reorder(jobs: Job[], id: string, target: JobMove): Job[] {
+  const job = jobs.find((candidate) => candidate.id === id)
+  if (!job || job.status !== 'queued' || !job.lane) return jobs
+  const slots: number[] = []
+  jobs.forEach((other, index) => {
+    if (other.status === 'queued' && other.lane === job.lane) slots.push(index)
+  })
+  const line = waitingLine(jobs, job.lane)
+  const start = line.indexOf(job)
+  line.splice(start, 1)
+  let to: number
+  if ('before' in target) {
+    to = line.findIndex((other) => other.id === target.before)
+    if (to < 0) return jobs
+  } else {
+    to = { top: 0, up: start - 1, down: start + 1, bottom: line.length }[target.to]
+  }
+  line.splice(Math.max(0, Math.min(line.length, to)), 0, job)
+  const next = [...jobs]
+  // Back to newest first before it goes into the slots.
+  line.reverse().forEach((other, index) => {
+    next[slots[index]] = other
+  })
+  return next
 }
 
 /** Which runs the polling fallback should fetch output for, and the
