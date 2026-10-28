@@ -6,6 +6,8 @@ import { useSchemas } from '@/api/queries'
 import type { MediaItem, TabSchema } from '@/api/types'
 import { Button, Pill, useToast } from '@/components/ui'
 import { useHandoff } from '@/store/handoff'
+import { writeTabState } from '@/store/tabState'
+import { presetValuesKey } from '@/components/PresetBar'
 import { useImageToken } from '@/components/SettingsToken'
 import { cx, fileName, relativeTime, saveFile, useCopy } from '@/lib/util'
 import {
@@ -608,11 +610,23 @@ function useReuse(item: MediaItem | undefined) {
     if (!item || !schema) return false
     setBusy(true)
     try {
-      const values = await api.applyRecipe(schema.key, item.id)
+      const { values, preset } = await api.applyRecipe(schema.key, item.id)
       if (Object.keys(values).length === 0) {
         toast('No recipe on file for that one.')
         return false
       }
+      /* The preset dropdown follows the recipe: the preset that run started
+       * from, with its values as the baseline the "Preset:" hints measure
+       * against — or nothing, for a run on none. Left alone, it went on
+       * naming whatever preset the tab was on before, over a form that no
+       * longer held it. Default marked applied as the token loader does. */
+      writeTabState(`preset.applied.${schema.key}`, false, () => true)
+      writeTabState(`preset.chosen.${schema.key}`, '', () => preset?.name ?? '')
+      writeTabState<Record<string, unknown> | null>(
+        presetValuesKey(schema.key),
+        null,
+        () => preset?.values ?? null,
+      )
       offer(schema.key, await withSources(schema, values))
       navigate(schema.route)
       /* Names the seed, because the form does not: the box now holds the

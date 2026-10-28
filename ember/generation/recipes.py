@@ -176,16 +176,21 @@ def _compact() -> None:
 
 # ── the current job ───────────────────────────────────────────────────────
 
-def begin(tab: str, tab_label: str, tab_id: str, fields) -> None:
+def begin(tab: str, tab_label: str, tab_id: str, fields,
+          preset: str = "") -> None:
     """This thread is now generating for `tab`, with these control values.
 
     `fields` is [[label, value], ...] in the tab's own input order — see
     the module docstring on why it is a list and not a dict.
+
+    `preset` is the preset the form started from, or "" for none. Context
+    rather than a setting, kept so loading the recipe can point the
+    dropdown back at it; the controls themselves are all in `fields`.
     """
     _CURRENT.recipe = {
         "tab": str(tab), "tab_label": tab_label, "tab_id": tab_id,
         "fields": [[str(label), value] for label, value in fields],
-        "seed": None,
+        "seed": None, "preset": str(preset or ""),
     }
 
 

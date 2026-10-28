@@ -594,7 +594,9 @@ export interface ApiClient {
    *  an image input cannot take one. Both kinds are the gallery's filter. */
   getGallery(cursor: string | null, kind?: MediaKind): Promise<GalleryPage>
   deleteMedia(id: string): Promise<void>
-  submit(schema: TabSchema, values: SubmitValues): Promise<SubmitResult>
+  /** `preset`: the preset dropdown's name at the click, filed with the
+   *  run's recipe so loading it later names that preset again. */
+  submit(schema: TabSchema, values: SubmitValues, preset?: string): Promise<SubmitResult>
   cancel(jobId: string): Promise<void>
   /** Reorder a waiting job within its lane's line. `message` is empty when
    *  the job was already there, and starts with ⚠️ when it was refused. */
@@ -621,7 +623,12 @@ export interface ApiClient {
    *  which model and LoRA ids this tab's feature offers, and turning the
    *  stored blob into form values is tabschema's job (see PromptCard). */
   applyPreset(tabKey: string, preset: string): Promise<Record<string, unknown>>
-  applyRecipe(tabKey: string, pathId: string): Promise<Record<string, unknown>>
+  /** `preset` is the preset that run started from and its values now, or
+   *  null for a run on none — or one since taken off offer. */
+  applyRecipe(tabKey: string, pathId: string): Promise<{
+    values: Record<string, unknown>
+    preset: { name: string; values: Record<string, unknown> } | null
+  }>
   applySettings(tabKey: string, settings: Record<string, unknown>): Promise<Record<string, unknown>>
   /** A decoded settings token, guarded by the pod. `notes` names every
    *  value that could not go in and every number that was clamped. */

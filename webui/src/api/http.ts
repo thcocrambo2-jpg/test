@@ -178,10 +178,11 @@ export const httpClient: ApiClient = {
     return send<{ deleted: number; failed: string[] }>('/gallery/delete', { ids })
   },
 
-  async submit(schema: TabSchema, values: SubmitValues): Promise<SubmitResult> {
+  async submit(schema: TabSchema, values: SubmitValues, preset = ''): Promise<SubmitResult> {
     const resolved = await resolveUploads(schema, values)
     return send<SubmitResult>(`/tabs/${encodeURIComponent(schema.key)}/generate`, {
       values: resolved,
+      preset,
     })
   },
 
@@ -271,11 +272,14 @@ export const httpClient: ApiClient = {
   },
 
   async applyRecipe(tabKey: string, pathId: string) {
-    const body = await send<{ values: Record<string, unknown> }>(
-      `/schema/${encodeURIComponent(tabKey)}/apply`,
-      { recipe: pathId },
-    )
-    return body.values
+    const body = await send<{
+      values: Record<string, unknown>
+      preset?: string | null
+      presetValues?: Record<string, unknown> | null
+    }>(`/schema/${encodeURIComponent(tabKey)}/apply`, { recipe: pathId })
+    const preset =
+      body.preset && body.presetValues ? { name: body.preset, values: body.presetValues } : null
+    return { values: body.values, preset }
   },
 
   /* One EventSource for the whole application.

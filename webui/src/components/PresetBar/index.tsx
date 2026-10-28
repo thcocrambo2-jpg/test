@@ -84,7 +84,10 @@ export function PresetBar({
   const toast = useToast()
 
   async function apply(name: string, isDefault = false) {
-    setChosen(name)
+    // The default is only named once it has landed: something else — a
+    // Gallery recipe, a token — may name another preset while it is in
+    // flight, and clearing the dropdown then would erase that.
+    if (!isDefault) setChosen(name)
     if (!name) {
       setBaseline(null)
       return
@@ -93,11 +96,11 @@ export function PresetBar({
     try {
       const values = await api.applyPreset(schema.key, name)
       if (isDefault && shouldApplyDefault && !shouldApplyDefault()) {
-        // Superseded while it was in flight. Named nowhere, then: the
-        // dropdown showing a preset the form does not hold would be a lie.
-        setChosen('')
+        // Superseded while it was in flight, so left unnamed: the dropdown
+        // showing a preset the form does not hold would be a lie.
         return
       }
+      if (isDefault) setChosen(name)
       onApply(values)
       setBaseline(values)
       toast(`Loaded the “${name}” preset`)

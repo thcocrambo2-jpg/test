@@ -142,6 +142,14 @@ Two things are deliberately left out:
   has to restore whole — but a dropdown reading "None" beside a weight of
   0.8 is a row of noise.
 
+**The preset the run started from** is kept beside the fields, as its
+name (`preset`; "" for none). The browser sends the dropdown's name with
+every Generate, and loading the recipe points the dropdown back at it,
+with that preset's values as the baseline the "Preset:" hints measure
+against — so a run on preset B with two dials moved loads as B with those
+two dials marked. A run on no preset, a recipe from before this, or a
+preset no longer on offer loads with the dropdown empty.
+
 **Uploaded files** — the source image of an edit or an image-to-video run,
 Qwen 2.1's reference images — are not stored *in* the recipe, but they do come back. See
 [Source images](#source-images) below.

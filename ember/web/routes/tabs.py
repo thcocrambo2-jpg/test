@@ -123,7 +123,16 @@ def _mount_tab(api: APIRouter, schema) -> None:
                                           for name in values[field.name]]
             if stored.get("seed") is not None and schema.field("seed"):
                 values["seed"] = stored["seed"]
-            return {"values": values, "applied": stored.get("tab_label")}
+            # The preset the run started from, with its values as they are
+            # now, so the dropdown names it and the "Preset:" hints measure
+            # against it. Absent for a run on no preset, one recorded before
+            # recipes kept this, or a preset since taken off offer.
+            preset = str(stored.get("preset") or "")
+            settings = _preset_settings(schema.preset_tab, preset)
+            return {"values": values, "applied": stored.get("tab_label"),
+                    "preset": preset if settings is not None else None,
+                    "presetValues": (schema.preset_values(settings)
+                                     if settings is not None else None)}
         if "settings" in body:
             return {"values": schema.preset_values(body.get("settings") or {}),
                     "applied": None}
@@ -180,6 +189,8 @@ def _mount_tab(api: APIRouter, schema) -> None:
         raw = body.get("values")
         if not isinstance(raw, dict):
             raise HTTPException(400, "Send a `values` object.")
+        preset = body.get("preset")
+        preset = preset if isinstance(preset, str) else ""
         try:
             resolved = _resolve_uploads(schema, raw)
             args, values = schema.submit(resolved)
@@ -195,7 +206,7 @@ def _mount_tab(api: APIRouter, schema) -> None:
         view = jobqueue.submit(
             lane=schema.lane, tab=key, tab_label=schema.title(),
             title=_job_title(schema, values),
-            fn=_recording(schema, values, kept), args=args,
+            fn=_recording(schema, values, kept, preset), args=args,
             result_keys=schema.result_keys,
         )
         ahead = max(0, view.place - 1)
@@ -232,7 +243,7 @@ def _job_title(schema, values) -> str:
     return text[:59] + "…" if len(text) > 60 else text
 
 
-def _recording(schema, values, kept=None):
+def _recording(schema, values, kept=None, preset=""):
     """The handler, wrapped so whatever it writes is filed under a recipe.
 
     The wrapper exists to move one line onto the *worker* thread. The
@@ -248,7 +259,8 @@ def _recording(schema, values, kept=None):
 
     `kept` is `_keep_sources`' answer: the name each image field's upload
     was kept under, recorded in that field's slot so the recipe can hand
-    the picture back.
+    the picture back. `preset` is the dropdown's name at the click, filed
+    beside them (recipes.begin).
     """
     fields = schema.recipe_fields(values, kept)
     key = str(schema.key)
@@ -257,7 +269,7 @@ def _recording(schema, values, kept=None):
     handler = schema.handler
 
     def run(*args):
-        recipes.begin(key, label, tab_id, fields)
+        recipes.begin(key, label, tab_id, fields, preset)
         try:
             yield from handler(*args)
         finally:

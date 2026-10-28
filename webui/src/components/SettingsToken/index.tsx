@@ -468,12 +468,15 @@ export function useImageToken(item: MediaItem | undefined) {
     if (!item || !schema) return null
     setBusy(true)
     try {
-      const values = await api.applyRecipe(schema.key, item.id)
+      const { values, preset } = await api.applyRecipe(schema.key, item.id)
       if (Object.keys(values).length === 0) {
         toast('No settings on file for that one.')
         return null
       }
-      const next = await encodeToken(schema, tokenData(schema, { ...defaultsFor(schema), ...values }))
+      const next = await encodeToken(
+        schema,
+        tokenData(schema, { ...defaultsFor(schema), ...values }, preset ?? undefined),
+      )
       setBuilt({ id: item.id, token: next })
       return next
     } catch (error) {

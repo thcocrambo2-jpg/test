@@ -1,6 +1,7 @@
 import { create } from 'zustand'
 import { useShallow } from 'zustand/react/shallow'
 import { api } from '@/api/client'
+import { readTabState } from '@/store/tabState'
 import type {
   DisplayResult,
   JobMove,
@@ -514,7 +515,10 @@ export const useQueue = create<QueueState>((set, get) => {
 
     async submit({ schema, prompt, values }) {
       try {
-        const result = await api.submit(schema, values)
+        // Read here rather than passed in, so every way a job is queued —
+        // Generate, the auto-prompt loop — files the preset the tab is on.
+        const preset = readTabState(`preset.chosen.${schema.key}`, '')
+        const result = await api.submit(schema, values, preset)
         // Optimistic, and replaced by the next `queue` event a moment
         // later. Without it the button appears to do nothing for up to
         // half a second, which is exactly the feedback gap this rewrite
