@@ -35,6 +35,7 @@ asset groups it needs.
 | `gallery` | 🖼️ Gallery | none |
 | `krea_edit` | ✨ Krea2 Edit | ~1.9 GB + base |
 | `krea_v2_edit` | 🔷 Krea2 V2 Edit | ~1.9 GB + V2 |
+| `krea_edit_v2` | 💠 Krea2 Edit V2 — on no plan (non-commercial LoRAs) | ~3.6 GB + V2 |
 | `qwen21_edit` | 🧩 Qwen 2.1 Reference — on no plan yet | ~17.3 GB, shared with `qwen21_t2i` |
 | `wan_i2v` | 🎬 Wan Video | ~48 GB |
 | `minimax_i2v` | 🎥 MiniMax I2V (video with sound) | ~56 GB, shared with `minimax_t2v` |
@@ -52,7 +53,8 @@ the same Krea 2 base models as `krea_t2i` and granting both fetches them
 once. `krea_v2_edit` is the same trick one level up: it shares the
 Identity Edit LoRA with `krea_edit` and the ~17 GB of V2 weights with
 `krea_v2_t2i`, so its own cost is only whichever of those two is not
-already granted. The MiniMax pair name one group between them, which is
+already granted. `krea_edit_v2` shares the V2 weights the same way, but
+not the edit LoRA: its two are V2's own. The MiniMax pair name one group between them, which is
 why the second tab is free, and so do the two Qwen 2.1 tabs.
 
 A new tab lands on the internal `admin` plan first and is added to a

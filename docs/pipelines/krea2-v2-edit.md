@@ -88,6 +88,9 @@ Which fields transfer and which do not is in
 
 ## Related
 
+- [krea2-edit-v2.md](krea2-edit-v2.md) — 💠 Krea2 Edit V2, which builds
+  through the same function with the V2 edit LoRAs and reference
+  placement.
 - [krea2-v2.md](krea2-v2.md) — the pipeline this imports.
 - [krea2.md](krea2.md) — the original edit recipe, in full.
 - [catalogue.md](catalogue.md) — the model and LoRA records.

@@ -187,6 +187,17 @@ upload would be distribution. Leave both out of the mirror until a
 commercial licence says otherwise — see
 [anima.md](../pipelines/anima.md#licence).
 
+Krea2 Edit V2's two LoRAs are the same case. They come from
+`conradlocke/krea2-identity-edit`, the repo the mirrored v1.2 LoRA comes
+from, pinned at `f33b2629` (the revision that added V2; v1.2's bytes are
+the same there as at the old pin) and fetched upstream, with no manifest
+item. V2 is licensed for non-commercial use only, so leave both files out
+of the mirror until a commercial licence says otherwise — see
+[krea2-edit-v2.md](../pipelines/krea2-edit-v2.md#licence). The same tab
+moved comfyui-krea2edit's pin to 2.0.0 (`13ef60f2`); that pack is Apache
+2.0, and pods clone it at the pin until a mirror run packs
+`comfyui-krea2edit-13ef60f2.tar.gz`.
+
 Catalogue **models** are only audited. The script uploads catalogue
 LoRAs, not catalogue models.
 

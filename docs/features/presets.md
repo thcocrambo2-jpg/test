@@ -20,8 +20,8 @@ customer without shipping a binary. The pod's side is
 
 ## The Edit tabs read the same list
 
-**✨ Krea2 Edit** shows 🎨 Krea2's presets and **🔷 Krea2 V2 Edit** shows
-🔶 Krea2 V2's — the same dropdown, at the top of the same column, filled
+**✨ Krea2 Edit** shows 🎨 Krea2's presets, and **🔷 Krea2 V2 Edit** and
+**💠 Krea2 Edit V2** show 🔶 Krea2 V2's — the same dropdown, at the top of the same column, filled
 from the generation tab it shares a pipeline with. A recipe is a recipe
 whether the pixels come from noise or from an uploaded image, and
 dialling one back in by hand to edit with it was the whole friction.
@@ -40,7 +40,8 @@ Everything else transfers as stored: model, steps, CFG, sampler, seed,
 randomize, batch count and the LoRA stack on ✨ Krea2 Edit; the whole
 ClownsharKSampler and Smart Seed Variance blocks and the LoRA rows on 🔷
 Krea2 V2 Edit. The controls that belong to editing alone — grounding,
-reference fidelity, the second-reference switch, the fit mode — are left
+reference fidelity, the second-reference switch, the fit mode, and on 💠
+Krea2 Edit V2 the Edit LoRA and the two placements — are left
 exactly where you set them, because no preset carries them.
 
 The `is_default` preset is applied to the Edit tabs on page load too, so

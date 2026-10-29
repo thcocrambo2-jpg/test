@@ -133,11 +133,12 @@ keep a plain name. The registry, in `sort_order`:
 | `community_prompts` | Prompt Library | tools |
 | `krea_v2_edit` | Krea2 V2 Edit | editing |
 | `qwen21_edit` | Qwen 2.1 Reference | editing |
+| `krea_edit_v2` | Krea2 Edit V2 | editing |
 | `wan_i2v` | Wan Video | video |
 | `minimax_i2v` | MiniMax Video | video |
 | `minimax_t2v` | MiniMax Text to Video | video |
 
-`zimage_t2i`, `qwen21_t2i`, `qwen21_edit` and `anima_t2i` are on no plan yet, not even `admin`,
+`zimage_t2i`, `qwen21_t2i`, `qwen21_edit`, `anima_t2i` and `krea_edit_v2` are on no plan yet, not even `admin`,
 and their rows are `enabled: false`. A key gets one through
 `features_extra`:
 

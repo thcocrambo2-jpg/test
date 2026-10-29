@@ -23,9 +23,9 @@ validation rules — is documented in
   that tab offers. The first model is the tab's default. An id may appear
   in any number of features.
 
-Ten features have a `feature_assets` entry: `krea_t2i`, `krea_edit`,
-`krea_v2_t2i`, `krea_v2_edit`, `zimage_t2i`, `qwen21_t2i`, `qwen21_edit`,
-`anima_t2i`, `minimax_i2v` and `minimax_t2v`.
+Eleven features have a `feature_assets` entry: `krea_t2i`, `krea_edit`,
+`krea_v2_t2i`, `krea_v2_edit`, `krea_edit_v2`, `zimage_t2i`, `qwen21_t2i`,
+`qwen21_edit`, `anima_t2i`, `minimax_i2v` and `minimax_t2v`.
 
 `zimage_t2i` lists one model, `z-image-turbo-bf16`, and LoRAs trained
 for Z-Image; the Krea LoRAs do not load on it, so none are shared. An
@@ -130,7 +130,7 @@ source of truth for them.
 
 ## The two shapes of LoRA stack
 
-| | Krea2, Krea2 Edit, Ember Lite, MiniMax I2V, MiniMax T2V | Krea2 V2, Krea2 V2 Edit |
+| | Krea2, Krea2 Edit, Ember Lite, MiniMax I2V, MiniMax T2V | Krea2 V2, Krea2 V2 Edit, Krea2 Edit V2 |
 | --- | --- | --- |
 | rows | `MAX_LORA_SLOTS` blank slots (currently 8), all empty | one row per LoRA in the feature's list, in that order |
 | starting state | every slot `None` and off | every row off, at its record's `default_strength` |
