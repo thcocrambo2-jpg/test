@@ -11,8 +11,8 @@
 # vite.config.ts, with CRLF normalised. scripts/check_webui.py recomputes
 # it and fails the build when it no longer matches, which is what stops a
 # stale front end from shipping.
-SOURCE_HASH = 'sha256:bcb0293994b64b5fd6f34a3018e5fbb49d3bad37806ab4593156668033ef71e5'
-BUILT_AT = '2026-10-28T19:50:22Z'
+SOURCE_HASH = 'sha256:ed806c0777e52e74264b844d398b5cc4fdc5b429231728b37d3a067fd2b4874a'
+BUILT_AT = '2026-10-29T11:26:31Z'
 
 # name -> (gzip bytes, media type, ETag). Served by ember/web/spa.py,
 # which hands the gzip stream to the browser as-is whenever it will take it.
