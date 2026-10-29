@@ -196,6 +196,19 @@ export const FEATURES = [
     sort_order: 68,
     enabled: false,
   },
+  // On no plan yet, so off here like Z-Image: see that entry.
+  {
+    key: "qwen_edit_2511",
+    name: "Qwen Edit 2511",
+    tab_label: "🪄 Qwen Edit 2511",
+    description:
+      "Edit a photo by instruction — a new pose, angle, outfit or scene — " +
+      "with up to 3 images",
+    category: "editing",
+    // 70, after Krea2 Edit V2 (69), with the other edit tabs.
+    sort_order: 70,
+    enabled: false,
+  },
   {
     key: "wan_i2v",
     name: "Wan Video",

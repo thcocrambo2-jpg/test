@@ -45,7 +45,7 @@ import { checkSettings, defaultScope } from "../src/assets.js";
 
 const PRESET_TABS = [
   "krea_t2i", "krea_v2_t2i", "minimax_i2v", "zimage_t2i", "qwen21_edit",
-  "qwen21_t2i", "anima_t2i",
+  "qwen21_t2i", "anima_t2i", "qwen_edit_2511",
 ];
 
 function args(argv) {

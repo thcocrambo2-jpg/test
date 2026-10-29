@@ -907,6 +907,21 @@
       "trigger": "",
       "enabled": true,
       "sort_order": 570
+    },
+    {
+      "id": "qwen-edit-2511-multiple-angles",
+      "name": "Multiple Angles (camera)",
+      "file": "qwen-image-edit-2511-multiple-angles-lora.safetensors",
+      "source": {
+        "kind": "hf",
+        "repo": "fal/Qwen-Image-Edit-2511-Multiple-Angles-LoRA",
+        "path": "qwen-image-edit-2511-multiple-angles-lora.safetensors"
+      },
+      "mirror": null,
+      "default_strength": 1.0,
+      "trigger": "<sks>",
+      "enabled": true,
+      "sort_order": 580
     }
   ],
   "models": [
@@ -977,6 +992,23 @@
       "variant": "raw",
       "steps": 25,
       "cfg": 1.0,
+      "turbo_lora": null,
+      "trigger": "",
+      "enabled": true
+    },
+    {
+      "id": "qwen-image-edit-2511-fp8mixed",
+      "name": "Qwen Image Edit 2511 fp8",
+      "file": "qwen_image_edit_2511_fp8mixed.safetensors",
+      "source": {
+        "kind": "hf",
+        "repo": "Comfy-Org/Qwen-Image-Edit_ComfyUI",
+        "path": "split_files/diffusion_models/qwen_image_edit_2511_fp8mixed.safetensors"
+      },
+      "mirror": null,
+      "variant": "raw",
+      "steps": 40,
+      "cfg": 4.0,
       "turbo_lora": null,
       "trigger": "",
       "enabled": true
@@ -1291,6 +1323,14 @@
         "qwen-image-2-1-int8"
       ],
       "loras": []
+    },
+    "qwen_edit_2511": {
+      "models": [
+        "qwen-image-edit-2511-fp8mixed"
+      ],
+      "loras": [
+        "qwen-edit-2511-multiple-angles"
+      ]
     },
     "anima_t2i": {
       "models": [
