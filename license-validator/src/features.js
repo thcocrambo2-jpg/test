@@ -166,6 +166,23 @@ export const FEATURES = [
     sort_order: 67,
     enabled: true,
   },
+  // The same tab on the Identity / General Edit V2 LoRAs. On no plan, and
+  // off here, because those LoRAs are free for non-commercial use only
+  // (LICENSE_V2.md in conradlocke/krea2-identity-edit): a key granted it by
+  // hand gets the tab, and once a commercial licence is in place, flipping
+  // this and adding it to a plan is all it takes.
+  {
+    key: "krea_edit_v2",
+    name: "Krea2 Edit V2",
+    tab_label: "💠 Krea2 Edit V2",
+    description:
+      "Put the person in a photo into a new pose, scene or outfit, or " +
+      "edit by instruction, with the Edit V2 LoRAs",
+    category: "editing",
+    // 69, after the other edit tabs (Krea2 V2 Edit 67, Qwen 2.1 Reference 68).
+    sort_order: 69,
+    enabled: false,
+  },
   // On no plan yet, so off here like Z-Image: see that entry.
   {
     key: "qwen21_edit",

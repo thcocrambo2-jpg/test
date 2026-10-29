@@ -1240,6 +1240,46 @@
         "krea2-lowres-v2"
       ]
     },
+    "krea_edit_v2": {
+      "models": [
+        "krea2-turbo-mxfp8",
+        "krea2-raw-fp8"
+      ],
+      "loras": [
+        "krea2-turbo",
+        "filter-bypass-3",
+        "enhancer",
+        "realism-v2",
+        "realism-engine-v3-1",
+        "realistic-snapshot",
+        "purelens",
+        "lenovo",
+        "mysticxxx-v3",
+        "knp-v4-1",
+        "snofs-krea-v1",
+        "halide-v1",
+        "realism-engine-v2-0",
+        "snofs-krea2-v1-0",
+        "aio-nsfw-v1-0",
+        "galaxyace",
+        "hmbody-d-e10",
+        "elusarca-photo",
+        "nsfw-plus",
+        "nicegirls",
+        "realism-v1",
+        "desi-realism-v1",
+        "pawg",
+        "private-style-v1-1",
+        "knp-v4-3-exp",
+        "realistic-slider-v1-0",
+        "cutifyier-v2",
+        "bloomgirls-v1-0",
+        "hm1girl-v1-0",
+        "yarn-tiny4k",
+        "yarn-showybeauty",
+        "krea2-lowres-v2"
+      ]
+    },
     "qwen21_edit": {
       "models": [
         "qwen-image-2-1-int8"
