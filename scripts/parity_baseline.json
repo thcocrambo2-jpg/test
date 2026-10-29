@@ -10299,6 +10299,5695 @@
         }
       ]
     },
+    "krea_edit_v2": {
+      "tab_id": "editv2",
+      "controls": [
+        {
+          "type": "Image",
+          "label": "Source image (paste with Ctrl+V)",
+          "value": null,
+          "placeholder": null,
+          "interactive": null,
+          "visible": true,
+          "elem_id": null
+        },
+        {
+          "type": "Checkbox",
+          "label": "\u2795 Add a second reference (subject)",
+          "value": false,
+          "interactive": null,
+          "visible": true,
+          "elem_id": null
+        },
+        {
+          "type": "Image",
+          "label": "Second reference \u2014 subject",
+          "value": null,
+          "placeholder": null,
+          "interactive": null,
+          "visible": false,
+          "elem_id": null
+        },
+        {
+          "type": "Textbox",
+          "label": "Edit instruction",
+          "value": null,
+          "lines": 5,
+          "placeholder": "make the jacket red \u00b7 this person walking a dog on a beach at sunset",
+          "interactive": null,
+          "visible": true,
+          "elem_id": null
+        },
+        {
+          "type": "Textbox",
+          "label": "Negative prompt",
+          "value": "This low quality greyscale unfinished sketch is inaccurate and flawed. The image is very blurred and lacks detail with excessive chromatic aberrations and artifacts. The image is overly saturated with excessive bloom. It has a toony aesthetic with bold outlines and flat colors.\n\nFake, unreal, wrong anatomy, big eyes, bad anatomy, extra limbs, missing fingers, fused fingers, poorly drawn hands, poorly drawn face, mutated hands, long neck, extra arms, extra legs, extra fingers, disfigured, malformed limbs, missing limbs, skinny, fat, jpeg artifacts, watermark, signature, text, logo, exaggerated features, unnatural skin tone, bokeh, deformed, lowres, out of frame, aliasing, blurry background, doll-like skin, plastic texture, uncanny valley, incorrect proportions, duplicate body parts, unnatural poses, poor anatomical proportions, pubic hair, digital art, drawing, cartoon, large breasts, huge breasts, faded colors, pastel tones, beigesthetic, flat lighting, overexposed whites, AI glow, plastic skin, skincare-ad look, studio lighting, cartoon or 3D style, text watermark or logos, cleft chin, indented chin, smooth groin, Barbie-doll anatomy, blurred genitalia, aged, wrinkles, massive breasts, 28G, airbrushed, plastic skin, clothes, bra, underwear, iPhone, smartphone, wide angle distortion, tattoos, piercings, excessive cum.",
+          "lines": 3,
+          "placeholder": null,
+          "interactive": null,
+          "visible": true,
+          "elem_id": null
+        },
+        {
+          "type": "Number",
+          "label": "Seed",
+          "value": 42,
+          "minimum": null,
+          "maximum": null,
+          "step": 1,
+          "placeholder": null,
+          "interactive": null,
+          "visible": true,
+          "elem_id": null
+        },
+        {
+          "type": "Checkbox",
+          "label": "\ud83c\udfb2 Random seed",
+          "value": true,
+          "interactive": null,
+          "visible": true,
+          "elem_id": null
+        },
+        {
+          "type": "Dropdown",
+          "label": "Model",
+          "value": "krea2-turbo-mxfp8",
+          "interactive": null,
+          "visible": true,
+          "multiselect": null,
+          "elem_id": null,
+          "choices": [
+            [
+              "Krea 2 Turbo mxfp8 (workflow default)",
+              "krea2-turbo-mxfp8"
+            ],
+            [
+              "Krea 2 Raw fp8",
+              "krea2-raw-fp8"
+            ]
+          ]
+        },
+        {
+          "type": "Dropdown",
+          "label": "Edit LoRA",
+          "value": "\ud83e\uddd1 Identity \u2014 restage the person (pose, scene, outfit, light)",
+          "interactive": null,
+          "visible": true,
+          "multiselect": null,
+          "elem_id": null,
+          "choices": [
+            [
+              "\ud83e\uddd1 Identity \u2014 restage the person (pose, scene, outfit, light)",
+              "\ud83e\uddd1 Identity \u2014 restage the person (pose, scene, outfit, light)"
+            ],
+            [
+              "\u2702\ufe0f General \u2014 remove, recolour, relight, swap the background",
+              "\u2702\ufe0f General \u2014 remove, recolour, relight, swap the background"
+            ],
+            [
+              "\ud83e\uddd1\u2702\ufe0f Both at 0.6",
+              "\ud83e\uddd1\u2702\ufe0f Both at 0.6"
+            ]
+          ]
+        },
+        {
+          "type": "Dropdown",
+          "label": "Person placement (beside = free to restage, aligned = keep the photo's layout)",
+          "value": "beside (right of target)",
+          "interactive": null,
+          "visible": true,
+          "multiselect": null,
+          "elem_id": null,
+          "choices": [
+            [
+              "aligned (trained)",
+              "aligned (trained)"
+            ],
+            [
+              "beside (right of target)",
+              "beside (right of target)"
+            ],
+            [
+              "bag of features",
+              "bag of features"
+            ]
+          ]
+        },
+        {
+          "type": "Dropdown",
+          "label": "Scene placement (second reference only)",
+          "value": "aligned (trained)",
+          "interactive": null,
+          "visible": true,
+          "multiselect": null,
+          "elem_id": null,
+          "choices": [
+            [
+              "aligned (trained)",
+              "aligned (trained)"
+            ],
+            [
+              "beside (right of target)",
+              "beside (right of target)"
+            ],
+            [
+              "bag of features",
+              "bag of features"
+            ]
+          ]
+        },
+        {
+          "type": "Slider",
+          "label": "Grounding (low = stronger edit, high = keep likeness)",
+          "value": 768,
+          "minimum": 384,
+          "maximum": 768,
+          "step": 64,
+          "interactive": null,
+          "visible": true,
+          "elem_id": null
+        },
+        {
+          "type": "Slider",
+          "label": "Reference fidelity (1 = neutral, ~4 = strong likeness, >10 breaks removals)",
+          "value": 2.0,
+          "minimum": 0.0,
+          "maximum": 10.0,
+          "step": 0.5,
+          "interactive": null,
+          "visible": true,
+          "elem_id": null
+        },
+        {
+          "type": "Slider",
+          "label": "Scene fidelity (1 = neutral)",
+          "value": 1.0,
+          "minimum": 0.0,
+          "maximum": 10.0,
+          "step": 0.5,
+          "interactive": null,
+          "visible": false,
+          "elem_id": null
+        },
+        {
+          "type": "Slider",
+          "label": "Eta",
+          "value": 0.5,
+          "minimum": 0.0,
+          "maximum": 2.0,
+          "step": 0.01,
+          "interactive": null,
+          "visible": true,
+          "elem_id": null
+        },
+        {
+          "type": "Dropdown",
+          "label": "Sampler",
+          "value": "linear/euler",
+          "interactive": null,
+          "visible": true,
+          "multiselect": null,
+          "elem_id": null,
+          "choices": [
+            [
+              "linear/euler",
+              "linear/euler"
+            ],
+            [
+              "res_2m",
+              "res_2m"
+            ],
+            [
+              "res_3m",
+              "res_3m"
+            ],
+            [
+              "deis_2m",
+              "deis_2m"
+            ],
+            [
+              "euler",
+              "euler"
+            ]
+          ]
+        },
+        {
+          "type": "Dropdown",
+          "label": "Scheduler",
+          "value": "bong_tangent",
+          "interactive": null,
+          "visible": true,
+          "multiselect": null,
+          "elem_id": null,
+          "choices": [
+            [
+              "bong_tangent",
+              "bong_tangent"
+            ],
+            [
+              "beta57",
+              "beta57"
+            ],
+            [
+              "normal",
+              "normal"
+            ],
+            [
+              "karras",
+              "karras"
+            ],
+            [
+              "simple",
+              "simple"
+            ]
+          ]
+        },
+        {
+          "type": "Slider",
+          "label": "Steps",
+          "value": 10,
+          "minimum": 1,
+          "maximum": 100,
+          "step": 1,
+          "interactive": null,
+          "visible": true,
+          "elem_id": null
+        },
+        {
+          "type": "Slider",
+          "label": "CFG",
+          "value": 1.0,
+          "minimum": 0.0,
+          "maximum": 20.0,
+          "step": 0.1,
+          "interactive": null,
+          "visible": true,
+          "elem_id": null
+        },
+        {
+          "type": "Dropdown",
+          "label": "Sampler mode",
+          "value": "standard",
+          "interactive": null,
+          "visible": true,
+          "multiselect": null,
+          "elem_id": null,
+          "choices": [
+            [
+              "standard",
+              "standard"
+            ],
+            [
+              "unsample",
+              "unsample"
+            ],
+            [
+              "resample",
+              "resample"
+            ]
+          ]
+        },
+        {
+          "type": "Checkbox",
+          "label": "bongmath",
+          "value": true,
+          "interactive": null,
+          "visible": true,
+          "elem_id": null
+        },
+        {
+          "type": "Dropdown",
+          "label": "Preset",
+          "value": "\ud83c\udf31 Subtle",
+          "interactive": null,
+          "visible": true,
+          "multiselect": null,
+          "elem_id": null,
+          "choices": [
+            [
+              "\u274c Disabled",
+              "\u274c Disabled"
+            ],
+            [
+              "\ud83c\udf31 Subtle",
+              "\ud83c\udf31 Subtle"
+            ],
+            [
+              "\ud83c\udf3f Balanced",
+              "\ud83c\udf3f Balanced"
+            ],
+            [
+              "\ud83e\udeb4 Creative",
+              "\ud83e\udeb4 Creative"
+            ],
+            [
+              "\ud83c\udf33 Bold",
+              "\ud83c\udf33 Bold"
+            ],
+            [
+              "\ud83c\udf34 Wild",
+              "\ud83c\udf34 Wild"
+            ],
+            [
+              "\u2699\ufe0f Custom",
+              "\u2699\ufe0f Custom"
+            ]
+          ]
+        },
+        {
+          "type": "Slider",
+          "label": "Fine tune",
+          "value": 50,
+          "minimum": 0,
+          "maximum": 100,
+          "step": 1,
+          "interactive": null,
+          "visible": true,
+          "elem_id": null
+        },
+        {
+          "type": "Dropdown",
+          "label": "Model type",
+          "value": "\ud83d\udcf8 Krea2 (SingleStream)",
+          "interactive": null,
+          "visible": true,
+          "multiselect": null,
+          "elem_id": null,
+          "choices": [
+            [
+              "\u26a1 Ember Lite Turbo",
+              "\u26a1 Z-Image Turbo"
+            ],
+            [
+              "\ud83d\udcf8 Krea2 (SingleStream)",
+              "\ud83d\udcf8 Krea2 (SingleStream)"
+            ],
+            [
+              "\ud83d\uddbc\ufe0f Qwen-Image",
+              "\ud83d\uddbc\ufe0f Qwen-Image"
+            ],
+            [
+              "\ud83d\udd2e Flux (Dev/Schnell)",
+              "\ud83d\udd2e Flux (Dev/Schnell)"
+            ],
+            [
+              "\ud83c\udfa8 Chroma HD",
+              "\ud83c\udfa8 Chroma HD"
+            ],
+            [
+              "\ud83e\udde7 ERNIE-Image",
+              "\ud83e\udde7 ERNIE-Image"
+            ],
+            [
+              "\ud83d\udd2e Ideogram 4.0",
+              "\ud83d\udd2e Ideogram 4.0"
+            ],
+            [
+              "\ud83d\udd8c\ufe0f SDXL",
+              "\ud83d\udd8c\ufe0f SDXL"
+            ],
+            [
+              "\ud83c\udfac Wan2.2",
+              "\ud83c\udfac Wan2.2"
+            ],
+            [
+              "\u2699\ufe0f Other",
+              "\u2699\ufe0f Other"
+            ]
+          ]
+        },
+        {
+          "type": "Dropdown",
+          "label": "Schedule",
+          "value": "constant",
+          "interactive": null,
+          "visible": true,
+          "multiselect": null,
+          "elem_id": null,
+          "choices": [
+            [
+              "constant",
+              "constant"
+            ],
+            [
+              "decreasing",
+              "decreasing"
+            ],
+            [
+              "step_cutoff",
+              "step_cutoff"
+            ],
+            [
+              "tiered_release",
+              "tiered_release"
+            ],
+            [
+              "hard_lock",
+              "hard_lock"
+            ]
+          ]
+        },
+        {
+          "type": "Slider",
+          "label": "Cutoff step",
+          "value": 8,
+          "minimum": 0,
+          "maximum": 100,
+          "step": 1,
+          "interactive": null,
+          "visible": true,
+          "elem_id": null
+        },
+        {
+          "type": "Slider",
+          "label": "Total steps",
+          "value": 20,
+          "minimum": 1,
+          "maximum": 100,
+          "step": 1,
+          "interactive": null,
+          "visible": true,
+          "elem_id": null
+        },
+        {
+          "type": "Slider",
+          "label": "Cutoff strength",
+          "value": 0.0,
+          "minimum": 0.0,
+          "maximum": 1.0,
+          "step": 0.1,
+          "interactive": null,
+          "visible": true,
+          "elem_id": null
+        },
+        {
+          "type": "Slider",
+          "label": "Shift strength",
+          "value": 100,
+          "minimum": 0,
+          "maximum": 200,
+          "step": 1,
+          "interactive": null,
+          "visible": true,
+          "elem_id": null
+        },
+        {
+          "type": "Slider",
+          "label": "Batch count",
+          "value": 1,
+          "minimum": 1,
+          "maximum": 20,
+          "step": 1,
+          "interactive": null,
+          "visible": true,
+          "elem_id": null
+        },
+        {
+          "type": "Checkbox",
+          "label": "On",
+          "value": false,
+          "interactive": null,
+          "visible": true,
+          "elem_id": null
+        },
+        {
+          "type": "Dropdown",
+          "label": "LoRA 1",
+          "value": "krea2-turbo",
+          "interactive": null,
+          "visible": true,
+          "multiselect": null,
+          "elem_id": null,
+          "choices": [
+            [
+              "None",
+              "None"
+            ],
+            [
+              "Krea 2 Turbo LoRA",
+              "krea2-turbo"
+            ],
+            [
+              "Filter Bypass 3",
+              "filter-bypass-3"
+            ],
+            [
+              "Enhancer",
+              "enhancer"
+            ],
+            [
+              "Realism V2",
+              "realism-v2"
+            ],
+            [
+              "Ideogram 4",
+              "realism-engine-v3-1"
+            ],
+            [
+              "Realistic Snapshot",
+              "realistic-snapshot"
+            ],
+            [
+              "PureLens",
+              "purelens"
+            ],
+            [
+              "Lenovo",
+              "lenovo"
+            ],
+            [
+              "MysticXXX v3",
+              "mysticxxx-v3"
+            ],
+            [
+              "KNP v4.1",
+              "knp-v4-1"
+            ],
+            [
+              "SNOFS Krea v1",
+              "snofs-krea-v1"
+            ],
+            [
+              "Halide v1",
+              "halide-v1"
+            ],
+            [
+              "Realism Engine v2.0",
+              "realism-engine-v2-0"
+            ],
+            [
+              "SNOFS Krea2 v1.0",
+              "snofs-krea2-v1-0"
+            ],
+            [
+              "AIO NSFW v1.0",
+              "aio-nsfw-v1-0"
+            ],
+            [
+              "GalaxyAce",
+              "galaxyace"
+            ],
+            [
+              "HMBody D e10",
+              "hmbody-d-e10"
+            ],
+            [
+              "Elusarca Photo",
+              "elusarca-photo"
+            ],
+            [
+              "NSFW Plus",
+              "nsfw-plus"
+            ],
+            [
+              "Nicegirls",
+              "nicegirls"
+            ],
+            [
+              "Realism V1",
+              "realism-v1"
+            ],
+            [
+              "Desi Realism v1",
+              "desi-realism-v1"
+            ],
+            [
+              "PAWG",
+              "pawg"
+            ],
+            [
+              "Private Magazine Style v1.1",
+              "private-style-v1-1"
+            ],
+            [
+              "Krea 2 NSFW v4.3 EXP",
+              "knp-v4-3-exp"
+            ],
+            [
+              "Realistic Slider v1.0",
+              "realistic-slider-v1-0"
+            ],
+            [
+              "Cutifyier v2",
+              "cutifyier-v2"
+            ],
+            [
+              "BloomGirls UltraRealism v1.0",
+              "bloomgirls-v1-0"
+            ],
+            [
+              "HM1Girl v1.0",
+              "hm1girl-v1-0"
+            ],
+            [
+              "YARN Tiny4K",
+              "yarn-tiny4k"
+            ],
+            [
+              "YARN ShowyBeauty",
+              "yarn-showybeauty"
+            ],
+            [
+              "Krea2 LowRes",
+              "krea2-lowres-v2"
+            ]
+          ]
+        },
+        {
+          "type": "Slider",
+          "label": "Strength",
+          "value": 0.6,
+          "minimum": 0.0,
+          "maximum": 2.0,
+          "step": 0.01,
+          "interactive": null,
+          "visible": true,
+          "elem_id": null
+        },
+        {
+          "type": "Checkbox",
+          "label": "On",
+          "value": false,
+          "interactive": null,
+          "visible": true,
+          "elem_id": null
+        },
+        {
+          "type": "Dropdown",
+          "label": "LoRA 2",
+          "value": "filter-bypass-3",
+          "interactive": null,
+          "visible": true,
+          "multiselect": null,
+          "elem_id": null,
+          "choices": [
+            [
+              "None",
+              "None"
+            ],
+            [
+              "Krea 2 Turbo LoRA",
+              "krea2-turbo"
+            ],
+            [
+              "Filter Bypass 3",
+              "filter-bypass-3"
+            ],
+            [
+              "Enhancer",
+              "enhancer"
+            ],
+            [
+              "Realism V2",
+              "realism-v2"
+            ],
+            [
+              "Ideogram 4",
+              "realism-engine-v3-1"
+            ],
+            [
+              "Realistic Snapshot",
+              "realistic-snapshot"
+            ],
+            [
+              "PureLens",
+              "purelens"
+            ],
+            [
+              "Lenovo",
+              "lenovo"
+            ],
+            [
+              "MysticXXX v3",
+              "mysticxxx-v3"
+            ],
+            [
+              "KNP v4.1",
+              "knp-v4-1"
+            ],
+            [
+              "SNOFS Krea v1",
+              "snofs-krea-v1"
+            ],
+            [
+              "Halide v1",
+              "halide-v1"
+            ],
+            [
+              "Realism Engine v2.0",
+              "realism-engine-v2-0"
+            ],
+            [
+              "SNOFS Krea2 v1.0",
+              "snofs-krea2-v1-0"
+            ],
+            [
+              "AIO NSFW v1.0",
+              "aio-nsfw-v1-0"
+            ],
+            [
+              "GalaxyAce",
+              "galaxyace"
+            ],
+            [
+              "HMBody D e10",
+              "hmbody-d-e10"
+            ],
+            [
+              "Elusarca Photo",
+              "elusarca-photo"
+            ],
+            [
+              "NSFW Plus",
+              "nsfw-plus"
+            ],
+            [
+              "Nicegirls",
+              "nicegirls"
+            ],
+            [
+              "Realism V1",
+              "realism-v1"
+            ],
+            [
+              "Desi Realism v1",
+              "desi-realism-v1"
+            ],
+            [
+              "PAWG",
+              "pawg"
+            ],
+            [
+              "Private Magazine Style v1.1",
+              "private-style-v1-1"
+            ],
+            [
+              "Krea 2 NSFW v4.3 EXP",
+              "knp-v4-3-exp"
+            ],
+            [
+              "Realistic Slider v1.0",
+              "realistic-slider-v1-0"
+            ],
+            [
+              "Cutifyier v2",
+              "cutifyier-v2"
+            ],
+            [
+              "BloomGirls UltraRealism v1.0",
+              "bloomgirls-v1-0"
+            ],
+            [
+              "HM1Girl v1.0",
+              "hm1girl-v1-0"
+            ],
+            [
+              "YARN Tiny4K",
+              "yarn-tiny4k"
+            ],
+            [
+              "YARN ShowyBeauty",
+              "yarn-showybeauty"
+            ],
+            [
+              "Krea2 LowRes",
+              "krea2-lowres-v2"
+            ]
+          ]
+        },
+        {
+          "type": "Slider",
+          "label": "Strength",
+          "value": 0.93,
+          "minimum": 0.0,
+          "maximum": 2.0,
+          "step": 0.01,
+          "interactive": null,
+          "visible": true,
+          "elem_id": null
+        },
+        {
+          "type": "Checkbox",
+          "label": "On",
+          "value": false,
+          "interactive": null,
+          "visible": true,
+          "elem_id": null
+        },
+        {
+          "type": "Dropdown",
+          "label": "LoRA 3",
+          "value": "enhancer",
+          "interactive": null,
+          "visible": true,
+          "multiselect": null,
+          "elem_id": null,
+          "choices": [
+            [
+              "None",
+              "None"
+            ],
+            [
+              "Krea 2 Turbo LoRA",
+              "krea2-turbo"
+            ],
+            [
+              "Filter Bypass 3",
+              "filter-bypass-3"
+            ],
+            [
+              "Enhancer",
+              "enhancer"
+            ],
+            [
+              "Realism V2",
+              "realism-v2"
+            ],
+            [
+              "Ideogram 4",
+              "realism-engine-v3-1"
+            ],
+            [
+              "Realistic Snapshot",
+              "realistic-snapshot"
+            ],
+            [
+              "PureLens",
+              "purelens"
+            ],
+            [
+              "Lenovo",
+              "lenovo"
+            ],
+            [
+              "MysticXXX v3",
+              "mysticxxx-v3"
+            ],
+            [
+              "KNP v4.1",
+              "knp-v4-1"
+            ],
+            [
+              "SNOFS Krea v1",
+              "snofs-krea-v1"
+            ],
+            [
+              "Halide v1",
+              "halide-v1"
+            ],
+            [
+              "Realism Engine v2.0",
+              "realism-engine-v2-0"
+            ],
+            [
+              "SNOFS Krea2 v1.0",
+              "snofs-krea2-v1-0"
+            ],
+            [
+              "AIO NSFW v1.0",
+              "aio-nsfw-v1-0"
+            ],
+            [
+              "GalaxyAce",
+              "galaxyace"
+            ],
+            [
+              "HMBody D e10",
+              "hmbody-d-e10"
+            ],
+            [
+              "Elusarca Photo",
+              "elusarca-photo"
+            ],
+            [
+              "NSFW Plus",
+              "nsfw-plus"
+            ],
+            [
+              "Nicegirls",
+              "nicegirls"
+            ],
+            [
+              "Realism V1",
+              "realism-v1"
+            ],
+            [
+              "Desi Realism v1",
+              "desi-realism-v1"
+            ],
+            [
+              "PAWG",
+              "pawg"
+            ],
+            [
+              "Private Magazine Style v1.1",
+              "private-style-v1-1"
+            ],
+            [
+              "Krea 2 NSFW v4.3 EXP",
+              "knp-v4-3-exp"
+            ],
+            [
+              "Realistic Slider v1.0",
+              "realistic-slider-v1-0"
+            ],
+            [
+              "Cutifyier v2",
+              "cutifyier-v2"
+            ],
+            [
+              "BloomGirls UltraRealism v1.0",
+              "bloomgirls-v1-0"
+            ],
+            [
+              "HM1Girl v1.0",
+              "hm1girl-v1-0"
+            ],
+            [
+              "YARN Tiny4K",
+              "yarn-tiny4k"
+            ],
+            [
+              "YARN ShowyBeauty",
+              "yarn-showybeauty"
+            ],
+            [
+              "Krea2 LowRes",
+              "krea2-lowres-v2"
+            ]
+          ]
+        },
+        {
+          "type": "Slider",
+          "label": "Strength",
+          "value": 0.4,
+          "minimum": 0.0,
+          "maximum": 2.0,
+          "step": 0.01,
+          "interactive": null,
+          "visible": true,
+          "elem_id": null
+        },
+        {
+          "type": "Checkbox",
+          "label": "On",
+          "value": false,
+          "interactive": null,
+          "visible": true,
+          "elem_id": null
+        },
+        {
+          "type": "Dropdown",
+          "label": "LoRA 4",
+          "value": "realism-v2",
+          "interactive": null,
+          "visible": true,
+          "multiselect": null,
+          "elem_id": null,
+          "choices": [
+            [
+              "None",
+              "None"
+            ],
+            [
+              "Krea 2 Turbo LoRA",
+              "krea2-turbo"
+            ],
+            [
+              "Filter Bypass 3",
+              "filter-bypass-3"
+            ],
+            [
+              "Enhancer",
+              "enhancer"
+            ],
+            [
+              "Realism V2",
+              "realism-v2"
+            ],
+            [
+              "Ideogram 4",
+              "realism-engine-v3-1"
+            ],
+            [
+              "Realistic Snapshot",
+              "realistic-snapshot"
+            ],
+            [
+              "PureLens",
+              "purelens"
+            ],
+            [
+              "Lenovo",
+              "lenovo"
+            ],
+            [
+              "MysticXXX v3",
+              "mysticxxx-v3"
+            ],
+            [
+              "KNP v4.1",
+              "knp-v4-1"
+            ],
+            [
+              "SNOFS Krea v1",
+              "snofs-krea-v1"
+            ],
+            [
+              "Halide v1",
+              "halide-v1"
+            ],
+            [
+              "Realism Engine v2.0",
+              "realism-engine-v2-0"
+            ],
+            [
+              "SNOFS Krea2 v1.0",
+              "snofs-krea2-v1-0"
+            ],
+            [
+              "AIO NSFW v1.0",
+              "aio-nsfw-v1-0"
+            ],
+            [
+              "GalaxyAce",
+              "galaxyace"
+            ],
+            [
+              "HMBody D e10",
+              "hmbody-d-e10"
+            ],
+            [
+              "Elusarca Photo",
+              "elusarca-photo"
+            ],
+            [
+              "NSFW Plus",
+              "nsfw-plus"
+            ],
+            [
+              "Nicegirls",
+              "nicegirls"
+            ],
+            [
+              "Realism V1",
+              "realism-v1"
+            ],
+            [
+              "Desi Realism v1",
+              "desi-realism-v1"
+            ],
+            [
+              "PAWG",
+              "pawg"
+            ],
+            [
+              "Private Magazine Style v1.1",
+              "private-style-v1-1"
+            ],
+            [
+              "Krea 2 NSFW v4.3 EXP",
+              "knp-v4-3-exp"
+            ],
+            [
+              "Realistic Slider v1.0",
+              "realistic-slider-v1-0"
+            ],
+            [
+              "Cutifyier v2",
+              "cutifyier-v2"
+            ],
+            [
+              "BloomGirls UltraRealism v1.0",
+              "bloomgirls-v1-0"
+            ],
+            [
+              "HM1Girl v1.0",
+              "hm1girl-v1-0"
+            ],
+            [
+              "YARN Tiny4K",
+              "yarn-tiny4k"
+            ],
+            [
+              "YARN ShowyBeauty",
+              "yarn-showybeauty"
+            ],
+            [
+              "Krea2 LowRes",
+              "krea2-lowres-v2"
+            ]
+          ]
+        },
+        {
+          "type": "Slider",
+          "label": "Strength",
+          "value": 0.3,
+          "minimum": 0.0,
+          "maximum": 2.0,
+          "step": 0.01,
+          "interactive": null,
+          "visible": true,
+          "elem_id": null
+        },
+        {
+          "type": "Checkbox",
+          "label": "On",
+          "value": false,
+          "interactive": null,
+          "visible": true,
+          "elem_id": null
+        },
+        {
+          "type": "Dropdown",
+          "label": "LoRA 5",
+          "value": "realism-engine-v3-1",
+          "interactive": null,
+          "visible": true,
+          "multiselect": null,
+          "elem_id": null,
+          "choices": [
+            [
+              "None",
+              "None"
+            ],
+            [
+              "Krea 2 Turbo LoRA",
+              "krea2-turbo"
+            ],
+            [
+              "Filter Bypass 3",
+              "filter-bypass-3"
+            ],
+            [
+              "Enhancer",
+              "enhancer"
+            ],
+            [
+              "Realism V2",
+              "realism-v2"
+            ],
+            [
+              "Ideogram 4",
+              "realism-engine-v3-1"
+            ],
+            [
+              "Realistic Snapshot",
+              "realistic-snapshot"
+            ],
+            [
+              "PureLens",
+              "purelens"
+            ],
+            [
+              "Lenovo",
+              "lenovo"
+            ],
+            [
+              "MysticXXX v3",
+              "mysticxxx-v3"
+            ],
+            [
+              "KNP v4.1",
+              "knp-v4-1"
+            ],
+            [
+              "SNOFS Krea v1",
+              "snofs-krea-v1"
+            ],
+            [
+              "Halide v1",
+              "halide-v1"
+            ],
+            [
+              "Realism Engine v2.0",
+              "realism-engine-v2-0"
+            ],
+            [
+              "SNOFS Krea2 v1.0",
+              "snofs-krea2-v1-0"
+            ],
+            [
+              "AIO NSFW v1.0",
+              "aio-nsfw-v1-0"
+            ],
+            [
+              "GalaxyAce",
+              "galaxyace"
+            ],
+            [
+              "HMBody D e10",
+              "hmbody-d-e10"
+            ],
+            [
+              "Elusarca Photo",
+              "elusarca-photo"
+            ],
+            [
+              "NSFW Plus",
+              "nsfw-plus"
+            ],
+            [
+              "Nicegirls",
+              "nicegirls"
+            ],
+            [
+              "Realism V1",
+              "realism-v1"
+            ],
+            [
+              "Desi Realism v1",
+              "desi-realism-v1"
+            ],
+            [
+              "PAWG",
+              "pawg"
+            ],
+            [
+              "Private Magazine Style v1.1",
+              "private-style-v1-1"
+            ],
+            [
+              "Krea 2 NSFW v4.3 EXP",
+              "knp-v4-3-exp"
+            ],
+            [
+              "Realistic Slider v1.0",
+              "realistic-slider-v1-0"
+            ],
+            [
+              "Cutifyier v2",
+              "cutifyier-v2"
+            ],
+            [
+              "BloomGirls UltraRealism v1.0",
+              "bloomgirls-v1-0"
+            ],
+            [
+              "HM1Girl v1.0",
+              "hm1girl-v1-0"
+            ],
+            [
+              "YARN Tiny4K",
+              "yarn-tiny4k"
+            ],
+            [
+              "YARN ShowyBeauty",
+              "yarn-showybeauty"
+            ],
+            [
+              "Krea2 LowRes",
+              "krea2-lowres-v2"
+            ]
+          ]
+        },
+        {
+          "type": "Slider",
+          "label": "Strength",
+          "value": 0.6,
+          "minimum": 0.0,
+          "maximum": 2.0,
+          "step": 0.01,
+          "interactive": null,
+          "visible": true,
+          "elem_id": null
+        },
+        {
+          "type": "Checkbox",
+          "label": "On",
+          "value": false,
+          "interactive": null,
+          "visible": true,
+          "elem_id": null
+        },
+        {
+          "type": "Dropdown",
+          "label": "LoRA 6",
+          "value": "realistic-snapshot",
+          "interactive": null,
+          "visible": true,
+          "multiselect": null,
+          "elem_id": null,
+          "choices": [
+            [
+              "None",
+              "None"
+            ],
+            [
+              "Krea 2 Turbo LoRA",
+              "krea2-turbo"
+            ],
+            [
+              "Filter Bypass 3",
+              "filter-bypass-3"
+            ],
+            [
+              "Enhancer",
+              "enhancer"
+            ],
+            [
+              "Realism V2",
+              "realism-v2"
+            ],
+            [
+              "Ideogram 4",
+              "realism-engine-v3-1"
+            ],
+            [
+              "Realistic Snapshot",
+              "realistic-snapshot"
+            ],
+            [
+              "PureLens",
+              "purelens"
+            ],
+            [
+              "Lenovo",
+              "lenovo"
+            ],
+            [
+              "MysticXXX v3",
+              "mysticxxx-v3"
+            ],
+            [
+              "KNP v4.1",
+              "knp-v4-1"
+            ],
+            [
+              "SNOFS Krea v1",
+              "snofs-krea-v1"
+            ],
+            [
+              "Halide v1",
+              "halide-v1"
+            ],
+            [
+              "Realism Engine v2.0",
+              "realism-engine-v2-0"
+            ],
+            [
+              "SNOFS Krea2 v1.0",
+              "snofs-krea2-v1-0"
+            ],
+            [
+              "AIO NSFW v1.0",
+              "aio-nsfw-v1-0"
+            ],
+            [
+              "GalaxyAce",
+              "galaxyace"
+            ],
+            [
+              "HMBody D e10",
+              "hmbody-d-e10"
+            ],
+            [
+              "Elusarca Photo",
+              "elusarca-photo"
+            ],
+            [
+              "NSFW Plus",
+              "nsfw-plus"
+            ],
+            [
+              "Nicegirls",
+              "nicegirls"
+            ],
+            [
+              "Realism V1",
+              "realism-v1"
+            ],
+            [
+              "Desi Realism v1",
+              "desi-realism-v1"
+            ],
+            [
+              "PAWG",
+              "pawg"
+            ],
+            [
+              "Private Magazine Style v1.1",
+              "private-style-v1-1"
+            ],
+            [
+              "Krea 2 NSFW v4.3 EXP",
+              "knp-v4-3-exp"
+            ],
+            [
+              "Realistic Slider v1.0",
+              "realistic-slider-v1-0"
+            ],
+            [
+              "Cutifyier v2",
+              "cutifyier-v2"
+            ],
+            [
+              "BloomGirls UltraRealism v1.0",
+              "bloomgirls-v1-0"
+            ],
+            [
+              "HM1Girl v1.0",
+              "hm1girl-v1-0"
+            ],
+            [
+              "YARN Tiny4K",
+              "yarn-tiny4k"
+            ],
+            [
+              "YARN ShowyBeauty",
+              "yarn-showybeauty"
+            ],
+            [
+              "Krea2 LowRes",
+              "krea2-lowres-v2"
+            ]
+          ]
+        },
+        {
+          "type": "Slider",
+          "label": "Strength",
+          "value": 0.8,
+          "minimum": 0.0,
+          "maximum": 2.0,
+          "step": 0.01,
+          "interactive": null,
+          "visible": true,
+          "elem_id": null
+        },
+        {
+          "type": "Checkbox",
+          "label": "On",
+          "value": false,
+          "interactive": null,
+          "visible": true,
+          "elem_id": null
+        },
+        {
+          "type": "Dropdown",
+          "label": "LoRA 7",
+          "value": "purelens",
+          "interactive": null,
+          "visible": true,
+          "multiselect": null,
+          "elem_id": null,
+          "choices": [
+            [
+              "None",
+              "None"
+            ],
+            [
+              "Krea 2 Turbo LoRA",
+              "krea2-turbo"
+            ],
+            [
+              "Filter Bypass 3",
+              "filter-bypass-3"
+            ],
+            [
+              "Enhancer",
+              "enhancer"
+            ],
+            [
+              "Realism V2",
+              "realism-v2"
+            ],
+            [
+              "Ideogram 4",
+              "realism-engine-v3-1"
+            ],
+            [
+              "Realistic Snapshot",
+              "realistic-snapshot"
+            ],
+            [
+              "PureLens",
+              "purelens"
+            ],
+            [
+              "Lenovo",
+              "lenovo"
+            ],
+            [
+              "MysticXXX v3",
+              "mysticxxx-v3"
+            ],
+            [
+              "KNP v4.1",
+              "knp-v4-1"
+            ],
+            [
+              "SNOFS Krea v1",
+              "snofs-krea-v1"
+            ],
+            [
+              "Halide v1",
+              "halide-v1"
+            ],
+            [
+              "Realism Engine v2.0",
+              "realism-engine-v2-0"
+            ],
+            [
+              "SNOFS Krea2 v1.0",
+              "snofs-krea2-v1-0"
+            ],
+            [
+              "AIO NSFW v1.0",
+              "aio-nsfw-v1-0"
+            ],
+            [
+              "GalaxyAce",
+              "galaxyace"
+            ],
+            [
+              "HMBody D e10",
+              "hmbody-d-e10"
+            ],
+            [
+              "Elusarca Photo",
+              "elusarca-photo"
+            ],
+            [
+              "NSFW Plus",
+              "nsfw-plus"
+            ],
+            [
+              "Nicegirls",
+              "nicegirls"
+            ],
+            [
+              "Realism V1",
+              "realism-v1"
+            ],
+            [
+              "Desi Realism v1",
+              "desi-realism-v1"
+            ],
+            [
+              "PAWG",
+              "pawg"
+            ],
+            [
+              "Private Magazine Style v1.1",
+              "private-style-v1-1"
+            ],
+            [
+              "Krea 2 NSFW v4.3 EXP",
+              "knp-v4-3-exp"
+            ],
+            [
+              "Realistic Slider v1.0",
+              "realistic-slider-v1-0"
+            ],
+            [
+              "Cutifyier v2",
+              "cutifyier-v2"
+            ],
+            [
+              "BloomGirls UltraRealism v1.0",
+              "bloomgirls-v1-0"
+            ],
+            [
+              "HM1Girl v1.0",
+              "hm1girl-v1-0"
+            ],
+            [
+              "YARN Tiny4K",
+              "yarn-tiny4k"
+            ],
+            [
+              "YARN ShowyBeauty",
+              "yarn-showybeauty"
+            ],
+            [
+              "Krea2 LowRes",
+              "krea2-lowres-v2"
+            ]
+          ]
+        },
+        {
+          "type": "Slider",
+          "label": "Strength",
+          "value": 0.6,
+          "minimum": 0.0,
+          "maximum": 2.0,
+          "step": 0.01,
+          "interactive": null,
+          "visible": true,
+          "elem_id": null
+        },
+        {
+          "type": "Checkbox",
+          "label": "On",
+          "value": false,
+          "interactive": null,
+          "visible": true,
+          "elem_id": null
+        },
+        {
+          "type": "Dropdown",
+          "label": "LoRA 8",
+          "value": "lenovo",
+          "interactive": null,
+          "visible": true,
+          "multiselect": null,
+          "elem_id": null,
+          "choices": [
+            [
+              "None",
+              "None"
+            ],
+            [
+              "Krea 2 Turbo LoRA",
+              "krea2-turbo"
+            ],
+            [
+              "Filter Bypass 3",
+              "filter-bypass-3"
+            ],
+            [
+              "Enhancer",
+              "enhancer"
+            ],
+            [
+              "Realism V2",
+              "realism-v2"
+            ],
+            [
+              "Ideogram 4",
+              "realism-engine-v3-1"
+            ],
+            [
+              "Realistic Snapshot",
+              "realistic-snapshot"
+            ],
+            [
+              "PureLens",
+              "purelens"
+            ],
+            [
+              "Lenovo",
+              "lenovo"
+            ],
+            [
+              "MysticXXX v3",
+              "mysticxxx-v3"
+            ],
+            [
+              "KNP v4.1",
+              "knp-v4-1"
+            ],
+            [
+              "SNOFS Krea v1",
+              "snofs-krea-v1"
+            ],
+            [
+              "Halide v1",
+              "halide-v1"
+            ],
+            [
+              "Realism Engine v2.0",
+              "realism-engine-v2-0"
+            ],
+            [
+              "SNOFS Krea2 v1.0",
+              "snofs-krea2-v1-0"
+            ],
+            [
+              "AIO NSFW v1.0",
+              "aio-nsfw-v1-0"
+            ],
+            [
+              "GalaxyAce",
+              "galaxyace"
+            ],
+            [
+              "HMBody D e10",
+              "hmbody-d-e10"
+            ],
+            [
+              "Elusarca Photo",
+              "elusarca-photo"
+            ],
+            [
+              "NSFW Plus",
+              "nsfw-plus"
+            ],
+            [
+              "Nicegirls",
+              "nicegirls"
+            ],
+            [
+              "Realism V1",
+              "realism-v1"
+            ],
+            [
+              "Desi Realism v1",
+              "desi-realism-v1"
+            ],
+            [
+              "PAWG",
+              "pawg"
+            ],
+            [
+              "Private Magazine Style v1.1",
+              "private-style-v1-1"
+            ],
+            [
+              "Krea 2 NSFW v4.3 EXP",
+              "knp-v4-3-exp"
+            ],
+            [
+              "Realistic Slider v1.0",
+              "realistic-slider-v1-0"
+            ],
+            [
+              "Cutifyier v2",
+              "cutifyier-v2"
+            ],
+            [
+              "BloomGirls UltraRealism v1.0",
+              "bloomgirls-v1-0"
+            ],
+            [
+              "HM1Girl v1.0",
+              "hm1girl-v1-0"
+            ],
+            [
+              "YARN Tiny4K",
+              "yarn-tiny4k"
+            ],
+            [
+              "YARN ShowyBeauty",
+              "yarn-showybeauty"
+            ],
+            [
+              "Krea2 LowRes",
+              "krea2-lowres-v2"
+            ]
+          ]
+        },
+        {
+          "type": "Slider",
+          "label": "Strength",
+          "value": 0.5,
+          "minimum": 0.0,
+          "maximum": 2.0,
+          "step": 0.01,
+          "interactive": null,
+          "visible": true,
+          "elem_id": null
+        },
+        {
+          "type": "Checkbox",
+          "label": "On",
+          "value": false,
+          "interactive": null,
+          "visible": true,
+          "elem_id": null
+        },
+        {
+          "type": "Dropdown",
+          "label": "LoRA 9",
+          "value": "mysticxxx-v3",
+          "interactive": null,
+          "visible": true,
+          "multiselect": null,
+          "elem_id": null,
+          "choices": [
+            [
+              "None",
+              "None"
+            ],
+            [
+              "Krea 2 Turbo LoRA",
+              "krea2-turbo"
+            ],
+            [
+              "Filter Bypass 3",
+              "filter-bypass-3"
+            ],
+            [
+              "Enhancer",
+              "enhancer"
+            ],
+            [
+              "Realism V2",
+              "realism-v2"
+            ],
+            [
+              "Ideogram 4",
+              "realism-engine-v3-1"
+            ],
+            [
+              "Realistic Snapshot",
+              "realistic-snapshot"
+            ],
+            [
+              "PureLens",
+              "purelens"
+            ],
+            [
+              "Lenovo",
+              "lenovo"
+            ],
+            [
+              "MysticXXX v3",
+              "mysticxxx-v3"
+            ],
+            [
+              "KNP v4.1",
+              "knp-v4-1"
+            ],
+            [
+              "SNOFS Krea v1",
+              "snofs-krea-v1"
+            ],
+            [
+              "Halide v1",
+              "halide-v1"
+            ],
+            [
+              "Realism Engine v2.0",
+              "realism-engine-v2-0"
+            ],
+            [
+              "SNOFS Krea2 v1.0",
+              "snofs-krea2-v1-0"
+            ],
+            [
+              "AIO NSFW v1.0",
+              "aio-nsfw-v1-0"
+            ],
+            [
+              "GalaxyAce",
+              "galaxyace"
+            ],
+            [
+              "HMBody D e10",
+              "hmbody-d-e10"
+            ],
+            [
+              "Elusarca Photo",
+              "elusarca-photo"
+            ],
+            [
+              "NSFW Plus",
+              "nsfw-plus"
+            ],
+            [
+              "Nicegirls",
+              "nicegirls"
+            ],
+            [
+              "Realism V1",
+              "realism-v1"
+            ],
+            [
+              "Desi Realism v1",
+              "desi-realism-v1"
+            ],
+            [
+              "PAWG",
+              "pawg"
+            ],
+            [
+              "Private Magazine Style v1.1",
+              "private-style-v1-1"
+            ],
+            [
+              "Krea 2 NSFW v4.3 EXP",
+              "knp-v4-3-exp"
+            ],
+            [
+              "Realistic Slider v1.0",
+              "realistic-slider-v1-0"
+            ],
+            [
+              "Cutifyier v2",
+              "cutifyier-v2"
+            ],
+            [
+              "BloomGirls UltraRealism v1.0",
+              "bloomgirls-v1-0"
+            ],
+            [
+              "HM1Girl v1.0",
+              "hm1girl-v1-0"
+            ],
+            [
+              "YARN Tiny4K",
+              "yarn-tiny4k"
+            ],
+            [
+              "YARN ShowyBeauty",
+              "yarn-showybeauty"
+            ],
+            [
+              "Krea2 LowRes",
+              "krea2-lowres-v2"
+            ]
+          ]
+        },
+        {
+          "type": "Slider",
+          "label": "Strength",
+          "value": 1.0,
+          "minimum": 0.0,
+          "maximum": 2.0,
+          "step": 0.01,
+          "interactive": null,
+          "visible": true,
+          "elem_id": null
+        },
+        {
+          "type": "Checkbox",
+          "label": "On",
+          "value": false,
+          "interactive": null,
+          "visible": true,
+          "elem_id": null
+        },
+        {
+          "type": "Dropdown",
+          "label": "LoRA 10",
+          "value": "knp-v4-1",
+          "interactive": null,
+          "visible": true,
+          "multiselect": null,
+          "elem_id": null,
+          "choices": [
+            [
+              "None",
+              "None"
+            ],
+            [
+              "Krea 2 Turbo LoRA",
+              "krea2-turbo"
+            ],
+            [
+              "Filter Bypass 3",
+              "filter-bypass-3"
+            ],
+            [
+              "Enhancer",
+              "enhancer"
+            ],
+            [
+              "Realism V2",
+              "realism-v2"
+            ],
+            [
+              "Ideogram 4",
+              "realism-engine-v3-1"
+            ],
+            [
+              "Realistic Snapshot",
+              "realistic-snapshot"
+            ],
+            [
+              "PureLens",
+              "purelens"
+            ],
+            [
+              "Lenovo",
+              "lenovo"
+            ],
+            [
+              "MysticXXX v3",
+              "mysticxxx-v3"
+            ],
+            [
+              "KNP v4.1",
+              "knp-v4-1"
+            ],
+            [
+              "SNOFS Krea v1",
+              "snofs-krea-v1"
+            ],
+            [
+              "Halide v1",
+              "halide-v1"
+            ],
+            [
+              "Realism Engine v2.0",
+              "realism-engine-v2-0"
+            ],
+            [
+              "SNOFS Krea2 v1.0",
+              "snofs-krea2-v1-0"
+            ],
+            [
+              "AIO NSFW v1.0",
+              "aio-nsfw-v1-0"
+            ],
+            [
+              "GalaxyAce",
+              "galaxyace"
+            ],
+            [
+              "HMBody D e10",
+              "hmbody-d-e10"
+            ],
+            [
+              "Elusarca Photo",
+              "elusarca-photo"
+            ],
+            [
+              "NSFW Plus",
+              "nsfw-plus"
+            ],
+            [
+              "Nicegirls",
+              "nicegirls"
+            ],
+            [
+              "Realism V1",
+              "realism-v1"
+            ],
+            [
+              "Desi Realism v1",
+              "desi-realism-v1"
+            ],
+            [
+              "PAWG",
+              "pawg"
+            ],
+            [
+              "Private Magazine Style v1.1",
+              "private-style-v1-1"
+            ],
+            [
+              "Krea 2 NSFW v4.3 EXP",
+              "knp-v4-3-exp"
+            ],
+            [
+              "Realistic Slider v1.0",
+              "realistic-slider-v1-0"
+            ],
+            [
+              "Cutifyier v2",
+              "cutifyier-v2"
+            ],
+            [
+              "BloomGirls UltraRealism v1.0",
+              "bloomgirls-v1-0"
+            ],
+            [
+              "HM1Girl v1.0",
+              "hm1girl-v1-0"
+            ],
+            [
+              "YARN Tiny4K",
+              "yarn-tiny4k"
+            ],
+            [
+              "YARN ShowyBeauty",
+              "yarn-showybeauty"
+            ],
+            [
+              "Krea2 LowRes",
+              "krea2-lowres-v2"
+            ]
+          ]
+        },
+        {
+          "type": "Slider",
+          "label": "Strength",
+          "value": 1.0,
+          "minimum": 0.0,
+          "maximum": 2.0,
+          "step": 0.01,
+          "interactive": null,
+          "visible": true,
+          "elem_id": null
+        },
+        {
+          "type": "Checkbox",
+          "label": "On",
+          "value": false,
+          "interactive": null,
+          "visible": true,
+          "elem_id": null
+        },
+        {
+          "type": "Dropdown",
+          "label": "LoRA 11",
+          "value": "snofs-krea-v1",
+          "interactive": null,
+          "visible": true,
+          "multiselect": null,
+          "elem_id": null,
+          "choices": [
+            [
+              "None",
+              "None"
+            ],
+            [
+              "Krea 2 Turbo LoRA",
+              "krea2-turbo"
+            ],
+            [
+              "Filter Bypass 3",
+              "filter-bypass-3"
+            ],
+            [
+              "Enhancer",
+              "enhancer"
+            ],
+            [
+              "Realism V2",
+              "realism-v2"
+            ],
+            [
+              "Ideogram 4",
+              "realism-engine-v3-1"
+            ],
+            [
+              "Realistic Snapshot",
+              "realistic-snapshot"
+            ],
+            [
+              "PureLens",
+              "purelens"
+            ],
+            [
+              "Lenovo",
+              "lenovo"
+            ],
+            [
+              "MysticXXX v3",
+              "mysticxxx-v3"
+            ],
+            [
+              "KNP v4.1",
+              "knp-v4-1"
+            ],
+            [
+              "SNOFS Krea v1",
+              "snofs-krea-v1"
+            ],
+            [
+              "Halide v1",
+              "halide-v1"
+            ],
+            [
+              "Realism Engine v2.0",
+              "realism-engine-v2-0"
+            ],
+            [
+              "SNOFS Krea2 v1.0",
+              "snofs-krea2-v1-0"
+            ],
+            [
+              "AIO NSFW v1.0",
+              "aio-nsfw-v1-0"
+            ],
+            [
+              "GalaxyAce",
+              "galaxyace"
+            ],
+            [
+              "HMBody D e10",
+              "hmbody-d-e10"
+            ],
+            [
+              "Elusarca Photo",
+              "elusarca-photo"
+            ],
+            [
+              "NSFW Plus",
+              "nsfw-plus"
+            ],
+            [
+              "Nicegirls",
+              "nicegirls"
+            ],
+            [
+              "Realism V1",
+              "realism-v1"
+            ],
+            [
+              "Desi Realism v1",
+              "desi-realism-v1"
+            ],
+            [
+              "PAWG",
+              "pawg"
+            ],
+            [
+              "Private Magazine Style v1.1",
+              "private-style-v1-1"
+            ],
+            [
+              "Krea 2 NSFW v4.3 EXP",
+              "knp-v4-3-exp"
+            ],
+            [
+              "Realistic Slider v1.0",
+              "realistic-slider-v1-0"
+            ],
+            [
+              "Cutifyier v2",
+              "cutifyier-v2"
+            ],
+            [
+              "BloomGirls UltraRealism v1.0",
+              "bloomgirls-v1-0"
+            ],
+            [
+              "HM1Girl v1.0",
+              "hm1girl-v1-0"
+            ],
+            [
+              "YARN Tiny4K",
+              "yarn-tiny4k"
+            ],
+            [
+              "YARN ShowyBeauty",
+              "yarn-showybeauty"
+            ],
+            [
+              "Krea2 LowRes",
+              "krea2-lowres-v2"
+            ]
+          ]
+        },
+        {
+          "type": "Slider",
+          "label": "Strength",
+          "value": 1.0,
+          "minimum": 0.0,
+          "maximum": 2.0,
+          "step": 0.01,
+          "interactive": null,
+          "visible": true,
+          "elem_id": null
+        },
+        {
+          "type": "Checkbox",
+          "label": "On",
+          "value": false,
+          "interactive": null,
+          "visible": true,
+          "elem_id": null
+        },
+        {
+          "type": "Dropdown",
+          "label": "LoRA 12",
+          "value": "halide-v1",
+          "interactive": null,
+          "visible": true,
+          "multiselect": null,
+          "elem_id": null,
+          "choices": [
+            [
+              "None",
+              "None"
+            ],
+            [
+              "Krea 2 Turbo LoRA",
+              "krea2-turbo"
+            ],
+            [
+              "Filter Bypass 3",
+              "filter-bypass-3"
+            ],
+            [
+              "Enhancer",
+              "enhancer"
+            ],
+            [
+              "Realism V2",
+              "realism-v2"
+            ],
+            [
+              "Ideogram 4",
+              "realism-engine-v3-1"
+            ],
+            [
+              "Realistic Snapshot",
+              "realistic-snapshot"
+            ],
+            [
+              "PureLens",
+              "purelens"
+            ],
+            [
+              "Lenovo",
+              "lenovo"
+            ],
+            [
+              "MysticXXX v3",
+              "mysticxxx-v3"
+            ],
+            [
+              "KNP v4.1",
+              "knp-v4-1"
+            ],
+            [
+              "SNOFS Krea v1",
+              "snofs-krea-v1"
+            ],
+            [
+              "Halide v1",
+              "halide-v1"
+            ],
+            [
+              "Realism Engine v2.0",
+              "realism-engine-v2-0"
+            ],
+            [
+              "SNOFS Krea2 v1.0",
+              "snofs-krea2-v1-0"
+            ],
+            [
+              "AIO NSFW v1.0",
+              "aio-nsfw-v1-0"
+            ],
+            [
+              "GalaxyAce",
+              "galaxyace"
+            ],
+            [
+              "HMBody D e10",
+              "hmbody-d-e10"
+            ],
+            [
+              "Elusarca Photo",
+              "elusarca-photo"
+            ],
+            [
+              "NSFW Plus",
+              "nsfw-plus"
+            ],
+            [
+              "Nicegirls",
+              "nicegirls"
+            ],
+            [
+              "Realism V1",
+              "realism-v1"
+            ],
+            [
+              "Desi Realism v1",
+              "desi-realism-v1"
+            ],
+            [
+              "PAWG",
+              "pawg"
+            ],
+            [
+              "Private Magazine Style v1.1",
+              "private-style-v1-1"
+            ],
+            [
+              "Krea 2 NSFW v4.3 EXP",
+              "knp-v4-3-exp"
+            ],
+            [
+              "Realistic Slider v1.0",
+              "realistic-slider-v1-0"
+            ],
+            [
+              "Cutifyier v2",
+              "cutifyier-v2"
+            ],
+            [
+              "BloomGirls UltraRealism v1.0",
+              "bloomgirls-v1-0"
+            ],
+            [
+              "HM1Girl v1.0",
+              "hm1girl-v1-0"
+            ],
+            [
+              "YARN Tiny4K",
+              "yarn-tiny4k"
+            ],
+            [
+              "YARN ShowyBeauty",
+              "yarn-showybeauty"
+            ],
+            [
+              "Krea2 LowRes",
+              "krea2-lowres-v2"
+            ]
+          ]
+        },
+        {
+          "type": "Slider",
+          "label": "Strength",
+          "value": 1.0,
+          "minimum": 0.0,
+          "maximum": 2.0,
+          "step": 0.01,
+          "interactive": null,
+          "visible": true,
+          "elem_id": null
+        },
+        {
+          "type": "Checkbox",
+          "label": "On",
+          "value": false,
+          "interactive": null,
+          "visible": true,
+          "elem_id": null
+        },
+        {
+          "type": "Dropdown",
+          "label": "LoRA 13",
+          "value": "realism-engine-v2-0",
+          "interactive": null,
+          "visible": true,
+          "multiselect": null,
+          "elem_id": null,
+          "choices": [
+            [
+              "None",
+              "None"
+            ],
+            [
+              "Krea 2 Turbo LoRA",
+              "krea2-turbo"
+            ],
+            [
+              "Filter Bypass 3",
+              "filter-bypass-3"
+            ],
+            [
+              "Enhancer",
+              "enhancer"
+            ],
+            [
+              "Realism V2",
+              "realism-v2"
+            ],
+            [
+              "Ideogram 4",
+              "realism-engine-v3-1"
+            ],
+            [
+              "Realistic Snapshot",
+              "realistic-snapshot"
+            ],
+            [
+              "PureLens",
+              "purelens"
+            ],
+            [
+              "Lenovo",
+              "lenovo"
+            ],
+            [
+              "MysticXXX v3",
+              "mysticxxx-v3"
+            ],
+            [
+              "KNP v4.1",
+              "knp-v4-1"
+            ],
+            [
+              "SNOFS Krea v1",
+              "snofs-krea-v1"
+            ],
+            [
+              "Halide v1",
+              "halide-v1"
+            ],
+            [
+              "Realism Engine v2.0",
+              "realism-engine-v2-0"
+            ],
+            [
+              "SNOFS Krea2 v1.0",
+              "snofs-krea2-v1-0"
+            ],
+            [
+              "AIO NSFW v1.0",
+              "aio-nsfw-v1-0"
+            ],
+            [
+              "GalaxyAce",
+              "galaxyace"
+            ],
+            [
+              "HMBody D e10",
+              "hmbody-d-e10"
+            ],
+            [
+              "Elusarca Photo",
+              "elusarca-photo"
+            ],
+            [
+              "NSFW Plus",
+              "nsfw-plus"
+            ],
+            [
+              "Nicegirls",
+              "nicegirls"
+            ],
+            [
+              "Realism V1",
+              "realism-v1"
+            ],
+            [
+              "Desi Realism v1",
+              "desi-realism-v1"
+            ],
+            [
+              "PAWG",
+              "pawg"
+            ],
+            [
+              "Private Magazine Style v1.1",
+              "private-style-v1-1"
+            ],
+            [
+              "Krea 2 NSFW v4.3 EXP",
+              "knp-v4-3-exp"
+            ],
+            [
+              "Realistic Slider v1.0",
+              "realistic-slider-v1-0"
+            ],
+            [
+              "Cutifyier v2",
+              "cutifyier-v2"
+            ],
+            [
+              "BloomGirls UltraRealism v1.0",
+              "bloomgirls-v1-0"
+            ],
+            [
+              "HM1Girl v1.0",
+              "hm1girl-v1-0"
+            ],
+            [
+              "YARN Tiny4K",
+              "yarn-tiny4k"
+            ],
+            [
+              "YARN ShowyBeauty",
+              "yarn-showybeauty"
+            ],
+            [
+              "Krea2 LowRes",
+              "krea2-lowres-v2"
+            ]
+          ]
+        },
+        {
+          "type": "Slider",
+          "label": "Strength",
+          "value": 1.0,
+          "minimum": 0.0,
+          "maximum": 2.0,
+          "step": 0.01,
+          "interactive": null,
+          "visible": true,
+          "elem_id": null
+        },
+        {
+          "type": "Checkbox",
+          "label": "On",
+          "value": false,
+          "interactive": null,
+          "visible": true,
+          "elem_id": null
+        },
+        {
+          "type": "Dropdown",
+          "label": "LoRA 14",
+          "value": "snofs-krea2-v1-0",
+          "interactive": null,
+          "visible": true,
+          "multiselect": null,
+          "elem_id": null,
+          "choices": [
+            [
+              "None",
+              "None"
+            ],
+            [
+              "Krea 2 Turbo LoRA",
+              "krea2-turbo"
+            ],
+            [
+              "Filter Bypass 3",
+              "filter-bypass-3"
+            ],
+            [
+              "Enhancer",
+              "enhancer"
+            ],
+            [
+              "Realism V2",
+              "realism-v2"
+            ],
+            [
+              "Ideogram 4",
+              "realism-engine-v3-1"
+            ],
+            [
+              "Realistic Snapshot",
+              "realistic-snapshot"
+            ],
+            [
+              "PureLens",
+              "purelens"
+            ],
+            [
+              "Lenovo",
+              "lenovo"
+            ],
+            [
+              "MysticXXX v3",
+              "mysticxxx-v3"
+            ],
+            [
+              "KNP v4.1",
+              "knp-v4-1"
+            ],
+            [
+              "SNOFS Krea v1",
+              "snofs-krea-v1"
+            ],
+            [
+              "Halide v1",
+              "halide-v1"
+            ],
+            [
+              "Realism Engine v2.0",
+              "realism-engine-v2-0"
+            ],
+            [
+              "SNOFS Krea2 v1.0",
+              "snofs-krea2-v1-0"
+            ],
+            [
+              "AIO NSFW v1.0",
+              "aio-nsfw-v1-0"
+            ],
+            [
+              "GalaxyAce",
+              "galaxyace"
+            ],
+            [
+              "HMBody D e10",
+              "hmbody-d-e10"
+            ],
+            [
+              "Elusarca Photo",
+              "elusarca-photo"
+            ],
+            [
+              "NSFW Plus",
+              "nsfw-plus"
+            ],
+            [
+              "Nicegirls",
+              "nicegirls"
+            ],
+            [
+              "Realism V1",
+              "realism-v1"
+            ],
+            [
+              "Desi Realism v1",
+              "desi-realism-v1"
+            ],
+            [
+              "PAWG",
+              "pawg"
+            ],
+            [
+              "Private Magazine Style v1.1",
+              "private-style-v1-1"
+            ],
+            [
+              "Krea 2 NSFW v4.3 EXP",
+              "knp-v4-3-exp"
+            ],
+            [
+              "Realistic Slider v1.0",
+              "realistic-slider-v1-0"
+            ],
+            [
+              "Cutifyier v2",
+              "cutifyier-v2"
+            ],
+            [
+              "BloomGirls UltraRealism v1.0",
+              "bloomgirls-v1-0"
+            ],
+            [
+              "HM1Girl v1.0",
+              "hm1girl-v1-0"
+            ],
+            [
+              "YARN Tiny4K",
+              "yarn-tiny4k"
+            ],
+            [
+              "YARN ShowyBeauty",
+              "yarn-showybeauty"
+            ],
+            [
+              "Krea2 LowRes",
+              "krea2-lowres-v2"
+            ]
+          ]
+        },
+        {
+          "type": "Slider",
+          "label": "Strength",
+          "value": 1.0,
+          "minimum": 0.0,
+          "maximum": 2.0,
+          "step": 0.01,
+          "interactive": null,
+          "visible": true,
+          "elem_id": null
+        },
+        {
+          "type": "Checkbox",
+          "label": "On",
+          "value": false,
+          "interactive": null,
+          "visible": true,
+          "elem_id": null
+        },
+        {
+          "type": "Dropdown",
+          "label": "LoRA 15",
+          "value": "aio-nsfw-v1-0",
+          "interactive": null,
+          "visible": true,
+          "multiselect": null,
+          "elem_id": null,
+          "choices": [
+            [
+              "None",
+              "None"
+            ],
+            [
+              "Krea 2 Turbo LoRA",
+              "krea2-turbo"
+            ],
+            [
+              "Filter Bypass 3",
+              "filter-bypass-3"
+            ],
+            [
+              "Enhancer",
+              "enhancer"
+            ],
+            [
+              "Realism V2",
+              "realism-v2"
+            ],
+            [
+              "Ideogram 4",
+              "realism-engine-v3-1"
+            ],
+            [
+              "Realistic Snapshot",
+              "realistic-snapshot"
+            ],
+            [
+              "PureLens",
+              "purelens"
+            ],
+            [
+              "Lenovo",
+              "lenovo"
+            ],
+            [
+              "MysticXXX v3",
+              "mysticxxx-v3"
+            ],
+            [
+              "KNP v4.1",
+              "knp-v4-1"
+            ],
+            [
+              "SNOFS Krea v1",
+              "snofs-krea-v1"
+            ],
+            [
+              "Halide v1",
+              "halide-v1"
+            ],
+            [
+              "Realism Engine v2.0",
+              "realism-engine-v2-0"
+            ],
+            [
+              "SNOFS Krea2 v1.0",
+              "snofs-krea2-v1-0"
+            ],
+            [
+              "AIO NSFW v1.0",
+              "aio-nsfw-v1-0"
+            ],
+            [
+              "GalaxyAce",
+              "galaxyace"
+            ],
+            [
+              "HMBody D e10",
+              "hmbody-d-e10"
+            ],
+            [
+              "Elusarca Photo",
+              "elusarca-photo"
+            ],
+            [
+              "NSFW Plus",
+              "nsfw-plus"
+            ],
+            [
+              "Nicegirls",
+              "nicegirls"
+            ],
+            [
+              "Realism V1",
+              "realism-v1"
+            ],
+            [
+              "Desi Realism v1",
+              "desi-realism-v1"
+            ],
+            [
+              "PAWG",
+              "pawg"
+            ],
+            [
+              "Private Magazine Style v1.1",
+              "private-style-v1-1"
+            ],
+            [
+              "Krea 2 NSFW v4.3 EXP",
+              "knp-v4-3-exp"
+            ],
+            [
+              "Realistic Slider v1.0",
+              "realistic-slider-v1-0"
+            ],
+            [
+              "Cutifyier v2",
+              "cutifyier-v2"
+            ],
+            [
+              "BloomGirls UltraRealism v1.0",
+              "bloomgirls-v1-0"
+            ],
+            [
+              "HM1Girl v1.0",
+              "hm1girl-v1-0"
+            ],
+            [
+              "YARN Tiny4K",
+              "yarn-tiny4k"
+            ],
+            [
+              "YARN ShowyBeauty",
+              "yarn-showybeauty"
+            ],
+            [
+              "Krea2 LowRes",
+              "krea2-lowres-v2"
+            ]
+          ]
+        },
+        {
+          "type": "Slider",
+          "label": "Strength",
+          "value": 1.0,
+          "minimum": 0.0,
+          "maximum": 2.0,
+          "step": 0.01,
+          "interactive": null,
+          "visible": true,
+          "elem_id": null
+        },
+        {
+          "type": "Checkbox",
+          "label": "On",
+          "value": false,
+          "interactive": null,
+          "visible": true,
+          "elem_id": null
+        },
+        {
+          "type": "Dropdown",
+          "label": "LoRA 16",
+          "value": "galaxyace",
+          "interactive": null,
+          "visible": true,
+          "multiselect": null,
+          "elem_id": null,
+          "choices": [
+            [
+              "None",
+              "None"
+            ],
+            [
+              "Krea 2 Turbo LoRA",
+              "krea2-turbo"
+            ],
+            [
+              "Filter Bypass 3",
+              "filter-bypass-3"
+            ],
+            [
+              "Enhancer",
+              "enhancer"
+            ],
+            [
+              "Realism V2",
+              "realism-v2"
+            ],
+            [
+              "Ideogram 4",
+              "realism-engine-v3-1"
+            ],
+            [
+              "Realistic Snapshot",
+              "realistic-snapshot"
+            ],
+            [
+              "PureLens",
+              "purelens"
+            ],
+            [
+              "Lenovo",
+              "lenovo"
+            ],
+            [
+              "MysticXXX v3",
+              "mysticxxx-v3"
+            ],
+            [
+              "KNP v4.1",
+              "knp-v4-1"
+            ],
+            [
+              "SNOFS Krea v1",
+              "snofs-krea-v1"
+            ],
+            [
+              "Halide v1",
+              "halide-v1"
+            ],
+            [
+              "Realism Engine v2.0",
+              "realism-engine-v2-0"
+            ],
+            [
+              "SNOFS Krea2 v1.0",
+              "snofs-krea2-v1-0"
+            ],
+            [
+              "AIO NSFW v1.0",
+              "aio-nsfw-v1-0"
+            ],
+            [
+              "GalaxyAce",
+              "galaxyace"
+            ],
+            [
+              "HMBody D e10",
+              "hmbody-d-e10"
+            ],
+            [
+              "Elusarca Photo",
+              "elusarca-photo"
+            ],
+            [
+              "NSFW Plus",
+              "nsfw-plus"
+            ],
+            [
+              "Nicegirls",
+              "nicegirls"
+            ],
+            [
+              "Realism V1",
+              "realism-v1"
+            ],
+            [
+              "Desi Realism v1",
+              "desi-realism-v1"
+            ],
+            [
+              "PAWG",
+              "pawg"
+            ],
+            [
+              "Private Magazine Style v1.1",
+              "private-style-v1-1"
+            ],
+            [
+              "Krea 2 NSFW v4.3 EXP",
+              "knp-v4-3-exp"
+            ],
+            [
+              "Realistic Slider v1.0",
+              "realistic-slider-v1-0"
+            ],
+            [
+              "Cutifyier v2",
+              "cutifyier-v2"
+            ],
+            [
+              "BloomGirls UltraRealism v1.0",
+              "bloomgirls-v1-0"
+            ],
+            [
+              "HM1Girl v1.0",
+              "hm1girl-v1-0"
+            ],
+            [
+              "YARN Tiny4K",
+              "yarn-tiny4k"
+            ],
+            [
+              "YARN ShowyBeauty",
+              "yarn-showybeauty"
+            ],
+            [
+              "Krea2 LowRes",
+              "krea2-lowres-v2"
+            ]
+          ]
+        },
+        {
+          "type": "Slider",
+          "label": "Strength",
+          "value": 1.0,
+          "minimum": 0.0,
+          "maximum": 2.0,
+          "step": 0.01,
+          "interactive": null,
+          "visible": true,
+          "elem_id": null
+        },
+        {
+          "type": "Checkbox",
+          "label": "On",
+          "value": false,
+          "interactive": null,
+          "visible": true,
+          "elem_id": null
+        },
+        {
+          "type": "Dropdown",
+          "label": "LoRA 17",
+          "value": "hmbody-d-e10",
+          "interactive": null,
+          "visible": true,
+          "multiselect": null,
+          "elem_id": null,
+          "choices": [
+            [
+              "None",
+              "None"
+            ],
+            [
+              "Krea 2 Turbo LoRA",
+              "krea2-turbo"
+            ],
+            [
+              "Filter Bypass 3",
+              "filter-bypass-3"
+            ],
+            [
+              "Enhancer",
+              "enhancer"
+            ],
+            [
+              "Realism V2",
+              "realism-v2"
+            ],
+            [
+              "Ideogram 4",
+              "realism-engine-v3-1"
+            ],
+            [
+              "Realistic Snapshot",
+              "realistic-snapshot"
+            ],
+            [
+              "PureLens",
+              "purelens"
+            ],
+            [
+              "Lenovo",
+              "lenovo"
+            ],
+            [
+              "MysticXXX v3",
+              "mysticxxx-v3"
+            ],
+            [
+              "KNP v4.1",
+              "knp-v4-1"
+            ],
+            [
+              "SNOFS Krea v1",
+              "snofs-krea-v1"
+            ],
+            [
+              "Halide v1",
+              "halide-v1"
+            ],
+            [
+              "Realism Engine v2.0",
+              "realism-engine-v2-0"
+            ],
+            [
+              "SNOFS Krea2 v1.0",
+              "snofs-krea2-v1-0"
+            ],
+            [
+              "AIO NSFW v1.0",
+              "aio-nsfw-v1-0"
+            ],
+            [
+              "GalaxyAce",
+              "galaxyace"
+            ],
+            [
+              "HMBody D e10",
+              "hmbody-d-e10"
+            ],
+            [
+              "Elusarca Photo",
+              "elusarca-photo"
+            ],
+            [
+              "NSFW Plus",
+              "nsfw-plus"
+            ],
+            [
+              "Nicegirls",
+              "nicegirls"
+            ],
+            [
+              "Realism V1",
+              "realism-v1"
+            ],
+            [
+              "Desi Realism v1",
+              "desi-realism-v1"
+            ],
+            [
+              "PAWG",
+              "pawg"
+            ],
+            [
+              "Private Magazine Style v1.1",
+              "private-style-v1-1"
+            ],
+            [
+              "Krea 2 NSFW v4.3 EXP",
+              "knp-v4-3-exp"
+            ],
+            [
+              "Realistic Slider v1.0",
+              "realistic-slider-v1-0"
+            ],
+            [
+              "Cutifyier v2",
+              "cutifyier-v2"
+            ],
+            [
+              "BloomGirls UltraRealism v1.0",
+              "bloomgirls-v1-0"
+            ],
+            [
+              "HM1Girl v1.0",
+              "hm1girl-v1-0"
+            ],
+            [
+              "YARN Tiny4K",
+              "yarn-tiny4k"
+            ],
+            [
+              "YARN ShowyBeauty",
+              "yarn-showybeauty"
+            ],
+            [
+              "Krea2 LowRes",
+              "krea2-lowres-v2"
+            ]
+          ]
+        },
+        {
+          "type": "Slider",
+          "label": "Strength",
+          "value": 1.0,
+          "minimum": 0.0,
+          "maximum": 2.0,
+          "step": 0.01,
+          "interactive": null,
+          "visible": true,
+          "elem_id": null
+        },
+        {
+          "type": "Checkbox",
+          "label": "On",
+          "value": false,
+          "interactive": null,
+          "visible": true,
+          "elem_id": null
+        },
+        {
+          "type": "Dropdown",
+          "label": "LoRA 18",
+          "value": "elusarca-photo",
+          "interactive": null,
+          "visible": true,
+          "multiselect": null,
+          "elem_id": null,
+          "choices": [
+            [
+              "None",
+              "None"
+            ],
+            [
+              "Krea 2 Turbo LoRA",
+              "krea2-turbo"
+            ],
+            [
+              "Filter Bypass 3",
+              "filter-bypass-3"
+            ],
+            [
+              "Enhancer",
+              "enhancer"
+            ],
+            [
+              "Realism V2",
+              "realism-v2"
+            ],
+            [
+              "Ideogram 4",
+              "realism-engine-v3-1"
+            ],
+            [
+              "Realistic Snapshot",
+              "realistic-snapshot"
+            ],
+            [
+              "PureLens",
+              "purelens"
+            ],
+            [
+              "Lenovo",
+              "lenovo"
+            ],
+            [
+              "MysticXXX v3",
+              "mysticxxx-v3"
+            ],
+            [
+              "KNP v4.1",
+              "knp-v4-1"
+            ],
+            [
+              "SNOFS Krea v1",
+              "snofs-krea-v1"
+            ],
+            [
+              "Halide v1",
+              "halide-v1"
+            ],
+            [
+              "Realism Engine v2.0",
+              "realism-engine-v2-0"
+            ],
+            [
+              "SNOFS Krea2 v1.0",
+              "snofs-krea2-v1-0"
+            ],
+            [
+              "AIO NSFW v1.0",
+              "aio-nsfw-v1-0"
+            ],
+            [
+              "GalaxyAce",
+              "galaxyace"
+            ],
+            [
+              "HMBody D e10",
+              "hmbody-d-e10"
+            ],
+            [
+              "Elusarca Photo",
+              "elusarca-photo"
+            ],
+            [
+              "NSFW Plus",
+              "nsfw-plus"
+            ],
+            [
+              "Nicegirls",
+              "nicegirls"
+            ],
+            [
+              "Realism V1",
+              "realism-v1"
+            ],
+            [
+              "Desi Realism v1",
+              "desi-realism-v1"
+            ],
+            [
+              "PAWG",
+              "pawg"
+            ],
+            [
+              "Private Magazine Style v1.1",
+              "private-style-v1-1"
+            ],
+            [
+              "Krea 2 NSFW v4.3 EXP",
+              "knp-v4-3-exp"
+            ],
+            [
+              "Realistic Slider v1.0",
+              "realistic-slider-v1-0"
+            ],
+            [
+              "Cutifyier v2",
+              "cutifyier-v2"
+            ],
+            [
+              "BloomGirls UltraRealism v1.0",
+              "bloomgirls-v1-0"
+            ],
+            [
+              "HM1Girl v1.0",
+              "hm1girl-v1-0"
+            ],
+            [
+              "YARN Tiny4K",
+              "yarn-tiny4k"
+            ],
+            [
+              "YARN ShowyBeauty",
+              "yarn-showybeauty"
+            ],
+            [
+              "Krea2 LowRes",
+              "krea2-lowres-v2"
+            ]
+          ]
+        },
+        {
+          "type": "Slider",
+          "label": "Strength",
+          "value": 1.0,
+          "minimum": 0.0,
+          "maximum": 2.0,
+          "step": 0.01,
+          "interactive": null,
+          "visible": true,
+          "elem_id": null
+        },
+        {
+          "type": "Checkbox",
+          "label": "On",
+          "value": false,
+          "interactive": null,
+          "visible": true,
+          "elem_id": null
+        },
+        {
+          "type": "Dropdown",
+          "label": "LoRA 19",
+          "value": "nsfw-plus",
+          "interactive": null,
+          "visible": true,
+          "multiselect": null,
+          "elem_id": null,
+          "choices": [
+            [
+              "None",
+              "None"
+            ],
+            [
+              "Krea 2 Turbo LoRA",
+              "krea2-turbo"
+            ],
+            [
+              "Filter Bypass 3",
+              "filter-bypass-3"
+            ],
+            [
+              "Enhancer",
+              "enhancer"
+            ],
+            [
+              "Realism V2",
+              "realism-v2"
+            ],
+            [
+              "Ideogram 4",
+              "realism-engine-v3-1"
+            ],
+            [
+              "Realistic Snapshot",
+              "realistic-snapshot"
+            ],
+            [
+              "PureLens",
+              "purelens"
+            ],
+            [
+              "Lenovo",
+              "lenovo"
+            ],
+            [
+              "MysticXXX v3",
+              "mysticxxx-v3"
+            ],
+            [
+              "KNP v4.1",
+              "knp-v4-1"
+            ],
+            [
+              "SNOFS Krea v1",
+              "snofs-krea-v1"
+            ],
+            [
+              "Halide v1",
+              "halide-v1"
+            ],
+            [
+              "Realism Engine v2.0",
+              "realism-engine-v2-0"
+            ],
+            [
+              "SNOFS Krea2 v1.0",
+              "snofs-krea2-v1-0"
+            ],
+            [
+              "AIO NSFW v1.0",
+              "aio-nsfw-v1-0"
+            ],
+            [
+              "GalaxyAce",
+              "galaxyace"
+            ],
+            [
+              "HMBody D e10",
+              "hmbody-d-e10"
+            ],
+            [
+              "Elusarca Photo",
+              "elusarca-photo"
+            ],
+            [
+              "NSFW Plus",
+              "nsfw-plus"
+            ],
+            [
+              "Nicegirls",
+              "nicegirls"
+            ],
+            [
+              "Realism V1",
+              "realism-v1"
+            ],
+            [
+              "Desi Realism v1",
+              "desi-realism-v1"
+            ],
+            [
+              "PAWG",
+              "pawg"
+            ],
+            [
+              "Private Magazine Style v1.1",
+              "private-style-v1-1"
+            ],
+            [
+              "Krea 2 NSFW v4.3 EXP",
+              "knp-v4-3-exp"
+            ],
+            [
+              "Realistic Slider v1.0",
+              "realistic-slider-v1-0"
+            ],
+            [
+              "Cutifyier v2",
+              "cutifyier-v2"
+            ],
+            [
+              "BloomGirls UltraRealism v1.0",
+              "bloomgirls-v1-0"
+            ],
+            [
+              "HM1Girl v1.0",
+              "hm1girl-v1-0"
+            ],
+            [
+              "YARN Tiny4K",
+              "yarn-tiny4k"
+            ],
+            [
+              "YARN ShowyBeauty",
+              "yarn-showybeauty"
+            ],
+            [
+              "Krea2 LowRes",
+              "krea2-lowres-v2"
+            ]
+          ]
+        },
+        {
+          "type": "Slider",
+          "label": "Strength",
+          "value": 1.0,
+          "minimum": 0.0,
+          "maximum": 2.0,
+          "step": 0.01,
+          "interactive": null,
+          "visible": true,
+          "elem_id": null
+        },
+        {
+          "type": "Checkbox",
+          "label": "On",
+          "value": false,
+          "interactive": null,
+          "visible": true,
+          "elem_id": null
+        },
+        {
+          "type": "Dropdown",
+          "label": "LoRA 20",
+          "value": "nicegirls",
+          "interactive": null,
+          "visible": true,
+          "multiselect": null,
+          "elem_id": null,
+          "choices": [
+            [
+              "None",
+              "None"
+            ],
+            [
+              "Krea 2 Turbo LoRA",
+              "krea2-turbo"
+            ],
+            [
+              "Filter Bypass 3",
+              "filter-bypass-3"
+            ],
+            [
+              "Enhancer",
+              "enhancer"
+            ],
+            [
+              "Realism V2",
+              "realism-v2"
+            ],
+            [
+              "Ideogram 4",
+              "realism-engine-v3-1"
+            ],
+            [
+              "Realistic Snapshot",
+              "realistic-snapshot"
+            ],
+            [
+              "PureLens",
+              "purelens"
+            ],
+            [
+              "Lenovo",
+              "lenovo"
+            ],
+            [
+              "MysticXXX v3",
+              "mysticxxx-v3"
+            ],
+            [
+              "KNP v4.1",
+              "knp-v4-1"
+            ],
+            [
+              "SNOFS Krea v1",
+              "snofs-krea-v1"
+            ],
+            [
+              "Halide v1",
+              "halide-v1"
+            ],
+            [
+              "Realism Engine v2.0",
+              "realism-engine-v2-0"
+            ],
+            [
+              "SNOFS Krea2 v1.0",
+              "snofs-krea2-v1-0"
+            ],
+            [
+              "AIO NSFW v1.0",
+              "aio-nsfw-v1-0"
+            ],
+            [
+              "GalaxyAce",
+              "galaxyace"
+            ],
+            [
+              "HMBody D e10",
+              "hmbody-d-e10"
+            ],
+            [
+              "Elusarca Photo",
+              "elusarca-photo"
+            ],
+            [
+              "NSFW Plus",
+              "nsfw-plus"
+            ],
+            [
+              "Nicegirls",
+              "nicegirls"
+            ],
+            [
+              "Realism V1",
+              "realism-v1"
+            ],
+            [
+              "Desi Realism v1",
+              "desi-realism-v1"
+            ],
+            [
+              "PAWG",
+              "pawg"
+            ],
+            [
+              "Private Magazine Style v1.1",
+              "private-style-v1-1"
+            ],
+            [
+              "Krea 2 NSFW v4.3 EXP",
+              "knp-v4-3-exp"
+            ],
+            [
+              "Realistic Slider v1.0",
+              "realistic-slider-v1-0"
+            ],
+            [
+              "Cutifyier v2",
+              "cutifyier-v2"
+            ],
+            [
+              "BloomGirls UltraRealism v1.0",
+              "bloomgirls-v1-0"
+            ],
+            [
+              "HM1Girl v1.0",
+              "hm1girl-v1-0"
+            ],
+            [
+              "YARN Tiny4K",
+              "yarn-tiny4k"
+            ],
+            [
+              "YARN ShowyBeauty",
+              "yarn-showybeauty"
+            ],
+            [
+              "Krea2 LowRes",
+              "krea2-lowres-v2"
+            ]
+          ]
+        },
+        {
+          "type": "Slider",
+          "label": "Strength",
+          "value": 1.0,
+          "minimum": 0.0,
+          "maximum": 2.0,
+          "step": 0.01,
+          "interactive": null,
+          "visible": true,
+          "elem_id": null
+        },
+        {
+          "type": "Checkbox",
+          "label": "On",
+          "value": false,
+          "interactive": null,
+          "visible": true,
+          "elem_id": null
+        },
+        {
+          "type": "Dropdown",
+          "label": "LoRA 21",
+          "value": "realism-v1",
+          "interactive": null,
+          "visible": true,
+          "multiselect": null,
+          "elem_id": null,
+          "choices": [
+            [
+              "None",
+              "None"
+            ],
+            [
+              "Krea 2 Turbo LoRA",
+              "krea2-turbo"
+            ],
+            [
+              "Filter Bypass 3",
+              "filter-bypass-3"
+            ],
+            [
+              "Enhancer",
+              "enhancer"
+            ],
+            [
+              "Realism V2",
+              "realism-v2"
+            ],
+            [
+              "Ideogram 4",
+              "realism-engine-v3-1"
+            ],
+            [
+              "Realistic Snapshot",
+              "realistic-snapshot"
+            ],
+            [
+              "PureLens",
+              "purelens"
+            ],
+            [
+              "Lenovo",
+              "lenovo"
+            ],
+            [
+              "MysticXXX v3",
+              "mysticxxx-v3"
+            ],
+            [
+              "KNP v4.1",
+              "knp-v4-1"
+            ],
+            [
+              "SNOFS Krea v1",
+              "snofs-krea-v1"
+            ],
+            [
+              "Halide v1",
+              "halide-v1"
+            ],
+            [
+              "Realism Engine v2.0",
+              "realism-engine-v2-0"
+            ],
+            [
+              "SNOFS Krea2 v1.0",
+              "snofs-krea2-v1-0"
+            ],
+            [
+              "AIO NSFW v1.0",
+              "aio-nsfw-v1-0"
+            ],
+            [
+              "GalaxyAce",
+              "galaxyace"
+            ],
+            [
+              "HMBody D e10",
+              "hmbody-d-e10"
+            ],
+            [
+              "Elusarca Photo",
+              "elusarca-photo"
+            ],
+            [
+              "NSFW Plus",
+              "nsfw-plus"
+            ],
+            [
+              "Nicegirls",
+              "nicegirls"
+            ],
+            [
+              "Realism V1",
+              "realism-v1"
+            ],
+            [
+              "Desi Realism v1",
+              "desi-realism-v1"
+            ],
+            [
+              "PAWG",
+              "pawg"
+            ],
+            [
+              "Private Magazine Style v1.1",
+              "private-style-v1-1"
+            ],
+            [
+              "Krea 2 NSFW v4.3 EXP",
+              "knp-v4-3-exp"
+            ],
+            [
+              "Realistic Slider v1.0",
+              "realistic-slider-v1-0"
+            ],
+            [
+              "Cutifyier v2",
+              "cutifyier-v2"
+            ],
+            [
+              "BloomGirls UltraRealism v1.0",
+              "bloomgirls-v1-0"
+            ],
+            [
+              "HM1Girl v1.0",
+              "hm1girl-v1-0"
+            ],
+            [
+              "YARN Tiny4K",
+              "yarn-tiny4k"
+            ],
+            [
+              "YARN ShowyBeauty",
+              "yarn-showybeauty"
+            ],
+            [
+              "Krea2 LowRes",
+              "krea2-lowres-v2"
+            ]
+          ]
+        },
+        {
+          "type": "Slider",
+          "label": "Strength",
+          "value": 1.0,
+          "minimum": 0.0,
+          "maximum": 2.0,
+          "step": 0.01,
+          "interactive": null,
+          "visible": true,
+          "elem_id": null
+        },
+        {
+          "type": "Checkbox",
+          "label": "On",
+          "value": false,
+          "interactive": null,
+          "visible": true,
+          "elem_id": null
+        },
+        {
+          "type": "Dropdown",
+          "label": "LoRA 22",
+          "value": "desi-realism-v1",
+          "interactive": null,
+          "visible": true,
+          "multiselect": null,
+          "elem_id": null,
+          "choices": [
+            [
+              "None",
+              "None"
+            ],
+            [
+              "Krea 2 Turbo LoRA",
+              "krea2-turbo"
+            ],
+            [
+              "Filter Bypass 3",
+              "filter-bypass-3"
+            ],
+            [
+              "Enhancer",
+              "enhancer"
+            ],
+            [
+              "Realism V2",
+              "realism-v2"
+            ],
+            [
+              "Ideogram 4",
+              "realism-engine-v3-1"
+            ],
+            [
+              "Realistic Snapshot",
+              "realistic-snapshot"
+            ],
+            [
+              "PureLens",
+              "purelens"
+            ],
+            [
+              "Lenovo",
+              "lenovo"
+            ],
+            [
+              "MysticXXX v3",
+              "mysticxxx-v3"
+            ],
+            [
+              "KNP v4.1",
+              "knp-v4-1"
+            ],
+            [
+              "SNOFS Krea v1",
+              "snofs-krea-v1"
+            ],
+            [
+              "Halide v1",
+              "halide-v1"
+            ],
+            [
+              "Realism Engine v2.0",
+              "realism-engine-v2-0"
+            ],
+            [
+              "SNOFS Krea2 v1.0",
+              "snofs-krea2-v1-0"
+            ],
+            [
+              "AIO NSFW v1.0",
+              "aio-nsfw-v1-0"
+            ],
+            [
+              "GalaxyAce",
+              "galaxyace"
+            ],
+            [
+              "HMBody D e10",
+              "hmbody-d-e10"
+            ],
+            [
+              "Elusarca Photo",
+              "elusarca-photo"
+            ],
+            [
+              "NSFW Plus",
+              "nsfw-plus"
+            ],
+            [
+              "Nicegirls",
+              "nicegirls"
+            ],
+            [
+              "Realism V1",
+              "realism-v1"
+            ],
+            [
+              "Desi Realism v1",
+              "desi-realism-v1"
+            ],
+            [
+              "PAWG",
+              "pawg"
+            ],
+            [
+              "Private Magazine Style v1.1",
+              "private-style-v1-1"
+            ],
+            [
+              "Krea 2 NSFW v4.3 EXP",
+              "knp-v4-3-exp"
+            ],
+            [
+              "Realistic Slider v1.0",
+              "realistic-slider-v1-0"
+            ],
+            [
+              "Cutifyier v2",
+              "cutifyier-v2"
+            ],
+            [
+              "BloomGirls UltraRealism v1.0",
+              "bloomgirls-v1-0"
+            ],
+            [
+              "HM1Girl v1.0",
+              "hm1girl-v1-0"
+            ],
+            [
+              "YARN Tiny4K",
+              "yarn-tiny4k"
+            ],
+            [
+              "YARN ShowyBeauty",
+              "yarn-showybeauty"
+            ],
+            [
+              "Krea2 LowRes",
+              "krea2-lowres-v2"
+            ]
+          ]
+        },
+        {
+          "type": "Slider",
+          "label": "Strength",
+          "value": 1.0,
+          "minimum": 0.0,
+          "maximum": 2.0,
+          "step": 0.01,
+          "interactive": null,
+          "visible": true,
+          "elem_id": null
+        },
+        {
+          "type": "Checkbox",
+          "label": "On",
+          "value": false,
+          "interactive": null,
+          "visible": true,
+          "elem_id": null
+        },
+        {
+          "type": "Dropdown",
+          "label": "LoRA 23",
+          "value": "pawg",
+          "interactive": null,
+          "visible": true,
+          "multiselect": null,
+          "elem_id": null,
+          "choices": [
+            [
+              "None",
+              "None"
+            ],
+            [
+              "Krea 2 Turbo LoRA",
+              "krea2-turbo"
+            ],
+            [
+              "Filter Bypass 3",
+              "filter-bypass-3"
+            ],
+            [
+              "Enhancer",
+              "enhancer"
+            ],
+            [
+              "Realism V2",
+              "realism-v2"
+            ],
+            [
+              "Ideogram 4",
+              "realism-engine-v3-1"
+            ],
+            [
+              "Realistic Snapshot",
+              "realistic-snapshot"
+            ],
+            [
+              "PureLens",
+              "purelens"
+            ],
+            [
+              "Lenovo",
+              "lenovo"
+            ],
+            [
+              "MysticXXX v3",
+              "mysticxxx-v3"
+            ],
+            [
+              "KNP v4.1",
+              "knp-v4-1"
+            ],
+            [
+              "SNOFS Krea v1",
+              "snofs-krea-v1"
+            ],
+            [
+              "Halide v1",
+              "halide-v1"
+            ],
+            [
+              "Realism Engine v2.0",
+              "realism-engine-v2-0"
+            ],
+            [
+              "SNOFS Krea2 v1.0",
+              "snofs-krea2-v1-0"
+            ],
+            [
+              "AIO NSFW v1.0",
+              "aio-nsfw-v1-0"
+            ],
+            [
+              "GalaxyAce",
+              "galaxyace"
+            ],
+            [
+              "HMBody D e10",
+              "hmbody-d-e10"
+            ],
+            [
+              "Elusarca Photo",
+              "elusarca-photo"
+            ],
+            [
+              "NSFW Plus",
+              "nsfw-plus"
+            ],
+            [
+              "Nicegirls",
+              "nicegirls"
+            ],
+            [
+              "Realism V1",
+              "realism-v1"
+            ],
+            [
+              "Desi Realism v1",
+              "desi-realism-v1"
+            ],
+            [
+              "PAWG",
+              "pawg"
+            ],
+            [
+              "Private Magazine Style v1.1",
+              "private-style-v1-1"
+            ],
+            [
+              "Krea 2 NSFW v4.3 EXP",
+              "knp-v4-3-exp"
+            ],
+            [
+              "Realistic Slider v1.0",
+              "realistic-slider-v1-0"
+            ],
+            [
+              "Cutifyier v2",
+              "cutifyier-v2"
+            ],
+            [
+              "BloomGirls UltraRealism v1.0",
+              "bloomgirls-v1-0"
+            ],
+            [
+              "HM1Girl v1.0",
+              "hm1girl-v1-0"
+            ],
+            [
+              "YARN Tiny4K",
+              "yarn-tiny4k"
+            ],
+            [
+              "YARN ShowyBeauty",
+              "yarn-showybeauty"
+            ],
+            [
+              "Krea2 LowRes",
+              "krea2-lowres-v2"
+            ]
+          ]
+        },
+        {
+          "type": "Slider",
+          "label": "Strength",
+          "value": 1.0,
+          "minimum": 0.0,
+          "maximum": 2.0,
+          "step": 0.01,
+          "interactive": null,
+          "visible": true,
+          "elem_id": null
+        },
+        {
+          "type": "Checkbox",
+          "label": "On",
+          "value": false,
+          "interactive": null,
+          "visible": true,
+          "elem_id": null
+        },
+        {
+          "type": "Dropdown",
+          "label": "LoRA 24",
+          "value": "private-style-v1-1",
+          "interactive": null,
+          "visible": true,
+          "multiselect": null,
+          "elem_id": null,
+          "choices": [
+            [
+              "None",
+              "None"
+            ],
+            [
+              "Krea 2 Turbo LoRA",
+              "krea2-turbo"
+            ],
+            [
+              "Filter Bypass 3",
+              "filter-bypass-3"
+            ],
+            [
+              "Enhancer",
+              "enhancer"
+            ],
+            [
+              "Realism V2",
+              "realism-v2"
+            ],
+            [
+              "Ideogram 4",
+              "realism-engine-v3-1"
+            ],
+            [
+              "Realistic Snapshot",
+              "realistic-snapshot"
+            ],
+            [
+              "PureLens",
+              "purelens"
+            ],
+            [
+              "Lenovo",
+              "lenovo"
+            ],
+            [
+              "MysticXXX v3",
+              "mysticxxx-v3"
+            ],
+            [
+              "KNP v4.1",
+              "knp-v4-1"
+            ],
+            [
+              "SNOFS Krea v1",
+              "snofs-krea-v1"
+            ],
+            [
+              "Halide v1",
+              "halide-v1"
+            ],
+            [
+              "Realism Engine v2.0",
+              "realism-engine-v2-0"
+            ],
+            [
+              "SNOFS Krea2 v1.0",
+              "snofs-krea2-v1-0"
+            ],
+            [
+              "AIO NSFW v1.0",
+              "aio-nsfw-v1-0"
+            ],
+            [
+              "GalaxyAce",
+              "galaxyace"
+            ],
+            [
+              "HMBody D e10",
+              "hmbody-d-e10"
+            ],
+            [
+              "Elusarca Photo",
+              "elusarca-photo"
+            ],
+            [
+              "NSFW Plus",
+              "nsfw-plus"
+            ],
+            [
+              "Nicegirls",
+              "nicegirls"
+            ],
+            [
+              "Realism V1",
+              "realism-v1"
+            ],
+            [
+              "Desi Realism v1",
+              "desi-realism-v1"
+            ],
+            [
+              "PAWG",
+              "pawg"
+            ],
+            [
+              "Private Magazine Style v1.1",
+              "private-style-v1-1"
+            ],
+            [
+              "Krea 2 NSFW v4.3 EXP",
+              "knp-v4-3-exp"
+            ],
+            [
+              "Realistic Slider v1.0",
+              "realistic-slider-v1-0"
+            ],
+            [
+              "Cutifyier v2",
+              "cutifyier-v2"
+            ],
+            [
+              "BloomGirls UltraRealism v1.0",
+              "bloomgirls-v1-0"
+            ],
+            [
+              "HM1Girl v1.0",
+              "hm1girl-v1-0"
+            ],
+            [
+              "YARN Tiny4K",
+              "yarn-tiny4k"
+            ],
+            [
+              "YARN ShowyBeauty",
+              "yarn-showybeauty"
+            ],
+            [
+              "Krea2 LowRes",
+              "krea2-lowres-v2"
+            ]
+          ]
+        },
+        {
+          "type": "Slider",
+          "label": "Strength",
+          "value": 1.0,
+          "minimum": 0.0,
+          "maximum": 2.0,
+          "step": 0.01,
+          "interactive": null,
+          "visible": true,
+          "elem_id": null
+        },
+        {
+          "type": "Checkbox",
+          "label": "On",
+          "value": false,
+          "interactive": null,
+          "visible": true,
+          "elem_id": null
+        },
+        {
+          "type": "Dropdown",
+          "label": "LoRA 25",
+          "value": "knp-v4-3-exp",
+          "interactive": null,
+          "visible": true,
+          "multiselect": null,
+          "elem_id": null,
+          "choices": [
+            [
+              "None",
+              "None"
+            ],
+            [
+              "Krea 2 Turbo LoRA",
+              "krea2-turbo"
+            ],
+            [
+              "Filter Bypass 3",
+              "filter-bypass-3"
+            ],
+            [
+              "Enhancer",
+              "enhancer"
+            ],
+            [
+              "Realism V2",
+              "realism-v2"
+            ],
+            [
+              "Ideogram 4",
+              "realism-engine-v3-1"
+            ],
+            [
+              "Realistic Snapshot",
+              "realistic-snapshot"
+            ],
+            [
+              "PureLens",
+              "purelens"
+            ],
+            [
+              "Lenovo",
+              "lenovo"
+            ],
+            [
+              "MysticXXX v3",
+              "mysticxxx-v3"
+            ],
+            [
+              "KNP v4.1",
+              "knp-v4-1"
+            ],
+            [
+              "SNOFS Krea v1",
+              "snofs-krea-v1"
+            ],
+            [
+              "Halide v1",
+              "halide-v1"
+            ],
+            [
+              "Realism Engine v2.0",
+              "realism-engine-v2-0"
+            ],
+            [
+              "SNOFS Krea2 v1.0",
+              "snofs-krea2-v1-0"
+            ],
+            [
+              "AIO NSFW v1.0",
+              "aio-nsfw-v1-0"
+            ],
+            [
+              "GalaxyAce",
+              "galaxyace"
+            ],
+            [
+              "HMBody D e10",
+              "hmbody-d-e10"
+            ],
+            [
+              "Elusarca Photo",
+              "elusarca-photo"
+            ],
+            [
+              "NSFW Plus",
+              "nsfw-plus"
+            ],
+            [
+              "Nicegirls",
+              "nicegirls"
+            ],
+            [
+              "Realism V1",
+              "realism-v1"
+            ],
+            [
+              "Desi Realism v1",
+              "desi-realism-v1"
+            ],
+            [
+              "PAWG",
+              "pawg"
+            ],
+            [
+              "Private Magazine Style v1.1",
+              "private-style-v1-1"
+            ],
+            [
+              "Krea 2 NSFW v4.3 EXP",
+              "knp-v4-3-exp"
+            ],
+            [
+              "Realistic Slider v1.0",
+              "realistic-slider-v1-0"
+            ],
+            [
+              "Cutifyier v2",
+              "cutifyier-v2"
+            ],
+            [
+              "BloomGirls UltraRealism v1.0",
+              "bloomgirls-v1-0"
+            ],
+            [
+              "HM1Girl v1.0",
+              "hm1girl-v1-0"
+            ],
+            [
+              "YARN Tiny4K",
+              "yarn-tiny4k"
+            ],
+            [
+              "YARN ShowyBeauty",
+              "yarn-showybeauty"
+            ],
+            [
+              "Krea2 LowRes",
+              "krea2-lowres-v2"
+            ]
+          ]
+        },
+        {
+          "type": "Slider",
+          "label": "Strength",
+          "value": 1.0,
+          "minimum": 0.0,
+          "maximum": 2.0,
+          "step": 0.01,
+          "interactive": null,
+          "visible": true,
+          "elem_id": null
+        },
+        {
+          "type": "Checkbox",
+          "label": "On",
+          "value": false,
+          "interactive": null,
+          "visible": true,
+          "elem_id": null
+        },
+        {
+          "type": "Dropdown",
+          "label": "LoRA 26",
+          "value": "realistic-slider-v1-0",
+          "interactive": null,
+          "visible": true,
+          "multiselect": null,
+          "elem_id": null,
+          "choices": [
+            [
+              "None",
+              "None"
+            ],
+            [
+              "Krea 2 Turbo LoRA",
+              "krea2-turbo"
+            ],
+            [
+              "Filter Bypass 3",
+              "filter-bypass-3"
+            ],
+            [
+              "Enhancer",
+              "enhancer"
+            ],
+            [
+              "Realism V2",
+              "realism-v2"
+            ],
+            [
+              "Ideogram 4",
+              "realism-engine-v3-1"
+            ],
+            [
+              "Realistic Snapshot",
+              "realistic-snapshot"
+            ],
+            [
+              "PureLens",
+              "purelens"
+            ],
+            [
+              "Lenovo",
+              "lenovo"
+            ],
+            [
+              "MysticXXX v3",
+              "mysticxxx-v3"
+            ],
+            [
+              "KNP v4.1",
+              "knp-v4-1"
+            ],
+            [
+              "SNOFS Krea v1",
+              "snofs-krea-v1"
+            ],
+            [
+              "Halide v1",
+              "halide-v1"
+            ],
+            [
+              "Realism Engine v2.0",
+              "realism-engine-v2-0"
+            ],
+            [
+              "SNOFS Krea2 v1.0",
+              "snofs-krea2-v1-0"
+            ],
+            [
+              "AIO NSFW v1.0",
+              "aio-nsfw-v1-0"
+            ],
+            [
+              "GalaxyAce",
+              "galaxyace"
+            ],
+            [
+              "HMBody D e10",
+              "hmbody-d-e10"
+            ],
+            [
+              "Elusarca Photo",
+              "elusarca-photo"
+            ],
+            [
+              "NSFW Plus",
+              "nsfw-plus"
+            ],
+            [
+              "Nicegirls",
+              "nicegirls"
+            ],
+            [
+              "Realism V1",
+              "realism-v1"
+            ],
+            [
+              "Desi Realism v1",
+              "desi-realism-v1"
+            ],
+            [
+              "PAWG",
+              "pawg"
+            ],
+            [
+              "Private Magazine Style v1.1",
+              "private-style-v1-1"
+            ],
+            [
+              "Krea 2 NSFW v4.3 EXP",
+              "knp-v4-3-exp"
+            ],
+            [
+              "Realistic Slider v1.0",
+              "realistic-slider-v1-0"
+            ],
+            [
+              "Cutifyier v2",
+              "cutifyier-v2"
+            ],
+            [
+              "BloomGirls UltraRealism v1.0",
+              "bloomgirls-v1-0"
+            ],
+            [
+              "HM1Girl v1.0",
+              "hm1girl-v1-0"
+            ],
+            [
+              "YARN Tiny4K",
+              "yarn-tiny4k"
+            ],
+            [
+              "YARN ShowyBeauty",
+              "yarn-showybeauty"
+            ],
+            [
+              "Krea2 LowRes",
+              "krea2-lowres-v2"
+            ]
+          ]
+        },
+        {
+          "type": "Slider",
+          "label": "Strength",
+          "value": 1.0,
+          "minimum": 0.0,
+          "maximum": 2.0,
+          "step": 0.01,
+          "interactive": null,
+          "visible": true,
+          "elem_id": null
+        },
+        {
+          "type": "Checkbox",
+          "label": "On",
+          "value": false,
+          "interactive": null,
+          "visible": true,
+          "elem_id": null
+        },
+        {
+          "type": "Dropdown",
+          "label": "LoRA 27",
+          "value": "cutifyier-v2",
+          "interactive": null,
+          "visible": true,
+          "multiselect": null,
+          "elem_id": null,
+          "choices": [
+            [
+              "None",
+              "None"
+            ],
+            [
+              "Krea 2 Turbo LoRA",
+              "krea2-turbo"
+            ],
+            [
+              "Filter Bypass 3",
+              "filter-bypass-3"
+            ],
+            [
+              "Enhancer",
+              "enhancer"
+            ],
+            [
+              "Realism V2",
+              "realism-v2"
+            ],
+            [
+              "Ideogram 4",
+              "realism-engine-v3-1"
+            ],
+            [
+              "Realistic Snapshot",
+              "realistic-snapshot"
+            ],
+            [
+              "PureLens",
+              "purelens"
+            ],
+            [
+              "Lenovo",
+              "lenovo"
+            ],
+            [
+              "MysticXXX v3",
+              "mysticxxx-v3"
+            ],
+            [
+              "KNP v4.1",
+              "knp-v4-1"
+            ],
+            [
+              "SNOFS Krea v1",
+              "snofs-krea-v1"
+            ],
+            [
+              "Halide v1",
+              "halide-v1"
+            ],
+            [
+              "Realism Engine v2.0",
+              "realism-engine-v2-0"
+            ],
+            [
+              "SNOFS Krea2 v1.0",
+              "snofs-krea2-v1-0"
+            ],
+            [
+              "AIO NSFW v1.0",
+              "aio-nsfw-v1-0"
+            ],
+            [
+              "GalaxyAce",
+              "galaxyace"
+            ],
+            [
+              "HMBody D e10",
+              "hmbody-d-e10"
+            ],
+            [
+              "Elusarca Photo",
+              "elusarca-photo"
+            ],
+            [
+              "NSFW Plus",
+              "nsfw-plus"
+            ],
+            [
+              "Nicegirls",
+              "nicegirls"
+            ],
+            [
+              "Realism V1",
+              "realism-v1"
+            ],
+            [
+              "Desi Realism v1",
+              "desi-realism-v1"
+            ],
+            [
+              "PAWG",
+              "pawg"
+            ],
+            [
+              "Private Magazine Style v1.1",
+              "private-style-v1-1"
+            ],
+            [
+              "Krea 2 NSFW v4.3 EXP",
+              "knp-v4-3-exp"
+            ],
+            [
+              "Realistic Slider v1.0",
+              "realistic-slider-v1-0"
+            ],
+            [
+              "Cutifyier v2",
+              "cutifyier-v2"
+            ],
+            [
+              "BloomGirls UltraRealism v1.0",
+              "bloomgirls-v1-0"
+            ],
+            [
+              "HM1Girl v1.0",
+              "hm1girl-v1-0"
+            ],
+            [
+              "YARN Tiny4K",
+              "yarn-tiny4k"
+            ],
+            [
+              "YARN ShowyBeauty",
+              "yarn-showybeauty"
+            ],
+            [
+              "Krea2 LowRes",
+              "krea2-lowres-v2"
+            ]
+          ]
+        },
+        {
+          "type": "Slider",
+          "label": "Strength",
+          "value": 1.0,
+          "minimum": 0.0,
+          "maximum": 2.0,
+          "step": 0.01,
+          "interactive": null,
+          "visible": true,
+          "elem_id": null
+        },
+        {
+          "type": "Checkbox",
+          "label": "On",
+          "value": false,
+          "interactive": null,
+          "visible": true,
+          "elem_id": null
+        },
+        {
+          "type": "Dropdown",
+          "label": "LoRA 28",
+          "value": "bloomgirls-v1-0",
+          "interactive": null,
+          "visible": true,
+          "multiselect": null,
+          "elem_id": null,
+          "choices": [
+            [
+              "None",
+              "None"
+            ],
+            [
+              "Krea 2 Turbo LoRA",
+              "krea2-turbo"
+            ],
+            [
+              "Filter Bypass 3",
+              "filter-bypass-3"
+            ],
+            [
+              "Enhancer",
+              "enhancer"
+            ],
+            [
+              "Realism V2",
+              "realism-v2"
+            ],
+            [
+              "Ideogram 4",
+              "realism-engine-v3-1"
+            ],
+            [
+              "Realistic Snapshot",
+              "realistic-snapshot"
+            ],
+            [
+              "PureLens",
+              "purelens"
+            ],
+            [
+              "Lenovo",
+              "lenovo"
+            ],
+            [
+              "MysticXXX v3",
+              "mysticxxx-v3"
+            ],
+            [
+              "KNP v4.1",
+              "knp-v4-1"
+            ],
+            [
+              "SNOFS Krea v1",
+              "snofs-krea-v1"
+            ],
+            [
+              "Halide v1",
+              "halide-v1"
+            ],
+            [
+              "Realism Engine v2.0",
+              "realism-engine-v2-0"
+            ],
+            [
+              "SNOFS Krea2 v1.0",
+              "snofs-krea2-v1-0"
+            ],
+            [
+              "AIO NSFW v1.0",
+              "aio-nsfw-v1-0"
+            ],
+            [
+              "GalaxyAce",
+              "galaxyace"
+            ],
+            [
+              "HMBody D e10",
+              "hmbody-d-e10"
+            ],
+            [
+              "Elusarca Photo",
+              "elusarca-photo"
+            ],
+            [
+              "NSFW Plus",
+              "nsfw-plus"
+            ],
+            [
+              "Nicegirls",
+              "nicegirls"
+            ],
+            [
+              "Realism V1",
+              "realism-v1"
+            ],
+            [
+              "Desi Realism v1",
+              "desi-realism-v1"
+            ],
+            [
+              "PAWG",
+              "pawg"
+            ],
+            [
+              "Private Magazine Style v1.1",
+              "private-style-v1-1"
+            ],
+            [
+              "Krea 2 NSFW v4.3 EXP",
+              "knp-v4-3-exp"
+            ],
+            [
+              "Realistic Slider v1.0",
+              "realistic-slider-v1-0"
+            ],
+            [
+              "Cutifyier v2",
+              "cutifyier-v2"
+            ],
+            [
+              "BloomGirls UltraRealism v1.0",
+              "bloomgirls-v1-0"
+            ],
+            [
+              "HM1Girl v1.0",
+              "hm1girl-v1-0"
+            ],
+            [
+              "YARN Tiny4K",
+              "yarn-tiny4k"
+            ],
+            [
+              "YARN ShowyBeauty",
+              "yarn-showybeauty"
+            ],
+            [
+              "Krea2 LowRes",
+              "krea2-lowres-v2"
+            ]
+          ]
+        },
+        {
+          "type": "Slider",
+          "label": "Strength",
+          "value": 1.0,
+          "minimum": 0.0,
+          "maximum": 2.0,
+          "step": 0.01,
+          "interactive": null,
+          "visible": true,
+          "elem_id": null
+        },
+        {
+          "type": "Checkbox",
+          "label": "On",
+          "value": false,
+          "interactive": null,
+          "visible": true,
+          "elem_id": null
+        },
+        {
+          "type": "Dropdown",
+          "label": "LoRA 29",
+          "value": "hm1girl-v1-0",
+          "interactive": null,
+          "visible": true,
+          "multiselect": null,
+          "elem_id": null,
+          "choices": [
+            [
+              "None",
+              "None"
+            ],
+            [
+              "Krea 2 Turbo LoRA",
+              "krea2-turbo"
+            ],
+            [
+              "Filter Bypass 3",
+              "filter-bypass-3"
+            ],
+            [
+              "Enhancer",
+              "enhancer"
+            ],
+            [
+              "Realism V2",
+              "realism-v2"
+            ],
+            [
+              "Ideogram 4",
+              "realism-engine-v3-1"
+            ],
+            [
+              "Realistic Snapshot",
+              "realistic-snapshot"
+            ],
+            [
+              "PureLens",
+              "purelens"
+            ],
+            [
+              "Lenovo",
+              "lenovo"
+            ],
+            [
+              "MysticXXX v3",
+              "mysticxxx-v3"
+            ],
+            [
+              "KNP v4.1",
+              "knp-v4-1"
+            ],
+            [
+              "SNOFS Krea v1",
+              "snofs-krea-v1"
+            ],
+            [
+              "Halide v1",
+              "halide-v1"
+            ],
+            [
+              "Realism Engine v2.0",
+              "realism-engine-v2-0"
+            ],
+            [
+              "SNOFS Krea2 v1.0",
+              "snofs-krea2-v1-0"
+            ],
+            [
+              "AIO NSFW v1.0",
+              "aio-nsfw-v1-0"
+            ],
+            [
+              "GalaxyAce",
+              "galaxyace"
+            ],
+            [
+              "HMBody D e10",
+              "hmbody-d-e10"
+            ],
+            [
+              "Elusarca Photo",
+              "elusarca-photo"
+            ],
+            [
+              "NSFW Plus",
+              "nsfw-plus"
+            ],
+            [
+              "Nicegirls",
+              "nicegirls"
+            ],
+            [
+              "Realism V1",
+              "realism-v1"
+            ],
+            [
+              "Desi Realism v1",
+              "desi-realism-v1"
+            ],
+            [
+              "PAWG",
+              "pawg"
+            ],
+            [
+              "Private Magazine Style v1.1",
+              "private-style-v1-1"
+            ],
+            [
+              "Krea 2 NSFW v4.3 EXP",
+              "knp-v4-3-exp"
+            ],
+            [
+              "Realistic Slider v1.0",
+              "realistic-slider-v1-0"
+            ],
+            [
+              "Cutifyier v2",
+              "cutifyier-v2"
+            ],
+            [
+              "BloomGirls UltraRealism v1.0",
+              "bloomgirls-v1-0"
+            ],
+            [
+              "HM1Girl v1.0",
+              "hm1girl-v1-0"
+            ],
+            [
+              "YARN Tiny4K",
+              "yarn-tiny4k"
+            ],
+            [
+              "YARN ShowyBeauty",
+              "yarn-showybeauty"
+            ],
+            [
+              "Krea2 LowRes",
+              "krea2-lowres-v2"
+            ]
+          ]
+        },
+        {
+          "type": "Slider",
+          "label": "Strength",
+          "value": 1.0,
+          "minimum": 0.0,
+          "maximum": 2.0,
+          "step": 0.01,
+          "interactive": null,
+          "visible": true,
+          "elem_id": null
+        },
+        {
+          "type": "Checkbox",
+          "label": "On",
+          "value": false,
+          "interactive": null,
+          "visible": true,
+          "elem_id": null
+        },
+        {
+          "type": "Dropdown",
+          "label": "LoRA 30",
+          "value": "yarn-tiny4k",
+          "interactive": null,
+          "visible": true,
+          "multiselect": null,
+          "elem_id": null,
+          "choices": [
+            [
+              "None",
+              "None"
+            ],
+            [
+              "Krea 2 Turbo LoRA",
+              "krea2-turbo"
+            ],
+            [
+              "Filter Bypass 3",
+              "filter-bypass-3"
+            ],
+            [
+              "Enhancer",
+              "enhancer"
+            ],
+            [
+              "Realism V2",
+              "realism-v2"
+            ],
+            [
+              "Ideogram 4",
+              "realism-engine-v3-1"
+            ],
+            [
+              "Realistic Snapshot",
+              "realistic-snapshot"
+            ],
+            [
+              "PureLens",
+              "purelens"
+            ],
+            [
+              "Lenovo",
+              "lenovo"
+            ],
+            [
+              "MysticXXX v3",
+              "mysticxxx-v3"
+            ],
+            [
+              "KNP v4.1",
+              "knp-v4-1"
+            ],
+            [
+              "SNOFS Krea v1",
+              "snofs-krea-v1"
+            ],
+            [
+              "Halide v1",
+              "halide-v1"
+            ],
+            [
+              "Realism Engine v2.0",
+              "realism-engine-v2-0"
+            ],
+            [
+              "SNOFS Krea2 v1.0",
+              "snofs-krea2-v1-0"
+            ],
+            [
+              "AIO NSFW v1.0",
+              "aio-nsfw-v1-0"
+            ],
+            [
+              "GalaxyAce",
+              "galaxyace"
+            ],
+            [
+              "HMBody D e10",
+              "hmbody-d-e10"
+            ],
+            [
+              "Elusarca Photo",
+              "elusarca-photo"
+            ],
+            [
+              "NSFW Plus",
+              "nsfw-plus"
+            ],
+            [
+              "Nicegirls",
+              "nicegirls"
+            ],
+            [
+              "Realism V1",
+              "realism-v1"
+            ],
+            [
+              "Desi Realism v1",
+              "desi-realism-v1"
+            ],
+            [
+              "PAWG",
+              "pawg"
+            ],
+            [
+              "Private Magazine Style v1.1",
+              "private-style-v1-1"
+            ],
+            [
+              "Krea 2 NSFW v4.3 EXP",
+              "knp-v4-3-exp"
+            ],
+            [
+              "Realistic Slider v1.0",
+              "realistic-slider-v1-0"
+            ],
+            [
+              "Cutifyier v2",
+              "cutifyier-v2"
+            ],
+            [
+              "BloomGirls UltraRealism v1.0",
+              "bloomgirls-v1-0"
+            ],
+            [
+              "HM1Girl v1.0",
+              "hm1girl-v1-0"
+            ],
+            [
+              "YARN Tiny4K",
+              "yarn-tiny4k"
+            ],
+            [
+              "YARN ShowyBeauty",
+              "yarn-showybeauty"
+            ],
+            [
+              "Krea2 LowRes",
+              "krea2-lowres-v2"
+            ]
+          ]
+        },
+        {
+          "type": "Slider",
+          "label": "Strength",
+          "value": 1.0,
+          "minimum": 0.0,
+          "maximum": 2.0,
+          "step": 0.01,
+          "interactive": null,
+          "visible": true,
+          "elem_id": null
+        },
+        {
+          "type": "Checkbox",
+          "label": "On",
+          "value": false,
+          "interactive": null,
+          "visible": true,
+          "elem_id": null
+        },
+        {
+          "type": "Dropdown",
+          "label": "LoRA 31",
+          "value": "yarn-showybeauty",
+          "interactive": null,
+          "visible": true,
+          "multiselect": null,
+          "elem_id": null,
+          "choices": [
+            [
+              "None",
+              "None"
+            ],
+            [
+              "Krea 2 Turbo LoRA",
+              "krea2-turbo"
+            ],
+            [
+              "Filter Bypass 3",
+              "filter-bypass-3"
+            ],
+            [
+              "Enhancer",
+              "enhancer"
+            ],
+            [
+              "Realism V2",
+              "realism-v2"
+            ],
+            [
+              "Ideogram 4",
+              "realism-engine-v3-1"
+            ],
+            [
+              "Realistic Snapshot",
+              "realistic-snapshot"
+            ],
+            [
+              "PureLens",
+              "purelens"
+            ],
+            [
+              "Lenovo",
+              "lenovo"
+            ],
+            [
+              "MysticXXX v3",
+              "mysticxxx-v3"
+            ],
+            [
+              "KNP v4.1",
+              "knp-v4-1"
+            ],
+            [
+              "SNOFS Krea v1",
+              "snofs-krea-v1"
+            ],
+            [
+              "Halide v1",
+              "halide-v1"
+            ],
+            [
+              "Realism Engine v2.0",
+              "realism-engine-v2-0"
+            ],
+            [
+              "SNOFS Krea2 v1.0",
+              "snofs-krea2-v1-0"
+            ],
+            [
+              "AIO NSFW v1.0",
+              "aio-nsfw-v1-0"
+            ],
+            [
+              "GalaxyAce",
+              "galaxyace"
+            ],
+            [
+              "HMBody D e10",
+              "hmbody-d-e10"
+            ],
+            [
+              "Elusarca Photo",
+              "elusarca-photo"
+            ],
+            [
+              "NSFW Plus",
+              "nsfw-plus"
+            ],
+            [
+              "Nicegirls",
+              "nicegirls"
+            ],
+            [
+              "Realism V1",
+              "realism-v1"
+            ],
+            [
+              "Desi Realism v1",
+              "desi-realism-v1"
+            ],
+            [
+              "PAWG",
+              "pawg"
+            ],
+            [
+              "Private Magazine Style v1.1",
+              "private-style-v1-1"
+            ],
+            [
+              "Krea 2 NSFW v4.3 EXP",
+              "knp-v4-3-exp"
+            ],
+            [
+              "Realistic Slider v1.0",
+              "realistic-slider-v1-0"
+            ],
+            [
+              "Cutifyier v2",
+              "cutifyier-v2"
+            ],
+            [
+              "BloomGirls UltraRealism v1.0",
+              "bloomgirls-v1-0"
+            ],
+            [
+              "HM1Girl v1.0",
+              "hm1girl-v1-0"
+            ],
+            [
+              "YARN Tiny4K",
+              "yarn-tiny4k"
+            ],
+            [
+              "YARN ShowyBeauty",
+              "yarn-showybeauty"
+            ],
+            [
+              "Krea2 LowRes",
+              "krea2-lowres-v2"
+            ]
+          ]
+        },
+        {
+          "type": "Slider",
+          "label": "Strength",
+          "value": 1.0,
+          "minimum": 0.0,
+          "maximum": 2.0,
+          "step": 0.01,
+          "interactive": null,
+          "visible": true,
+          "elem_id": null
+        },
+        {
+          "type": "Checkbox",
+          "label": "On",
+          "value": false,
+          "interactive": null,
+          "visible": true,
+          "elem_id": null
+        },
+        {
+          "type": "Dropdown",
+          "label": "LoRA 32",
+          "value": "krea2-lowres-v2",
+          "interactive": null,
+          "visible": true,
+          "multiselect": null,
+          "elem_id": null,
+          "choices": [
+            [
+              "None",
+              "None"
+            ],
+            [
+              "Krea 2 Turbo LoRA",
+              "krea2-turbo"
+            ],
+            [
+              "Filter Bypass 3",
+              "filter-bypass-3"
+            ],
+            [
+              "Enhancer",
+              "enhancer"
+            ],
+            [
+              "Realism V2",
+              "realism-v2"
+            ],
+            [
+              "Ideogram 4",
+              "realism-engine-v3-1"
+            ],
+            [
+              "Realistic Snapshot",
+              "realistic-snapshot"
+            ],
+            [
+              "PureLens",
+              "purelens"
+            ],
+            [
+              "Lenovo",
+              "lenovo"
+            ],
+            [
+              "MysticXXX v3",
+              "mysticxxx-v3"
+            ],
+            [
+              "KNP v4.1",
+              "knp-v4-1"
+            ],
+            [
+              "SNOFS Krea v1",
+              "snofs-krea-v1"
+            ],
+            [
+              "Halide v1",
+              "halide-v1"
+            ],
+            [
+              "Realism Engine v2.0",
+              "realism-engine-v2-0"
+            ],
+            [
+              "SNOFS Krea2 v1.0",
+              "snofs-krea2-v1-0"
+            ],
+            [
+              "AIO NSFW v1.0",
+              "aio-nsfw-v1-0"
+            ],
+            [
+              "GalaxyAce",
+              "galaxyace"
+            ],
+            [
+              "HMBody D e10",
+              "hmbody-d-e10"
+            ],
+            [
+              "Elusarca Photo",
+              "elusarca-photo"
+            ],
+            [
+              "NSFW Plus",
+              "nsfw-plus"
+            ],
+            [
+              "Nicegirls",
+              "nicegirls"
+            ],
+            [
+              "Realism V1",
+              "realism-v1"
+            ],
+            [
+              "Desi Realism v1",
+              "desi-realism-v1"
+            ],
+            [
+              "PAWG",
+              "pawg"
+            ],
+            [
+              "Private Magazine Style v1.1",
+              "private-style-v1-1"
+            ],
+            [
+              "Krea 2 NSFW v4.3 EXP",
+              "knp-v4-3-exp"
+            ],
+            [
+              "Realistic Slider v1.0",
+              "realistic-slider-v1-0"
+            ],
+            [
+              "Cutifyier v2",
+              "cutifyier-v2"
+            ],
+            [
+              "BloomGirls UltraRealism v1.0",
+              "bloomgirls-v1-0"
+            ],
+            [
+              "HM1Girl v1.0",
+              "hm1girl-v1-0"
+            ],
+            [
+              "YARN Tiny4K",
+              "yarn-tiny4k"
+            ],
+            [
+              "YARN ShowyBeauty",
+              "yarn-showybeauty"
+            ],
+            [
+              "Krea2 LowRes",
+              "krea2-lowres-v2"
+            ]
+          ]
+        },
+        {
+          "type": "Slider",
+          "label": "Strength",
+          "value": 1.0,
+          "minimum": 0.0,
+          "maximum": 2.0,
+          "step": 0.01,
+          "interactive": null,
+          "visible": true,
+          "elem_id": null
+        }
+      ]
+    },
     "qwen21_edit": {
       "tab_id": "qwen21ref",
       "controls": [
@@ -12170,6 +17859,42 @@
         "ref_boost",
         "ref_boost_a",
         "fit_mode",
+        "eta",
+        "sampler_name",
+        "scheduler",
+        "steps",
+        "cfg",
+        "sampler_mode",
+        "bongmath",
+        "variance_preset",
+        "fine_tune_variance",
+        "variance_model_type",
+        "variance_schedule",
+        "cutoff_step",
+        "total_steps",
+        "cutoff_strength",
+        "shift_strength",
+        "batch_count"
+      ],
+      "varargs": "lora_slots",
+      "keyword_only": []
+    },
+    "generate_edit_v2": {
+      "positional": [
+        "image",
+        "use_image2",
+        "image2",
+        "prompt",
+        "negative",
+        "seed",
+        "randomize",
+        "model",
+        "edit_mode",
+        "ref_position",
+        "ref_position_a",
+        "grounding",
+        "ref_boost",
+        "ref_boost_a",
         "eta",
         "sampler_name",
         "scheduler",

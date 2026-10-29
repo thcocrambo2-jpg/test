@@ -160,6 +160,8 @@ def handler_modules() -> tuple:
     from ember.pipelines.anima import handler as anima_handler
     from ember.pipelines.anima import workflow as anima
     from ember.pipelines.krea2 import workflow as krea2
+    from ember.pipelines.krea2_edit_v2 import handler as krea2_edit_v2_handler
+    from ember.pipelines.krea2_edit_v2 import workflow as krea2_edit_v2
     from ember.pipelines.krea2_v2 import handler as krea2_v2_handler
     from ember.pipelines.krea2_v2 import workflow as krea2_v2
     from ember.pipelines.krea2_v2_edit import handler as krea2_v2_edit_handler
@@ -175,9 +177,9 @@ def handler_modules() -> tuple:
     return (handlers, loras, runner,
             krea2_handler, krea2_v2_handler, krea2_v2_edit_handler,
             wan_handler, minimax_handler, zimage_handler, qwen21_handler,
-            anima_handler,
+            anima_handler, krea2_edit_v2_handler,
             krea2, krea2_v2, krea2_v2_edit, wan, minimax, zimage, qwen21,
-            anima)
+            anima, krea2_edit_v2)
 
 
 class Namespace:
@@ -281,7 +283,7 @@ def patch(users, capture) -> None:
     ):
         _patch_all(users, name, lambda *a, **k: True)
 
-    for name in ("v2_status", "v2_edit_status"):
+    for name in ("v2_status", "v2_edit_status", "edit_v2_status"):
         _patch_all(users, name, lambda *a, **k: (True, ""))
 
     # Z-Image's fixed-file check answers with what is missing, so nothing
@@ -345,6 +347,7 @@ def cases(module) -> dict:
     edit_model = module.default_model(module.KREA_EDIT)
     v2_model = module.default_model(module.KREA_V2_T2I)
     v2_edit_model = module.default_model(module.KREA_V2_EDIT)
+    edit_v2_model = module.default_model(module.KREA_EDIT_V2)
     zimage_model = module.default_model(module.ZIMAGE_T2I)
     qwen21_model = module.default_model(module.QWEN21_EDIT)
     qwen21_t2i_model = module.default_model(module.QWEN21_T2I)
@@ -459,6 +462,36 @@ def cases(module) -> dict:
             "🪴 Creative", 61, "🔮 Flux (Dev/Schnell)", "step_cutoff",
             7, 23, 0.65, 140, 2,
         ) + v2_triples(module.KREA_V2_EDIT),
+
+        # Krea2 Edit V2, the author's restage recipe: one image, Identity
+        # Edit V2 at 1.0, the person placed beside, ref_boost 2, 8 steps at
+        # CFG 1. The scene placement is set but not emitted, because there
+        # is no second reference.
+        "generate_edit_v2": (
+            image, False, None, "she sits cross-legged on a sofa, full body",
+            "", 6789012, False, edit_v2_model,
+            "🧑 Identity — restage the person (pose, scene, outfit, light)",
+            "beside (right of target)", "bag of features",
+            768, 2.0, 1.0, 0.5, "linear/euler", "bong_tangent",
+            8, 1.0, "standard", True,
+            "❌ Disabled", 50, "📸 Krea2 (SingleStream)", "step_cutoff",
+            5, 20, 0.5, 100, 2,
+        ) + v2_triples(module.KREA_EDIT_V2),
+
+        # Two references and both LoRAs at 0.6. The person is aligned and
+        # the scene beside, the reverse of the author's compositing recipe,
+        # so ref_position / ref_position_a swapping over shows; every other
+        # setting differs from the case above for the same reason.
+        "generate_edit_v2_both": (
+            image, True, image, "put the woman from image 2 on the beach",
+            "blurry, watermark", 7890123, False, edit_v2_model,
+            "🧑✂️ Both at 0.6",
+            "aligned (trained)", "beside (right of target)",
+            640, 3.0, 1.5, 0.35, "res_3m", "normal",
+            12, 2.2, "resample", False,
+            "🪴 Creative", 61, "🔮 Flux (Dev/Schnell)", "step_cutoff",
+            7, 23, 0.65, 140, 1,
+        ) + v2_triples(module.KREA_EDIT_V2, on=frozenset({0, 5})),
 
         # Anima, the model card's graph at the BAS:NSFW record's 8 steps and
         # CFG 1: no negative, so it is the positive's ConditioningZeroOut,
@@ -629,6 +662,7 @@ CASE_HANDLERS = {"generate_zimage_upscale": "generate_zimage",
                  "generate_qwen21_ref_ten": "generate_qwen21_ref",
                  "generate_qwen21_t2i_negative": "generate_qwen21_t2i",
                  "generate_anima_negative": "generate_anima",
+                 "generate_edit_v2_both": "generate_edit_v2",
                  "generate_wan_video_smooth": "generate_wan_video",
                  "generate_wan_video_5b_smooth": "generate_wan_video",
                  "generate_minimax_video_eros": "generate_minimax_video",
