@@ -63,6 +63,12 @@ from ember.pipelines.wan.constants import (
     WAN_RIFE_REPO,
 )
 from ember.pipelines.qwen21.constants import QWEN21_HF_FILES, QWEN21_HF_REPO
+from ember.pipelines.qwen_edit.constants import (
+    QWEN_EDIT_HF_FILES,
+    QWEN_EDIT_HF_REPO,
+    QWEN_EDIT_LIGHTNING_FILES,
+    QWEN_EDIT_LIGHTNING_REPO,
+)
 from ember.pipelines.zimage.constants import (
     ZIMAGE_HF_FILES,
     ZIMAGE_HF_REPO,
@@ -685,6 +691,35 @@ def download_qwen21_models() -> None:
                       "fetches it.", relpath, exc)
 
 
+def download_qwen_edit_models() -> None:
+    """Fetch Qwen-Image-Edit-2511's text encoder and Lightning LoRAs (~11 GB).
+
+    The diffusion model is a catalogue record, fetched by the "catalog"
+    group, and the VAE is the Krea tabs' Qwen image VAE — the same file —
+    fetched by the "krea2" group the feature also names. The encoder sits
+    under split_files/ upstream, like Z-Image's; the two Lightning LoRAs
+    sit at the root of lightx2v's repo and are placed in loras/, like the
+    MiniMax turbo LoRA. Every item is independent: a missing encoder costs
+    the tab, a missing LoRA only its Speed choice, and the next run
+    retries it.
+    """
+    for relpath in QWEN_EDIT_HF_FILES:
+        try:
+            fetch_repackaged_file(QWEN_EDIT_HF_REPO, relpath)
+        except Exception as exc:
+            log.error("Qwen Edit 2511 file %s unavailable (%s) — the Qwen "
+                      "Edit 2511 tab will refuse to run until a later run "
+                      "fetches it.", relpath, exc)
+    for filename in QWEN_EDIT_LIGHTNING_FILES:
+        try:
+            fetch_hf_file_to(QWEN_EDIT_LIGHTNING_REPO, filename,
+                             MODELS_DIR / "loras" / filename)
+        except Exception as exc:
+            log.error("Qwen Edit 2511 Lightning LoRA %s unavailable (%s) — "
+                      "that Speed choice will refuse to run until a later "
+                      "run fetches it.", filename, exc)
+
+
 def download_anima_models() -> None:
     """Fetch Anima's text encoder (~1.2 GB).
 
@@ -715,6 +750,7 @@ ASSET_GROUPS = {
     "catalog": download_catalog,
     "zimage": download_zimage_models,
     "qwen21": download_qwen21_models,
+    "qwen_edit": download_qwen_edit_models,
     "anima": download_anima_models,
     "wan": download_wan_models,
     "minimax": download_minimax_models,

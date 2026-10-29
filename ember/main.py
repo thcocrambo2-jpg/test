@@ -49,6 +49,10 @@ from ember.pipelines.qwen21.constants import (
     QWEN21_COMFYUI_MIN,
     QWEN21_ENCODE_NODE,
 )
+from ember.pipelines.qwen_edit.constants import (
+    QWEN_EDIT_COMFYUI_MIN,
+    QWEN_EDIT_ENCODE_NODE,
+)
 from ember.pipelines.wan.constants import WAN_RIFE_NODES
 from ember.pipelines.zimage.constants import ZIMAGE_UPSCALE_NODES
 
@@ -192,6 +196,11 @@ def main() -> None:
         # image graph does not use the node, but the model it loads arrived
         # in the same release, so the node stands for that too.
         comfy.verify_core_node(QWEN21_ENCODE_NODE, QWEN21_COMFYUI_MIN)
+    if features.enabled(features.Key.QWEN_EDIT_2511):
+        # Core as well. The encoder is older than the pin floor; it is
+        # checked for the same reason, and the release named is the one
+        # whose reference method the 2511 graph needs.
+        comfy.verify_core_node(QWEN_EDIT_ENCODE_NODE, QWEN_EDIT_COMFYUI_MIN)
     if (features.enabled(features.Key.KREA_EDIT)
             or features.enabled(features.Key.KREA_V2_EDIT)
             or features.enabled(features.Key.KREA_EDIT_V2)):

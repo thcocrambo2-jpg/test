@@ -74,6 +74,7 @@ class Key(str, Enum):
     KREA_V2_EDIT = "krea_v2_edit"
     KREA_EDIT_V2 = "krea_edit_v2"
     QWEN21_EDIT = "qwen21_edit"
+    QWEN_EDIT_2511 = "qwen_edit_2511"
     WAN_I2V = "wan_i2v"
     MINIMAX_I2V = "minimax_i2v"
     MINIMAX_T2V = "minimax_t2v"
@@ -139,7 +140,8 @@ class Feature:
 # (ember.licensing.catalog, from the licence server) lists for the enabled
 # features
 # that name it. Each Krea tab names it, so do Z-Image, both Qwen 2.1
-# tabs and Anima, and so do the MiniMax tabs for their LoRAs; downloads.download_catalog reads the
+# tabs, Qwen Edit 2511 and Anima, and so do the MiniMax tabs for their
+# LoRAs; downloads.download_catalog reads the
 # lists of exactly
 # those that are on — so a feature's own models are what it pulls in, not
 # a group-wide set, and a file two tabs share is fetched once.
@@ -175,6 +177,11 @@ FEATURES = (
     # catalogue record, like Z-Image's, and so are its LoRAs.
     Feature(Key.QWEN21_EDIT, "🧩 Qwen 2.1 Reference",
             needs=("qwen21", "catalog")),
+    # Qwen-Image-Edit-2511: its own text encoder and Lightning LoRAs
+    # ("qwen_edit"), the Qwen image VAE it shares with Krea ("krea2"), and
+    # a catalogue model and LoRA list, like Qwen 2.1's.
+    Feature(Key.QWEN_EDIT_2511, "🪄 Qwen Edit 2511",
+            needs=("qwen_edit", "krea2", "catalog")),
     # "catalog" for its checkpoints, which are catalogue models — the
     # built-in pair when the licence server lists none (catalog.py).
     Feature(Key.WAN_I2V, "🎬 Wan Video", needs=("wan", "catalog")),

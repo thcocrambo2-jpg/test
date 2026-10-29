@@ -49,6 +49,9 @@ ZIMAGE_T2I = str(Key.ZIMAGE_T2I)
 # VAE are fixed in pipelines/qwen21/constants.py.
 QWEN21_EDIT = str(Key.QWEN21_EDIT)
 QWEN21_T2I = str(Key.QWEN21_T2I)
+# And Qwen Edit 2511. Its text encoder, VAE and Lightning LoRAs are fixed in
+# pipelines/qwen_edit/constants.py.
+QWEN_EDIT_2511 = str(Key.QWEN_EDIT_2511)
 # And Anima. Its text encoder is fixed in pipelines/anima/constants.py; its
 # VAE is Krea's.
 ANIMA_T2I = str(Key.ANIMA_T2I)

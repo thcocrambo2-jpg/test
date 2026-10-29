@@ -6,8 +6,8 @@ import s from '@/components/SchemaForm/form.module.css'
 
 /** Seed, "Random seed", Batch count.
  *
- *  The same trio sits on twelve of the fourteen tabs, so it is one
- *  component rather than twelve copies. It takes fields rather than
+ *  The same trio sits on thirteen of the fifteen tabs, so it is one
+ *  component rather than thirteen copies. It takes fields rather than
  *  hardcoding the labels because those labels come from the schema and are
  *  compared to the parity baseline character for character.
  *

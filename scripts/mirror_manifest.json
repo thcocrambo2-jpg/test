@@ -134,8 +134,12 @@
     "huihui-ai/Huihui-Qwen3-VL-4B-Instruct-abliterated": "hf",
     "Comfy-Org/z_image_turbo": "hf",
     "Comfy-Org/Qwen-Image-2.1": "hf",
+    "Comfy-Org/Qwen-Image_ComfyUI": "hf",
+    "Comfy-Org/Qwen-Image-Edit_ComfyUI": "hf",
     "Hearmeman/comfyui-template-assets": "hf",
     "lightx2v/Wan2.2-Distill-Loras": "hf",
+    "lightx2v/Qwen-Image-Edit-2511-Lightning": "hf",
+    "fal/Qwen-Image-Edit-2511-Multiple-Angles-LoRA": "hf",
     "Isi99999/Frame_Interpolation_Models": "hf",
     "circlestone-labs/Anima": "hf",
     "https://github.com/comfyanonymous/ComfyUI.git": "git"
