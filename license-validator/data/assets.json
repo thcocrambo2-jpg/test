@@ -1011,6 +1011,7 @@
       "cfg": 4.0,
       "turbo_lora": null,
       "trigger": "",
+      "negative": "stick figure, skeleton lines, colored lines, deformed limbs, extra arms, extra legs, missing hands, fused fingers, distorted face, different person, cartoon, blurry",
       "enabled": true
     },
     {

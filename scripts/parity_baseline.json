@@ -16377,7 +16377,7 @@
         {
           "type": "Textbox",
           "label": "Negative prompt",
-          "value": null,
+          "value": "stick figure, skeleton lines, colored lines, deformed limbs, extra arms, extra legs, missing hands, fused fingers, distorted face, different person, cartoon, blurry",
           "lines": 3,
           "placeholder": null,
           "interactive": null,

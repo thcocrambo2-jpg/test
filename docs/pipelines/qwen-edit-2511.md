@@ -90,7 +90,9 @@ itself and emits only the branch it took.
 The Steps and CFG sliders show only for Normal. With Lightning they keep
 their values but are not used, as the template's switches ignore them.
 At CFG 1 the sampler ignores the negative prompt, so it only matters on
-Normal.
+Normal. The box starts on the model record's `negative` — skeleton lines,
+bad anatomy and a different person — which suits the pose-skeleton use;
+change it on the record, not in code.
 
 ## Prompting a pose change
 
