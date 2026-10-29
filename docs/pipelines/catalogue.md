@@ -23,9 +23,10 @@ validation rules — is documented in
   that tab offers. The first model is the tab's default. An id may appear
   in any number of features.
 
-Eleven features have a `feature_assets` entry: `krea_t2i`, `krea_edit`,
+Twelve features have a `feature_assets` entry: `krea_t2i`, `krea_edit`,
 `krea_v2_t2i`, `krea_v2_edit`, `krea_edit_v2`, `zimage_t2i`, `qwen21_t2i`,
-`qwen21_edit`, `anima_t2i`, `minimax_i2v` and `minimax_t2v`.
+`qwen21_edit`, `qwen_edit_2511`, `anima_t2i`, `minimax_i2v` and
+`minimax_t2v`.
 
 `zimage_t2i` lists one model, `z-image-turbo-bf16`, and LoRAs trained
 for Z-Image; the Krea LoRAs do not load on it, so none are shared. An
@@ -35,6 +36,12 @@ for `models` only.
 `qwen21_t2i` and `qwen21_edit` each list one model, `qwen-image-2-1-int8`,
 and no LoRAs yet: nothing trained for Qwen Image 2.1 is in the catalogue,
 so their stacks offer `None` alone until some are added.
+
+`qwen_edit_2511` lists one model, `qwen-image-edit-2511-fp8mixed`
+(Comfy-Org's fp8 repackaging, 40 steps at CFG 4 on Normal), and one
+LoRA, `qwen-edit-2511-multiple-angles` (fal's camera-angle LoRA,
+trigger `<sks>`). Its Lightning LoRAs are pipeline files, not catalogue
+records.
 
 `anima_t2i` lists one model, `bas-nsfw-anima-v1-0` (BAS:NSFW, a CivitAI
 merge of Anima Base and the Anima Turbo LoRA, 8 steps at CFG 1), and no
@@ -155,6 +162,10 @@ each feature's whole list, like the left column, chained as `LoraLoader`
 on the model and the CLIP, like the right one, because the template's
 loader patched both (Anima's, because kohya-trained Anima LoRAs carry
 text-encoder weights). See [qwen21.md](qwen21.md#the-lora-stack).
+
+🪄 Qwen Edit 2511 has the left column's stack: eight blank slots,
+model-only, chained after the Lightning LoRA when one is on. See
+[qwen-edit-2511.md](qwen-edit-2511.md#the-lora-stack).
 
 The V2 tabs' rows are described under
 [krea2-v2.md](krea2-v2.md#lora-stack); the MiniMax chain under

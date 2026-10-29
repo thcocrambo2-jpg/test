@@ -3,7 +3,7 @@
 The **⚙️ Preset** dropdown on the 🎨 Krea2 and 🔶 Krea2 V2 tabs, what
 the two Edit tabs do with it, the one list the two MiniMax tabs share,
 and the lists of their own that ⚡ Ember Lite, 🌄 Qwen 2.1, 🧩 Qwen
-2.1 Reference and 🌸 Anima keep. For someone using the tabs, for the admin who
+2.1 Reference, 🪄 Qwen Edit 2511 and 🌸 Anima keep. For someone using the tabs, for the admin who
 writes presets, and for someone changing how they apply.
 
 Picking a preset writes every control below it — model, steps, CFG,
@@ -16,7 +16,7 @@ Presets live on the licence server, so changing one changes it for every
 customer without shipping a binary. The pod's side is
 [`ember/licensing/presets.py`](../../ember/licensing/presets.py), whose
 `TABS` is `krea_t2i`, `krea_v2_t2i`, `minimax_i2v`, `zimage_t2i`,
-`qwen21_edit`, `qwen21_t2i` and `anima_t2i`.
+`qwen21_edit`, `qwen21_t2i`, `anima_t2i` and `qwen_edit_2511`.
 
 ## The Edit tabs read the same list
 
@@ -96,6 +96,12 @@ server's `PRESET_TABS`. See
 🌸 Anima keeps one under `anima_t2i`, in 🌄 Qwen 2.1's shape. Saving
 needs `anima_t2i` in the licence server's `PRESET_TABS`. See
 [anima.md](../pipelines/anima.md#presets).
+
+🪄 Qwen Edit 2511 keeps one under `qwen_edit_2511`: Speed, model, steps,
+CFG, sampler, scheduler, seed, randomize, batch count and the LoRA stack,
+and never the images. Saving needs `qwen_edit_2511` in the licence
+server's `PRESET_TABS`. See
+[qwen-edit-2511.md](../pipelines/qwen-edit-2511.md#presets).
 
 ## Only an admin can write one
 

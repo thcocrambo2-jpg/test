@@ -9,7 +9,9 @@ Edit (text-to-image and instruction editing on the Krea 2 model), 💠 Krea2
 Edit V2 (the same editing on the Edit V2 LoRAs, on no plan), ⚡
 Ember Lite (Z-Image Turbo text-to-image, with an optional start image and 1.5x upscale), 🌄
 Qwen 2.1 (Qwen Image 2.1 text-to-image) and 🧩 Qwen 2.1 Reference (one new
-image kept consistent with up to 10 reference images), 🌸 Anima (anime
+image kept consistent with up to 10 reference images), 🪄 Qwen Edit 2511
+(instruction editing on Qwen-Image-Edit-2511 with up to 3 images, Lightning
+or normal, on no plan), 🌸 Anima (anime
 text-to-image, on no plan), 🎬 Wan Video (Wan 2.2 image-to-video), and 🎥
 MiniMax I2V and 🎞️ MiniMax T2V
 (MiniMax H3 video with sound). Alongside them are a gallery, a job queue

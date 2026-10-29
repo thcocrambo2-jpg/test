@@ -44,6 +44,7 @@ and LoRAs a licence can see.
 | [Krea 2 Edit V2](pipelines/krea2-edit-v2.md) | 💠 The same on the Edit V2 LoRAs, with reference placement, and why it is on no plan |
 | [Ember Lite](pipelines/zimage.md) | ⚡ Ember Lite (Z-Image Turbo) text-to-image, image to image from a start image, and the 1.5x upscale pass |
 | [Qwen Image 2.1](pipelines/qwen21.md) | 🧩 Qwen 2.1 Reference: a prompt and up to 10 reference images; 🌄 Qwen 2.1 text-to-image |
+| [Qwen Edit 2511](pipelines/qwen-edit-2511.md) | 🪄 Instruction editing on Qwen-Image-Edit-2511: up to 3 images, Lightning or normal |
 | [Anima](pipelines/anima.md) | 🌸 Anima anime text-to-image, and why it is on no plan |
 | [Video](pipelines/wan.md) | Wan 2.2 image-to-video, and the parallel instance |
 | [Video with sound](pipelines/minimax.md) | MiniMax H3, both tabs, and the LoRA stack |

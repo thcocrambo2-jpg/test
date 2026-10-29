@@ -178,6 +178,16 @@ Qwen 2.1 Reference is the plain case: its diffusion model, text encoder
 and VAE all come from `Comfy-Org/Qwen-Image-2.1`, pinned at `9a44dbdb`
 and fetched upstream, and it installs no node pack.
 
+Qwen Edit 2511 is plain too, and Apache 2.0 throughout. Its diffusion
+model comes from `Comfy-Org/Qwen-Image-Edit_ComfyUI` (pinned at
+`f68ace85`) and its text encoder from `Comfy-Org/Qwen-Image_ComfyUI`
+(`1f12b17b`), both upstream; its VAE is Krea's, the same bytes. The two
+Lightning LoRAs come from `lightx2v/Qwen-Image-Edit-2511-Lightning`
+(`107d238d`) and the Multiple Angles catalogue LoRA from
+`fal/Qwen-Image-Edit-2511-Multiple-Angles-LoRA` (`e3066224`). All four
+repos are pinned and fetched upstream with no manifest item; the licences
+allow mirroring them whenever a mirror run is wanted.
+
 Anima is the case that must **not** be mirrored. Its text encoder comes
 from `circlestone-labs/Anima`, pinned at `f973fc41` and fetched upstream,
 with no manifest item; its diffusion model is a CivitAI catalogue

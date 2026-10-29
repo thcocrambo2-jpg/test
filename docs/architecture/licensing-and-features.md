@@ -37,6 +37,7 @@ asset groups it needs.
 | `krea_v2_edit` | 🔷 Krea2 V2 Edit | ~1.9 GB + V2 |
 | `krea_edit_v2` | 💠 Krea2 Edit V2 — on no plan (non-commercial LoRAs) | ~3.6 GB + V2 |
 | `qwen21_edit` | 🧩 Qwen 2.1 Reference — on no plan yet | ~17.3 GB, shared with `qwen21_t2i` |
+| `qwen_edit_2511` | 🪄 Qwen Edit 2511 — on no plan yet | ~32 GB, plus the Qwen image VAE Krea uses |
 | `wan_i2v` | 🎬 Wan Video | ~48 GB |
 | `minimax_i2v` | 🎥 MiniMax I2V (video with sound) | ~56 GB, shared with `minimax_t2v` |
 | `minimax_t2v` | 🎞️ MiniMax T2V (video with sound) | shared with `minimax_i2v` |
@@ -62,7 +63,7 @@ public plan in `license-validator/src/plans.js` when it should be
 something a customer can buy.
 
 A tab can also be on no plan at all, which is where `zimage_t2i`,
-`qwen21_t2i`, `qwen21_edit` and `anima_t2i` are. A key gets one through
+`qwen21_t2i`, `qwen21_edit`, `qwen_edit_2511` and `anima_t2i` are. A key gets one through
 `features_extra` (`npm run issue-key -- --key <key> --features-extra
 zimage_t2i,qwen21_t2i,qwen21_edit --update`), and its row in the `features` collection is `enabled: false`, so neither `/v1/plans` nor the Telegram
 bot mentions it. That flag never touches an entitlement, so the key still
