@@ -286,8 +286,9 @@ def _v2_variance_fields():
     )
 
 
-def _reference_fields(group="reference"):
-    """Grounding / reference fidelity / scene fidelity — both Edit tabs."""
+def _reference_fields(group="reference",
+                      ref_boost=V2_EDIT_DEFAULT_REF_BOOST):
+    """Grounding / reference fidelity / scene fidelity — the Edit tabs."""
     return (
         Field("grounding",
               "Grounding (low = stronger edit, high = keep likeness)",
@@ -296,7 +297,7 @@ def _reference_fields(group="reference"):
         Field("ref_boost",
               "Reference fidelity (1 = neutral, ~4 = strong likeness, "
               ">10 breaks removals)",
-              "slider", V2_EDIT_DEFAULT_REF_BOOST, lo=0.0, hi=10.0, step=0.5,
+              "slider", ref_boost, lo=0.0, hi=10.0, step=0.5,
               group=group, wide=True),
         Field("ref_boost_a", "Scene fidelity (1 = neutral)", "slider", 1.0,
               lo=0.0, hi=10.0, step=0.5, group=group, wide=True),

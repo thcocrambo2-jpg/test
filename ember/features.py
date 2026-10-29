@@ -72,6 +72,7 @@ class Key(str, Enum):
     GALLERY = "gallery"
     KREA_EDIT = "krea_edit"
     KREA_V2_EDIT = "krea_v2_edit"
+    KREA_EDIT_V2 = "krea_edit_v2"
     QWEN21_EDIT = "qwen21_edit"
     WAN_I2V = "wan_i2v"
     MINIMAX_I2V = "minimax_i2v"
@@ -164,6 +165,12 @@ FEATURES = (
     # pipeline file the two edit tabs do share.
     Feature(Key.KREA_V2_EDIT, "🔷 Krea2 V2 Edit",
             needs=("text_encoder", "v2", "edit_lora", "catalog")),
+    # The same tab on the Identity / General Edit V2 LoRAs ("edit_lora_v2")
+    # in place of v1.2. Those are licensed for non-commercial use only, so
+    # the licence server keeps it on no plan until a commercial licence is
+    # in place.
+    Feature(Key.KREA_EDIT_V2, "💠 Krea2 Edit V2",
+            needs=("text_encoder", "v2", "edit_lora_v2", "catalog")),
     # Its own text encoder and VAE ("qwen21"); the diffusion model is a
     # catalogue record, like Z-Image's, and so are its LoRAs.
     Feature(Key.QWEN21_EDIT, "🧩 Qwen 2.1 Reference",

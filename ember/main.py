@@ -168,11 +168,12 @@ def main() -> None:
     # reported in comfyui.log — surface it here instead of letting the first
     # generation fail with a bare "node not found".
     if (features.enabled(features.Key.KREA_V2_T2I)
-            or features.enabled(features.Key.KREA_V2_EDIT)):
+            or features.enabled(features.Key.KREA_V2_EDIT)
+            or features.enabled(features.Key.KREA_EDIT_V2)):
         # Two of the Krea 2 V2 packs' nodes have no core equivalent, so a
         # silent import failure would only show up as "node not found" on
-        # the first generation. Krea 2 V2 Edit runs the same sampler and
-        # variance nodes, so either feature is reason enough to check.
+        # the first generation. Both V2 edit tabs run the same sampler and
+        # variance nodes, so any of the three is reason enough to check.
         for dirname, _repo, class_type in V2_NODE_REPOS:
             comfy.verify_custom_node(
                 class_type, dirname, COMFY_DIR / "custom_nodes" / dirname,
@@ -192,14 +193,25 @@ def main() -> None:
         # in the same release, so the node stands for that too.
         comfy.verify_core_node(QWEN21_ENCODE_NODE, QWEN21_COMFYUI_MIN)
     if (features.enabled(features.Key.KREA_EDIT)
-            or features.enabled(features.Key.KREA_V2_EDIT)):
+            or features.enabled(features.Key.KREA_V2_EDIT)
+            or features.enabled(features.Key.KREA_EDIT_V2)):
         # Krea2Edit is cloned rather than vendored, so it fails the same
         # way and deserves the same check. One class proves the pack
         # loaded; the other lives in the same module.
-        comfy.verify_custom_node(
+        loaded = comfy.verify_custom_node(
             "Krea2EditModelPatch", "comfyui-krea2edit",
             COMFY_DIR / "custom_nodes" / "comfyui-krea2edit",
         )
+        # Edit V2's placement dropdown is an input 2.0.0 added. On an older
+        # checkout ComfyUI drops it without a word and every person stays
+        # pinned to the photo's layout, so say so here instead.
+        if (loaded and features.enabled(features.Key.KREA_EDIT_V2)
+                and not comfy.node_has_input("Krea2EditModelPatch",
+                                             "ref_position")):
+            log.error("comfyui-krea2edit at %s predates 2.0.0 — the Edit V2 "
+                      "tab's placement setting will be ignored until it is "
+                      "moved to the revision scripts/PINS.json records.",
+                      COMFY_DIR / "custom_nodes" / "comfyui-krea2edit")
     if features.enabled(features.Key.ZIMAGE_T2I):
         # Only the Upscale tick needs this pack, so a failed import costs
         # that tick alone — the tab says so itself when it is used, and

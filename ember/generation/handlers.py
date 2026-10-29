@@ -40,6 +40,8 @@ KREA_T2I = str(Key.KREA_T2I)
 KREA_EDIT = str(Key.KREA_EDIT)
 KREA_V2_T2I = str(Key.KREA_V2_T2I)
 KREA_V2_EDIT = str(Key.KREA_V2_EDIT)
+# 💠 Krea2 Edit V2: krea_v2_edit on the V2 edit LoRAs, with lists of its own.
+KREA_EDIT_V2 = str(Key.KREA_EDIT_V2)
 # Z-Image reads a model list and a LoRA list the same way. Its text encoder,
 # VAE and upscale model are fixed in pipelines/zimage/constants.py.
 ZIMAGE_T2I = str(Key.ZIMAGE_T2I)

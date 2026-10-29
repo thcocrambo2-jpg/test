@@ -233,6 +233,26 @@ def node_registered(class_type: str, port: int = COMFY_PORT) -> bool:
         return False
 
 
+def node_has_input(class_type: str, name: str,
+                   port: int = COMFY_PORT) -> bool:
+    """True if the running ComfyUI's `class_type` takes an input `name`.
+
+    For a pack whose newer release adds an input: ComfyUI ignores inputs a
+    node does not declare, so an old checkout would run the graph and
+    silently drop the setting rather than refuse it.
+    """
+    try:
+        with urllib.request.urlopen(
+            f"http://{COMFY_HOST}:{port}/object_info/{class_type}", timeout=30
+        ) as resp:
+            spec = json.loads(resp.read()).get(class_type, {})
+        declared = spec.get("input", {})
+        return any(name in declared.get(kind, {})
+                   for kind in ("required", "optional"))
+    except Exception:
+        return False
+
+
 def _custom_node_traceback(log_path, needle: str) -> str:
     """The traceback ComfyUI logged for a custom node it could not import.
 

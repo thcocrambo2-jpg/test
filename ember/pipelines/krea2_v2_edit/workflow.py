@@ -138,6 +138,9 @@ def build_v2_edit_workflow(
     ref_boost: float = 4.0,
     ref_boost_a: float = 1.0,
     fit_mode: str = "fit",
+    edit_loras=None,
+    ref_position: str | None = None,
+    ref_position_a: str | None = None,
     sampler_settings=None,
     variance_settings=None,
     variance_seed: int | None = None,
@@ -187,6 +190,18 @@ def build_v2_edit_workflow(
     — the scene is what the composition is kept from. The subject does not
     need to match its aspect ratio, because the patch node resamples every
     reference onto the target grid in pixel space.
+
+    The 💠 Krea2 Edit V2 tab builds through here too, with two things this
+    tab leaves at their defaults:
+
+      • `edit_loras` — (filename, strength) pairs that replace the v1.2
+        Identity Edit LoRA at 1.0. V2 ships an Identity and a General LoRA,
+        run one at a time or both at about 0.6.
+      • `ref_position` / `ref_position_a` — comfyui-krea2edit 2.0.0's
+        reference placement, for the last reference and the scene, with the
+        same split as `ref_boost` / `ref_boost_a`. Each is emitted only when
+        given (`ref_position_a` only with a second reference), so this tab's
+        graph is the one it always built.
     """
     steps, cfg, _turbo_lora = model_defaults(model)
     sampler = {**V2_SAMPLER_DEFAULTS, "steps": steps, "cfg": cfg,
@@ -227,12 +242,17 @@ def build_v2_edit_workflow(
     # The Identity Edit LoRA first, at the strength it was trained at, and
     # model-only — the grounded encoder reads the image through the CLIP,
     # so patching the CLIP with an edit LoRA is not part of the recipe.
-    wf["edit_lora"] = {
-        "class_type": "LoraLoaderModelOnly",
-        "inputs": {"lora_name": EDIT_LORA_FILE, "strength_model": 1.0,
-                   "model": model_ref},
-    }
-    model_ref = ["edit_lora", 0]
+    # The first node keeps its old name so this tab's graph is unchanged.
+    for i, (lora_file, strength) in enumerate(
+            edit_loras or ((EDIT_LORA_FILE, 1.0),)):
+        node = "edit_lora" if i == 0 else f"edit_lora{i}"
+        wf[node] = {
+            "class_type": "LoraLoaderModelOnly",
+            "inputs": {"lora_name": lora_file,
+                       "strength_model": float(strength),
+                       "model": model_ref},
+        }
+        model_ref = [node, 0]
 
     # Then the V2 stack, model + CLIP, exactly as the V2 tab applies it.
     # Both refs advance together because the source node feeds its CLIP
@@ -270,6 +290,8 @@ def build_v2_edit_workflow(
         "fit_mode": fit_mode,
         "ref_boost": float(ref_boost),
     }
+    if ref_position:
+        patch_inputs["ref_position"] = ref_position
     # Shared by both grounded encoders, so the negative sees exactly the
     # references the positive does — the trained unconditional.
     grounding = {"grounding_px": int(grounding_px)}
@@ -285,6 +307,8 @@ def build_v2_edit_workflow(
         patch_inputs["source_latent_b"] = ["encode_b", 0]
         patch_inputs["source_image_b"] = ["source_b", 0]
         patch_inputs["ref_boost_a"] = float(ref_boost_a)
+        if ref_position_a:
+            patch_inputs["ref_position_a"] = ref_position_a
         grounding["image_b"] = ["source_b", 0]
     wf["edit_model"] = {
         "class_type": "Krea2EditModelPatch",
@@ -343,6 +367,6 @@ def build_v2_edit_workflow(
         "inputs": {"filename_prefix": filename_prefix, "images": ["decode", 0]},
     }
     log.debug("Krea 2 V2 Edit graph: %d nodes, %d reference(s), %d style "
-              "LoRA(s) over the Identity Edit LoRA", len(wf),
+              "LoRA(s) over the edit LoRA", len(wf),
               2 if image2_name else 1, len(loras))
     return wf

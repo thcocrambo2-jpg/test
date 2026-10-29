@@ -822,21 +822,29 @@ def install_custom_nodes() -> None:
     instruction-edit workflow needs. Must run before the ComfyUI server
     starts so the nodes register; the pack has no extra Python deps.
 
-    Only the two Edit tabs use those two nodes, so this is skipped
-    entirely when both features are off.
+    Only the three Edit tabs use those two nodes, so this is skipped
+    entirely when all three features are off.
+
+    An existing checkout is moved to the pin rather than skipped: the Edit
+    V2 tab needs the 2.0.0 nodes (reference placement), and a volume
+    cloned at v1.2 would otherwise keep them for ever. repin_checkout is
+    best-effort and only touches a git checkout; a tree unpacked from the
+    mirror tarball has no .git and stays as it is.
 
     A failure here is logged, not raised, which is the contract
-    install_v2_nodes also follows: the two Edit tabs then report the
+    install_v2_nodes also follows: the Edit tabs then report the
     missing nodes and refuse to run, and every other tab starts normally.
     Raising instead would let one unreachable node pack take the whole app
     down with it, including the tabs that never needed those nodes.
     """
     if not (features.enabled(features.Key.KREA_EDIT)
-            or features.enabled(features.Key.KREA_V2_EDIT)):
+            or features.enabled(features.Key.KREA_V2_EDIT)
+            or features.enabled(features.Key.KREA_EDIT_V2)):
         return
     dest = COMFY_DIR / "custom_nodes" / "comfyui-krea2edit"
     if dest.exists():
         log.info("Krea2Edit nodes already present at %s — skipping clone", dest)
+        repin_checkout(dest, "comfyui-krea2edit")
         return
     try:
         install_node_pack("comfyui-krea2edit", KREA2EDIT_NODES_REPO, dest,
@@ -858,11 +866,12 @@ def install_v2_nodes() -> None:
     missing and every other tab untouched. main.py verifies afterwards
     that each class actually registered.
 
-    Krea 2 V2 Edit runs the same sampler and variance nodes, so it pulls
-    these packs in too — either feature on its own is enough.
+    Krea 2 V2 Edit and Krea 2 Edit V2 run the same sampler and variance
+    nodes, so they pull these packs in too — any one feature is enough.
     """
     if not (features.enabled(features.Key.KREA_V2_T2I)
-            or features.enabled(features.Key.KREA_V2_EDIT)):
+            or features.enabled(features.Key.KREA_V2_EDIT)
+            or features.enabled(features.Key.KREA_EDIT_V2)):
         return
     for dirname, repo, _class_type in V2_NODE_REPOS:
         dest = COMFY_DIR / "custom_nodes" / dirname

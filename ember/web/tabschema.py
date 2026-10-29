@@ -124,6 +124,7 @@ from ember.web.schema.fields import NEGATIVE_FALLBACKS
 from ember.web.schema.model import Invalid, TabSchema
 from ember.web.schema.tabs.anima import ANIMA_SCHEMA
 from ember.web.schema.tabs.krea2 import KREA2_EDIT_SCHEMA, KREA2_SCHEMA
+from ember.web.schema.tabs.krea2_edit_v2 import KREA2_EDIT_V2_SCHEMA
 from ember.web.schema.tabs.krea2_v2 import KREA2_V2_SCHEMA
 from ember.web.schema.tabs.krea2_v2_edit import KREA2_V2_EDIT_SCHEMA
 from ember.web.schema.tabs.minimax import (
@@ -137,7 +138,7 @@ from ember.web.schema.tabs.zimage import ZIMAGE_SCHEMA
 Key = features.Key
 
 
-# ═══════════════════════════════════════════════════ the eleven tabs
+# ═══════════════════════════════════════════════════ the twelve tabs
 # Order is the order they appear in the navigation, which is ui.TAB_ORDER's
 # order with the two bespoke tabs (Gallery, Prompt Library) taken out —
 # those have no form and so no schema.
@@ -150,6 +151,7 @@ SCHEMAS = (
     ANIMA_SCHEMA,
     KREA2_EDIT_SCHEMA,
     KREA2_V2_EDIT_SCHEMA,
+    KREA2_EDIT_V2_SCHEMA,
     QWEN21_REF_SCHEMA,
     WAN_SCHEMA,
     MINIMAX_I2V_SCHEMA,
@@ -208,7 +210,8 @@ _SIZE_FROM_IMAGE = {
 
 # The V2 family's rows carry one more default than the Krea2 family's:
 # whether the model's recipe switches its turbo LoRA on.
-_V2_FEATURES = (handlers.KREA_V2_T2I, handlers.KREA_V2_EDIT)
+_V2_FEATURES = (handlers.KREA_V2_T2I, handlers.KREA_V2_EDIT,
+                handlers.KREA_EDIT_V2)
 # The MiniMax rows carry their Sampling controls too (sampler, scheduler,
 # shift, turbo strength): a checkpoint with turbo merged in runs a recipe
 # of its own, and the browser deals a row's defaults into the controls of

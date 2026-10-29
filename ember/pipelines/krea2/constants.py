@@ -36,6 +36,10 @@ ABLITERATED_ENCODER_FILE = "qwen3vl_4b_abliterated.safetensors"
 # build_edit_workflow wires), and the v1.2 nodes default fit_mode to "fit",
 # which v1/v1.1 weights were not trained for. Bump both together or
 # neither — scripts/PINS.json is what holds the node pack still.
+#
+# The pack is pinned at 2.0.0 for the 💠 Edit V2 tab. 2.0.0 only adds the
+# reference-placement inputs, and their defaults reproduce 1.2.x exactly,
+# so these v1.2 weights are still running the nodes they were built for.
 KREA2EDIT_NODES_REPO = "https://github.com/lbouaraba/comfyui-krea2edit"
 EDIT_LORA_REPO = "conradlocke/krea2-identity-edit"
 EDIT_LORA_FILE = "krea2_identity_edit_v1_2.safetensors"  # ~1.83 GB

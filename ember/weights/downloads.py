@@ -37,6 +37,10 @@ from ember.pipelines.krea2.constants import (
     HF_MODEL_REPO,
     TEXT_ENCODER_FILE,
 )
+from ember.pipelines.krea2_edit_v2.constants import (
+    EDIT_V2_FILES,
+    EDIT_V2_LORA_REPO,
+)
 from ember.pipelines.krea2_v2.constants import (
     V2_VAE_FILE,
     V2_VAE_HF_PATH,
@@ -229,6 +233,30 @@ def fetch_edit_lora() -> None:
             revision=mirror.revision(EDIT_LORA_REPO),
         ),
         desc=EDIT_LORA_FILE,
+    )
+
+
+def fetch_edit_lora_v2(filename: str) -> None:
+    """Download one Identity / General Edit V2 LoRA into the loras folder.
+
+    Upstream only, at the pinned revision, and never from the mirror: the
+    V2 LoRAs are licensed for non-commercial use, and the mirror repos are
+    public.
+    """
+    dest = MODELS_DIR / "loras" / filename
+    if dest.exists():
+        log.info("✓ %s (cached)", filename)
+        return
+    log.info("↓ %s (from %s) ...", filename, EDIT_V2_LORA_REPO)
+    _with_retries(
+        lambda: hf_hub_download(
+            repo_id=EDIT_V2_LORA_REPO,
+            filename=filename,
+            local_dir=MODELS_DIR / "loras",
+            token=HF_TOKEN,
+            revision=mirror.revision(EDIT_V2_LORA_REPO),
+        ),
+        desc=filename,
     )
 
 
@@ -522,6 +550,21 @@ def download_edit_lora() -> None:
                   "stay disabled until it downloads on a later run.", exc)
 
 
+def download_edit_lora_v2() -> None:
+    """Fetch the Identity and General Edit V2 LoRAs (~1.8 GB each).
+
+    Each file is tried on its own: the Edit V2 tab only refuses the choice
+    whose file is missing, and the next run retries it.
+    """
+    for filename in EDIT_V2_FILES:
+        try:
+            fetch_edit_lora_v2(filename)
+        except Exception as exc:
+            log.error("Edit V2 LoRA %s unavailable (%s) — the Edit V2 tab "
+                      "will refuse the choice that needs it until a later "
+                      "run fetches it.", filename, exc)
+
+
 def _shared(relpaths) -> list:
     """A pipeline's file list without its diffusion models.
 
@@ -667,6 +710,7 @@ ASSET_GROUPS = {
     "text_encoder": download_text_encoder,
     "krea2": download_krea2_models,
     "edit_lora": download_edit_lora,
+    "edit_lora_v2": download_edit_lora_v2,
     "v2": download_v2_models,
     "catalog": download_catalog,
     "zimage": download_zimage_models,
