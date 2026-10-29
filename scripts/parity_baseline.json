@@ -16350,6 +16350,509 @@
         }
       ]
     },
+    "qwen_edit_2511": {
+      "tab_id": "qwenedit",
+      "controls": [
+        {
+          "type": "Gallery",
+          "label": "Images (paste with Ctrl+V)",
+          "value": [],
+          "minimum": 1,
+          "maximum": 3,
+          "placeholder": null,
+          "interactive": null,
+          "visible": true,
+          "elem_id": null
+        },
+        {
+          "type": "Textbox",
+          "label": "Edit instruction",
+          "value": "Turn the woman in image 1 around so her back is to the camera, looking back at the camera over her right shoulder. Keep her face, hair, outfit and the background the same.",
+          "lines": 5,
+          "placeholder": null,
+          "interactive": null,
+          "visible": true,
+          "elem_id": null
+        },
+        {
+          "type": "Textbox",
+          "label": "Negative prompt",
+          "value": null,
+          "lines": 3,
+          "placeholder": null,
+          "interactive": null,
+          "visible": true,
+          "elem_id": null
+        },
+        {
+          "type": "Dropdown",
+          "label": "Speed",
+          "value": "\u26a1 Lightning \u00b7 4 steps",
+          "interactive": null,
+          "visible": true,
+          "multiselect": null,
+          "elem_id": null,
+          "choices": [
+            [
+              "\u26a1 Lightning \u00b7 4 steps",
+              "\u26a1 Lightning \u00b7 4 steps"
+            ],
+            [
+              "\u26a1 Lightning \u00b7 8 steps",
+              "\u26a1 Lightning \u00b7 8 steps"
+            ],
+            [
+              "Normal (steps and CFG below)",
+              "Normal (steps and CFG below)"
+            ]
+          ]
+        },
+        {
+          "type": "Dropdown",
+          "label": "Model",
+          "value": "qwen-image-edit-2511-fp8mixed",
+          "interactive": null,
+          "visible": true,
+          "multiselect": null,
+          "elem_id": null,
+          "choices": [
+            [
+              "Qwen Image Edit 2511 fp8",
+              "qwen-image-edit-2511-fp8mixed"
+            ]
+          ]
+        },
+        {
+          "type": "Slider",
+          "label": "Steps",
+          "value": 40,
+          "minimum": 1,
+          "maximum": 80,
+          "step": 1,
+          "interactive": null,
+          "visible": true,
+          "elem_id": null
+        },
+        {
+          "type": "Slider",
+          "label": "CFG",
+          "value": 4.0,
+          "minimum": 1.0,
+          "maximum": 10.0,
+          "step": 0.1,
+          "interactive": null,
+          "visible": true,
+          "elem_id": null
+        },
+        {
+          "type": "Dropdown",
+          "label": "Sampler",
+          "value": "euler",
+          "interactive": null,
+          "visible": true,
+          "multiselect": null,
+          "elem_id": null,
+          "choices": [
+            [
+              "euler",
+              "euler"
+            ],
+            [
+              "euler_ancestral",
+              "euler_ancestral"
+            ],
+            [
+              "dpmpp_2m",
+              "dpmpp_2m"
+            ],
+            [
+              "res_multistep",
+              "res_multistep"
+            ],
+            [
+              "er_sde",
+              "er_sde"
+            ]
+          ]
+        },
+        {
+          "type": "Dropdown",
+          "label": "Scheduler",
+          "value": "simple",
+          "interactive": null,
+          "visible": true,
+          "multiselect": null,
+          "elem_id": null,
+          "choices": [
+            [
+              "simple",
+              "simple"
+            ],
+            [
+              "beta",
+              "beta"
+            ],
+            [
+              "normal",
+              "normal"
+            ]
+          ]
+        },
+        {
+          "type": "Number",
+          "label": "Seed",
+          "value": 42,
+          "minimum": 0,
+          "maximum": null,
+          "step": 1,
+          "placeholder": null,
+          "interactive": null,
+          "visible": true,
+          "elem_id": null
+        },
+        {
+          "type": "Checkbox",
+          "label": "\ud83c\udfb2 Random seed",
+          "value": true,
+          "interactive": null,
+          "visible": true,
+          "elem_id": null
+        },
+        {
+          "type": "Slider",
+          "label": "Batch count",
+          "value": 1,
+          "minimum": 1,
+          "maximum": 20,
+          "step": 1,
+          "interactive": null,
+          "visible": true,
+          "elem_id": null
+        },
+        {
+          "type": "Checkbox",
+          "label": "\ud83d\udcbe Save these settings as a preset",
+          "value": false,
+          "interactive": null,
+          "visible": true,
+          "elem_id": null
+        },
+        {
+          "type": "Textbox",
+          "label": "Preset name",
+          "value": null,
+          "lines": 1,
+          "placeholder": null,
+          "interactive": null,
+          "visible": true,
+          "elem_id": null
+        },
+        {
+          "type": "Checkbox",
+          "label": "On",
+          "value": false,
+          "interactive": null,
+          "visible": true,
+          "elem_id": null
+        },
+        {
+          "type": "Dropdown",
+          "label": "LoRA 1",
+          "value": "None",
+          "interactive": null,
+          "visible": true,
+          "multiselect": null,
+          "elem_id": null,
+          "choices": [
+            [
+              "None",
+              "None"
+            ],
+            [
+              "Multiple Angles (camera) (not downloaded)",
+              "qwen-edit-2511-multiple-angles"
+            ]
+          ]
+        },
+        {
+          "type": "Slider",
+          "label": "Strength",
+          "value": 1.0,
+          "minimum": 0.0,
+          "maximum": 2.0,
+          "step": 0.01,
+          "interactive": null,
+          "visible": true,
+          "elem_id": null
+        },
+        {
+          "type": "Checkbox",
+          "label": "On",
+          "value": false,
+          "interactive": null,
+          "visible": true,
+          "elem_id": null
+        },
+        {
+          "type": "Dropdown",
+          "label": "LoRA 2",
+          "value": "None",
+          "interactive": null,
+          "visible": true,
+          "multiselect": null,
+          "elem_id": null,
+          "choices": [
+            [
+              "None",
+              "None"
+            ],
+            [
+              "Multiple Angles (camera) (not downloaded)",
+              "qwen-edit-2511-multiple-angles"
+            ]
+          ]
+        },
+        {
+          "type": "Slider",
+          "label": "Strength",
+          "value": 1.0,
+          "minimum": 0.0,
+          "maximum": 2.0,
+          "step": 0.01,
+          "interactive": null,
+          "visible": true,
+          "elem_id": null
+        },
+        {
+          "type": "Checkbox",
+          "label": "On",
+          "value": false,
+          "interactive": null,
+          "visible": true,
+          "elem_id": null
+        },
+        {
+          "type": "Dropdown",
+          "label": "LoRA 3",
+          "value": "None",
+          "interactive": null,
+          "visible": true,
+          "multiselect": null,
+          "elem_id": null,
+          "choices": [
+            [
+              "None",
+              "None"
+            ],
+            [
+              "Multiple Angles (camera) (not downloaded)",
+              "qwen-edit-2511-multiple-angles"
+            ]
+          ]
+        },
+        {
+          "type": "Slider",
+          "label": "Strength",
+          "value": 1.0,
+          "minimum": 0.0,
+          "maximum": 2.0,
+          "step": 0.01,
+          "interactive": null,
+          "visible": true,
+          "elem_id": null
+        },
+        {
+          "type": "Checkbox",
+          "label": "On",
+          "value": false,
+          "interactive": null,
+          "visible": true,
+          "elem_id": null
+        },
+        {
+          "type": "Dropdown",
+          "label": "LoRA 4",
+          "value": "None",
+          "interactive": null,
+          "visible": true,
+          "multiselect": null,
+          "elem_id": null,
+          "choices": [
+            [
+              "None",
+              "None"
+            ],
+            [
+              "Multiple Angles (camera) (not downloaded)",
+              "qwen-edit-2511-multiple-angles"
+            ]
+          ]
+        },
+        {
+          "type": "Slider",
+          "label": "Strength",
+          "value": 1.0,
+          "minimum": 0.0,
+          "maximum": 2.0,
+          "step": 0.01,
+          "interactive": null,
+          "visible": true,
+          "elem_id": null
+        },
+        {
+          "type": "Checkbox",
+          "label": "On",
+          "value": false,
+          "interactive": null,
+          "visible": true,
+          "elem_id": null
+        },
+        {
+          "type": "Dropdown",
+          "label": "LoRA 5",
+          "value": "None",
+          "interactive": null,
+          "visible": true,
+          "multiselect": null,
+          "elem_id": null,
+          "choices": [
+            [
+              "None",
+              "None"
+            ],
+            [
+              "Multiple Angles (camera) (not downloaded)",
+              "qwen-edit-2511-multiple-angles"
+            ]
+          ]
+        },
+        {
+          "type": "Slider",
+          "label": "Strength",
+          "value": 1.0,
+          "minimum": 0.0,
+          "maximum": 2.0,
+          "step": 0.01,
+          "interactive": null,
+          "visible": true,
+          "elem_id": null
+        },
+        {
+          "type": "Checkbox",
+          "label": "On",
+          "value": false,
+          "interactive": null,
+          "visible": true,
+          "elem_id": null
+        },
+        {
+          "type": "Dropdown",
+          "label": "LoRA 6",
+          "value": "None",
+          "interactive": null,
+          "visible": true,
+          "multiselect": null,
+          "elem_id": null,
+          "choices": [
+            [
+              "None",
+              "None"
+            ],
+            [
+              "Multiple Angles (camera) (not downloaded)",
+              "qwen-edit-2511-multiple-angles"
+            ]
+          ]
+        },
+        {
+          "type": "Slider",
+          "label": "Strength",
+          "value": 1.0,
+          "minimum": 0.0,
+          "maximum": 2.0,
+          "step": 0.01,
+          "interactive": null,
+          "visible": true,
+          "elem_id": null
+        },
+        {
+          "type": "Checkbox",
+          "label": "On",
+          "value": false,
+          "interactive": null,
+          "visible": true,
+          "elem_id": null
+        },
+        {
+          "type": "Dropdown",
+          "label": "LoRA 7",
+          "value": "None",
+          "interactive": null,
+          "visible": true,
+          "multiselect": null,
+          "elem_id": null,
+          "choices": [
+            [
+              "None",
+              "None"
+            ],
+            [
+              "Multiple Angles (camera) (not downloaded)",
+              "qwen-edit-2511-multiple-angles"
+            ]
+          ]
+        },
+        {
+          "type": "Slider",
+          "label": "Strength",
+          "value": 1.0,
+          "minimum": 0.0,
+          "maximum": 2.0,
+          "step": 0.01,
+          "interactive": null,
+          "visible": true,
+          "elem_id": null
+        },
+        {
+          "type": "Checkbox",
+          "label": "On",
+          "value": false,
+          "interactive": null,
+          "visible": true,
+          "elem_id": null
+        },
+        {
+          "type": "Dropdown",
+          "label": "LoRA 8",
+          "value": "None",
+          "interactive": null,
+          "visible": true,
+          "multiselect": null,
+          "elem_id": null,
+          "choices": [
+            [
+              "None",
+              "None"
+            ],
+            [
+              "Multiple Angles (camera) (not downloaded)",
+              "qwen-edit-2511-multiple-angles"
+            ]
+          ]
+        },
+        {
+          "type": "Slider",
+          "label": "Strength",
+          "value": 1.0,
+          "minimum": 0.0,
+          "maximum": 2.0,
+          "step": 0.01,
+          "interactive": null,
+          "visible": true,
+          "elem_id": null
+        }
+      ]
+    },
     "wan_i2v": {
       "tab_id": "video",
       "controls": [
@@ -17927,6 +18430,26 @@
         "sampler",
         "scheduler",
         "reference_detail",
+        "seed",
+        "randomize",
+        "batch_count",
+        "save_preset",
+        "preset_name"
+      ],
+      "varargs": "lora_slots",
+      "keyword_only": []
+    },
+    "generate_qwen_edit": {
+      "positional": [
+        "images",
+        "prompt",
+        "negative",
+        "speed",
+        "model",
+        "steps",
+        "cfg",
+        "sampler",
+        "scheduler",
         "seed",
         "randomize",
         "batch_count",

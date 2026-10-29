@@ -170,6 +170,8 @@ def handler_modules() -> tuple:
     from ember.pipelines.minimax import workflow as minimax
     from ember.pipelines.qwen21 import handler as qwen21_handler
     from ember.pipelines.qwen21 import workflow as qwen21
+    from ember.pipelines.qwen_edit import handler as qwen_edit_handler
+    from ember.pipelines.qwen_edit import workflow as qwen_edit
     from ember.pipelines.wan import handler as wan_handler
     from ember.pipelines.wan import workflow as wan
     from ember.pipelines.zimage import handler as zimage_handler
@@ -177,9 +179,9 @@ def handler_modules() -> tuple:
     return (handlers, loras, runner,
             krea2_handler, krea2_v2_handler, krea2_v2_edit_handler,
             wan_handler, minimax_handler, zimage_handler, qwen21_handler,
-            anima_handler, krea2_edit_v2_handler,
+            anima_handler, krea2_edit_v2_handler, qwen_edit_handler,
             krea2, krea2_v2, krea2_v2_edit, wan, minimax, zimage, qwen21,
-            anima, krea2_edit_v2)
+            anima, krea2_edit_v2, qwen_edit)
 
 
 class Namespace:
@@ -294,6 +296,8 @@ def patch(users, capture) -> None:
     # through node_registered, patched above.
     _patch_all(users, "qwen21_missing", lambda *a, **k: [])
     _patch_all(users, "anima_missing", lambda *a, **k: [])
+    # Qwen Edit 2511's too; it takes the Lightning file it is asked about.
+    _patch_all(users, "qwen_edit_missing", lambda *a, **k: [])
     _patch_all(users, "node_registered", lambda *a, **k: True)
 
     _patch_all(users, "comfy_ensure_alive", lambda *a, **k: (True, ""))
@@ -352,6 +356,7 @@ def cases(module) -> dict:
     qwen21_model = module.default_model(module.QWEN21_EDIT)
     qwen21_t2i_model = module.default_model(module.QWEN21_T2I)
     anima_model = module.default_model(module.ANIMA_T2I)
+    qwen_edit_model = module.default_model(module.QWEN_EDIT_2511)
     image = _image()
 
     # Krea2: eight blank slots. The first three name LoRAs — two on, one
@@ -409,6 +414,15 @@ def cases(module) -> dict:
         v for i in range(4)
         for v in (*({3: (True, "hmbody-d-e10")}.get(i, (False, "None"))),
                   round(0.9 - i / 100, 2)))
+    # Qwen Edit 2511: eight blank slots over its own list, which holds the
+    # Multiple Angles LoRA. The first row ticks it, the third ticks a Krea
+    # LoRA this tab does not offer, so the snapshots show one chained after
+    # Lightning and the other skipped.
+    qwen_edit_triples = tuple(
+        v for i in range(module.MAX_LORA_SLOTS)
+        for v in (*({0: (True, "qwen-edit-2511-multiple-angles"),
+                     2: (True, "hmbody-d-e10")}.get(i, (False, "None"))),
+                  round(0.8 + i / 100, 2)))
     # References of different shapes, so "Same as reference 1" has a shape
     # to take and the order is visible in the sizes.
     from PIL import Image
@@ -650,6 +664,32 @@ def cases(module) -> dict:
             "9:16 · 1536×2752", qwen21_t2i_model, 33, 3.5, "res_multistep",
             "beta", 5791357, False, 2, False, "",
         ) + qwen21_t2i_triples,
+
+        # Qwen Edit 2511 on one image at Lightning 4 steps: the LoRA after
+        # CFGNorm, 4 steps at CFG 1 whatever the sliders hold. Saves a
+        # preset, so its blob is checked against settings().
+        "generate_qwen_edit": (
+            references[:1], "turn her around, looking back over her "
+            "shoulder", "", "⚡ Lightning · 4 steps", qwen_edit_model, 40,
+            4.0, "euler", "simple", 1928374, False, 2, True, "Golden",
+        ) + qwen_edit_triples,
+
+        # Two images at Lightning 8 steps: image1 and image2 on both
+        # encoders, the 8-step LoRA.
+        "generate_qwen_edit_lightning8": (
+            references[:2], "the woman in image 1 wearing the dress from "
+            "image 2", "", "⚡ Lightning · 8 steps", qwen_edit_model, 40,
+            4.0, "euler", "simple", 2837465, False, 1, False, "",
+        ) + qwen_edit_triples,
+
+        # All three images on Normal: no Lightning node, and the sliders'
+        # steps and CFG reach the KSampler, with the negative encoded.
+        "generate_qwen_edit_normal": (
+            references[:3], "the woman in image 1 in the pose from image 2 "
+            "in the room from image 3", "blurry, extra fingers",
+            "Normal (steps and CFG below)", qwen_edit_model, 36, 4.5,
+            "res_multistep", "beta", 3746556, False, 1, False, "",
+        ) + qwen_edit_triples,
     }
 
 
@@ -661,6 +701,8 @@ CASE_HANDLERS = {"generate_zimage_upscale": "generate_zimage",
                  "generate_qwen21_ref_three": "generate_qwen21_ref",
                  "generate_qwen21_ref_ten": "generate_qwen21_ref",
                  "generate_qwen21_t2i_negative": "generate_qwen21_t2i",
+                 "generate_qwen_edit_lightning8": "generate_qwen_edit",
+                 "generate_qwen_edit_normal": "generate_qwen_edit",
                  "generate_anima_negative": "generate_anima",
                  "generate_edit_v2_both": "generate_edit_v2",
                  "generate_wan_video_smooth": "generate_wan_video",
@@ -682,10 +724,10 @@ def check_settings(name, args, settings) -> None:
     import, because that one is a plain function. The V2 blob is built
     inline inside generate_v2, so the only way to see it is to run the
     handler — which is what happens here. The two MiniMax cases and the
-    first Z-Image, Qwen 2.1 Reference, Qwen 2.1 and Anima cases tick the
-    save-preset box, so their blobs (_minimax_settings, _zimage_settings,
-    _qwen21_settings, _qwen21_t2i_settings, _anima_settings) are checked
-    too.
+    first Z-Image, Qwen 2.1 Reference, Qwen 2.1, Anima and Qwen Edit 2511
+    cases tick the save-preset box, so their blobs (_minimax_settings,
+    _zimage_settings, _qwen21_settings, _qwen21_t2i_settings,
+    _anima_settings, _qwen_edit_settings) are checked too.
 
     The inversion in the middle is worth reading twice. `Field.name` is
     the handler parameter name and `fields` is submission order, so
