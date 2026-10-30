@@ -25,6 +25,7 @@ from ember.web.schema.fields import (
     GEN_PRESET_NOTE,
     G_CORE,
     G_PROMPT,
+    G_REFINE,
     G_SAMPLER,
     G_SAVE_PRESET,
     G_SEED,
@@ -36,6 +37,7 @@ from ember.web.schema.fields import (
     _model_negative,
     _model_setting,
     _preset_save_fields,
+    _refine_fields,
     _seed_fields,
     _triple_tail,
 )
@@ -68,7 +70,7 @@ QWEN21_REF_SCHEMA = TabSchema(
             G_PROMPT, G_CORE, G_SAMPLER,
             Group("advanced", "Advanced", collapsible=True,
                   default_open=False),
-            G_SEED, G_SAVE_PRESET),
+            G_REFINE, G_SEED, G_SAVE_PRESET),
     fields=(
         Field("references", "Reference images (paste with Ctrl+V)",
               "images", (), lo=1, hi=QWEN21_MAX_REFERENCES,
@@ -110,6 +112,7 @@ QWEN21_REF_SCHEMA = TabSchema(
         *_seed_fields(),
         _batch_field(),
         *_preset_save_fields(),
+        *_refine_fields(edit=True),
         Field("lora_slots", "LoRA stack", "repeat",
               repeat=_triple_tail(handlers.QWEN21_EDIT,
                                   _blank_slots(QWEN21_LORA_SLOTS),
@@ -133,7 +136,7 @@ QWEN21_T2I_SCHEMA = TabSchema(
     category="generate", route="/generate/qwen21",
     submit_label="Generate", preset_tab=presets.TAB_QWEN21_T2I,
     preset_note=GEN_PRESET_NOTE,
-    groups=(G_PROMPT, G_CORE, G_SAMPLER, G_SEED, G_SAVE_PRESET),
+    groups=(G_PROMPT, G_CORE, G_SAMPLER, G_REFINE, G_SEED, G_SAVE_PRESET),
     fields=(
         Field("prompt", "Prompt", "textarea",
               "A neon shop sign that reads \"OPEN ALL NIGHT\" above a "
@@ -162,6 +165,7 @@ QWEN21_T2I_SCHEMA = TabSchema(
         *_seed_fields(),
         _batch_field(),
         *_preset_save_fields(),
+        *_refine_fields(),
         Field("lora_slots", "LoRA stack", "repeat",
               repeat=_triple_tail(handlers.QWEN21_T2I,
                                   _blank_slots(QWEN21_LORA_SLOTS),

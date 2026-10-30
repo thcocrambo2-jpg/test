@@ -23,10 +23,12 @@ from ember.licensing import presets
 from ember.licensing import prompts
 from ember.pipelines.common import edit_lora_available
 from ember.pipelines.krea2.workflow import build_edit_workflow
+from ember.pipelines.zimage.refine import refine_spec
 
 
 def _krea_settings(seed, randomize, steps, cfg, resolution, sampler, model,
-                   batch_count, lora_slots) -> dict:
+                   batch_count, lora_slots, refine=False,
+                   refine_denoise=0.25) -> dict:
     """The Krea 2 tab's controls as the prompt library stores them.
 
     Deliberately the *UI* values, not the resolved job dict: what goes in
@@ -49,6 +51,7 @@ def _krea_settings(seed, randomize, steps, cfg, resolution, sampler, model,
         "seed": int(seed or 0),
         "randomize": bool(randomize),
         "batch_count": int(batch_count),
+        "refine": {"on": bool(refine), "denoise": float(refine_denoise)},
         "loras": [[bool(on), stored_lora(name), float(weight)]
                   for on, name, weight
                   in zip(lora_slots[::3], lora_slots[1::3], lora_slots[2::3])],
@@ -57,14 +60,21 @@ def _krea_settings(seed, randomize, steps, cfg, resolution, sampler, model,
 
 def generate_single(prompt, negative, seed, randomize, steps, cfg, resolution,
                     sampler, model, batch_count, publish, publish_title,
-                    save_preset, preset_name, *lora_slots):
+                    save_preset, preset_name, refine, refine_denoise,
+                    refine_prompt, *lora_slots):
     """First tab: run batch_count jobs on sequential seeds."""
     entry, error = _check_model(KREA_T2I, model)
     if error:
         yield [], error, 0
         return
+    refiner, error = refine_spec(refine, refine_denoise, refine_prompt,
+                                 prompt)
+    if error:
+        yield [], error, 0
+        return
     settings = _krea_settings(seed, randomize, steps, cfg, resolution,
-                              sampler, model, batch_count, lora_slots)
+                              sampler, model, batch_count, lora_slots,
+                              refine, refine_denoise)
     # After the guard, before the work: a click that could never run does
     # not belong in the library, but one that fails half way through a
     # batch still had a recipe worth keeping. Returns instantly and
@@ -84,7 +94,7 @@ def generate_single(prompt, negative, seed, randomize, steps, cfg, resolution,
         "steps": int(steps), "cfg": float(cfg), "width": width, "height": height,
         "sampler": sampler, "loras": loras, "unet_file": entry.file,
     } for i in range(int(batch_count))]
-    for images, status in _run_jobs(jobs):
+    for images, status in _run_jobs(jobs, refine=refiner):
         yield images, notice + status, base_seed
 
 
@@ -107,7 +117,8 @@ def _fit_edit_size(w: int, h: int, max_pixels: int = 2_000_000) -> tuple:
 
 def generate_edit(image, use_image2, image2, prompt, negative, seed,
                   randomize, steps, cfg, sampler, grounding, ref_boost,
-                  ref_boost_a, model, batch_count, *lora_slots):
+                  ref_boost_a, model, batch_count, refine, refine_denoise,
+                  refine_prompt, *lora_slots):
     """Edit tab: instruction-based editing. The model sees the source image
     (Identity Edit LoRA dual conditioning), so the prompt describes the
     change to make — no mask, no denoise tuning.
@@ -133,6 +144,11 @@ def generate_edit(image, use_image2, image2, prompt, negative, seed,
         return
     if not str(prompt or "").strip():
         yield [], "❌ Describe the change (e.g. “make the jacket red”).", 0
+        return
+    refiner, error = refine_spec(refine, refine_denoise, refine_prompt,
+                                 prompt, edit=True)
+    if error:
+        yield [], error, 0
         return
     image = image.convert("RGB")
     width, height = _fit_edit_size(*image.size)
@@ -172,5 +188,5 @@ def generate_edit(image, use_image2, image2, prompt, negative, seed,
         "unet_file": entry.file,
     } for i in range(int(batch_count))]
     for images, status in _run_jobs(jobs, builder=build_edit_workflow,
-                                    prefix="Krea2Edit"):
+                                    prefix="Krea2Edit", refine=refiner):
         yield images, note + status, base_seed

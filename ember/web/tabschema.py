@@ -418,6 +418,7 @@ def _assert_settings() -> None:
         seed=args[2], randomize=args[3], steps=args[4], cfg=args[5],
         resolution=args[6], sampler=args[7], model=args[8],
         batch_count=args[9], lora_slots=args[named:],
+        refine=values["refine"], refine_denoise=values["refine_denoise"],
     )
     actual = schema.settings(values)
     if actual != expected:

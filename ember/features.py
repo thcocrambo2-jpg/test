@@ -79,6 +79,7 @@ class Key(str, Enum):
     MINIMAX_I2V = "minimax_i2v"
     MINIMAX_T2V = "minimax_t2v"
     COMMUNITY_PROMPTS = "community_prompts"
+    ZIMAGE_REFINE = "zimage_refine"
 
     __str__ = str.__str__
 
@@ -199,7 +200,18 @@ FEATURES = (
     # it loads prompts into (Krea2 and Krea2 V2) — the cards for a tab
     # this licence does not grant still render, they just cannot be used.
     Feature(Key.COMMUNITY_PROMPTS, "🌟 Prompt Library", default=True),
+    # Not a tab: the ⚡ Ember Lite refine section on the image tabs, which
+    # re-renders every result with Z-Image. Z-Image's pipeline files
+    # ("zimage") and its own catalogue list for the model ("catalog"), so
+    # a key can have the refine without the Ember Lite tab. See ADDONS.
+    Feature(Key.ZIMAGE_REFINE, "⚡ Ember Lite refine",
+            needs=("zimage", "catalog")),
 )
+
+# Features that switch fields on other tabs on rather than a tab of their
+# own (Field.feature). They have no schema, no route and no navigation
+# entry; scripts/check_routes.py exempts them from "every key owns a tab".
+ADDONS = (Key.ZIMAGE_REFINE,)
 
 BY_KEY = {feature.key: feature for feature in FEATURES}
 

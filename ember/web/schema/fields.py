@@ -5,6 +5,7 @@ Each builder returns Fields (or a `Repeat` tail) ready to drop into a
 `TabSchema.fields` tuple, in submission order.
 """
 
+from ember import features
 from ember.licensing import catalog as assets
 from ember.generation import loras
 from ember.generation import runner
@@ -22,6 +23,10 @@ from ember.pipelines.krea2_v2 import handler as krea2_v2
 from ember.pipelines.krea2_v2_edit.constants import (
     V2_EDIT_DEFAULT_GROUNDING,
     V2_EDIT_DEFAULT_REF_BOOST,
+)
+from ember.pipelines.zimage.constants import (
+    REFINE_DEFAULT_DENOISE,
+    REFINE_FIELD_LABEL,
 )
 from ember.web.schema.model import Field, Group, Repeat
 
@@ -203,6 +208,40 @@ def _preset_save_fields():
     )
 
 
+def _refine_fields(edit=False):
+    """The ⚡ Ember Lite refine: the tick, its denoise and its prompt.
+
+    Every image tab but Ember Lite itself and Anima (whose drawings a
+    photographic pass would undo) has these, last before the LoRA tail so
+    every control already in a tab's recipes keeps its position. Gated by
+    the zimage_refine feature: a licence without it has no section, and
+    the handler gets the tick off. Off by default. The tick and the
+    denoise are preset settings; the prompt, like the main one, is not.
+    `edit` is the edit tabs, whose empty prompt box means the built-in
+    realism prompt rather than their instruction. See
+    pipelines/zimage/refine.py.
+    """
+    gate = features.Key.ZIMAGE_REFINE
+    blank = ("a built-in realism prompt — your instruction describes a "
+             "change, not the picture." if edit else "your prompt above.")
+    return (
+        Field("refine", REFINE_FIELD_LABEL, "bool", False, group="refine",
+              preset="refine.on", wide=True, feature=gate,
+              hint="Re-renders every result with Ember Lite for real skin "
+                   "and light. The original is kept: both are saved, each "
+                   "in the Gallery."),
+        Field("refine_denoise", "Refine denoise", "slider",
+              REFINE_DEFAULT_DENOISE, lo=0.05, hi=1.0, step=0.01,
+              group="refine", preset="refine.denoise", feature=gate,
+              show_if=("refine", True),
+              hint="0.25 keeps the picture and repaints its surface; "
+                   "above about 0.5 Ember Lite starts redrawing it."),
+        Field("refine_prompt", "Refine prompt (optional)", "textarea", "",
+              lines=3, group="refine", feature=gate,
+              show_if=("refine", True), hint="Empty: " + blank),
+    )
+
+
 def _v2_sampler_fields(feature, denoise=True):
     """The ClownsharKSampler block, shared by the V2 and V2 Edit tabs.
 
@@ -336,6 +375,8 @@ G_INPUTS = Group("inputs", "Images", column="right")
 # titling the same kind of thing differently.
 G_CORE = Group("core", "Output", dense=True)
 G_REFERENCE = Group("reference", "Reference", dense=True)
+G_REFINE = Group("refine", "⚡ Ember Lite refine", collapsible=True,
+                 default_open=False)
 
 # The two prompt boxes every generation tab opens with. The negative's
 # label differs per tab (it names the CFG condition, and the V2 tabs call

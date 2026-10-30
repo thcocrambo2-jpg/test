@@ -16,6 +16,7 @@ from ember.web.schema.fields import (
     GEN_PRESET_NOTE,
     G_CORE,
     G_PROMPT,
+    G_REFINE,
     G_SAMPLER,
     G_SAVE,
     G_SEED,
@@ -25,6 +26,7 @@ from ember.web.schema.fields import (
     _batch_field,
     _model_field,
     _model_negative,
+    _refine_fields,
     _save_fields,
     _seed_fields,
     _stack_slots,
@@ -52,7 +54,7 @@ KREA2_V2_SCHEMA = TabSchema(
             G_SAMPLER, G_VARIANCE,
             Group("post", "Post-processing", dense=True, collapsible=True,
                   default_open=False),
-            G_SEED, G_SAVE),
+            G_REFINE, G_SEED, G_SAVE),
     fields=(
         Field("prompt", "Prompt", "textarea", "", lines=5,
               group="prompt"),
@@ -80,6 +82,7 @@ KREA2_V2_SCHEMA = TabSchema(
               wide=True),
         _batch_field(),
         *_save_fields(),
+        *_refine_fields(),
         Field("lora_slots", "LoRA stack", "repeat",
               repeat=_triple_tail(
                   handlers.KREA_V2_T2I,

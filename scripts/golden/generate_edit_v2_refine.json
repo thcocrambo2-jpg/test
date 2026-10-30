@@ -1,0 +1,369 @@
+[
+  {
+    "clip": {
+      "class_type": "CLIPLoader",
+      "inputs": {
+        "clip_name": "qwen3vl_4b_fp8_scaled.safetensors",
+        "device": "default",
+        "type": "krea2"
+      }
+    },
+    "decode": {
+      "class_type": "VAEDecode",
+      "inputs": {
+        "samples": [
+          "sampler",
+          0
+        ],
+        "vae": [
+          "vae",
+          0
+        ]
+      }
+    },
+    "edit_lora": {
+      "class_type": "LoraLoaderModelOnly",
+      "inputs": {
+        "lora_name": "krea2_identity_edit_v2.safetensors",
+        "model": [
+          "unet",
+          0
+        ],
+        "strength_model": 1.0
+      }
+    },
+    "edit_model": {
+      "class_type": "Krea2EditModelPatch",
+      "inputs": {
+        "fit_mode": "fit",
+        "model": [
+          "lora3",
+          0
+        ],
+        "ref_boost": 2.0,
+        "ref_position": "beside (right of target)",
+        "source_image": [
+          "source",
+          0
+        ],
+        "source_latent": [
+          "encode",
+          0
+        ],
+        "target_latent": [
+          "latent",
+          0
+        ],
+        "vae": [
+          "vae",
+          0
+        ]
+      }
+    },
+    "encode": {
+      "class_type": "VAEEncode",
+      "inputs": {
+        "pixels": [
+          "source",
+          0
+        ],
+        "vae": [
+          "vae",
+          0
+        ]
+      }
+    },
+    "latent": {
+      "class_type": "EmptySD3LatentImage",
+      "inputs": {
+        "batch_size": 1,
+        "height": 416,
+        "width": 640
+      }
+    },
+    "lora0": {
+      "class_type": "LoraLoader",
+      "inputs": {
+        "clip": [
+          "clip",
+          0
+        ],
+        "lora_name": "krea2filterbypass3.safetensors",
+        "model": [
+          "edit_lora",
+          0
+        ],
+        "strength_clip": 0.46,
+        "strength_model": 0.46
+      }
+    },
+    "lora1": {
+      "class_type": "LoraLoader",
+      "inputs": {
+        "clip": [
+          "lora0",
+          1
+        ],
+        "lora_name": "krea2_Enhancer.safetensors",
+        "model": [
+          "lora0",
+          0
+        ],
+        "strength_clip": 0.47,
+        "strength_model": 0.47
+      }
+    },
+    "lora2": {
+      "class_type": "LoraLoader",
+      "inputs": {
+        "clip": [
+          "lora1",
+          1
+        ],
+        "lora_name": "Krea2-realism-V2.safetensors",
+        "model": [
+          "lora1",
+          0
+        ],
+        "strength_clip": 0.48,
+        "strength_model": 0.48
+      }
+    },
+    "lora3": {
+      "class_type": "LoraLoader",
+      "inputs": {
+        "clip": [
+          "lora2",
+          1
+        ],
+        "lora_name": "realism_engine_krea2_v3.1.safetensors",
+        "model": [
+          "lora2",
+          0
+        ],
+        "strength_clip": 0.49,
+        "strength_model": 0.49
+      }
+    },
+    "negative": {
+      "class_type": "ConditioningZeroOut",
+      "inputs": {
+        "conditioning": [
+          "positive",
+          0
+        ]
+      }
+    },
+    "positive": {
+      "class_type": "Krea2EditGroundedEncode",
+      "inputs": {
+        "clip": [
+          "lora3",
+          1
+        ],
+        "grounding_px": 768,
+        "image": [
+          "source",
+          0
+        ],
+        "prompt": "she sits cross-legged on a sofa, full body"
+      }
+    },
+    "sampler": {
+      "class_type": "ClownsharKSampler_Beta",
+      "inputs": {
+        "bongmath": true,
+        "cfg": 1.0,
+        "denoise": 1.0,
+        "eta": 0.5,
+        "latent_image": [
+          "latent",
+          0
+        ],
+        "model": [
+          "edit_model",
+          0
+        ],
+        "negative": [
+          "negative",
+          0
+        ],
+        "positive": [
+          "variance",
+          0
+        ],
+        "sampler_mode": "standard",
+        "sampler_name": "linear/euler",
+        "scheduler": "bong_tangent",
+        "seed": 6789013,
+        "steps": 8,
+        "steps_to_run": -1
+      }
+    },
+    "save": {
+      "class_type": "SaveImage",
+      "inputs": {
+        "filename_prefix": "Krea2EditV2_krea2filterbypass3_golden00",
+        "images": [
+          "decode",
+          0
+        ]
+      }
+    },
+    "source": {
+      "class_type": "LoadImage",
+      "inputs": {
+        "image": "golden_upload.png"
+      }
+    },
+    "unet": {
+      "class_type": "UNETLoader",
+      "inputs": {
+        "unet_name": "krea2_turbo_mxfp8.safetensors",
+        "weight_dtype": "default"
+      }
+    },
+    "vae": {
+      "class_type": "VAELoader",
+      "inputs": {
+        "vae_name": "wan21-vae.safetensors"
+      }
+    },
+    "variance": {
+      "class_type": "RBG_Smart_Seed_Variance",
+      "inputs": {
+        "conditioning": [
+          "positive",
+          0
+        ],
+        "cutoff_step": 5,
+        "cutoff_strength": 0.5,
+        "direction_shift": "🚫 None",
+        "fade_curve": "Instant",
+        "fine_tune_variance": 50,
+        "model_type": "📸 Krea2 (SingleStream)",
+        "noise_injection": "Beginning Steps",
+        "protect_mode": "🚫 None",
+        "protect_regions": "",
+        "seed": 6789013,
+        "shift_strength": 100,
+        "total_steps": 20,
+        "variance_preset": "❌ Disabled",
+        "variance_schedule": "step_cutoff",
+        "vibe_blend": 0.5
+      }
+    }
+  },
+  {
+    "clip": {
+      "class_type": "CLIPLoader",
+      "inputs": {
+        "clip_name": "qwen_3_4b.safetensors",
+        "device": "default",
+        "type": "qwen_image"
+      }
+    },
+    "decode": {
+      "class_type": "VAEDecode",
+      "inputs": {
+        "samples": [
+          "sampler",
+          0
+        ],
+        "vae": [
+          "vae",
+          0
+        ]
+      }
+    },
+    "init_image": {
+      "class_type": "LoadImage",
+      "inputs": {
+        "image": "golden_upload.png"
+      }
+    },
+    "latent": {
+      "class_type": "VAEEncode",
+      "inputs": {
+        "pixels": [
+          "init_image",
+          0
+        ],
+        "vae": [
+          "vae",
+          0
+        ]
+      }
+    },
+    "negative": {
+      "class_type": "CLIPTextEncode",
+      "inputs": {
+        "clip": [
+          "clip",
+          0
+        ],
+        "text": ""
+      }
+    },
+    "positive": {
+      "class_type": "CLIPTextEncode",
+      "inputs": {
+        "clip": [
+          "clip",
+          0
+        ],
+        "text": "An unretouched, true-to-life photograph. Everything stays exactly as it is: the same people, faces, expressions, pose, clothing, objects, setting, framing, colours and lighting; only the realism changes. Skin has real, natural texture: fine visible pores, gentle variation in tone, faint natural lines and a few tiny marks, with a natural matte finish and a soft sheen only where the light catches it. Eyebrows, eyelashes and hair keep their exact shape and colour, with individual strands and a few natural flyaways. Fabric shows its real weave, seams and creases, and every surface its real material. Natural light, true colour, realistic micro-detail, natural sharpness and fine, even photographic grain, straight out of a full-frame camera with a sharp prime lens."
+      }
+    },
+    "sampler": {
+      "class_type": "KSampler",
+      "inputs": {
+        "cfg": 1.0,
+        "denoise": 0.25,
+        "latent_image": [
+          "latent",
+          0
+        ],
+        "model": [
+          "unet",
+          0
+        ],
+        "negative": [
+          "negative",
+          0
+        ],
+        "positive": [
+          "positive",
+          0
+        ],
+        "sampler_name": "er_sde",
+        "scheduler": "simple",
+        "seed": 6789013,
+        "steps": 12
+      }
+    },
+    "save": {
+      "class_type": "SaveImage",
+      "inputs": {
+        "filename_prefix": "Krea2EditV2_krea2filterbypass3_golden00_refined",
+        "images": [
+          "decode",
+          0
+        ]
+      }
+    },
+    "unet": {
+      "class_type": "UNETLoader",
+      "inputs": {
+        "unet_name": "z_image_turbo_bf16.safetensors",
+        "weight_dtype": "default"
+      }
+    },
+    "vae": {
+      "class_type": "VAELoader",
+      "inputs": {
+        "vae_name": "ae.safetensors"
+      }
+    }
+  }
+]

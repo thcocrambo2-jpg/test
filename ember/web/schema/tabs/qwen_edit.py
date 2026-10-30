@@ -17,6 +17,7 @@ from ember.web.schema.fields import (
     GEN_PRESET_NOTE,
     G_CORE,
     G_PROMPT,
+    G_REFINE,
     G_SAMPLER,
     G_SAVE_PRESET,
     G_SEED,
@@ -28,6 +29,7 @@ from ember.web.schema.fields import (
     _model_negative,
     _model_setting,
     _preset_save_fields,
+    _refine_fields,
     _seed_fields,
 )
 from ember.web.schema.model import Field, Group, TabSchema
@@ -54,7 +56,7 @@ QWEN_EDIT_SCHEMA = TabSchema(
     preset_note=GEN_PRESET_NOTE,
     groups=(Group("references", "Images", column="right",
                   stack_first=True),
-            G_PROMPT, G_CORE, G_SAMPLER, G_SEED, G_SAVE_PRESET),
+            G_PROMPT, G_CORE, G_SAMPLER, G_REFINE, G_SEED, G_SAVE_PRESET),
     fields=(
         Field("images", "Images (paste with Ctrl+V)",
               "images", (), lo=1, hi=QWEN_EDIT_MAX_IMAGES,
@@ -92,6 +94,7 @@ QWEN_EDIT_SCHEMA = TabSchema(
         *_seed_fields(),
         _batch_field(),
         *_preset_save_fields(),
+        *_refine_fields(edit=True),
         Field("lora_slots", "LoRA stack", "repeat",
               repeat=_blank_lora_tail(handlers.QWEN_EDIT_2511)),
     ),

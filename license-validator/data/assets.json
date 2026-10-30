@@ -1354,6 +1354,12 @@
         "penis-zit-v3"
       ]
     },
+    "zimage_refine": {
+      "models": [
+        "z-image-turbo-bf16"
+      ],
+      "loras": []
+    },
     "minimax_i2v": {
       "models": [
         "minimax-h3-int8",

@@ -45,6 +45,9 @@ KREA_EDIT_V2 = str(Key.KREA_EDIT_V2)
 # Z-Image reads a model list and a LoRA list the same way. Its text encoder,
 # VAE and upscale model are fixed in pipelines/zimage/constants.py.
 ZIMAGE_T2I = str(Key.ZIMAGE_T2I)
+# The ⚡ Ember Lite refine reads a model list of its own, so a key can have
+# the refine without the tab. No LoRAs: the refine runs with none.
+ZIMAGE_REFINE = str(Key.ZIMAGE_REFINE)
 # So do the two Qwen 2.1 tabs, each its own lists. Their text encoder and
 # VAE are fixed in pipelines/qwen21/constants.py.
 QWEN21_EDIT = str(Key.QWEN21_EDIT)

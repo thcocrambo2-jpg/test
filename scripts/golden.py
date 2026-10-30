@@ -107,6 +107,10 @@ IMAGE_SIZE = (653, 431)
 # from itself between two runs.
 UPLOADED = "golden_upload.png"
 
+# The picture the refine cases refine, in place of a file on disk: 1080 x
+# 1350 is 67.5 x 84.375 sixteens, so the refine has to snap it (1088 x 1344).
+REFINE_RENDER_SIZE = (1080, 1350)
+
 
 def stub_comfy() -> None:
     """Make `import comfy` work on a machine ComfyUI cannot run on.
@@ -175,13 +179,14 @@ def handler_modules() -> tuple:
     from ember.pipelines.wan import handler as wan_handler
     from ember.pipelines.wan import workflow as wan
     from ember.pipelines.zimage import handler as zimage_handler
+    from ember.pipelines.zimage import refine as zimage_refine
     from ember.pipelines.zimage import workflow as zimage
     return (handlers, loras, runner,
             krea2_handler, krea2_v2_handler, krea2_v2_edit_handler,
             wan_handler, minimax_handler, zimage_handler, qwen21_handler,
             anima_handler, krea2_edit_v2_handler, qwen_edit_handler,
             krea2, krea2_v2, krea2_v2_edit, wan, minimax, zimage, qwen21,
-            anima, krea2_edit_v2, qwen_edit)
+            anima, krea2_edit_v2, qwen_edit, zimage_refine)
 
 
 class Namespace:
@@ -301,6 +306,14 @@ def patch(users, capture) -> None:
     _patch_all(users, "node_registered", lambda *a, **k: True)
 
     _patch_all(users, "comfy_ensure_alive", lambda *a, **k: (True, ""))
+
+    # The ⚡ Ember Lite refine opens each picture the batch made, and the
+    # stubbed ComfyUI makes none; this one's size is off the grid of 16,
+    # so the snapshot shows the refine putting it back on.
+    from PIL import Image
+    _patch_all(users, "open_render",
+               lambda path: Image.new("RGB", REFINE_RENDER_SIZE,
+                                      (180, 140, 120)))
 
     # The per-job filename token. Random by design — that is the whole
     # point of it — and it lands *in* the workflow as filename_prefix, so
@@ -443,12 +456,17 @@ def cases(module) -> dict:
             in enumerate(module.v2_lora_slots(feature))
             for v in (i in on, lora_id, round(0.45 + i / 100, 2)))
 
+    # The refine controls (tick, denoise, prompt), off: what every case
+    # below sends unless it is a refine case, so their graphs show the
+    # tick off adds nothing.
+    REFINE_OFF = (False, 0.25, "")
+
     return {
         "generate_single": (
             "a lighthouse in a storm, 35mm", "blurry, watermark",
             1234567, False, 9, 1.7, "1216×832 (Landscape)", "euler",
             model, 2, False, "", False, "",
-        ) + krea_triples,
+        ) + REFINE_OFF + krea_triples,
 
         # The two-input edit: the second reference is on, so the snapshot
         # holds both LoadImage nodes and the dual conditioning. It is the
@@ -458,7 +476,7 @@ def cases(module) -> dict:
             image, True, image, "put a red scarf on her",
             "blurry, watermark", 2345678, False, 14, 2.3, "dpmpp_2m",
             576, 4.5, 1.5, edit_model, 2,
-        ) + edit_triples,
+        ) + REFINE_OFF + edit_triples,
 
         "generate_v2": (
             "a lighthouse in a storm, 35mm", "blurry, watermark",
@@ -466,6 +484,21 @@ def cases(module) -> dict:
             0.35, "res_2m", "beta57", 13, 0.85, 2.4, "unsample", False,
             "🌿 Balanced", 37, "🖼️ Qwen-Image", "decreasing",
             7, 23, 0.65, 140, True, True, 2, False, "", False, "",
+        ) + REFINE_OFF + v2_triples(module.KREA_V2_T2I),
+
+        # The ⚡ Ember Lite refine on a generate tab, its prompt box empty:
+        # the two V2 graphs, then one Z-Image image-to-image graph per
+        # picture, at 0.3 on the picture's own seed, refining with the
+        # tab's prompt. REFINE_RENDER_SIZE snapped to 1088×1344, no LoRAs,
+        # and each saved as its original's prefix plus "_refined". The
+        # blob prompts.record keeps has the tick on.
+        "generate_v2_refine": (
+            "a lighthouse in a storm, 35mm", "blurry, watermark",
+            4567891, False, v2_model, "16:9 (Landscape Wide)", 2.25, 32,
+            0.35, "res_2m", "beta57", 13, 0.85, 2.4, "unsample", False,
+            "🌿 Balanced", 37, "🖼️ Qwen-Image", "decreasing",
+            7, 23, 0.65, 140, False, False, 2, False, "", False, "",
+            True, 0.3, "",
         ) + v2_triples(module.KREA_V2_T2I),
 
         "generate_v2_edit": (
@@ -475,7 +508,7 @@ def cases(module) -> dict:
             13, 2.4, "resample", False,
             "🪴 Creative", 61, "🔮 Flux (Dev/Schnell)", "step_cutoff",
             7, 23, 0.65, 140, 2,
-        ) + v2_triples(module.KREA_V2_EDIT),
+        ) + REFINE_OFF + v2_triples(module.KREA_V2_EDIT),
 
         # Krea2 Edit V2, the author's restage recipe: one image, Identity
         # Edit V2 at 1.0, the person placed beside, ref_boost 2, 8 steps at
@@ -490,7 +523,7 @@ def cases(module) -> dict:
             8, 1.0, "standard", True,
             "❌ Disabled", 50, "📸 Krea2 (SingleStream)", "step_cutoff",
             5, 20, 0.5, 100, 2,
-        ) + v2_triples(module.KREA_EDIT_V2),
+        ) + REFINE_OFF + v2_triples(module.KREA_EDIT_V2),
 
         # Two references and both LoRAs at 0.6. The person is aligned and
         # the scene beside, the reverse of the author's compositing recipe,
@@ -505,7 +538,21 @@ def cases(module) -> dict:
             12, 2.2, "resample", False,
             "🪴 Creative", 61, "🔮 Flux (Dev/Schnell)", "step_cutoff",
             7, 23, 0.65, 140, 1,
-        ) + v2_triples(module.KREA_EDIT_V2, on=frozenset({0, 5})),
+        ) + REFINE_OFF + v2_triples(module.KREA_EDIT_V2, on=frozenset({0, 5})),
+
+        # The refine on an edit tab, its prompt box empty: the instruction
+        # is not a description, so the refine prompts with the built-in
+        # REFINE_EDIT_PROMPT instead.
+        "generate_edit_v2_refine": (
+            image, False, None, "she sits cross-legged on a sofa, full body",
+            "", 6789013, False, edit_v2_model,
+            "🧑 Identity — restage the person (pose, scene, outfit, light)",
+            "beside (right of target)", "bag of features",
+            768, 2.0, 1.0, 0.5, "linear/euler", "bong_tangent",
+            8, 1.0, "standard", True,
+            "❌ Disabled", 50, "📸 Krea2 (SingleStream)", "step_cutoff",
+            5, 20, 0.5, 100, 1, True, 0.25, "",
+        ) + v2_triples(module.KREA_EDIT_V2),
 
         # Anima, the model card's graph at the BAS:NSFW record's 8 steps and
         # CFG 1: no negative, so it is the positive's ConditioningZeroOut,
@@ -630,7 +677,7 @@ def cases(module) -> dict:
             "blurry, watermark", "Same as reference 1", qwen21_model,
             27, 1.3, "euler_ancestral", "beta", 896, 1357913, False, 2,
             True, "Golden",
-        ) + qwen21_triples,
+        ) + REFINE_OFF + qwen21_triples,
 
         # Three references and a preset size: 16:9 is 2752×1536 whatever
         # reference 1 is, and image_1..image_3 are wired in order.
@@ -639,14 +686,14 @@ def cases(module) -> dict:
             "image 2 outside the café in image 3", "", "16:9 · 2752×1536",
             qwen21_model, 25, 1.0, "euler", "simple", 1024, 2468024, False,
             2, False, "",
-        ) + qwen21_triples,
+        ) + REFINE_OFF + qwen21_triples,
 
         # All ten, the most the tab takes: image_1..image_10.
         "generate_qwen21_ref_ten": (
             references, "the woman from image 1 wearing every item from "
             "images 2 to 10", "", "Same as reference 1", qwen21_model, 31,
             1.1, "dpmpp_2m", "simple", 0, 3579135, False, 2, False, "",
-        ) + qwen21_triples,
+        ) + REFINE_OFF + qwen21_triples,
 
         # Qwen 2.1 text to image, the template's graph: no negative, so it
         # is the positive's ConditioningZeroOut, at 3:2's 2528×1696. Saves
@@ -655,7 +702,7 @@ def cases(module) -> dict:
             "a neon sign that reads \"OPEN\" above a noodle bar, rain",
             "", "3:2 · 2528×1696", qwen21_t2i_model, 26, 1.0, "euler",
             "simple", 4681357, False, 2, True, "Golden",
-        ) + qwen21_t2i_triples,
+        ) + REFINE_OFF + qwen21_t2i_triples,
 
         # With a negative and CFG above 1: the negative is encoded instead
         # of zeroed. 9:16 is 1536×2752.
@@ -663,6 +710,16 @@ def cases(module) -> dict:
             "a lighthouse in a storm, 35mm", "blurry, watermark",
             "9:16 · 1536×2752", qwen21_t2i_model, 33, 3.5, "res_multistep",
             "beta", 5791357, False, 2, False, "",
+        ) + REFINE_OFF + qwen21_t2i_triples,
+
+        # The refine with a prompt of its own, which wins over the tab's,
+        # at 0.45. Saves a preset, so the refine block of its blob is
+        # checked against settings() with the tick on.
+        "generate_qwen21_t2i_refine": (
+            "a lighthouse in a storm, 35mm", "", "3:2 · 2528×1696",
+            qwen21_t2i_model, 26, 1.0, "euler", "simple", 4681358, False, 1,
+            True, "Golden", True, 0.45,
+            "an unretouched 35 mm film photograph, fine grain",
         ) + qwen21_t2i_triples,
 
         # Qwen Edit 2511 on one image at Lightning 4 steps: the LoRA after
@@ -672,7 +729,7 @@ def cases(module) -> dict:
             references[:1], "turn her around, looking back over her "
             "shoulder", "", "⚡ Lightning · 4 steps", qwen_edit_model, 40,
             4.0, "euler", "simple", 1928374, False, 2, True, "Golden",
-        ) + qwen_edit_triples,
+        ) + REFINE_OFF + qwen_edit_triples,
 
         # Two images at Lightning 8 steps: image1 and image2 on both
         # encoders, the 8-step LoRA.
@@ -680,7 +737,7 @@ def cases(module) -> dict:
             references[:2], "the woman in image 1 wearing the dress from "
             "image 2", "", "⚡ Lightning · 8 steps", qwen_edit_model, 40,
             4.0, "euler", "simple", 2837465, False, 1, False, "",
-        ) + qwen_edit_triples,
+        ) + REFINE_OFF + qwen_edit_triples,
 
         # All three images on Normal: no Lightning node, and the sliders'
         # steps and CFG reach the KSampler, with the negative encoded.
@@ -689,7 +746,7 @@ def cases(module) -> dict:
             "in the room from image 3", "blurry, extra fingers",
             "Normal (steps and CFG below)", qwen_edit_model, 36, 4.5,
             "res_multistep", "beta", 3746556, False, 1, False, "",
-        ) + qwen_edit_triples,
+        ) + REFINE_OFF + qwen_edit_triples,
     }
 
 
@@ -697,6 +754,9 @@ def cases(module) -> dict:
 # more than one graph worth freezing. Every other case is named after its
 # handler.
 CASE_HANDLERS = {"generate_zimage_upscale": "generate_zimage",
+                 "generate_v2_refine": "generate_v2",
+                 "generate_edit_v2_refine": "generate_edit_v2",
+                 "generate_qwen21_t2i_refine": "generate_qwen21_t2i",
                  "generate_zimage_i2i": "generate_zimage",
                  "generate_qwen21_ref_three": "generate_qwen21_ref",
                  "generate_qwen21_ref_ten": "generate_qwen21_ref",

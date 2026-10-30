@@ -153,10 +153,19 @@ def _run_tag() -> str:
     return uuid.uuid4().hex[:8]
 
 
-def _run_jobs(jobs, builder=build_workflow, prefix="Krea2"):
-    """Shared executor: yields (gallery_paths, status_text) as work progresses."""
+def _run_jobs(jobs, builder=build_workflow, prefix="Krea2", refine=None):
+    """Shared executor: yields (gallery_paths, status_text) as work progresses.
+
+    With a `refine` (pipelines/zimage/refine.py), every picture the jobs
+    made is refined once more after the last of them — see _refine_pass.
+    """
     images = []
+    # (path, seed, filename prefix) of every picture, for the refine.
+    made = []
     total = len(jobs)
+    if refine is not None:
+        # The originals are what the form makes with the tick off.
+        recipes.override(refine.recipe_label, False)
     alive, note = comfy_ensure_alive()
     if not alive:
         yield images, note
@@ -197,11 +206,73 @@ def _run_jobs(jobs, builder=build_workflow, prefix="Krea2"):
                     yield images, f"⏳ Job {label} — step {event['step']}/{event['total']}"
                 elif event["type"] == "done":
                     images.extend(event["images"])
+                    made.extend((path, job["seed"], job_prefix)
+                                for path in event["images"])
                     yield images, f"✅ Job {label} finished"
         except ComfyUIError as exc:
             yield images, f"❌ Job {label} failed: {exc}"
             return
-    yield images, f"✅ All {total} job(s) done"
+    if refine is None or not made:
+        yield images, f"✅ All {total} job(s) done"
+        return
+    yield from _refine_pass(made, refine, total)
+
+
+def _refine_pass(made, refine, total):
+    """Refine every picture in `made`; yields (gallery_paths, status_text).
+
+    One after another once the batch is done, so the swap to Z-Image
+    happens once per click (_release_on_swap sees the new signature on the
+    first refine and frees the batch's model). Each refined picture is
+    listed right after its original, and is named after it plus
+    `_refined`, so the Gallery has the two side by side.
+
+    A refine that fails keeps every picture made so far and says so: the
+    originals are already on disk and are never lost to a refine.
+    """
+    count = len(made)
+    refined = {}
+
+    def shown():
+        paths = []
+        for index, (path, _seed, _prefix) in enumerate(made):
+            paths.append(path)
+            paths.extend(refined.get(index, ()))
+        return paths
+
+    recipes.override(refine.recipe_label, True)
+    timer = eta.tracker("refine", count, client.base)
+    for index, (path, seed, job_prefix) in enumerate(made):
+        label = f"{index + 1}/{count}"
+        try:
+            job = refine.job(path, seed)
+        except Exception as exc:
+            yield shown(), (f"⚠️ Refine {label} could not start: {exc} — "
+                            "the unrefined images are kept")
+            return
+        workflow = refine.builder(filename_prefix=job_prefix + "_refined",
+                                  **job)
+        signature = model_signature(workflow)
+        timer.start(workflow, signature, eta.is_cold(client.base, signature))
+        swap_note = _release_on_swap(client, workflow)
+        if swap_note:
+            yield shown(), f"{swap_note} — switching to ⚡ Ember Lite to refine"
+        recipes.stamp(seed=seed, refined_from=recipes.key_for(path))
+        yield shown(), f"⏳ Refine {label} — queued"
+        try:
+            for event in client.run(workflow):
+                timer.event(event)
+                if event["type"] == "progress" and event["total"]:
+                    yield shown(), (f"⏳ Refine {label} — step "
+                                    f"{event['step']}/{event['total']}")
+                elif event["type"] == "done":
+                    refined[index] = event["images"]
+                    yield shown(), f"✅ Refine {label} finished"
+        except ComfyUIError as exc:
+            yield shown(), (f"⚠️ Refine {label} failed: {exc} — the "
+                            "unrefined images are kept")
+            return
+    yield shown(), f"✅ All {total} job(s) done, {count} refined"
 
 
 def _png_bytes(image) -> bytes:

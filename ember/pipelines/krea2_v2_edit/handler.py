@@ -13,6 +13,7 @@ from ember.generation.loras import (
     _skipped_note,
 )
 from ember.generation.runner import _png_bytes, _run_jobs
+from ember.pipelines.zimage.refine import refine_spec
 from ember.pipelines.krea2_v2_edit.workflow import (
     build_v2_edit_workflow,
     fit_size as v2_edit_fit_size,
@@ -28,7 +29,8 @@ def generate_v2_edit(image, use_image2, image2, prompt, negative, seed,
                      variance_preset, fine_tune_variance,
                      variance_model_type, variance_schedule, cutoff_step,
                      total_steps, cutoff_strength, shift_strength,
-                     batch_count, *lora_slots):
+                     batch_count, refine, refine_denoise, refine_prompt,
+                     *lora_slots):
     """Krea 2 V2 Edit tab: instruction editing on the V2 pipeline.
 
     Same contract as generate_edit — upload an image, describe the change,
@@ -55,6 +57,11 @@ def generate_v2_edit(image, use_image2, image2, prompt, negative, seed,
         return
     if not str(prompt or "").strip():
         yield [], "❌ Describe the change (e.g. “make the jacket red”).", 0
+        return
+    refiner, error = refine_spec(refine, refine_denoise, refine_prompt,
+                                 prompt, edit=True)
+    if error:
+        yield [], error, 0
         return
     image = image.convert("RGB")
     width, height = v2_edit_fit_size(*image.size)
@@ -108,5 +115,5 @@ def generate_v2_edit(image, use_image2, image2, prompt, negative, seed,
         "variance_settings": variance_settings,
     } for i in range(int(batch_count))]
     for images, status in _run_jobs(jobs, builder=build_v2_edit_workflow,
-                                    prefix="Krea2V2Edit"):
+                                    prefix="Krea2V2Edit", refine=refiner):
         yield images, note + status, base_seed

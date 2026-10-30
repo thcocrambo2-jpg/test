@@ -170,6 +170,15 @@ class Field:
     # ("poses"): the field shows a button that opens a picker over it.
     # Presentation only — a picked picture arrives as an ordinary upload.
     library: str | None = None
+    # A features.Key the licence must grant for this control to exist — the
+    # ⚡ Ember Lite refine (features.ADDONS). Without it the field stays a
+    # handler argument, so the signature never depends on the licence, but
+    # the form does not get it and the submit path holds it at its default.
+    feature: Any = None
+
+    def available(self) -> bool:
+        """True unless the field needs a feature this licence lacks."""
+        return self.feature is None or features.enabled(self.feature)
 
     def options(self) -> tuple:
         """This field's choices, resolved. Empty for a non-choice field."""
@@ -463,7 +472,7 @@ class TabSchema:
             "presetNote": self.preset_note,
             "modelRegistry": self.model_registry,
             "autoprompt": self.autoprompt,
-            "fields": [f.to_json() for f in self.named()],
+            "fields": [f.to_json() for f in self.named() if f.available()],
             "groups": [g.to_json() for g in self.groups],
             "lora": _tail_json(tail),
         }
@@ -480,7 +489,10 @@ class TabSchema:
         """
         values = {}
         for f in self.named():
-            values[f.name] = f.coerce(raw.get(f.name, f.initial()))
+            # A control this licence does not have is at its default
+            # whatever was sent: the form never offered it.
+            raw_value = raw.get(f.name, f.initial()) if f.available()                 else f.initial()
+            values[f.name] = f.coerce(raw_value)
         tail = self.tail()
         if tail is not None:
             for index, row in enumerate(tail.rows()):
@@ -596,7 +608,7 @@ class TabSchema:
         for f in self.named():
             if not f.record or f.kind in ("image", "images"):
                 continue
-            if f.name not in given:
+            if f.name not in given or not f.available():
                 continue
             raw = given[f.name]
             ok, value = f.restore(raw)

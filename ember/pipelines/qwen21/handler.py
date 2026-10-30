@@ -38,11 +38,12 @@ from ember.pipelines.qwen21.workflow import (
     qwen21_missing,
     reference_size,
 )
+from ember.pipelines.zimage.refine import refine_spec
 
 
 def _qwen21_settings(output_size, model, steps, cfg, sampler, scheduler,
                      reference_detail, seed, randomize, batch_count,
-                     lora_slots) -> dict:
+                     lora_slots, refine=False, refine_denoise=0.25) -> dict:
     """The Qwen 2.1 Reference tab's controls as a preset stores them.
 
     The UI values, ids and all, in the flat shape of _zimage_settings.
@@ -61,6 +62,7 @@ def _qwen21_settings(output_size, model, steps, cfg, sampler, scheduler,
         "seed": int(seed or 0),
         "randomize": bool(randomize),
         "batch_count": int(batch_count),
+        "refine": {"on": bool(refine), "denoise": float(refine_denoise)},
         "loras": [[bool(on), stored_lora(name), float(weight)]
                   for on, name, weight
                   in zip(lora_slots[::3], lora_slots[1::3], lora_slots[2::3])],
@@ -94,7 +96,8 @@ def prepare_reference(image: Image.Image) -> Image.Image:
 def generate_qwen21_ref(references, prompt, negative, output_size, model,
                         steps, cfg, sampler, scheduler, reference_detail,
                         seed, randomize, batch_count, save_preset,
-                        preset_name, *lora_slots):
+                        preset_name, refine, refine_denoise, refine_prompt,
+                        *lora_slots):
     """Qwen 2.1 Reference tab: batch_count jobs on sequential seeds.
 
     `references` is the list of pictures in the order the form numbers
@@ -115,6 +118,11 @@ def generate_qwen21_ref(references, prompt, negative, output_size, model,
                    "image 2”)."), 0
         return
     entry, error = _check_model(QWEN21_EDIT, model)
+    if error:
+        yield [], error, 0
+        return
+    refiner, error = refine_spec(refine, refine_denoise, refine_prompt,
+                                 prompt, edit=True)
     if error:
         yield [], error, 0
         return
@@ -146,7 +154,8 @@ def generate_qwen21_ref(references, prompt, negative, output_size, model,
                                             sampler, scheduler,
                                             reference_detail, seed,
                                             randomize, batch_count,
-                                            lora_slots))
+                                            lora_slots, refine,
+                                            refine_denoise))
     base_seed = random.randint(0, 2**32 - 1) if randomize else int(seed)
 
     prepared = [prepare_reference(image) for image in references]
@@ -175,12 +184,13 @@ def generate_qwen21_ref(references, prompt, negative, output_size, model,
         "unet_file": entry.file,
     } for i in range(int(batch_count))]
     for images, status in _run_jobs(jobs, builder=build_qwen21_ref_workflow,
-                                    prefix="Qwen21Ref"):
+                                    prefix="Qwen21Ref", refine=refiner):
         yield images, notice + status, base_seed
 
 
 def _qwen21_t2i_settings(output_size, model, steps, cfg, sampler, scheduler,
-                         seed, randomize, batch_count, lora_slots) -> dict:
+                         seed, randomize, batch_count, lora_slots,
+                         refine=False, refine_denoise=0.25) -> dict:
     """The Qwen 2.1 tab's controls as a preset stores them.
 
     The Reference tab's shape without `reference_detail`. scripts/golden.py
@@ -196,6 +206,7 @@ def _qwen21_t2i_settings(output_size, model, steps, cfg, sampler, scheduler,
         "seed": int(seed or 0),
         "randomize": bool(randomize),
         "batch_count": int(batch_count),
+        "refine": {"on": bool(refine), "denoise": float(refine_denoise)},
         "loras": [[bool(on), stored_lora(name), float(weight)]
                   for on, name, weight
                   in zip(lora_slots[::3], lora_slots[1::3], lora_slots[2::3])],
@@ -204,12 +215,18 @@ def _qwen21_t2i_settings(output_size, model, steps, cfg, sampler, scheduler,
 
 def generate_qwen21_t2i(prompt, negative, output_size, model, steps, cfg,
                         sampler, scheduler, seed, randomize, batch_count,
-                        save_preset, preset_name, *lora_slots):
+                        save_preset, preset_name, refine, refine_denoise,
+                        refine_prompt, *lora_slots):
     """Qwen 2.1 tab: batch_count text-to-image jobs on sequential seeds."""
     if not str(prompt or "").strip():
         yield [], "❌ Write a prompt.", 0
         return
     entry, error = _check_model(QWEN21_T2I, model)
+    if error:
+        yield [], error, 0
+        return
+    refiner, error = refine_spec(refine, refine_denoise, refine_prompt,
+                                 prompt)
     if error:
         yield [], error, 0
         return
@@ -239,7 +256,8 @@ def generate_qwen21_t2i(prompt, negative, output_size, model, steps, cfg,
                            _qwen21_t2i_settings(output_size, model, steps,
                                                 cfg, sampler, scheduler,
                                                 seed, randomize, batch_count,
-                                                lora_slots))
+                                                lora_slots, refine,
+                                                refine_denoise))
     base_seed = random.randint(0, 2**32 - 1) if randomize else int(seed)
     width, height = QWEN21_T2I_SIZES.get(
         output_size, QWEN21_T2I_SIZES[QWEN21_T2I_DEFAULT_SIZE])
@@ -252,5 +270,5 @@ def generate_qwen21_t2i(prompt, negative, output_size, model, steps, cfg,
         "loras": loras, "unet_file": entry.file,
     } for i in range(int(batch_count))]
     for images, status in _run_jobs(jobs, builder=build_qwen21_t2i_workflow,
-                                    prefix="Qwen21"):
+                                    prefix="Qwen21", refine=refiner):
         yield images, notice + status, base_seed

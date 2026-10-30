@@ -30,6 +30,7 @@ from ember.pipelines.krea2_v2.workflow import (
     turbo_lora_available as v2_turbo_lora_available,
     turbo_lora_slot as v2_turbo_lora_slot,
 )
+from ember.pipelines.zimage.refine import refine_spec
 
 
 # ── Krea 2 V2 (Krea2 advanced graph) ─────────────────────────────────────────────
@@ -82,13 +83,19 @@ def generate_v2(prompt, negative, seed, randomize, model, aspect, megapixels,
                 variance_model_type, variance_schedule, cutoff_step,
                 total_steps, cutoff_strength, shift_strength, sharpen,
                 film_grain, batch_count, publish, publish_title,
-                save_preset, preset_name, *lora_slots):
+                save_preset, preset_name, refine, refine_denoise,
+                refine_prompt, *lora_slots):
     """Krea 2 V2 tab: the Krea2 advanced turbo/raw text-to-image graph."""
     ready, message = v2_status(KREA_V2_T2I, _enabled_lora_ids(lora_slots))
     if not ready:
         yield [], message, 0
         return
     entry, error = _check_model(KREA_V2_T2I, model)
+    if error:
+        yield [], error, 0
+        return
+    refiner, error = refine_spec(refine, refine_denoise, refine_prompt,
+                                 prompt)
     if error:
         yield [], error, 0
         return
@@ -132,6 +139,7 @@ def generate_v2(prompt, negative, seed, randomize, model, aspect, megapixels,
         "variance": variance_settings,
         "sharpen": bool(sharpen),
         "film_grain": bool(film_grain),
+        "refine": {"on": bool(refine), "denoise": float(refine_denoise)},
         "loras": [[bool(on), stored_lora(name), float(weight)]
                   for on, name, weight
                   in zip(lora_slots[::3], lora_slots[1::3], lora_slots[2::3])],
@@ -150,5 +158,5 @@ def generate_v2(prompt, negative, seed, randomize, model, aspect, megapixels,
         "sharpen": bool(sharpen), "film_grain": bool(film_grain),
     } for i in range(int(batch_count))]
     for images, status in _run_jobs(jobs, builder=build_v2_workflow,
-                                    prefix="Krea2V2"):
+                                    prefix="Krea2V2", refine=refiner):
         yield images, notice + status, base_seed

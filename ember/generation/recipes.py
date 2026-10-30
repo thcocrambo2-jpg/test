@@ -216,6 +216,27 @@ def stamp(**extra) -> None:
         recipe.update(extra)
 
 
+def override(label: str, value) -> None:
+    """Set one control's value in the current job's recipe, from here on.
+
+    For a control the executor acts on part way through a click — the
+    ⚡ Ember Lite refine, whose original pictures are filed with the tick
+    off and the refined ones with it on, so loading either makes that
+    picture again. A new list rather than an edit in place: the recipes
+    already filed share the old one (note_output copies the dict, not the
+    rows). A no-op off a generation thread, like stamp.
+    """
+    recipe = getattr(_CURRENT, "recipe", None)
+    if recipe is not None:
+        recipe["fields"] = [[name, value if name == label else held]
+                            for name, held in recipe["fields"]]
+
+
+def key_for(path) -> str | None:
+    """The store's key for a generated file — what a recipe names it by."""
+    return _key(path)
+
+
 # ── recording and reading ────────────────────────────────────────────────
 
 def note_output(paths) -> None:

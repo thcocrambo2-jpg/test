@@ -32,10 +32,12 @@ from ember.pipelines.qwen_edit.workflow import (
     build_qwen_edit_workflow,
     qwen_edit_missing,
 )
+from ember.pipelines.zimage.refine import refine_spec
 
 
 def _qwen_edit_settings(speed, model, steps, cfg, sampler, scheduler, seed,
-                        randomize, batch_count, lora_slots) -> dict:
+                        randomize, batch_count, lora_slots, refine=False,
+                        refine_denoise=0.25) -> dict:
     """The Qwen Edit 2511 tab's controls as a preset stores them.
 
     The UI values, ids and all, in the flat shape of _qwen21_settings.
@@ -53,6 +55,7 @@ def _qwen_edit_settings(speed, model, steps, cfg, sampler, scheduler, seed,
         "seed": int(seed or 0),
         "randomize": bool(randomize),
         "batch_count": int(batch_count),
+        "refine": {"on": bool(refine), "denoise": float(refine_denoise)},
         "loras": [[bool(on), stored_lora(name), float(weight)]
                   for on, name, weight
                   in zip(lora_slots[::3], lora_slots[1::3], lora_slots[2::3])],
@@ -61,7 +64,8 @@ def _qwen_edit_settings(speed, model, steps, cfg, sampler, scheduler, seed,
 
 def generate_qwen_edit(images, prompt, negative, speed, model, steps, cfg,
                        sampler, scheduler, seed, randomize, batch_count,
-                       save_preset, preset_name, *lora_slots):
+                       save_preset, preset_name, refine, refine_denoise,
+                       refine_prompt, *lora_slots):
     """Qwen Edit 2511 tab: batch_count jobs on sequential seeds.
 
     `images` is the list of pictures in the order the form numbers them:
@@ -82,6 +86,11 @@ def generate_qwen_edit(images, prompt, negative, speed, model, steps, cfg,
                    ), 0
         return
     entry, error = _check_model(QWEN_EDIT_2511, model)
+    if error:
+        yield [], error, 0
+        return
+    refiner, error = refine_spec(refine, refine_denoise, refine_prompt,
+                                 prompt, edit=True)
     if error:
         yield [], error, 0
         return
@@ -119,7 +128,8 @@ def generate_qwen_edit(images, prompt, negative, speed, model, steps, cfg,
                            _qwen_edit_settings(speed, model, steps, cfg,
                                                sampler, scheduler, seed,
                                                randomize, batch_count,
-                                               lora_slots))
+                                               lora_slots, refine,
+                                               refine_denoise))
     base_seed = random.randint(0, 2**32 - 1) if randomize else int(seed)
 
     tag = uuid.uuid4().hex[:8]
@@ -141,5 +151,5 @@ def generate_qwen_edit(images, prompt, negative, speed, model, steps, cfg,
         "lightning": lightning, "loras": loras, "unet_file": entry.file,
     } for i in range(int(batch_count))]
     for result, status in _run_jobs(jobs, builder=build_qwen_edit_workflow,
-                                    prefix="QwenEdit2511"):
+                                    prefix="QwenEdit2511", refine=refiner):
         yield result, notice + status, base_seed

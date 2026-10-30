@@ -183,6 +183,18 @@ def main() -> None:
     schema_keys = set(tabschema.BY_KEY) | {row["key"] for row in
                                            tabschema.BESPOKE}
     for feature in features.FEATURES:
+        if feature.key in features.ADDONS:
+            # Not a tab: it gates fields on other tabs (Field.feature),
+            # which the submit path holds at their defaults without it.
+            # So it must gate at least one, or it would gate nothing.
+            if not any(f.feature == feature.key
+                       for schema in tabschema.SCHEMAS
+                       for f in schema.named()):
+                failures.append(
+                    "features.Key.%s is an add-on that no field names in "
+                    "Field.feature — it gates nothing" % feature.key
+                )
+            continue
         if str(feature.key) not in schema_keys:
             failures.append(
                 "features.Key.%s has no schema and no bespoke entry — it "

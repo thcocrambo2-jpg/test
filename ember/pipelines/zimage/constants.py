@@ -126,3 +126,39 @@ ZIMAGE_DEFAULT_NEGATIVE = (
     "uncanny anatomy, frame-perfect symmetry, blurred background, fat, low "
     "resolution, big ears, vertical lines, lines glitch"
 )
+
+# ── The ⚡ Ember Lite refine ──────────────────────────────────────────────────
+# The image tabs' refine section: every result re-sampled once by Z-Image
+# Turbo from its own pixels (pipelines/zimage/refine.py). The settings are
+# the img2prompt sweep's (img2prompt/refine.py): 12 steps at CFG 1 on
+# er_sde, no LoRAs, the render's own seed, and 0.25 denoise, which kept the
+# content of 8 renders out of 8 and made 7 of them look more real. Only the
+# denoise is on the form.
+REFINE_DEFAULT_DENOISE = 0.25
+# The tick's label, which is also its recipe row: the runner sets it off
+# in the recipe of the picture before the refine and on in the refined
+# one's, so loading either makes that picture again.
+REFINE_FIELD_LABEL = "Refine with ⚡ Ember Lite"
+REFINE_STEPS = 12
+REFINE_CFG = 1.0
+REFINE_SAMPLER = "er_sde"
+
+# What the edit tabs refine with when the Refine prompt box is empty. Their
+# own prompt is an instruction — a change to make, not a description of
+# the picture — so it is no use here; this describes only how a real
+# photograph looks, never what is in it, because at 0.25 the content comes
+# from the pixels. The generate tabs refine with their own prompt instead.
+REFINE_EDIT_PROMPT = (
+    "An unretouched, true-to-life photograph. Everything stays exactly as "
+    "it is: the same people, faces, expressions, pose, clothing, objects, "
+    "setting, framing, colours and lighting; only the realism changes. "
+    "Skin has real, natural texture: fine visible pores, gentle variation "
+    "in tone, faint natural lines and a few tiny marks, with a natural "
+    "matte finish and a soft sheen only where the light catches it. "
+    "Eyebrows, eyelashes and hair keep their exact shape and colour, with "
+    "individual strands and a few natural flyaways. Fabric shows its real "
+    "weave, seams and creases, and every surface its real material. "
+    "Natural light, true colour, realistic micro-detail, natural sharpness "
+    "and fine, even photographic grain, straight out of a full-frame "
+    "camera with a sharp prime lens."
+)

@@ -110,6 +110,20 @@ export const FEATURES = [
     sort_order: 25,
     enabled: false,
   },
+  // Not a tab: the "⚡ Ember Lite refine" section on the image tabs, which
+  // re-renders every result with Z-Image. Granted on its own so a key can
+  // have it without the Ember Lite tab; its model is its own feature_assets
+  // list. On no plan yet, so off here like Z-Image: see that entry.
+  {
+    key: "zimage_refine",
+    name: "Ember Lite refine",
+    tab_label: "⚡ Ember Lite refine",
+    description: "A realism pass over every picture the image tabs make",
+    category: "generation",
+    // 26, right after Ember Lite (25), whose model it runs.
+    sort_order: 26,
+    enabled: false,
+  },
   // On no plan yet, so off here like Z-Image: see that entry.
   {
     key: "qwen21_t2i",

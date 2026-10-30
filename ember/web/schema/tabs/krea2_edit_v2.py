@@ -20,6 +20,7 @@ from ember.web.schema.fields import (
     G_INPUTS,
     G_PROMPT,
     G_REFERENCE,
+    G_REFINE,
     G_SAMPLER,
     G_SEED,
     G_VARIANCE,
@@ -29,6 +30,7 @@ from ember.web.schema.fields import (
     _model_field,
     _model_negative,
     _reference_fields,
+    _refine_fields,
     _seed_fields,
     _stack_slots,
     _triple_tail,
@@ -56,7 +58,7 @@ KREA2_EDIT_V2_SCHEMA = TabSchema(
     preset_tab=presets.TAB_KREA2_V2,
     preset_note=EDIT_PRESET_NOTE.format("🔶 Krea2 V2"),
     groups=(G_INPUTS, G_PROMPT, G_CORE, G_REFERENCE, G_SAMPLER,
-            G_VARIANCE, G_SEED),
+            G_VARIANCE, G_REFINE, G_SEED),
     fields=(
         *_two_image_fields("Source image (paste with Ctrl+V)",
                            "➕ Add a second reference (subject)",
@@ -86,6 +88,7 @@ KREA2_EDIT_V2_SCHEMA = TabSchema(
         *_v2_sampler_fields(handlers.KREA_EDIT_V2, denoise=False),
         *_v2_variance_fields(),
         _batch_field(),
+        *_refine_fields(edit=True),
         Field("lora_slots", "LoRA stack", "repeat",
               repeat=_triple_tail(
                   handlers.KREA_EDIT_V2,
