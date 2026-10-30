@@ -8,7 +8,7 @@ For someone using the app, and for someone changing the code.
 ## Where it is
 
 A closed **⚡ Ember Lite refine** section, just above Seed & batch, on
-seven tabs:
+eight tabs:
 
 | Generate | Edit |
 | --- | --- |
