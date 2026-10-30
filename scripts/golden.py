@@ -107,8 +107,10 @@ IMAGE_SIZE = (653, 431)
 # from itself between two runs.
 UPLOADED = "golden_upload.png"
 
-# The picture the refine cases refine, in place of a file on disk: 1080 x
-# 1350 is 67.5 x 84.375 sixteens, so the refine has to snap it (1088 x 1344).
+# The picture the refine cases refine, in place of a file on disk. Its
+# size reaches only the uploaded start image, which is stubbed: the
+# refine's graph starts from a VAEEncode and carries no width or height,
+# so the snapshots cannot show what size it refines at.
 REFINE_RENDER_SIZE = (1080, 1350)
 
 
@@ -308,8 +310,7 @@ def patch(users, capture) -> None:
     _patch_all(users, "comfy_ensure_alive", lambda *a, **k: (True, ""))
 
     # The ⚡ Ember Lite refine opens each picture the batch made, and the
-    # stubbed ComfyUI makes none; this one's size is off the grid of 16,
-    # so the snapshot shows the refine putting it back on.
+    # stubbed ComfyUI makes none, so it is handed this one instead.
     from PIL import Image
     _patch_all(users, "open_render",
                lambda path: Image.new("RGB", REFINE_RENDER_SIZE,
@@ -489,9 +490,9 @@ def cases(module) -> dict:
         # The ⚡ Ember Lite refine on a generate tab, its prompt box empty:
         # the two V2 graphs, then one Z-Image image-to-image graph per
         # picture, at 0.3 on the picture's own seed, refining with the
-        # tab's prompt. REFINE_RENDER_SIZE snapped to 1088×1344, no LoRAs,
-        # and each saved as its original's prefix plus "_refined". The
-        # blob prompts.record keeps has the tick on.
+        # tab's prompt, with no LoRAs, and each saved as its original's
+        # prefix plus "_refined". The blob prompts.record keeps has the
+        # tick on.
         "generate_v2_refine": (
             "a lighthouse in a storm, 35mm", "blurry, watermark",
             4567891, False, v2_model, "16:9 (Landscape Wide)", 2.25, 32,

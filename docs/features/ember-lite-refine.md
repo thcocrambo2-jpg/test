@@ -56,9 +56,28 @@ after its original plus `_refined` (`Krea2V2_<tag>_00001_.png` and
 `Krea2V2_<tag>_refined_00001_.png`), so the two sit side by side, and the
 result panel lists each refined picture right after its original.
 
-Each has its own recipe. The original's is filed with the tick **off**
-and the refined one's with it **on** (plus `refined_from`, the original's
-path), so loading either from the Gallery makes that picture again.
+Each has its own recipe, and loading either from the Gallery makes that
+picture again:
+
+- **The original** keeps its own tab's recipe, with the tick **off**.
+- **The refined one** is filed as the **⚡ Ember Lite** run it amounts
+  to: the original as the Start image (kept in the source store, like any
+  upload), the refine's prompt, denoise and seed, 12 steps at CFG 1 on
+  `er_sde`, no LoRAs, Upscale off, plus `refined_from`, the original's
+  path. So **Load these settings** on a refined picture opens Ember Lite
+  ready to refine the same original again — change the denoise or the
+  prompt and press Generate. The Gallery offers that button only for a
+  tab the licence has, so without the Ember Lite tab a refined picture
+  has none; the refine itself needs only `zimage_refine`.
+
+### Refining the same picture again
+
+Open the refined picture in the Gallery, **Load these settings**, and
+Ember Lite comes up on the original with what the refine used. Only the
+refine runs — the original is not rendered again — and every try is a
+new Ember Lite picture of its own. The graph that reload builds is the
+refine's exactly, which is why the refine is sized the way the next
+section says.
 
 If a refine fails, the click stops there with a ⚠️ status; every picture
 already made is kept.
@@ -73,9 +92,16 @@ it to `_run_jobs` in
 
 `_run_jobs` runs the batch exactly as it does without the tick, then
 `_refine_pass` takes every picture in order: it opens it, uploads it as
-the start image at its own size (on Z-Image's grid of 16), and runs
-`build_zimage_workflow` — the same image to image the Ember Lite tab
-runs — with the img2prompt sweep's settings:
+the start image, and runs `build_zimage_workflow` — the same image to
+image the Ember Lite tab runs — with the img2prompt sweep's settings.
+
+**Size.** As the Ember Lite tab sizes a start image, so its recipe can
+say it: Resolution `1328×1328 (1:1)` times the multiplier that gives the
+original's pixel count, snapped to the slider's 0.05 steps
+(`refine_multiplier`), and the original's own shape at that area on the
+grid of 16. A 2048×1152 Krea2 V2 picture refines at multiplier 1.15,
+2032×1152 — within a few percent of its own size, never cropped or
+stretched.
 
 | | |
 | --- | --- |

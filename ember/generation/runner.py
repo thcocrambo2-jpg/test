@@ -225,7 +225,9 @@ def _refine_pass(made, refine, total):
     happens once per click (_release_on_swap sees the new signature on the
     first refine and frees the batch's model). Each refined picture is
     listed right after its original, and is named after it plus
-    `_refined`, so the Gallery has the two side by side.
+    `_refined`, so the Gallery has the two side by side. Each is filed
+    under the Ember Lite recipe the Refine writes for it, where the
+    originals keep their own tab's.
 
     A refine that fails keeps every picture made so far and says so: the
     originals are already on disk and are never lost to a refine.
@@ -240,12 +242,14 @@ def _refine_pass(made, refine, total):
             paths.extend(refined.get(index, ()))
         return paths
 
-    recipes.override(refine.recipe_label, True)
     timer = eta.tracker("refine", count, client.base)
     for index, (path, seed, job_prefix) in enumerate(made):
         label = f"{index + 1}/{count}"
         try:
             job = refine.job(path, seed)
+            # Filed as the Ember Lite run it amounts to, so "Load these
+            # settings" opens Ember Lite on the original (refine.recipe).
+            recipe = refine.recipe(path, seed) if recipes.active() else None
         except Exception as exc:
             yield shown(), (f"⚠️ Refine {label} could not start: {exc} — "
                             "the unrefined images are kept")
@@ -257,7 +261,8 @@ def _refine_pass(made, refine, total):
         swap_note = _release_on_swap(client, workflow)
         if swap_note:
             yield shown(), f"{swap_note} — switching to ⚡ Ember Lite to refine"
-        recipes.stamp(seed=seed, refined_from=recipes.key_for(path))
+        if recipe is not None:
+            recipes.replace(recipe)
         yield shown(), f"⏳ Refine {label} — queued"
         try:
             for event in client.run(workflow):

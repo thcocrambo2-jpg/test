@@ -139,6 +139,10 @@ REFINE_DEFAULT_DENOISE = 0.25
 # in the recipe of the picture before the refine and on in the refined
 # one's, so loading either makes that picture again.
 REFINE_FIELD_LABEL = "Refine with ⚡ Ember Lite"
+# The Ember Lite Resolution a refine is sized from, times a multiplier
+# that gives it the original's pixel count (refine.refine_multiplier) —
+# so the refined picture's recipe, an Ember Lite one, can say its size.
+REFINE_RESOLUTION = "1328×1328 (1:1)"
 REFINE_STEPS = 12
 REFINE_CFG = 1.0
 REFINE_SAMPLER = "er_sde"

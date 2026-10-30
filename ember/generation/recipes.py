@@ -232,6 +232,23 @@ def override(label: str, value) -> None:
                             for name, held in recipe["fields"]]
 
 
+def active() -> bool:
+    """True on a generation thread, which has a recipe to file outputs by."""
+    return getattr(_CURRENT, "recipe", None) is not None
+
+
+def replace(recipe: dict) -> None:
+    """File this thread's next outputs under a whole other recipe.
+
+    For a picture another tab could have made: the ⚡ Ember Lite refine
+    files each refined picture as the Ember Lite run it amounts to (see
+    pipelines/zimage/refine.py), not as the tab that was clicked. `recipe`
+    is the shape begin() builds. A no-op off a generation thread.
+    """
+    if active():
+        _CURRENT.recipe = dict(recipe)
+
+
 def key_for(path) -> str | None:
     """The store's key for a generated file — what a recipe names it by."""
     return _key(path)
