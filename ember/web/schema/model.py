@@ -166,6 +166,10 @@ class Field:
     # from before still carries is read as the value it became, on submit
     # and on restore. Wan's Model held its labels before it held ids.
     aliases: Any = None
+    # An images field that can also take pictures from a shared library
+    # ("poses"): the field shows a button that opens a picker over it.
+    # Presentation only — a picked picture arrives as an ordinary upload.
+    library: str | None = None
 
     def options(self) -> tuple:
         """This field's choices, resolved. Empty for a non-choice field."""
@@ -335,6 +339,8 @@ class Field:
             row["collapsed"] = True
         if self.empty_note:
             row["emptyNote"] = self.empty_note
+        if self.library:
+            row["library"] = self.library
         # Only when off: the settings token leaves these out for the reason
         # the recipe does — loading one must never re-arm a publish.
         if not self.record:

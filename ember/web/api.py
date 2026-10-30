@@ -58,6 +58,7 @@ from ember.web import tabschema
 from ember.comfy.server import GPU_COUNT
 from ember.logs import log
 from ember.web.routes import events
+from ember.web.routes import library
 from ember.web.routes import licence
 from ember.web.routes import media
 from ember.web.routes import queue
@@ -157,6 +158,7 @@ def create_app() -> FastAPI:
     uploads.register(api)
     media.register(api)
     licence.register(api)
+    library.register(api)
     tabs._mount_tabs(api)
     events.register(api)
 

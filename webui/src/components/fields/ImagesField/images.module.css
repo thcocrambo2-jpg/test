@@ -358,3 +358,44 @@
     transform: none;
   }
 }
+
+/* ---------------------------------------------------------------- library */
+
+.addPose {
+  border-style: solid;
+  border-color: var(--c-accent-line);
+  background: var(--c-accent-soft);
+}
+
+.addPose:disabled {
+  opacity: 0.45;
+  cursor: not-allowed;
+}
+
+.addPose:disabled:hover {
+  border-color: var(--c-accent-line);
+  background: var(--c-accent-soft);
+  color: var(--c-text-muted);
+}
+
+/* Empty field: the drop zone takes the row, the pose tile sits at its end. */
+.emptyRow {
+  display: flex;
+  gap: var(--s-2);
+  align-items: stretch;
+}
+
+.emptyRow > :first-child {
+  flex: 1;
+  min-width: 0;
+}
+
+.emptyPose {
+  flex: none;
+  width: 112px;
+  display: flex;
+}
+
+.emptyPose > .add {
+  aspect-ratio: auto;
+}

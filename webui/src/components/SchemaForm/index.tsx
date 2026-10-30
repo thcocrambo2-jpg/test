@@ -325,6 +325,7 @@ function FieldRenderer({
           label={field.label}
           hint={hint}
           max={field.max}
+          library={field.library}
           value={Array.isArray(value) ? (value as File[]) : []}
           onChange={set}
         />

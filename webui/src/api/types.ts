@@ -67,6 +67,9 @@ export interface Field {
   placeholder?: string
   /** Sub-label shown under the control. Not from the baseline — ours. */
   hint?: string
+  /** An images field that can also pick from a shared picture library —
+   *  `poses` today. Absent on every other field. */
+  library?: string
   showIf?: FieldCondition
   /** Full-width inside a two-up group row. */
   wide?: boolean

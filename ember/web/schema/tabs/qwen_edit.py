@@ -61,7 +61,7 @@ QWEN_EDIT_SCHEMA = TabSchema(
               group="references", column="right",
               hint="Image 1 is the one edited. Name the others by number: "
                    "“put the woman in image 1 in the pose from image 2”.",
-              empty_note="Add the image to edit."),
+              empty_note="Add the image to edit.", library="poses"),
         Field("prompt", "Edit instruction", "textarea",
               "Turn the woman in image 1 around so her back is to the "
               "camera, looking back at the camera over her right shoulder. "

@@ -306,6 +306,16 @@ if SHOWCASE_BASE_URL and not SHOWCASE_BASE_URL.lower().startswith("https://"):
     SHOWCASE_BASE_URL = ""
 SHOWCASE_BASE_URL = SHOWCASE_BASE_URL.split("?")[0].split("#")[0].rstrip("/")
 
+# ── Picture libraries ─────────────────────────────────────────────────────────
+# Where the pose pack (and any later picture library) is unpacked: one folder
+# per library, holding manifest.json and v<N>/thumbs|full/<id>/<kind>.webp.
+# The pack is downloaded once per machine from the private builds bucket,
+# through a URL the licence server signs (POST /v1/library) — see
+# ember/web/library.py. Not in the binary: tens of megabytes that change
+# without a release. A dev checkout fills it with
+# scripts/build_pose_library.py and needs no server at all.
+LIBRARY_DIR = WORKING_DIR / "library"
+
 # ── The rest of the environment ───────────────────────────────────────────────
 # Values other modules used to read for themselves. They are here for the
 # same reason as everything above: one module decides what an unset or

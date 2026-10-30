@@ -332,6 +332,7 @@ export function Modal({
   children,
   width,
   zIndex,
+  className,
 }: {
   open: boolean
   onClose: () => void
@@ -341,6 +342,9 @@ export function Modal({
   /** Overrides `--z-modal`, for a modal opened on top of another layer that
    *  already sits at it — see `ConfirmHost`. */
   zIndex?: number | string
+  /** Added to the panel, for a modal that sizes itself — the pose picker,
+   *  which is a sheet on a phone rather than a box. */
+  className?: string
 }) {
   /* Keys are taken in the capture phase and stopped there.
    *
@@ -377,7 +381,7 @@ export function Modal({
   return createPortal(
     <div className={s.backdrop} style={zIndex ? { zIndex } : undefined} onMouseDown={onClose}>
       <div
-        className={s.modal}
+        className={cx(s.modal, className)}
         style={width ? { width: `min(${width}px, 100%)` } : undefined}
         role="dialog"
         aria-modal="true"

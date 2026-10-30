@@ -1,0 +1,466 @@
+/* The library picker. A wide dialog on a desktop, a full-screen sheet on a
+   phone. Doubled class selectors win over `.modal` whichever stylesheet
+   loads last. */
+
+.sheet.sheet {
+  width: min(1120px, 100%);
+  height: min(88vh, 920px);
+  max-height: none;
+}
+
+/* The modal's body: padding and scrolling move to the toolbar and the grid,
+   so the toolbar stays put while the cards scroll. */
+.sheet.sheet > :last-child {
+  padding: 0;
+  overflow: hidden;
+  flex: 1;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+}
+
+.body {
+  display: flex;
+  flex-direction: column;
+  flex: 1;
+  min-height: 0;
+}
+
+.toolbar {
+  display: flex;
+  flex-direction: column;
+  gap: var(--s-2);
+  padding: var(--s-3) var(--s-5);
+  border-bottom: 1px solid var(--c-border);
+}
+
+.row {
+  display: flex;
+  gap: var(--s-2);
+  align-items: center;
+  flex-wrap: wrap;
+}
+
+.search {
+  flex: 1;
+  min-width: 180px;
+  height: 34px;
+  padding: 0 var(--s-3);
+  border: 1px solid var(--c-border);
+  border-radius: var(--r-md);
+  background: var(--c-input);
+  color: var(--c-text);
+  font: inherit;
+  font-size: var(--t-sm);
+}
+
+.search:focus {
+  outline: 2px solid var(--c-focus);
+  outline-offset: -1px;
+}
+
+.chips {
+  display: flex;
+  gap: var(--s-1);
+  flex-wrap: wrap;
+  align-items: center;
+}
+
+.chip {
+  display: inline-flex;
+  align-items: baseline;
+  gap: 4px;
+  padding: 3px 10px;
+  border: 1px solid var(--c-border);
+  border-radius: var(--r-full);
+  background: var(--c-panel);
+  color: var(--c-text);
+  font-size: var(--t-xs);
+  white-space: nowrap;
+  cursor: pointer;
+}
+
+.chip small {
+  color: var(--c-text-faint);
+  font-size: var(--t-2xs);
+}
+
+.chip:hover {
+  background: var(--c-panel-hover);
+}
+
+.chipOn,
+.chipOn:hover {
+  border-color: var(--c-accent-line);
+  background: var(--c-accent-soft);
+}
+
+.tagChip {
+  color: var(--c-text-muted);
+}
+
+.select {
+  height: 26px;
+  padding: 0 var(--s-6) 0 var(--s-2);
+  border: 1px solid var(--c-border);
+  border-radius: var(--r-full);
+  background: var(--c-panel) var(--icon-caret) no-repeat right 8px center;
+  color: var(--c-text);
+  font: inherit;
+  font-size: var(--t-xs);
+  appearance: none;
+}
+
+.recent {
+  display: flex;
+  align-items: center;
+  gap: var(--s-2);
+  min-width: 0;
+}
+
+.recentLabel {
+  font-size: var(--t-2xs);
+  color: var(--c-text-faint);
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+
+.recentStrip {
+  display: flex;
+  gap: var(--s-1);
+  overflow-x: auto;
+  scrollbar-width: thin;
+  min-width: 0;
+}
+
+.recentThumb {
+  flex: none;
+  width: 36px;
+  height: 48px;
+  padding: 0;
+  border: 1px solid var(--c-border);
+  border-radius: var(--r-xs);
+  background: var(--c-media-ground);
+  overflow: hidden;
+  cursor: pointer;
+}
+
+.recentThumb img {
+  width: 100%;
+  height: 100%;
+  object-fit: contain;
+}
+
+.scroll {
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
+  padding: var(--s-4) var(--s-5) var(--s-6);
+  overscroll-behavior: contain;
+}
+
+.grid {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(140px, 1fr));
+  gap: var(--s-3);
+}
+
+.card {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  border: 1px solid var(--c-border);
+  border-radius: var(--r-md);
+  background: var(--c-bg-sunken);
+  overflow: hidden;
+}
+
+.card:hover {
+  border-color: var(--c-border-strong);
+}
+
+.thumb {
+  position: relative;
+  display: block;
+  width: 100%;
+  aspect-ratio: 3 / 4;
+  padding: 0;
+  border: 0;
+  background: var(--c-media-ground);
+  cursor: pointer;
+}
+
+.thumb:disabled {
+  cursor: not-allowed;
+  opacity: 0.5;
+}
+
+.thumb img {
+  width: 100%;
+  height: 100%;
+  object-fit: contain;
+  display: block;
+}
+
+.peek {
+  position: absolute;
+  inset: 0;
+  opacity: 0;
+  transition: opacity var(--d-fast) var(--e-out);
+}
+
+.addLabel {
+  position: absolute;
+  left: 50%;
+  bottom: var(--s-2);
+  transform: translateX(-50%);
+  padding: 3px 10px;
+  border-radius: var(--r-sm);
+  background: var(--c-accent);
+  color: var(--c-text-on-accent);
+  font-size: var(--t-2xs);
+  font-weight: var(--fw-semibold);
+  white-space: nowrap;
+  opacity: 0;
+  transition: opacity var(--d-fast) var(--e-out);
+}
+
+/* Hover only where there is one: on a phone the tap adds, and a label that
+   appears on the first tap would make every add take two. */
+@media (hover: hover) {
+  .thumb:hover .peek,
+  .thumb:hover .addLabel {
+    opacity: 1;
+  }
+}
+
+.thumb:focus-visible .addLabel {
+  opacity: 1;
+}
+
+.star {
+  position: absolute;
+  top: var(--s-1);
+  right: var(--s-1);
+  width: 26px;
+  height: 26px;
+  border: 0;
+  border-radius: 50%;
+  background: var(--c-media-chip);
+  color: var(--c-on-media-faint);
+  font-size: 13px;
+  line-height: 1;
+  cursor: pointer;
+}
+
+.starOn {
+  color: var(--c-accent);
+}
+
+.meta {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  padding: var(--s-2);
+  background: var(--c-panel);
+}
+
+.name {
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+  gap: var(--s-1);
+  font-size: var(--t-xs);
+  font-weight: var(--fw-semibold);
+  min-width: 0;
+}
+
+.name span {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.name em {
+  font-style: normal;
+  font-weight: var(--fw-normal);
+  font-size: var(--t-2xs);
+  color: var(--c-text-faint);
+}
+
+.tags {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 3px;
+}
+
+.tags span {
+  padding: 0 5px;
+  border-radius: var(--r-xs);
+  background: var(--c-bg-sunken);
+  color: var(--c-text-muted);
+  font-size: 10.5px;
+}
+
+.variants {
+  display: flex;
+  gap: 3px;
+}
+
+.variants button {
+  flex: 1;
+  padding: 2px 0;
+  border: 1px solid var(--c-border);
+  border-radius: var(--r-xs);
+  background: var(--c-input);
+  color: var(--c-text-muted);
+  font-size: 10.5px;
+  cursor: pointer;
+}
+
+.variants button:disabled {
+  opacity: 0.3;
+  cursor: default;
+}
+
+.variants .variantOn {
+  border-color: var(--c-accent-line);
+  background: var(--c-accent-soft);
+  color: var(--c-text);
+}
+
+.empty {
+  padding: var(--s-8) 0;
+  text-align: center;
+  color: var(--c-text-faint);
+}
+
+.more {
+  display: block;
+  margin: var(--s-4) auto 0;
+  padding: var(--s-2) var(--s-4);
+  border: 1px solid var(--c-border);
+  border-radius: var(--r-md);
+  background: var(--c-panel);
+  color: var(--c-text);
+  cursor: pointer;
+}
+
+/* ---------------------------------------------------------------- phone */
+
+@media (max-width: 640px) {
+  .sheet.sheet {
+    position: fixed;
+    inset: 0;
+    width: 100%;
+    height: 100dvh;
+    border-radius: 0;
+    border: 0;
+  }
+
+  .toolbar {
+    padding: var(--s-2) var(--s-3);
+  }
+
+  /* One sideways-scrolling line each, so the cards keep most of the screen. */
+  .chips {
+    flex-wrap: nowrap;
+    overflow-x: auto;
+    scrollbar-width: none;
+    margin: 0 calc(-1 * var(--s-3));
+    padding: 0 var(--s-3);
+  }
+
+  .chips::-webkit-scrollbar {
+    display: none;
+  }
+
+  .row > :last-child {
+    width: 100%;
+  }
+
+  .row > :last-child > * {
+    flex: 1;
+  }
+
+  .scroll {
+    padding: var(--s-2) var(--s-3) var(--s-6);
+  }
+
+  .grid {
+    grid-template-columns: repeat(3, 1fr);
+    gap: var(--s-2);
+  }
+
+  .meta {
+    padding: 6px;
+  }
+
+  .tags {
+    display: none;
+  }
+}
+
+/* ------------------------------------------------------------ renderings */
+
+.use {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--s-1);
+}
+
+.useLabel {
+  font-size: var(--t-2xs);
+  color: var(--c-text-faint);
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  margin-right: 2px;
+}
+
+.useButton {
+  height: 30px;
+  padding: 0 var(--s-3);
+  border: 1px solid var(--c-border);
+  border-radius: var(--r-md);
+  background: var(--c-panel);
+  color: var(--c-text-muted);
+  font-size: var(--t-xs);
+  white-space: nowrap;
+  cursor: pointer;
+}
+
+.useButton:hover {
+  background: var(--c-panel-hover);
+}
+
+.useOn,
+.useOn:hover {
+  border-color: var(--c-accent-line);
+  background: var(--c-accent-soft);
+  color: var(--c-text);
+  font-weight: var(--fw-medium);
+}
+
+.recentThumb:disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
+}
+
+@media (max-width: 640px) {
+  .useLabel {
+    display: none;
+  }
+
+  .useButton {
+    flex: 1;
+    padding: 0 var(--s-1);
+  }
+}
+
+.download {
+  max-width: 420px;
+  margin: var(--s-8) auto;
+}

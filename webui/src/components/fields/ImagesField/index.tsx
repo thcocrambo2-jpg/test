@@ -3,6 +3,7 @@ import type { MediaItem } from '@/api/types'
 import { Alert } from '@/components/ui'
 import { Lightbox } from '@/features/gallery/Lightbox'
 import { cx } from '@/lib/util'
+import { LibraryPicker, type LibraryKind } from '../LibraryPicker'
 import { RecentStrip } from '../RecentStrip'
 import f from '../fields.module.css'
 import s from './images.module.css'
@@ -148,12 +149,16 @@ export function ImagesField({
   value,
   onChange,
   max = 10,
+  library,
 }: {
   label: string
   hint?: ReactNode
   value: File[]
   onChange: (next: File[]) => void
   max?: number
+  /** A shared library to pick from as well (`poses`): an Add pose tile and
+   *  a picker. What it hands back is a File like any other. */
+  library?: string
 }) {
   const labelId = useId()
   const hintId = useId()
@@ -171,6 +176,11 @@ export function ImagesField({
   const noticeId = useRef(0)
   const focusNext = useRef<number | null>(null)
   const previous = useRef<File[]>(value)
+  const [libraryOpen, setLibraryOpen] = useState(false)
+  // The last pose added, for the hint that names its number. Tracked by
+  // file, so the number follows it through a reorder and the hint goes
+  // when the pose does.
+  const [pose, setPose] = useState<{ file: File; kind: LibraryKind } | null>(null)
 
   const room = Math.max(0, max - value.length)
   const full = room === 0
@@ -475,6 +485,38 @@ export function ImagesField({
 
   const displaced = move && move.from !== move.to ? shown[move.from] : null
 
+  // Last in the row whatever else is there — beside the drop zone when the
+  // field is empty, after "Add images", and still in place, dimmed, when the
+  // field is full, so the way back to the library never moves.
+  const poseTile = library && (
+    <button
+      type="button"
+      className={cx(s.add, s.addPose)}
+      disabled={full}
+      aria-label={
+        full
+          ? 'Add pose: the images are full, remove one first'
+          : `Add a pose from the library as image ${value.length + 1}`
+      }
+      onClick={() => setLibraryOpen(true)}
+    >
+      <span className={s.addIcon} aria-hidden="true">
+        🧍
+      </span>
+      <span>Add pose</span>
+      <span className={s.addHint}>{full ? 'full' : 'from the library'}</span>
+    </button>
+  )
+
+  // Where the pose sits now, followed through reorders; 0 once it is gone.
+  const poseAt = pose ? value.indexOf(pose.file) + 1 : 0
+  const poseUse =
+    pose?.kind === 'depth'
+      ? `the body position and camera angle in image ${poseAt}`
+      : pose?.kind === 'lineart'
+        ? `the outline in image ${poseAt}`
+        : `the skeleton in image ${poseAt}`
+
   return (
     <div className={cx(f.field, f.fieldWide, s.field)} ref={zoneRef}>
       <div className={f.labelRow}>
@@ -484,30 +526,33 @@ export function ImagesField({
       </div>
 
       {value.length === 0 ? (
-        <div
-          className={cx(f.drop, incoming > 0 && f.dropActive)}
-          role="button"
-          tabIndex={0}
-          aria-labelledby={labelId}
-          aria-describedby={hint ? hintId : undefined}
-          onClick={choose}
-          onKeyDown={(event) => {
-            if (event.key === 'Enter' || event.key === ' ') {
-              event.preventDefault()
-              choose()
-            }
-          }}
-          {...dropHandlers}
-        >
-          <div>
-            <span className={f.dropIcon} aria-hidden>
-              ⬆
-            </span>
-            Drop up to {max} images, or click to choose
-            <div className={f.dropHint}>
-              Pick several at once · Ctrl+V pastes from the clipboard
+        <div className={cx(library && s.emptyRow)}>
+          <div
+            className={cx(f.drop, incoming > 0 && f.dropActive)}
+            role="button"
+            tabIndex={0}
+            aria-labelledby={labelId}
+            aria-describedby={hint ? hintId : undefined}
+            onClick={choose}
+            onKeyDown={(event) => {
+              if (event.key === 'Enter' || event.key === ' ') {
+                event.preventDefault()
+                choose()
+              }
+            }}
+            {...dropHandlers}
+          >
+            <div>
+              <span className={f.dropIcon} aria-hidden>
+                ⬆
+              </span>
+              Drop up to {max} images, or click to choose
+              <div className={f.dropHint}>
+                Pick several at once · Ctrl+V pastes from the clipboard
+              </div>
             </div>
           </div>
+          {poseTile && <div className={s.emptyPose}>{poseTile}</div>}
         </div>
       ) : (
         <div className={cx(s.target, incoming > 0 && s.targetActive)} {...dropHandlers}>
@@ -554,6 +599,7 @@ export function ImagesField({
                 </button>
               </li>
             )}
+            {poseTile && <li>{poseTile}</li>}
           </ol>
         </div>
       )}
@@ -579,6 +625,13 @@ export function ImagesField({
           </strong>{' '}
           {value[displaced].name} becomes image {move.from + 1}.
         </p>
+      )}
+
+      {poseAt > 0 && (
+        <Alert tone="info" title={`Image ${poseAt} is a pose`} onDismiss={() => setPose(null)}>
+          Say how to use it in the instruction, for example: “Change her pose to match {poseUse}. Keep her
+          face, hair and outfit the same.”
+        </Alert>
       )}
 
       {notices.map((notice) => (
@@ -620,6 +673,21 @@ export function ImagesField({
         <div className={f.hint} id={hintId}>
           {hint}
         </div>
+      )}
+
+      {library && (
+        <LibraryPicker
+          library={library}
+          open={libraryOpen}
+          onClose={() => setLibraryOpen(false)}
+          nextNumber={value.length + 1}
+          room={room}
+          mainSize={value[0] ? (SIZES.get(value[0]) ?? null) : null}
+          onPick={(file, kind) => {
+            add([file], 'chose')
+            setPose({ file, kind })
+          }}
+        />
       )}
 
       {viewing !== null && items[viewing] && (
