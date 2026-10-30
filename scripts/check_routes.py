@@ -78,6 +78,13 @@ NO_WEIGHTS_BACKSTOP = {
     "community_prompts": "/api/v1/prompts",
 }
 
+# The picture libraries, each with a tab whose images field names it. They
+# have no weights behind them either; /library/<name> opens only while the
+# licence grants a tab that uses it (ember/web/routes/library.py).
+LIBRARIES = {
+    "poses": "qwen_edit_2511",
+}
+
 
 def _stub_comfy() -> None:
     """Same weightless boot as the other scripts — see scripts/dryrun.py."""
@@ -234,6 +241,18 @@ def main() -> None:
                 "working tab." % (path, status, key)
             )
 
+    # The picture libraries: no weights behind them either, so the route
+    # gate is the only one on this side. Both the manifest and a picture.
+    for name in LIBRARIES:
+        for path in ("/api/v1/library/%s" % name,
+                     "/api/v1/library/%s/thumbs/any/skeleton" % name):
+            status = client.get(path).status_code
+            if status != 403:
+                failures.append(
+                    "%s answered %d for a licence that grants nothing — a "
+                    "library has no weights backstop, it must be 403"
+                    % (path, status))
+
     # /catalog must not describe an ungranted tab either — layer three.
     body = client.get("/api/v1/catalog").json()
     if body.get("tabs"):
@@ -276,6 +295,23 @@ def main() -> None:
     if sorted(body.get("models") or {}) != ["krea_t2i"]:
         failures.append("/catalog listed models for %s under a krea_t2i-only "
                         "licence" % sorted(body.get("models") or {}))
+    for name in LIBRARIES:
+        status = client.get("/api/v1/library/%s" % name).status_code
+        if status != 403:
+            failures.append("the %s library answered %d for a krea_t2i-only "
+                            "licence, which has no tab that uses it"
+                            % (name, status))
+
+    # ── and each library opens with the tab that uses it ────────────
+    for name, key in LIBRARIES.items():
+        features.resolve([key])
+        client = TestClient(api.create_app(), raise_server_exceptions=False)
+        # 200 with a pack on this machine, 503 without one: either way the
+        # gate let it through, which is what this is about.
+        status = client.get("/api/v1/library/%s" % name).status_code
+        if status == 403:
+            failures.append("the %s library refused a licence granting %s, "
+                            "the tab whose field names it" % (name, key))
 
     if failures:
         print("%d licence-gate failure(s):" % len(failures))
@@ -283,8 +319,9 @@ def main() -> None:
             print("  - %s" % line)
         sys.exit(1)
     print("routes OK - %d per-tab route(s) refuse a licence that grants "
-          "nothing, %s named explicitly"
-          % (checked, " and ".join(NO_WEIGHTS_BACKSTOP)))
+          "nothing, %s named explicitly, %d librar%s gated by tab"
+          % (checked, " and ".join(NO_WEIGHTS_BACKSTOP), len(LIBRARIES),
+             "y" if len(LIBRARIES) == 1 else "ies"))
 
 
 if __name__ == "__main__":

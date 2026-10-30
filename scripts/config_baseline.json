@@ -39,6 +39,7 @@
     "HF_TOKEN": "None",
     "KREA2EDIT_NODES_REPO": "'https://github.com/lbouaraba/comfyui-krea2edit'",
     "KREA_RESERVE_VRAM_GB": "26.0",
+    "LIBRARY_DIR": "Path('<BASE_DIR>/library')",
     "LICENSE_API_URL": "'https://restructure-test.vercel.app'",
     "LICENSE_GRACE_SECONDS": "1800.0",
     "LICENSE_KEY": "'KREA2-TEST-TEST-TEST'",
