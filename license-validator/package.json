@@ -17,6 +17,7 @@
     "prompts": "node scripts/add-prompt.js",
     "presets": "node scripts/presets.js",
     "assets": "node scripts/assets.js",
+    "library": "node scripts/library.js",
     "orders": "node scripts/orders.js",
     "set-webhook": "node scripts/set-webhook.js"
   },

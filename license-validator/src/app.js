@@ -704,6 +704,86 @@ app.post(
   }),
 );
 
+// ── Picture libraries ───────────────────────────────────────────────────
+//
+// A pack of pictures one of the app's pickers draws from — the pose
+// library, today. It sits in the same PRIVATE bucket as the builds, as one
+// archive per version, and this hands a pod a short-lived URL for it. The
+// pod downloads it once, unpacks it into its own cache and never asks
+// again until the version moves (see ember/web/library.py).
+//
+// Gated twice: the key must be valid, and its entitlement must include one
+// of the tabs the library document names in `features`. A key without the
+// tab has no use for the pack, so it is not given one.
+//
+// `current_version` is what the pod already has. Matching it answers
+// up_to_date with no URL, the same way /v1/build keeps a restart free.
+//
+// Nothing is logged to `downloads`: that collection is the build gate's
+// rate-limit signal, and a pose pack fetched once per machine is not
+// something to spend it on.
+const LIBRARY_RE = /^[a-z][a-z0-9_-]{0,31}$/;
+
+app.post(
+  "/v1/library",
+  wrap(async (req, res) => {
+    const { license_key, instance_id, name, current_version } = req.body || {};
+    if (!license_key || typeof name !== "string" || !LIBRARY_RE.test(name)) {
+      return badRequest(res, "license_key and a library name are required.");
+    }
+    const { licenses, libraries } = await collections();
+    const license = await licenses.findOne({ key: license_key });
+    const problem = licenseProblem(license);
+    if (problem) return res.status(403).json({ ok: false, ...problem });
+
+    const library = await libraries.findOne({ _id: name });
+    if (!library || !library.key || !Number.isInteger(library.version)) {
+      return res.status(404).json({
+        ok: false,
+        error: "no_library",
+        message: `The ${name} library is not published yet.`,
+      });
+    }
+    const { features } = await resolveEntitlement(license);
+    const wanted = Array.isArray(library.features) ? library.features : [];
+    if (!features || !wanted.some((key) => features.includes(key))) {
+      return res.status(403).json({
+        ok: false,
+        error: "not_granted",
+        message: `The ${name} library is not part of this licence.`,
+      });
+    }
+
+    const pack = {
+      name,
+      version: library.version,
+      sha256: library.sha256 || null,
+      size: library.size ?? null,
+    };
+    if (current_version === library.version) {
+      return res.json({ ok: true, up_to_date: true, library: pack });
+    }
+    if (!r2Configured()) {
+      console.error("library  R2 is not configured — cannot sign a URL");
+      return res.status(503).json({
+        ok: false,
+        error: "server_error",
+        message: "The download service is not available. Try again later.",
+      });
+    }
+    const url = presignGet(library.key, BUILD_URL_TTL_SECONDS);
+    console.log(
+      `library  key=${license_key} instance=${instance_id || "-"} ` +
+        `name=${name} v${library.version}`,
+    );
+    res.json({
+      ok: true,
+      up_to_date: false,
+      library: { ...pack, url, url_expires_in: BUILD_URL_TTL_SECONDS },
+    });
+  }),
+);
+
 // The RunPod template's bootstrapper fetches this, and it is the one
 // endpoint that must answer before a pod has anything at all — no licence
 // key is sent and none is required. That is deliberate: the template is

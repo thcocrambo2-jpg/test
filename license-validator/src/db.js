@@ -83,6 +83,13 @@ export async function collections() {
     // buys: seat counts say how many pods run at once, this says how many
     // distinct machines have ever pulled the binary on a given key.
     downloads: db.collection("downloads"),
+    // Picture libraries the app's pickers draw from — `poses` today. One
+    // document per library, `_id` being its name: the pack's current
+    // version, its object key in the builds bucket, its sha256 and size, and
+    // `features`, the tabs that use it. A licence needs one of those to be
+    // handed the pack. Written by scripts/r2_upload_poses.py's operator
+    // step, never by a pod.
+    libraries: db.collection("libraries"),
     // One document per purchase attempt made through the Telegram bot, and
     // the state machine that makes a payment webhook safe to receive twice.
     // Telegram retries a webhook for up to 24 hours on any non-2xx, so a

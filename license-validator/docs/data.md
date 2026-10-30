@@ -227,6 +227,22 @@ promoting an older build to `stable` work: the start script downloads
 under whatever name that build recorded, not under the name the current
 build would have.
 
+## `libraries` — `_id` is the library name
+
+```js
+{ _id: "poses", version: 1,
+  key: "libraries/poses/v1/pack.tar",   // in the builds bucket
+  sha256: "<hex>", size: 21800960,
+  features: ["qwen_edit_2511"],         // a licence needs one of these
+  updated_at: ISODate }
+```
+
+What `POST /v1/library` signs a URL for. Written only by `npm run library --
+set` (the app repo's `scripts/r2_upload_poses.py` prints the line after
+uploading the pack). Each version has its own object key, so rolling back
+is a `set` with the older values. The app's side is
+`docs/features/pose-library.md` in the app repo.
+
 ## `orders`
 
 One document per purchase attempt, and the only reason a payment webhook

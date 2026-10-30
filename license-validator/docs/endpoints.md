@@ -12,6 +12,7 @@ easy to get wrong. For whoever calls this API or changes it.
 | `POST` | `/v1/release` | Give it back. Idempotent |
 | `POST` | `/v1/build` | Which build this licence gets + a signed R2 URL. `{license_key, instance_id, current_sha, platform}`. Takes no seat |
 | `POST` | `/v1/catalog` | The model and LoRA catalogue the Krea, Ember Lite, Qwen 2.1 and MiniMax tabs are built from. `{license_key, instance_id}`, licence checked like acquire. Takes no seat |
+| `POST` | `/v1/library` | A picture library's pack (the pose library) + a signed R2 URL for it. `{license_key, instance_id, name, current_version}`; the licence must grant a tab the `libraries` row lists. Takes no seat |
 | `GET` | `/v1/start.sh` | 302 to a signed URL for the Linux start script. Unauthenticated — the RunPod template fetches it |
 | `GET` | `/v1/start.ps1` | The same for the Windows start script, fetched by a desktop shortcut |
 | `GET` | `/v1/plans` | Public catalogue — `is_public` plans, enabled features, enabled billing cycles |
@@ -115,6 +116,8 @@ The Python client branches on exactly this table — keep it stable.
 | 400 | `bad_request` | client bug, no retry |
 | 403 | `invalid_key`, `revoked`, `expired`, `seat_limit` | **stop the app** |
 | 403 | `forbidden` | `POST /v1/presets` only — valid licence, not an admin |
+| 403 | `not_granted` | `/v1/library` only — valid licence, no tab that uses the library. The app shows the message in the picker and keeps running |
+| 404 | `no_library` | `/v1/library` only — no `libraries` row by that name |
 | 429 | `rate_limited` | `/v1/build` only — the per-licence hourly download cap |
 | 503 | `server_error`, `no_build` | transient — retry at startup, ride the grace window if running |
 
