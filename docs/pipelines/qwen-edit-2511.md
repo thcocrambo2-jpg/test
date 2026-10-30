@@ -100,7 +100,9 @@ Describe the change and what must stay: "Turn the woman in image 1 around
 so her back is to the camera, looking back at the camera over her right
 shoulder. Keep her face, hair, outfit and the background the same." For a
 pose the words do not pin down, add a pose skeleton (an OpenPose render)
-as image 2 and say "in the pose from image 2".
+as image 2 and say "in the pose from image 2". The **Add pose** tile opens
+the [pose library](../features/pose-library.md): 582 poses as a skeleton,
+a depth map or line art, added as the next image in one click.
 
 For a camera move rather than a body pose, tick the **Multiple Angles**
 LoRA in the stack and start the prompt with its trigger: `<sks> back view

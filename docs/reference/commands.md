@@ -300,6 +300,26 @@ warns when that happens.
 
 ---
 
+### 11.3 The pose library pack
+
+What the pose library is and how a pod gets it is in
+[Pose library](../features/pose-library.md); these are the commands.
+
+**PS**, from the repo root. The build reads `tmp\poses`; with no `--out` it
+writes into `<EMBER_BASE_DIR>\library\poses`, which is all a dev checkout
+needs. The upload needs the build machine's R2 write key as
+`R2_ACCESS_KEY_ID` / `R2_SECRET_ACCESS_KEY` and `R2_BUILDS_BUCKET`
+(`--dry-run` needs none of them):
+
+```powershell
+python scripts\build_pose_library.py --out tmp\pose-stage --version 2
+python scripts\r2_upload_poses.py --dir tmp\pose-stage --dry-run
+python scripts\r2_upload_poses.py --dir tmp\pose-stage   # prints the publish line
+cd license-validator
+npm run library -- set poses --version 2 --key libraries/poses/v2/pack.tar --sha256 <hex> --size <bytes> --features qwen_edit_2511
+npm run library -- list
+```
+
 ## 12. Utilities and troubleshooting
 
 → [troubleshooting](../troubleshooting.md).
