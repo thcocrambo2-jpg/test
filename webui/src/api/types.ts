@@ -570,6 +570,13 @@ export interface GalleryPage {
   total: number
 }
 
+/** The user's own pictures that runs were given, newest first — what the
+ *  Recent uploads strip under every image input lists. `url` is the kept
+ *  file at full size, `thumbUrl` its 512px WebP. */
+export interface RecentUploads {
+  items: { name: string; url: string; thumbUrl: string; usedAt: string }[]
+}
+
 /** A recipe as recipes.py stores it: the tab it came from, the seed the
  *  picture actually ran on, and `[[label, value], ...]` in that tab's own
  *  control order. Positional, and it has to be — a LoRA stack is eight
@@ -596,6 +603,8 @@ export interface ApiClient {
    *  page of the whole listing taken on a video tab is mostly clips, and
    *  an image input cannot take one. Both kinds are the gallery's filter. */
   getGallery(cursor: string | null, kind?: MediaKind): Promise<GalleryPage>
+  /** The Recent uploads strip's list. Not gated on the Gallery feature. */
+  getRecentUploads(): Promise<RecentUploads>
   deleteMedia(id: string): Promise<void>
   /** `preset`: the preset dropdown's name at the click, filed with the
    *  run's recipe so loading it later names that preset again. */

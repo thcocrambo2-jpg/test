@@ -8,9 +8,9 @@ the ones nobody ever claimed.
 import time
 import uuid
 
-from fastapi import APIRouter, Depends, HTTPException, UploadFile
+from fastapi import APIRouter, Depends, Form, HTTPException, UploadFile
 
-from ember.web.routes.common import UPLOADS, require_auth
+from ember.web.routes.common import OWN_SUFFIX, UPLOADS, require_auth
 
 # An upload nothing has claimed within this long is abandoned — a page
 # closed between choosing an image and pressing Generate. Swept lazily on
@@ -40,7 +40,7 @@ def _sweep_uploads() -> None:
 
 def register(api: APIRouter) -> None:
     @api.post("/uploads", dependencies=[Depends(require_auth)])
-    async def upload(file: UploadFile):
+    async def upload(file: UploadFile, origin: str = Form(default="")):
         """Take one file and hand back an id to reference it by.
 
         Separate from the generate route on purpose. A batch of
@@ -64,5 +64,7 @@ def register(api: APIRouter) -> None:
                         413, "That file is larger than %d MB."
                              % (MAX_UPLOAD // (1024 * 1024)))
                 handle.write(chunk)
+        if origin == "own":
+            (UPLOADS / (upload_id + OWN_SUFFIX)).touch()
         return {"id": upload_id, "size": size,
                 "name": file.filename or upload_id}

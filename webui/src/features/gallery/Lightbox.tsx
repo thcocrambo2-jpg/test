@@ -524,7 +524,7 @@ export function Lightbox({
  *
  *  The server hands each one back as the URL of the copy it kept when the
  *  run was submitted (sources.py). An image field holds a File and nothing
- *  else — see `fileFromMedia` in RecentStrip for why — so the URL is turned
+ *  else — see `fileFromUrl` in RecentStrip for why — so the URL is turned
  *  into one here, before the handoff, rather than teaching the form a
  *  second kind of value. A source that will not come back is dropped: the
  *  drop zone stays empty, which is what every recipe did before.

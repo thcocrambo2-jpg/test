@@ -10,6 +10,7 @@ import type {
   PromptPage,
   PromptQuery,
   QueueSnapshot,
+  RecentUploads,
   Session,
   Showcase,
   StoredRecipe,
@@ -18,6 +19,7 @@ import type {
   SubmitValues,
   TabSchema,
 } from './types'
+import { isOwn } from '@/lib/ownFiles'
 
 /*
  * The real client. This is the whole of what the app knows about the server.
@@ -104,10 +106,14 @@ async function errorText(response: Response): Promise<string> {
   return `${response.status} ${response.statusText}`
 }
 
-/** Send one blob and get the id the submission references it by. */
+/** Send one blob and get the id the submission references it by.
+ *
+ *  `origin=own` on the user's own files, so the server puts them on the
+ *  Recent uploads list — see lib/ownFiles.ts. */
 async function upload(blob: Blob, name: string): Promise<string> {
   const form = new FormData()
   form.append('file', blob, name)
+  if (isOwn(blob)) form.append('origin', 'own')
   const response = await fetch(`${BASE}/uploads`, { method: 'POST', body: form })
   if (!response.ok) throw new Error(await errorText(response))
   const body = (await response.json()) as { id: string }
@@ -165,6 +171,8 @@ export const httpClient: ApiClient = {
     const suffix = params.toString()
     return get<GalleryPage>(`/gallery${suffix ? `?${suffix}` : ''}`)
   },
+
+  getRecentUploads: () => get<RecentUploads>('/sources'),
 
   async deleteMedia(id: string) {
     await send<void>(`/gallery/${encodePathId(id)}`, undefined, 'DELETE')

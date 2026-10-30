@@ -128,3 +128,17 @@ export function useRecentImages() {
 
   return query
 }
+
+/** The user's own pictures that runs were given, for the Recent uploads strip.
+ *
+ *  Refetched after every submit, because that is when the server adds to it
+ *  — not when the run finishes, which is what `mediaRevision` counts. */
+export function useRecentUploads() {
+  const submitRevision = useQueue((state) => state.submitRevision)
+  return useQuery({
+    queryKey: ['recentUploads', submitRevision],
+    queryFn: () => api.getRecentUploads(),
+    staleTime: 30_000,
+    placeholderData: (previous) => previous,
+  })
+}

@@ -72,6 +72,13 @@ TOKEN = secrets.token_urlsafe(32)
 UPLOADS = TEMP_DIR / "uploads"
 UPLOADS.mkdir(parents=True, exist_ok=True)
 
+# Beside an upload the browser says was the user's own file — dropped,
+# pasted, chosen from disk or picked off the Recent uploads strip — rather
+# than a gallery picture or a library pose. Read by `_keep_one`, so
+# the kept copy goes on the Recent uploads list (sources.py). Never an id
+# itself: `_upload_path` takes only alphanumeric ids, and this has a dot.
+OWN_SUFFIX = ".own"
+
 
 # ─────────────────────────────────────────────────────────────── auth
 
@@ -250,7 +257,10 @@ def _keep_one(upload_id: str) -> str | None:
             fmt = image.format
     except Exception:                            # noqa: BLE001
         return None
-    return sources.keep(path, fmt)
+    name = sources.keep(path, fmt)
+    if name and (UPLOADS / (upload_id + OWN_SUFFIX)).exists():
+        sources.note_upload(name)
+    return name
 
 
 def _source_url(name: str) -> str:

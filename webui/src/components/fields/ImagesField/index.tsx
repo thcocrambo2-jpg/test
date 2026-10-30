@@ -5,6 +5,7 @@ import { Lightbox } from '@/features/gallery/Lightbox'
 import { cx } from '@/lib/util'
 import { LibraryPicker, type LibraryKind } from '../LibraryPicker'
 import { RecentStrip } from '../RecentStrip'
+import { markOwn } from '@/lib/ownFiles'
 import f from '../fields.module.css'
 import s from './images.module.css'
 
@@ -300,7 +301,7 @@ export function ImagesField({
         .filter((file): file is File => file !== null)
       if (files.length === 0) return
       event.preventDefault()
-      add(files, 'pasted')
+      add(markOwn(files), 'pasted')
     }
     window.addEventListener('paste', onPaste)
     return () => window.removeEventListener('paste', onPaste)
@@ -378,7 +379,7 @@ export function ImagesField({
       event.preventDefault()
       depth.current = 0
       setIncoming(0)
-      add(Array.from(event.dataTransfer.files), 'dropped')
+      add(markOwn(Array.from(event.dataTransfer.files)), 'dropped')
     },
   }
 
@@ -652,13 +653,24 @@ export function ImagesField({
         multiple
         hidden
         onChange={(event) => {
-          add(Array.from(event.target.files ?? []), 'chose')
+          add(markOwn(Array.from(event.target.files ?? [])), 'chose')
           // Cleared so choosing the same file again is still a change.
           event.target.value = ''
         }}
       />
 
       <RecentStrip
+        value={value}
+        onPick={(file) => add([file], 'chose')}
+        note={
+          full
+            ? 'full: remove a reference to add one'
+            : `click one to add it as image ${value.length + 1}`
+        }
+        disabled={full}
+      />
+      <RecentStrip
+        source="uploads"
         value={value}
         onPick={(file) => add([file], 'chose')}
         note={

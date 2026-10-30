@@ -3,6 +3,7 @@ import { cx } from '@/lib/util'
 import { useUndoHistory } from '@/lib/undo'
 import { Button, useToast } from '@/components/ui'
 import { RecentStrip } from './RecentStrip'
+import { markOwn } from '@/lib/ownFiles'
 import s from './fields.module.css'
 
 export { ImagesField, useImageSize } from './ImagesField'
@@ -526,7 +527,7 @@ export function ImageDropField({
   const accept = useCallback(
     (files: FileList | null) => {
       const file = files?.[0]
-      if (file && file.type.startsWith('image/')) onChange(file)
+      if (file && file.type.startsWith('image/')) onChange(markOwn([file])[0])
     },
     [onChange],
   )
@@ -542,7 +543,7 @@ export function ImageDropField({
       const file = item?.getAsFile()
       if (file) {
         event.preventDefault()
-        onChange(file)
+        onChange(markOwn([file])[0])
       }
     }
     window.addEventListener('paste', onPaste)
@@ -614,6 +615,7 @@ export function ImageDropField({
           every tab gets it, because every one of them is somewhere a
           picture this app already made might belong. */}
       <RecentStrip value={value} onPick={onChange} />
+      <RecentStrip source="uploads" value={value} onPick={onChange} />
 
       {hint && <div className={s.hint}>{hint}</div>}
     </div>

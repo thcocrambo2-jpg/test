@@ -1,7 +1,7 @@
 import { useRef, useState } from 'react'
-import { useRecentImages } from '@/api/queries'
-import type { MediaItem } from '@/api/types'
+import { useRecentImages, useRecentUploads } from '@/api/queries'
 import { useToast } from '@/components/ui'
+import { markOwn } from '@/lib/ownFiles'
 import { cx, fileName } from '@/lib/util'
 import s from './recent.module.css'
 
@@ -21,12 +21,49 @@ import s from './recent.module.css'
  * narrowed listing rather than filtering the answer here, because a page of
  * everything taken on a video tab is mostly clips — and a clip is not
  * something an image input can take.
+ *
+ * `source="uploads"` is the second row under it: the user's own pictures
+ * that earlier runs were given, newest first, so a photo used yesterday is
+ * one click away instead of a trip through a file picker. Same tiles, same
+ * picking; only the list differs — see sources.py for what is on it.
  */
+
+/** One tile, whichever list it came from. */
+interface Tile {
+  id: string
+  url: string
+  thumbUrl: string
+  title: string
+}
+
+const HEADINGS = { generations: 'Recent generations', uploads: 'Recent uploads' }
+
+function useTiles(source: 'generations' | 'uploads'): Tile[] {
+  // Both hooks every render, as hooks must be; each strip reads its own.
+  const generations = useRecentImages()
+  const uploads = useRecentUploads()
+  if (source === 'uploads') {
+    return (uploads.data?.items ?? []).map((item) => ({
+      id: item.name,
+      url: item.url,
+      thumbUrl: item.thumbUrl,
+      title: `Uploaded, last used ${item.usedAt.replace('T', ' ')}`,
+    }))
+  }
+  return (generations.data?.items ?? []).map((item) => ({
+    id: item.id,
+    url: item.url,
+    // The 512px WebP, as everywhere else a thumbnail is drawn.
+    thumbUrl: item.thumbUrl ?? item.url,
+    title: item.prompt || item.path,
+  }))
+}
 export function RecentStrip({
   value,
   onPick,
   note = 'click one to reuse it',
   disabled = false,
+  source = 'generations',
 }: {
   /** What the field holds now, so the strip can light up the thumb it handed
    *  over — and stop lighting it up the instant something else is dropped,
@@ -41,8 +78,10 @@ export function RecentStrip({
   note?: string
   /** Shown but not clickable — a field that is full. */
   disabled?: boolean
+  /** Which list: what this app made, or what the user uploaded before. */
+  source?: 'generations' | 'uploads'
 }) {
-  const { data } = useRecentImages()
+  const items = useTiles(source)
   const toast = useToast()
   const [picked, setPicked] = useState<{ id: string; file: File } | null>(null)
   const [busy, setBusy] = useState<string | null>(null)
@@ -52,21 +91,23 @@ export function RecentStrip({
    * whichever one happened to finish last. */
   const inFlight = useRef(false)
 
-  const items = data?.items ?? []
   const held = Array.isArray(value) ? value : value ? [value] : []
   const activeId = picked && held.includes(picked.file) ? picked.id : null
 
-  async function pick(item: MediaItem) {
+  async function pick(item: Tile) {
     if (inFlight.current || disabled) return
     inFlight.current = true
     setBusy(item.id)
     try {
-      const file = await fileFromMedia(item)
+      const file = await fileFromUrl(item.url, fileName(item.id))
+      // Picked again, it is still the user's own: it stays on the list and
+      // moves to the front when this run is submitted.
+      if (source === 'uploads') markOwn([file])
       setPicked({ id: item.id, file })
       onPick(file)
     } catch {
-      // Ordinary, and worth saying: the gallery page in hand can name a file
-      // that has since been deleted from another tab, or from the disk.
+      // Ordinary, and worth saying: the list in hand can name a file that
+      // has since been deleted from another tab, or from the disk.
       toast('That picture could not be read — it may have been deleted.')
     } finally {
       inFlight.current = false
@@ -74,14 +115,14 @@ export function RecentStrip({
     }
   }
 
-  // Nothing yet made, or a licence with no Gallery feature to ask. Either way
-  // an empty strip is a row of chrome around nothing.
+  // Nothing yet made or uploaded, or a licence with no Gallery feature to
+  // ask. Either way an empty strip is a row of chrome around nothing.
   if (items.length === 0) return null
 
   return (
     <div className={s.wrap}>
       <div className={s.head}>
-        <span className={s.label}>Recent generations</span>
+        <span className={s.label}>{HEADINGS[source]}</span>
         <span className={s.note}>{note}</span>
       </div>
       <div className={s.strip}>
@@ -94,11 +135,10 @@ export function RecentStrip({
             onClick={() => void pick(item)}
             aria-pressed={item.id === activeId}
             aria-label={`Use ${fileName(item.id)}`}
-            title={item.prompt || item.path}
+            title={item.title}
           >
-            {/* The 512px WebP, as everywhere else a thumbnail is drawn. The
-                full-resolution file is fetched only when one is picked. */}
-            <img src={item.thumbUrl ?? item.url} alt="" loading="lazy" />
+            {/* The full-resolution file is fetched only when one is picked. */}
+            <img src={item.thumbUrl} alt="" loading="lazy" />
             {busy === item.id && (
               <span className={s.busy} aria-hidden>
                 <span className={s.spinner} />
@@ -111,7 +151,7 @@ export function RecentStrip({
   )
 }
 
-/** One generated file, as a File the form can submit.
+/** One listed file, as a File the form can submit.
  *
  *  Fetched and then re-uploaded on submit, rather than referenced by the path
  *  the server already has it under. That is a real cost — several megabytes
@@ -127,9 +167,9 @@ export function RecentStrip({
  *  `resolveUploads` names every upload after the *field* it came from — but a
  *  File has to be called something, and `krea2_00042_.png` is a better answer
  *  to that than a placeholder if it is ever shown. */
-async function fileFromMedia(item: MediaItem): Promise<File> {
-  const response = await fetch(item.url)
+async function fileFromUrl(url: string, name: string): Promise<File> {
+  const response = await fetch(url)
   if (!response.ok) throw new Error(`${response.status} ${response.statusText}`)
   const blob = await response.blob()
-  return new File([blob], fileName(item.id), { type: blob.type || 'image/png' })
+  return new File([blob], name, { type: blob.type || 'image/png' })
 }

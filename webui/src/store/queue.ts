@@ -99,6 +99,9 @@ interface QueueState {
    *  counting what arrives gives a list of files a number that only ever
    *  goes up when there is genuinely something new to show. */
   mediaRevision: number
+  /** Goes up on every accepted submit — the moment the server puts a run's
+   *  own uploads on the Recent uploads list, so the strip refetches then. */
+  submitRevision: number
   connect(): () => void
   submit(input: {
     schema: TabSchema
@@ -393,6 +396,7 @@ export const useQueue = create<QueueState>((set, get) => {
     activeByTab: {},
     presetRevision: {},
     mediaRevision: 0,
+    submitRevision: 0,
 
     connect() {
       let lastEvent = Date.now()
@@ -548,6 +552,7 @@ export const useQueue = create<QueueState>((set, get) => {
             ...state.jobs.filter((job) => job.id !== result.jobId),
           ]),
           activeByTab: { ...state.activeByTab, [schema.key]: result.jobId },
+          submitRevision: state.submitRevision + 1,
         }))
         return result.jobId
       } catch (error) {

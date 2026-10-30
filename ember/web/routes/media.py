@@ -10,6 +10,7 @@ absolute path ever crosses the wire.
 """
 
 import mimetypes
+import time
 from pathlib import Path
 
 from fastapi import APIRouter, Body, Depends, HTTPException, Query
@@ -21,7 +22,7 @@ from ember.generation import recipes
 from ember.generation import sources
 from ember.web import tabschema
 from ember.web.routes.common import (
-    require_auth, require_feature, _media_list,
+    require_auth, require_feature, _media_list, _source_url,
 )
 
 # The most files one bulk delete may name. A gallery page holds at most
@@ -71,6 +72,38 @@ def register(api: APIRouter) -> None:
         which is thumb_for()'s whole no-backfill policy.
         """
         return _send(path_id, thumb=True)
+
+    @api.get("/sources", dependencies=[Depends(require_auth)])
+    def recent_sources(limit: int = Query(default=24, ge=1, le=100)):
+        """The user's own uploads still kept, newest first.
+
+        What the "Recent uploads" strip under every image input lists.
+        Only pictures that came off the user's disk or clipboard — the
+        gallery and the pose library have strips of their own, see
+        sources.py. Not gated on the Gallery feature: these are the
+        user's own files, which every tab with an image input takes.
+        """
+        return {"items": [
+            {"name": name, "url": _source_url(name),
+             "thumbUrl": _source_url(name) + "/thumb",
+             "usedAt": time.strftime("%Y-%m-%dT%H:%M:%S",
+                                     time.localtime(at))}
+            for name, at in sources.recent_uploads(limit)
+        ]}
+
+    @api.get("/sources/{name}/thumb", dependencies=[Depends(require_auth)])
+    def source_thumb(name: str):
+        """A kept source's 512px WebP, for the Recent uploads strip.
+
+        A phone photo can be 30 MB, and a strip of two dozen of them over
+        the tunnel just to draw 64px tiles is the wrong trade. Contained
+        by sources.path() exactly as /sources/{name} is.
+        """
+        target = sources.thumb(name)
+        if target is None:
+            raise HTTPException(404, "No such file.")
+        return FileResponse(target, media_type=_media_type(target.name),
+                            headers={"Cache-Control": "private, max-age=86400"})
 
     @api.get("/sources/{name}", dependencies=[Depends(require_auth)])
     def source(name: str):
