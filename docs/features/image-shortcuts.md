@@ -1,6 +1,6 @@
 # Image input shortcuts
 
-The four ways a picture gets into an image field. For someone using the
+The five ways a picture gets into an image field. For someone using the
 app, and for someone changing `ImageDropField` or `ImagesField`.
 
 Image inputs appear on **✨ Krea2 Edit** and **🔷 Krea2 V2 Edit** (a
@@ -8,11 +8,11 @@ source image, plus an optional second reference), on **🎬 Video
 (Wan 2.2)** and on **🎥 MiniMax I2V** (a start frame). Every one of them
 is the same component,
 [`webui/src/components/fields/index.tsx`](../../webui/src/components/fields/index.tsx),
-so every one of them takes all four routes in.
+so every one of them takes all five routes in.
 
 **🧩 Qwen 2.1 Reference** has the one multi-picture input, `ImagesField`
 ([`webui/src/components/fields/ImagesField`](../../webui/src/components/fields/ImagesField/index.tsx)),
-for up to 10 numbered references. It takes the same four routes, several
+for up to 10 numbered references. It takes the same five routes, several
 pictures at a time — see [below](#several-pictures-at-once).
 
 ## Click, drop, paste
@@ -61,6 +61,36 @@ A second click while the first fetch is still in flight is guarded, so
 the field cannot end up holding whichever request happened to finish
 last.
 
+## Recent uploads
+
+A second strip sits under the first: **Recent uploads**, the user's own
+pictures that earlier runs were given, newest first. It is the same
+`RecentStrip` with `source="uploads"`, so it picks, lights up and greys
+out exactly as the one above does.
+
+The photo you edited yesterday is otherwise a trip back through a file
+picker, and the app already has it: every submitted image is kept for its
+recipe (see [Source images](../architecture/gallery-and-recipes.md#source-images)).
+This strip lists the part of that store that was the user's own.
+
+- **Only the user's own files.** A gallery picture fed back in and a pose
+  from the library are kept too, and both have a strip of their own. So
+  the routes in that bring a user's file — click, drop, paste, and a pick
+  from this strip — mark it in
+  [`lib/ownFiles.ts`](../../webui/src/lib/ownFiles.ts), and the upload
+  says `origin=own`. Only those go on the list.
+- **Only what was submitted.** A picture is listed once a run has been
+  queued with it, not when it is dropped; the strip refetches after every
+  submit. Using one again moves it to the front.
+- **As long as its source is kept.** The list follows the source store's
+  sweep: a picture no recipe names any more, and not used for a day,
+  leaves the strip when it leaves the disk.
+- **512px thumbnails.** A phone photo can be 30 MB, so the strip draws
+  `/sources/<name>/thumb`, made on first ask; the full file is fetched
+  only when one is picked.
+- **Not gated on the Gallery feature**, unlike the strip above: these are
+  the user's own files, which every tab with an image input takes.
+
 ## Several pictures at once
 
 `ImagesField` takes every route the single input does, and adds rather
@@ -68,8 +98,8 @@ than replaces:
 
 - the file picker allows several files, and a drop or a paste can carry
   several;
-- a click in the recent strip adds that picture as the next number; the
-  strip says which ("click one to add it as image 4") and is greyed out
+- a click in either recent strip adds that picture as the next number;
+  the strip says which ("click one to add it as image 4") and is greyed out
   once the field is full;
 - a file that is not a picture is skipped, and one past the limit is
   refused; both are named in a warning inside the field, not a toast,

@@ -212,6 +212,15 @@ store, and the recipe records the copy's name in that image field's slot.
   recipe names goes too. A source kept for a run still in the queue has
   no recipe yet, so anything used in the last `GRACE` (a day) is left
   alone; `keep()` touches the file on every reuse.
+- **Also the Recent uploads list.** An upload the browser marks
+  `origin=own` (the user's own file, not a gallery pick or a library pose)
+  leaves a `.own` marker beside it, and `_keep_one` then writes the kept
+  name into `<output>/.sources/uploads.json` with when it was last used.
+  `GET /sources` lists those still on disk, newest first, and
+  `/sources/<name>/thumb` serves a 512px WebP from `.sources/thumbs/`,
+  made on first ask. The sweep skips both — neither is a name it keeps —
+  and drops a removed source's thumbnail and list entry with it. See
+  [Recent uploads](../features/image-shortcuts.md#recent-uploads).
 
 ### How the seed is captured
 
