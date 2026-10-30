@@ -30,6 +30,7 @@ asset groups it needs.
 | `krea_t2i` | 🎨 Krea2 | ~26 GB (Krea 2 base, shared) |
 | `krea_v2_t2i` | 🔶 Krea2 V2 | ~17 GB |
 | `zimage_t2i` | ⚡ Ember Lite — on no plan yet | ~20.8 GB |
+| `zimage_refine` | not a tab: the [⚡ Ember Lite refine](../features/ember-lite-refine.md) on the image tabs — on no plan yet | shared with `zimage_t2i` |
 | `qwen21_t2i` | 🌄 Qwen 2.1 — on no plan yet | ~17.3 GB, shared with `qwen21_edit` |
 | `anima_t2i` | 🌸 Anima — on no plan (non-commercial licence) | ~5.2 GB, plus the Qwen image VAE Krea uses |
 | `gallery` | 🖼️ Gallery | none |
@@ -62,7 +63,12 @@ A new tab lands on the internal `admin` plan first and is added to a
 public plan in `license-validator/src/plans.js` when it should be
 something a customer can buy.
 
-A tab can also be on no plan at all, which is where `zimage_t2i`,
+`zimage_refine` is the one key that is not a tab. It is an add-on
+(`features.ADDONS`): it switches the refine section on across the image
+tabs through `Field.feature`, and a licence without it never sees the
+section — see [Ember Lite refine](../features/ember-lite-refine.md#licensing).
+
+A tab can also be on no plan at all, which is where `zimage_t2i`, `zimage_refine`,
 `qwen21_t2i`, `qwen21_edit`, `qwen_edit_2511` and `anima_t2i` are. A key gets one through
 `features_extra` (`npm run issue-key -- --key <key> --features-extra
 zimage_t2i,qwen21_t2i,qwen21_edit --update`), and its row in the `features` collection is `enabled: false`, so neither `/v1/plans` nor the Telegram

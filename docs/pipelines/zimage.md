@@ -128,6 +128,10 @@ white and resizes it with LANCZOS before the upload.
 The start image is kept with the run's recipe, like every other tab's
 upload; a preset stores Denoise but never the picture.
 
+The other image tabs run this same pass over their own results, at 0.25,
+from their **⚡ Ember Lite refine** section — see
+[Ember Lite refine](../features/ember-lite-refine.md).
+
 ## The upscale pass
 
 With **Upscale 1.5x** ticked, the decoded image goes through two more

@@ -23,13 +23,16 @@ validation rules — is documented in
   that tab offers. The first model is the tab's default. An id may appear
   in any number of features.
 
-Twelve features have a `feature_assets` entry: `krea_t2i`, `krea_edit`,
-`krea_v2_t2i`, `krea_v2_edit`, `krea_edit_v2`, `zimage_t2i`, `qwen21_t2i`,
-`qwen21_edit`, `qwen_edit_2511`, `anima_t2i`, `minimax_i2v` and
-`minimax_t2v`.
+Thirteen features have a `feature_assets` entry: `krea_t2i`, `krea_edit`,
+`krea_v2_t2i`, `krea_v2_edit`, `krea_edit_v2`, `zimage_t2i`,
+`zimage_refine`, `qwen21_t2i`, `qwen21_edit`, `qwen_edit_2511`,
+`anima_t2i`, `minimax_i2v` and `minimax_t2v`.
 
 `zimage_t2i` lists one model, `z-image-turbo-bf16`, and LoRAs trained
-for Z-Image; the Krea LoRAs do not load on it, so none are shared. An
+for Z-Image; the Krea LoRAs do not load on it, so none are shared.
+`zimage_refine`, the [⚡ Ember Lite refine](../features/ember-lite-refine.md)
+on the image tabs, lists the same model and no LoRAs: the refine runs with
+none, and its first model is the one it runs. An
 empty `loras` list is valid on every feature; the at-least-one rule is
 for `models` only.
 

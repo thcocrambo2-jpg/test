@@ -30,6 +30,7 @@ For someone with the app in front of them.
 | [Prompt undo / redo](features/undo-redo.md) | The four cases, and why the buttons exist |
 | [Image input shortcuts](features/image-shortcuts.md) | Click, drop, paste, and the recent-generations strip |
 | [Pose library](features/pose-library.md) | Picking a pose for Qwen Edit 2511, and publishing a pose pack |
+| [Ember Lite refine](features/ember-lite-refine.md) | A Z-Image realism pass over every result of the image tabs, and its prompt |
 
 ## The models
 

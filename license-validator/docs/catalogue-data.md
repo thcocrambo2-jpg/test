@@ -123,6 +123,10 @@ the list once its record exists:
 npm run assets -- --feature zimage_t2i --add-lora <id>
 ```
 
+`zimage_refine` (the ⚡ Ember Lite refine on the image tabs, not a tab of
+its own) lists the same model, `z-image-turbo-bf16`, and no LoRAs: the
+refine runs the first model in its list, with none.
+
 An empty `loras` list is valid too: `idListProblems()` accepts it, and
 only `models` has the at-least-one rule.
 
