@@ -44,6 +44,11 @@
   .tab { color:var(--dim); font-size:12px; }
   .toggles { display:flex; gap:10px; font-size:12px; }
   .toggles label { display:flex; gap:4px; align-items:center; cursor:pointer; }
+  .meta select { width:100%; padding:4px 6px; }
+  .meta select.empty { border-color:var(--accent); color:var(--accent); }
+  .tags { display:flex; flex-wrap:wrap; gap:4px; }
+  .tags button { font-size:11px; padding:2px 7px; border-radius:99px; color:var(--dim); }
+  .tags button.on { color:#111; background:var(--pub); border-color:var(--pub); }
   .actions { display:flex; gap:6px; }
   .actions button { padding:3px 8px; font-size:12px; }
   .empty { color:var(--dim); padding:40px; text-align:center; }
@@ -60,6 +65,8 @@
   <span class="count" id="count"></span>
   <span class="spacer"></span>
   <select id="fTab"><option value="">Every tab</option></select>
+  <select id="fCat"><option value="">Every category</option></select>
+  <select id="fTag"><option value="">Any tag</option></select>
   <select id="fState">
     <option value="">Everything</option>
     <option value="enabled">For customers</option>
@@ -67,6 +74,7 @@
     <option value="public">On the showcase</option>
     <option value="private">Not on the showcase</option>
   </select>
+  <button id="autofile" title="File every entry that has no category yet, from its prompt">Auto-file uncategorised</button>
   <button id="reload" title="Read the index from R2 again">Reload</button>
 </header>
 <main>
@@ -104,6 +112,9 @@
 const $ = (id) => document.getElementById(id)
 let entries = []
 let labels = {}
+let categories = []
+let tags = []
+const catLabel = (key) => categories.find((c) => c.key === key)?.label || 'Uncategorised'
 const selected = new Set()
 
 async function call(path, body, raw) {
@@ -137,6 +148,10 @@ async function load(reload) {
     const data = await call('/api/state' + (reload ? '?reload=1' : ''))
     entries = data.entries
     labels = data.labels
+    categories = data.categories
+    tags = data.tags
+    fillFilter($('fCat'), 'Every category', [{ key: '-', label: 'Uncategorised' }, ...categories])
+    fillFilter($('fTag'), 'Any tag', [{ key: '-', label: 'No tags' }, ...tags])
     for (const id of [...selected]) if (!entries.some((e) => e.id === id)) selected.delete(id)
     const tabSelect = $('fTab')
     const current = tabSelect.value
@@ -150,6 +165,13 @@ async function load(reload) {
   }
 }
 
+function fillFilter(select, everything, items) {
+  const current = select.value
+  select.innerHTML = `<option value="">${everything}</option>` +
+    items.map((item) => `<option value="${item.key}">${escapeHtml(item.label)}</option>`).join('')
+  select.value = items.some((item) => item.key === current) ? current : ''
+}
+
 function escapeHtml(text) {
   return String(text ?? '').replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' })[c])
 }
@@ -157,20 +179,26 @@ function escapeHtml(text) {
 function visible() {
   const tab = $('fTab').value
   const state = $('fState').value
+  const cat = $('fCat').value
+  const tag = $('fTag').value
   return entries.filter((e) =>
     (!tab || e.tab === tab) &&
+    (!cat || (cat === '-' ? !e.category : e.category === cat)) &&
+    (!tag || (tag === '-' ? e.tags.length === 0 : e.tags.includes(tag))) &&
     (!state ||
       (state === 'enabled' && e.enabled) || (state === 'disabled' && !e.enabled) ||
       (state === 'public' && e.public) || (state === 'private' && !e.public)))
 }
 
-const filtered = () => Boolean($('fTab').value || $('fState').value)
+const filtered = () => Boolean($('fTab').value || $('fState').value || $('fCat').value || $('fTag').value)
 
 function render() {
   const shown = visible()
   const on = entries.filter((e) => e.enabled).length
   const pub = entries.filter((e) => e.public).length
-  $('count').textContent = `${entries.length} entries · ${on} for customers · ${pub} on the showcase`
+  const loose = entries.filter((e) => !e.category).length
+  $('count').textContent = `${entries.length} entries · ${on} for customers · ${pub} on the showcase` +
+    (loose ? ` · ${loose} uncategorised` : '') + (filtered() ? ` · ${shown.length} shown` : '')
   $('empty').hidden = shown.length > 0
   $('grid').innerHTML = ''
   for (const entry of shown) $('grid').append(card(entry))
@@ -211,11 +239,32 @@ function renderBulk(shown) {
     button.onclick = () => update([...selected], changes)
     bar.append(button)
   }
+  bar.append(picker('Set category…', categories, (key) => update([...selected], { category: key })))
+  bar.append(picker('Add tag…', tags, (key) => update([...selected], { addTags: [key] })))
+  bar.append(picker('Remove tag…', tags, (key) => update([...selected], { removeTags: [key] })))
+  const refile = document.createElement('button')
+  refile.textContent = 'Re-file from prompt'
+  refile.title = 'Replace the category and tags of the selected entries with what their prompts say'
+  refile.onclick = () => autofile([...selected], false)
+  bar.append(refile)
   const del = document.createElement('button')
   del.className = 'danger'
   del.textContent = `Delete ${n}`
   del.onclick = () => remove([...selected])
   bar.append(del)
+}
+
+/** A one-shot dropdown: pick an item and `then` runs; it resets itself. */
+function picker(prompt, items, then) {
+  const select = document.createElement('select')
+  select.innerHTML = `<option value="">${prompt}</option>` +
+    items.map((item) => `<option value="${item.key}">${escapeHtml(item.label)}</option>`).join('')
+  select.onchange = () => {
+    const key = select.value
+    select.value = ''
+    if (key) then(key)
+  }
+  return select
 }
 
 function card(entry) {
@@ -234,6 +283,13 @@ function card(entry) {
     <div class="meta">
       <div class="tab">${escapeHtml(entry.tabLabel)} · ${entry.width}×${entry.height}</div>
       <input type="text" class="title" placeholder="Title (optional)" value="${escapeHtml(entry.title)}">
+      <select class="category${entry.category ? '' : ' empty'}" title="Category">
+        <option value="">Uncategorised</option>
+        ${categories.map((c) => `<option value="${c.key}" ${c.key === entry.category ? 'selected' : ''}>${escapeHtml(c.label)}</option>`).join('')}
+      </select>
+      <div class="tags">
+        ${tags.map((t) => `<button class="tag${entry.tags.includes(t.key) ? ' on' : ''}" data-tag="${t.key}">${escapeHtml(t.label)}</button>`).join('')}
+      </div>
       <div class="toggles">
         <label><input type="checkbox" class="enabled" ${entry.enabled ? 'checked' : ''}> Customers</label>
         <label><input type="checkbox" class="public" ${entry.public ? 'checked' : ''}> Showcase</label>
@@ -254,8 +310,21 @@ function card(entry) {
   el.querySelector('.public').onchange = (event) => update([entry.id], { public: event.target.checked })
   const title = el.querySelector('.title')
   title.onchange = () => update([entry.id], { title: title.value })
+  el.querySelector('.category').onchange = (event) => update([entry.id], { category: event.target.value || null })
+  for (const button of el.querySelectorAll('.tag')) {
+    button.onclick = () => {
+      const key = button.dataset.tag
+      update([entry.id], entry.tags.includes(key) ? { removeTags: [key] } : { addTags: [key] })
+    }
+  }
   el.querySelector('.copy').onclick = async () => {
-    try { await navigator.clipboard.writeText(entry.token); toast('Token copied') } catch { toast('Could not reach the clipboard', true) }
+    try {
+      const { token } = await call(`/api/token/${entry.id}`)
+      await navigator.clipboard.writeText(token)
+      toast('Token copied')
+    } catch (error) {
+      toast(error.message || 'Could not reach the clipboard', true)
+    }
   }
   el.querySelector('.top').onclick = () => {
     const ids = entries.map((e) => e.id).filter((id) => id !== entry.id)
@@ -301,6 +370,16 @@ async function update(ids, changes) {
   } catch (error) {
     toast(error.message, true)
     load()
+  }
+}
+
+async function autofile(ids, onlyEmpty) {
+  try {
+    const data = await call('/api/autofile', { ids, onlyEmpty })
+    toast(data.changed ? `Filed ${data.changed} entr${data.changed === 1 ? 'y' : 'ies'}` : 'Nothing to change')
+    await load()
+  } catch (error) {
+    toast(error.message, true)
   }
 }
 
@@ -466,6 +545,9 @@ $('oneAdd').onclick = async () => {
 
 $('fTab').onchange = render
 $('fState').onchange = render
+$('fCat').onchange = render
+$('fTag').onchange = render
+$('autofile').onclick = () => autofile(null, true)
 $('reload').onclick = () => load(true)
 load()
 </script>

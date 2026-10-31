@@ -10,7 +10,13 @@ bucket, under one prefix:
 
     library/prompts/index.json            every entry, in display order
     library/prompts/<id>/thumb.webp       the grid picture
-    library/prompts/<id>/full.webp        the lightbox picture
+    library/prompts/<id>/full.webp        the full-size picture
+    library/prompts/<id>/token.txt        its settings token
+
+The token sits beside the pictures, not in the index: a token is several
+kilobytes and the index is read whole by every licence-server request, so
+keeping them apart means a request downloads only the tokens on the page
+it is answering (see the server's src/promptLibrary.js).
 
 The licence server reads the same index.json to answer pods
 (POST /v1/prompt-library), so the admin page, the showcase and every
@@ -19,14 +25,17 @@ customer's Prompt Library tab are three views of one file.
 An entry, as index.json holds it:
 
     {"id": "3f9c0a1b2d4e", "tab": "krea_v2_t2i", "title": "",
-     "token": "ember2.…;", "token_sha": "<sha256 of token>",
+     "token_sha": "<sha256 of token.txt>",
+     "category": "homemade", "tags": ["milf"],
      "enabled": false, "public": false, "created_at": "2026-10-31T…Z",
      "width": 1344, "height": 1728,
      "media": [{"kind": "image", "role": "thumb", "key": "…", …},
                {"kind": "image", "role": "full",  "key": "…", …}]}
 
 `enabled` puts it in the customers' tab, `public` on the showcase; the two
-are independent. `media` is a list, not two fixed fields, so a video and
+are independent. `category` is one key and `tags` a list of keys, both
+from categories.py, whose lists sit at the top of the index beside the
+entries. `media` is a list, not two fixed fields, so a video and
 its poster can join later without touching the entries already there.
 
 **Nothing but pixels leaves this machine.** Every picture is decoded and
@@ -191,6 +200,20 @@ def put_object(key: str, data: bytes, content_type: str) -> None:
         raise _refused(f"the upload of {key}", status, body)
 
 
+def get_text(key: str) -> str | None:
+    """One object as text, or None if it is not there."""
+    status, _, body = _call("GET", key)
+    if status == 404:
+        return None
+    if status != 200:
+        raise _refused(f"reading {key}", status, body)
+    return body.decode("utf-8")
+
+
+def token_key(entry_id: str) -> str:
+    return f"{PREFIX}/{entry_id}/token.txt"
+
+
 def delete_object(key: str) -> None:
     status, _, body = _call("DELETE", key)
     if status not in (200, 204, 404):
@@ -222,8 +245,13 @@ def load_index() -> tuple[list[dict], str | None]:
     return [entry for entry in entries if isinstance(entry, dict)], etag
 
 
-def save_index(entries: list[dict], etag: str | None) -> str | None:
+def save_index(entries: list[dict], etag: str | None,
+               meta: dict | None = None) -> str | None:
     """Write the index, refusing if someone else wrote it since `etag`.
+
+    `meta` is written beside the entries — the category and tag lists
+    (categories.index_meta()), so every reader takes their labels from
+    the file itself.
 
     A conditional PUT: If-Match the ETag that was read, or If-None-Match *
     for the very first save. Two admin pages open at once would otherwise
@@ -232,6 +260,7 @@ def save_index(entries: list[dict], etag: str | None) -> str | None:
     document = {
         "version": INDEX_VERSION,
         "updated_at": now_iso(),
+        **(meta or {}),
         "entries": entries,
     }
     data = json.dumps(document, ensure_ascii=False, indent=1).encode("utf-8")

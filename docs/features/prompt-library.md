@@ -4,10 +4,14 @@ The 🌟 Prompt Library tab: pictures made in this app, each with the settings
 token that made it. For someone using it, for the person curating it, and
 for someone changing how it works.
 
-A card is a picture. **Use** loads its token into the tab that made it,
-exactly as pasting the token into that tab's Settings token panel would,
-and the toast that says so carries Undo. The braces button copies the
-token. There is no prompt text on the card: a prompt only makes that
+A card is a picture, laid out in masonry columns in library order.
+**Use** loads its token into the tab that made it, exactly as pasting the
+token into that tab's Settings token panel would, and the toast that says
+so carries Undo. The braces button copies the token. Above the cards, a
+row of category chips (pick one, or All) and a row of tag chips (pick any
+number); each chip shows how many pictures it would give with the other
+choices kept. While a new choice loads, a thin line runs above the cards
+and the old ones dim. There is no prompt text on the card: a prompt only makes that
 picture together with every other setting, and the token carries all of
 them.
 
@@ -21,19 +25,60 @@ Nowhere but R2. There is no database row behind an entry and no copy on
 any pod. Everything is in the private builds bucket, under one prefix:
 
 ```
-library/prompts/index.json          every entry, in display order
+library/prompts/index.json          every entry, in display order, and the
+                                    category and tag lists
 library/prompts/<id>/thumb.webp     the grid picture (640 px long edge)
 library/prompts/<id>/full.webp      the full-size picture (2048 px long edge)
+library/prompts/<id>/token.txt      its settings token
 ```
 
-An entry in `index.json` holds the tab, an optional title, the token, two
-switches and its pictures:
+An entry in `index.json` holds the tab, an optional title, a category, its
+tags, two switches and its pictures:
 
 - `enabled` — shown to customers in the Prompt Library tab.
 - `public` — shown on the [showcase](#the-showcase).
 
 The two are independent. `media` is a list rather than two fixed fields so
 a video and its poster can join it later without touching what is there.
+
+The token is a file of its own, not a field in the index: a token is
+several kilobytes, and the licence server reads the index whole. A page
+of the library carries **no tokens** — only whether each card is usable
+on this licence — so switching category or tag is one small answer. The
+token is fetched when Use or Copy is pressed on that card
+(`POST /v1/prompt-library/token`, through the pod's
+`/api/v1/prompts/<id>/token`), and the server keeps every token it has
+read, since a token never changes once its entry exists.
+
+### Categories and tags
+
+Every picture has **one category** — the kind of scene — and any number of
+**tags** that cut across categories (a step-family scene can also be
+MILF). The lists are defined in
+[`scripts/prompt_library/categories.py`](../../scripts/prompt_library/categories.py)
+and written into `index.json` on every save, so the server, the app and
+the showcase all read their labels from the index.
+
+| Categories | |
+| --- | --- |
+| `homemade` Homemade couples | `public` Public & outdoor |
+| `pov` POV | `serial` TV serial & film |
+| `solo` Solo nudes & selfies | `studio` Studio productions |
+| `tease` Tease & lingerie | `group` Threesomes & group |
+| `stepfamily` Step-family | `kink` Kink & BDSM |
+| `cheating` Cheating & risky | `characters` Characters |
+
+Tags: `milf` MILF / 35+, `petite` Petite, `saree` Saree & traditional.
+
+**Keys are permanent** — entries store them. A label can be reworded in
+`categories.py` freely; the next admin save carries it everywhere.
+
+A picture is filed from the prompt inside its token, on your machine,
+by rules checked from the most specific situation to the most general (a
+named character, then step-family, then serial or studio style, then
+group, kink, cheating, outdoor, POV, other sex, solo nude, and tease for
+the rest). Only the keys are stored. They are rules, not judgement — the
+admin page shows the result on every card and either can be changed.
 
 Three things read that one file:
 
@@ -94,11 +139,16 @@ token beside it, or a token with no picture, is listed rather than guessed
 at.
 
 **New entries start switched off and not public.** Nothing reaches a
-customer until you tick it.
+customer until you tick it. Each is filed under a category and tags from
+its prompt as it arrives.
 
 **Everything else** is on the cards: the *Customers* and *Showcase*
-switches, a title, Copy token, To front, Delete. Select several to switch
-or delete them in one go. Drag cards to set the order customers see (with
+switches, a title, the category, the three tags, Copy token, To front,
+Delete. Select several to switch them, set their category, add or remove
+a tag, re-file them from their prompts, or delete them in one go. The
+filters at the top narrow by tab, state, category (including
+*Uncategorised*) and tag. **Auto-file uncategorised** files every entry
+that has no category yet and leaves hand-set ones alone. Drag cards to set the order customers see (with
 no filter on). Delete takes the entry out of the index first and then
 removes its pictures, so a failure halfway leaves an unreachable object,
 never an entry with a missing picture.
@@ -137,7 +187,8 @@ codes lock the page until it is restarted.
 What a client can get from it:
 
 - only entries that are on **and** public;
-- a picture, the tab's name and the title — the entries are trimmed to
+- a picture, the tab's name, the title, the category and tags (with the
+  same category and tag chips as the app) — the entries are trimmed to
   those fields before they leave the process, so **no token or prompt is
   ever sent**, and the pictures carry no metadata;
 - picture links that load straight from R2 (not through your upload

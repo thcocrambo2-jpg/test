@@ -539,13 +539,17 @@ export interface PromptCard {
   /** The feature key of the tab that made it. */
   tab: string
   title: string | null
+  /** One category key, and any number of tag keys. */
+  category: string | null
+  tags: string[]
   width: number | null
   height: number | null
   /** Signed R2 links, good for at least five hours. */
   thumb: string
   full: string
-  /** The settings token, or null when this licence does not have the tab. */
-  token: string | null
+  /** Whether this licence has the card's tab, so Use and Copy can fetch
+   *  its token (getPromptToken). A page never carries tokens. */
+  usable: boolean
 }
 
 export interface PromptPage {
@@ -555,11 +559,24 @@ export interface PromptPage {
   limit: number
   /** Entries per tab across the whole library, for the filter. */
   tabs: Record<string, number>
+  /** The filters' rows, each counted under the other filters chosen. Only
+   *  rows with something behind them, plus whichever are chosen. */
+  categories: PromptFacet[]
+  tags: PromptFacet[]
   error: string | null
+}
+
+export interface PromptFacet {
+  key: string
+  label: string
+  count: number
 }
 
 export interface PromptQuery {
   tab?: string
+  category?: string
+  /** Comma-separated; a card must carry every one. */
+  tags?: string
   skip?: number
   limit?: number
 }
@@ -659,6 +676,8 @@ export interface ApiClient {
     token: Record<string, unknown>,
   ): Promise<{ values: Record<string, unknown>; notes: string[] }>
   getPrompts(query: PromptQuery): Promise<PromptPage>
+  /** One library card's settings token, fetched when Use or Copy is pressed. */
+  getPromptToken(id: string): Promise<string>
   getRecipe(pathId: string): Promise<{ recipe: StoredRecipe | null; canLoad?: boolean }>
   getAutoPromptConfig(tabKey: string): Promise<AutoPromptConfig>
   /** Begin writing a prompt for this tab. Answers at once; the writing

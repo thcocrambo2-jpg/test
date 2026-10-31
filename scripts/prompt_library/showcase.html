@@ -16,6 +16,8 @@
   nav { display:flex; flex-wrap:wrap; gap:8px; padding:12px clamp(16px, 4vw, 48px) 20px; position:sticky; top:0; background:linear-gradient(var(--bg) 75%, #0b0c1000); z-index:2; }
   nav button { font:inherit; font-size:13px; padding:6px 14px; border-radius:99px; border:1px solid var(--line); background:transparent; color:var(--dim); cursor:pointer; }
   nav button.on { color:#111; background:var(--accent); border-color:var(--accent); }
+  nav button .n { margin-left:6px; opacity:.6; font-variant-numeric:tabular-nums; }
+  nav .gap { flex-basis:100%; height:0; }
   main { columns:4 260px; column-gap:14px; padding:0 clamp(16px, 4vw, 48px) 64px; }
   figure { margin:0 0 14px; break-inside:avoid; position:relative; border-radius:12px; overflow:hidden; background:#14151b; cursor:zoom-in; }
   figure img { display:block; width:100%; height:auto; transition:transform .4s ease; }
@@ -52,7 +54,8 @@
 <script>
 const $ = (id) => document.getElementById(id)
 let all = []
-let tab = ''
+let category = ''
+const chosenTags = new Set()
 let shown = []
 let at = -1
 
@@ -63,23 +66,60 @@ async function load() {
   if (response.status === 401) return location.reload()
   const data = await response.json()
   all = data.entries || []
-  const tabs = [...new Set(all.map((e) => e.tab).filter(Boolean))]
-  $('tabs').hidden = tabs.length < 2
-  $('tabs').innerHTML = ''
-  for (const value of ['', ...tabs]) {
-    const button = document.createElement('button')
-    button.append(text(value || 'Everything'))
-    button.onclick = () => { tab = value; render() }
-    button.dataset.tab = value
-    $('tabs').append(button)
-  }
   render()
 }
 
+/* One chip per category (one at a time) and per tag (any number), each with
+ * how many pictures it would give under the other choices. */
+function chips() {
+  const nav = $('tabs')
+  nav.innerHTML = ''
+  const withTags = all.filter((e) => [...chosenTags].every((t) => e.tags.includes(t)))
+  const cats = [...new Set(all.map((e) => e.category).filter(Boolean))]
+  const add = (label, count, on, onClick) => {
+    const button = document.createElement('button')
+    button.append(text(label))
+    if (count !== null) {
+      const n = document.createElement('span')
+      n.className = 'n'
+      n.append(text(count))
+      button.append(n)
+    }
+    button.classList.toggle('on', on)
+    button.onclick = onClick
+    nav.append(button)
+  }
+  add('Everything', null, !category, () => { category = ''; render() })
+  for (const value of cats) {
+    const count = withTags.filter((e) => e.category === value).length
+    if (count || value === category) add(value, count, value === category, () => { category = value === category ? '' : value; render() })
+  }
+  const inCategory = all.filter((e) => !category || e.category === category)
+  const tags = [...new Set(all.flatMap((e) => e.tags))]
+  if (tags.length) {
+    const gap = document.createElement('span')
+    gap.className = 'gap'
+    nav.append(gap)
+  }
+  for (const value of tags) {
+    const others = [...chosenTags].filter((t) => t !== value)
+    const count = inCategory.filter((e) => e.tags.includes(value) && others.every((t) => e.tags.includes(t))).length
+    if (count || chosenTags.has(value)) {
+      add(value, count, chosenTags.has(value), () => {
+        if (chosenTags.has(value)) chosenTags.delete(value)
+        else chosenTags.add(value)
+        render()
+      })
+    }
+  }
+  nav.hidden = cats.length === 0 && tags.length === 0
+}
+
 function render() {
-  shown = all.filter((e) => !tab || e.tab === tab)
+  shown = all.filter((e) =>
+    (!category || e.category === category) && [...chosenTags].every((t) => e.tags.includes(t)))
   $('sub').textContent = `${shown.length} picture${shown.length === 1 ? '' : 's'}`
-  for (const button of $('tabs').children) button.classList.toggle('on', button.dataset.tab === tab)
+  chips()
   $('empty').hidden = shown.length > 0
   const grid = $('grid')
   grid.innerHTML = ''
@@ -93,7 +133,7 @@ function render() {
     const caption = document.createElement('figcaption')
     const label = document.createElement('span')
     label.className = 'tab'
-    label.append(text(entry.tab))
+    label.append(text(entry.category || entry.tab))
     caption.append(label)
     if (entry.title) caption.append(text(' · ' + entry.title))
     figure.append(img, caption)
@@ -106,7 +146,7 @@ function open(index) {
   at = (index + shown.length) % shown.length
   const entry = shown[at]
   $('box').querySelector('img').src = entry.full
-  $('cap').textContent = [entry.tab, entry.title].filter(Boolean).join(' · ')
+  $('cap').textContent = [entry.category || entry.tab, ...entry.tags, entry.title].filter(Boolean).join(' · ')
   $('box').classList.add('open')
 }
 const close = () => { $('box').classList.remove('open'); at = -1 }

@@ -20,7 +20,9 @@ What it does, all against R2 (see store.py — there is no other copy):
     is exactly what Gallery's zip and auto-download write.
 
 A new upload starts **disabled and not public**. Nothing reaches a
-customer until you switch it on here.
+customer until you switch it on here. It is filed under a category and
+tags from its prompt as it arrives (categories.py); Auto-file does the
+same for entries already in the library, and both can be changed by hand.
 """
 
 from __future__ import annotations
@@ -31,10 +33,12 @@ import io
 import json
 import threading
 import zipfile
+from concurrent.futures import ThreadPoolExecutor
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path, PurePosixPath
 from urllib.parse import unquote, urlparse
 
+import categories
 import store
 
 HERE = Path(__file__).resolve().parent
@@ -54,15 +58,60 @@ class Library:
         self.lock = threading.Lock()
         self.entries: list[dict] = []
         self.etag: str | None = None
+        # Tokens by entry id. A token never changes once its entry exists,
+        # so one read of token.txt is good for the life of the process.
+        self.tokens: dict[str, str] = {}
         self.reload()
+        self._move_tokens_out()
 
     def reload(self) -> None:
         with self.lock:
             self.entries, self.etag = store.load_index()
 
+    def _move_tokens_out(self) -> None:
+        """One-time: an index written before tokens had files of their own.
+
+        Each entry still carrying `token` gets its token.txt, then the
+        field is dropped from the index in one save. A run that stops
+        halfway leaves the rest for the next start, and a token.txt
+        written twice is the same bytes.
+        """
+        with self.lock:
+            carrying = [e for e in self.entries if isinstance(e.get("token"), str)]
+        if not carrying:
+            return
+        print(f"Moving {len(carrying)} tokens out of the index into token.txt files…",
+              flush=True)
+
+        def write(entry):
+            store.put_object(store.token_key(entry["id"]),
+                             entry["token"].encode("utf-8"), "text/plain; charset=utf-8")
+            return entry["id"], entry["token"]
+
+        with ThreadPoolExecutor(max_workers=16) as pool:
+            moved = dict(pool.map(write, carrying))
+        with self.lock:
+            for entry in self.entries:
+                if entry.get("id") in moved:
+                    self.tokens[entry["id"]] = entry.pop("token")
+            self._save()
+        print(f"Moved {len(moved)} tokens.", flush=True)
+
+    def token(self, entry_id: str) -> str:
+        """An entry's token, from memory or its token.txt."""
+        cached = self.tokens.get(entry_id)
+        if cached is not None:
+            return cached
+        text = store.get_text(store.token_key(entry_id))
+        if text is None:
+            raise store.StoreError(f"Entry {entry_id} has no token.txt.")
+        self.tokens[entry_id] = text
+        return text
+
     def _save(self) -> None:
         try:
-            self.etag = store.save_index(self.entries, self.etag)
+            self.etag = store.save_index(self.entries, self.etag,
+                                         categories.index_meta())
         except store.Conflict:
             self.entries, self.etag = store.load_index()
             raise
@@ -74,7 +123,17 @@ class Library:
         raise store.StoreError("No such entry (reload the page).")
 
     def update(self, ids: list[str], changes: dict) -> list[dict]:
-        """Apply the same switches to every id, in one save."""
+        """Apply the same changes to every id, in one save.
+
+        `category` sets it (null clears it); `addTags` and `removeTags`
+        change tags without touching the others, so a bulk "add MILF"
+        cannot wipe the Petite an entry already had.
+        """
+        category = changes.get("category", ...)
+        if category not in (..., None) and category not in categories.CATEGORY_KEYS:
+            raise store.StoreError(f"Unknown category {category!r}.")
+        add = [tag for tag in changes.get("addTags") or [] if tag in categories.TAG_KEYS]
+        remove = set(changes.get("removeTags") or [])
         with self.lock:
             entries = [self.find(entry_id) for entry_id in ids]
             for entry in entries:
@@ -83,8 +142,43 @@ class Library:
                         entry[name] = bool(changes[name])
                 if "title" in changes:
                     entry["title"] = str(changes["title"] or "").strip()[:120]
+                if category is not ...:
+                    entry["category"] = category
+                if add or remove:
+                    tags = [tag for tag in entry.get("tags") or [] if tag not in remove]
+                    tags += [tag for tag in add if tag not in tags]
+                    entry["tags"] = [tag for tag in categories.TAG_KEYS if tag in tags]
             self._save()
             return entries
+
+    def autofile(self, ids: list[str] | None, only_empty: bool) -> int:
+        """File entries from their prompts, in one save; how many changed.
+
+        `ids` None means every entry. `only_empty` leaves alone anything
+        that already has a category, which is what keeps a hand correction
+        from being undone by the next Auto-file.
+        """
+        with self.lock:
+            wanted = set(ids) if ids is not None else None
+            todo = [entry["id"] for entry in self.entries
+                    if (wanted is None or entry.get("id") in wanted)
+                    and not (only_empty and entry.get("category"))]
+        # Read outside the lock: a cold start may have to fetch every token.
+        with ThreadPoolExecutor(max_workers=16) as pool:
+            filed = dict(zip(todo, pool.map(
+                lambda entry_id: categories.for_token(self.token(entry_id)), todo)))
+        changed = 0
+        with self.lock:
+            for entry in self.entries:
+                if entry.get("id") not in filed:
+                    continue
+                category, tags = filed[entry["id"]]
+                if (category, tags) != (entry.get("category"), entry.get("tags") or []):
+                    entry["category"], entry["tags"] = category, tags
+                    changed += 1
+            if changed:
+                self._save()
+        return changed
 
     def reorder(self, ids: list[str]) -> None:
         with self.lock:
@@ -111,6 +205,8 @@ class Library:
             for item in entry.get("media") or []:
                 if isinstance(item, dict) and item.get("key"):
                     store.delete_object(item["key"])
+            store.delete_object(store.token_key(entry["id"]))
+            self.tokens.pop(entry["id"], None)
 
     def add(self, picture: bytes, token_text: str, title: str = "") -> dict:
         """One picture + token in: checked, cleaned, uploaded, indexed."""
@@ -121,6 +217,8 @@ class Library:
                 return {"skipped": "already in the library"}
         encoded = store.pictures(picture)
         entry_id = store.new_id()
+        store.put_object(store.token_key(entry_id), token.encode("utf-8"),
+                         "text/plain; charset=utf-8")
         entry_media = []
         for role in ("thumb", "full"):
             data_bytes, width, height = encoded[role]
@@ -130,12 +228,14 @@ class Library:
                                 "width": width, "height": height,
                                 "bytes": len(data_bytes)})
         full = encoded["full"]
+        category, tags = categories.for_token(token)
         entry = {
             "id": entry_id,
             "tab": data["tab"],
             "title": title.strip()[:120],
-            "token": token,
             "token_sha": sha,
+            "category": category,
+            "tags": tags,
             "enabled": False,
             "public": False,
             "created_at": store.now_iso(),
@@ -149,6 +249,7 @@ class Library:
             if any(row.get("token_sha") == sha for row in self.entries):
                 for item in entry_media:
                     store.delete_object(item["key"])
+                store.delete_object(store.token_key(entry_id))
                 return {"skipped": "already in the library"}
             self.entries.insert(0, entry)
             try:
@@ -156,7 +257,9 @@ class Library:
             except store.StoreError:
                 for item in entry_media:
                     store.delete_object(item["key"])
+                store.delete_object(store.token_key(entry_id))
                 raise
+            self.tokens[entry_id] = token
         return {"entry": entry}
 
 
@@ -200,8 +303,9 @@ def wire(entry: dict, labels: dict[str, str]) -> dict:
     full = store.media(entry, "full")
     return {
         **{name: entry.get(name) for name in (
-            "id", "tab", "title", "token", "enabled", "public", "created_at",
-            "width", "height")},
+            "id", "tab", "title", "enabled", "public", "created_at",
+            "width", "height", "category")},
+        "tags": entry.get("tags") or [],
         "tabLabel": labels.get(entry.get("tab", ""), entry.get("tab", "")),
         "thumb": store.signed_url(thumb["key"]) if thumb else None,
         "full": store.signed_url(full["key"]) if full else None,
@@ -255,13 +359,19 @@ class Handler(BaseHTTPRequestHandler):
         if path == "/":
             self.send(200, (HERE / "admin.html").read_bytes(),
                       "text/html; charset=utf-8")
+        elif path.startswith("/api/token/"):
+            try:
+                self.json(200, {"token": self.library.token(path.rsplit("/", 1)[1])})
+            except store.StoreError as exc:
+                self.json(404, {"error": str(exc)})
         elif path == "/api/state":
             if "reload" in (urlparse(self.path).query or ""):
                 self.library.reload()
             with self.library.lock:
                 entries = [wire(entry, self.labels)
                            for entry in self.library.entries]
-            self.json(200, {"entries": entries, "labels": self.labels})
+            self.json(200, {"entries": entries, "labels": self.labels,
+                            **categories.index_meta()})
         else:
             self.send(404, b"not found", "text/plain")
 
@@ -298,6 +408,12 @@ class Handler(BaseHTTPRequestHandler):
             elif path == "/api/delete":
                 self.library.delete([str(value) for value in body.get("ids") or []])
                 self.json(200, {"ok": True})
+            elif path == "/api/autofile":
+                ids = body.get("ids")
+                changed = self.library.autofile(
+                    [str(value) for value in ids] if isinstance(ids, list) else None,
+                    bool(body.get("onlyEmpty")))
+                self.json(200, {"changed": changed})
             elif path == "/api/order":
                 self.library.reorder([str(value) for value in body.get("ids") or []])
                 self.json(200, {"ok": True})

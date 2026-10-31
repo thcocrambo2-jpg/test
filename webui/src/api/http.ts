@@ -261,6 +261,10 @@ export const httpClient: ApiClient = {
     return { values: body.values, notes: body.notes ?? [] }
   },
 
+  async getPromptToken(id: string) {
+    return (await get<{ token: string }>(`/prompts/${encodeURIComponent(id)}/token`)).token
+  },
+
   getPrompts(query: PromptQuery) {
     const params = new URLSearchParams()
     for (const [key, value] of Object.entries(query)) {

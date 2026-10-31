@@ -15,7 +15,7 @@ What a client can and cannot get from it:
 
   * Only entries switched **on and public** in the admin page.
   * **Never a token or a prompt.** The entries are trimmed to a picture,
-    a tab name and a title before they leave this process, so nothing a
+    a tab name, a title, a category and tags before they leave this process, so nothing a
     browser could inspect carries a recipe — and the pictures themselves
     are metadata-free WebPs (store.py).
   * The pictures load straight from R2 through signed links that last
@@ -38,6 +38,7 @@ from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
 from urllib.parse import unquote, urlparse
 
+import categories
 import store
 
 HERE = Path(__file__).resolve().parent
@@ -61,6 +62,8 @@ class Showcase:
                 return self.cached[1]
         rows, _ = store.load_index()
         labels = store.tab_labels()
+        category_labels = dict(categories.CATEGORIES)
+        tag_labels = dict(categories.TAGS)
         shown = []
         for entry in rows:
             if not (entry.get("enabled") and entry.get("public")):
@@ -75,6 +78,9 @@ class Showcase:
                 "id": entry.get("id"),
                 "tab": labels.get(entry.get("tab", ""), ""),
                 "title": entry.get("title") or "",
+                "category": category_labels.get(entry.get("category") or "", ""),
+                "tags": [tag_labels[tag] for tag in entry.get("tags") or []
+                         if tag in tag_labels],
                 "width": entry.get("width"),
                 "height": entry.get("height"),
                 "thumb": store.signed_url(thumb["key"]),

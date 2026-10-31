@@ -1,9 +1,9 @@
 /* The prompt library.
  *
- * The card grid is auto-fill rather than a fixed column count, so the page
- * uses whatever width it is given and a card is never cut off by a number
- * chosen at build time. Pictures keep their own shape — cropping one would
- * hide the very thing the card is there to show. */
+ * Masonry: as many columns as the width allows (PromptLibrary's Masonry
+ * decides how many and which card goes where), each a stack of cards.
+ * Pictures keep their own shape — cropping one would hide the very thing
+ * the card is there to show. The plain grid is only the loading skeleton. */
 
 .filters {
   display: flex;
@@ -13,11 +13,118 @@
   margin-bottom: var(--s-4);
 }
 
+/* Category and tag chips: a row that wraps, each chip with its count. */
+.chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--s-2);
+  margin-bottom: var(--s-3);
+}
+
+.chipsSmall {
+  margin-bottom: var(--s-4);
+}
+
+.chip {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--s-2);
+  padding: var(--s-1) var(--s-3);
+  border: 1px solid var(--c-border);
+  border-radius: var(--r-full);
+  background: var(--c-panel);
+  color: var(--c-text-muted);
+  font: inherit;
+  font-size: var(--t-sm);
+  cursor: pointer;
+}
+
+.chipsSmall .chip {
+  font-size: var(--t-xs);
+}
+
+.chip:hover {
+  border-color: var(--c-border-strong);
+  color: var(--c-text);
+}
+
+.chipOn,
+.chipOn:hover {
+  border-color: var(--c-accent);
+  background: var(--c-accent-soft);
+  color: var(--c-text);
+}
+
+.chipCount {
+  color: var(--c-text-faint);
+  font-variant-numeric: tabular-nums;
+}
+
 .grid {
   display: grid;
   grid-template-columns: repeat(auto-fill, minmax(220px, 1fr));
   gap: var(--s-4);
   align-items: start;
+}
+
+/* While a filter's page loads: a thin running line above the cards (its
+ * height is kept when idle, so nothing below it jumps) and the old cards
+ * dimmed. */
+.loadingBar {
+  position: relative;
+  height: 3px;
+  margin-bottom: var(--s-3);
+  overflow: hidden;
+  border-radius: var(--r-full);
+  font-size: 0;
+}
+
+.loadingOn::after {
+  content: '';
+  position: absolute;
+  inset: 0 auto 0 0;
+  width: 35%;
+  border-radius: inherit;
+  background: var(--c-accent);
+  animation: library-loading 1s ease-in-out infinite;
+}
+
+@keyframes library-loading {
+  from {
+    transform: translateX(-100%);
+  }
+  to {
+    transform: translateX(300%);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .loadingOn::after {
+    animation: none;
+    width: 100%;
+    opacity: 0.6;
+  }
+}
+
+/* The gap is COLUMN_GAP in PromptLibrary.tsx; keep the two equal. */
+.masonry {
+  display: flex;
+  gap: var(--s-4);
+  align-items: flex-start;
+  transition: opacity var(--d-fast) var(--e-out);
+}
+
+.dimmed {
+  opacity: 0.45;
+  pointer-events: none;
+}
+
+.column {
+  flex: 1 1 0;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: var(--s-4);
 }
 
 .card {
@@ -31,11 +138,7 @@
 }
 
 .picture {
-  display: block;
-  padding: 0;
-  border: 0;
   background: var(--c-media-ground);
-  cursor: zoom-in;
 }
 
 .picture img {
@@ -84,23 +187,4 @@
   align-items: center;
   gap: var(--s-2);
   flex: none;
-}
-
-/* The full picture in the modal, as large as the window allows. */
-.full {
-  display: grid;
-  gap: var(--s-3);
-  justify-items: center;
-}
-
-.full img {
-  display: block;
-  max-width: 100%;
-  max-height: 75vh;
-  height: auto;
-  border-radius: var(--r-md);
-}
-
-.fullActions {
-  justify-self: end;
 }

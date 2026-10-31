@@ -70,13 +70,29 @@ def register(api: APIRouter) -> None:
                                        Depends(require_feature(
                                            features.Key.COMMUNITY_PROMPTS))])
     def prompt_library(tab: str = Query(default=""),
+                       category: str = Query(default=""),
+                       tags: str = Query(default=""),
                        skip: int = Query(default=0, ge=0),
                        limit: int = Query(default=24, ge=1, le=48),
                        force: bool = Query(default=False)):
-        page = prompts.library(tab=tab or None, skip=skip, limit=limit,
-                               force=force)
+        # `tags` is comma-separated: every one of them must be on a card.
+        page = prompts.library(tab=tab or None, category=category or None,
+                               tags=tuple(t for t in tags.split(",") if t),
+                               skip=skip, limit=limit, force=force)
         return {
             "prompts": [dataclasses.asdict(row) for row in page.prompts],
             "total": page.total, "skip": page.skip, "limit": page.limit,
-            "tabs": page.tabs, "error": page.error,
+            "tabs": page.tabs, "categories": list(page.categories),
+            "tags": list(page.tags), "error": page.error,
         }
+
+    @api.get("/prompts/{entry_id}/token",
+             dependencies=[Depends(require_auth),
+                           Depends(require_feature(
+                               features.Key.COMMUNITY_PROMPTS))])
+    def prompt_token(entry_id: str):
+        """One card's settings token, for its Use or Copy button."""
+        value, problem = prompts.token(entry_id)
+        if value is None:
+            raise HTTPException(502, problem)
+        return {"token": value}

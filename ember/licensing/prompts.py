@@ -7,10 +7,11 @@ to read or copy on its own: a prompt only makes that picture together with
 every other setting, and the token carries all of them.
 
 The library is curated by the operator and lives in R2. This module only
-reads it, through the licence server (POST /v1/prompt-library), which
-checks the key, serves only the entries switched on, signs a link to each
-picture, and leaves out the token of any entry whose tab this licence does
-not have. The pictures themselves go from R2 straight to the browser;
+reads it, through the licence server: POST /v1/prompt-library for a page
+— the entries switched on, a signed link to each picture, and whether
+each card is usable on this licence — and POST /v1/prompt-library/token
+for one card's token, fetched only when its Use or Copy is pressed. A
+page carries no tokens, which is what keeps switching category quick. The pictures themselves go from R2 straight to the browser;
 nothing here downloads one.
 
 Same shape as plans.py: a frozen dataclass carrying either rows or a short
@@ -42,18 +43,20 @@ FETCH_TIMEOUT = 12
 class Prompt:
     """One entry, as the tab renders it.
 
-    `token` is None for an entry whose tab this licence does not have: the
-    picture still shows, it just cannot be loaded.
+    `usable` is False for an entry whose tab this licence does not have:
+    the picture still shows, it just cannot be loaded.
     """
 
     id: str
     tab: str
     title: str | None
+    category: str | None
+    tags: tuple[str, ...]
     width: int | None
     height: int | None
     thumb: str
     full: str
-    token: str | None
+    usable: bool
 
 
 @dataclass(frozen=True)
@@ -63,8 +66,10 @@ class Library:
     `error` is None on success and a short human sentence otherwise, in
     which case `prompts` is empty — the same contract as
     plans.Catalogue, so the tab can render without checking which case
-    it got. `tabs` counts the entries per tab across the whole library,
-    for the filter.
+    it got. `tabs` counts the entries per tab across the whole library.
+    `categories` and `tags` are the filters' rows, {key, label, count},
+    each counted under the other filters chosen — see the server's
+    POST /v1/prompt-library.
     """
 
     prompts: tuple[Prompt, ...] = ()
@@ -72,6 +77,8 @@ class Library:
     skip: int = 0
     limit: int = 24
     tabs: dict[str, int] = field(default_factory=dict)
+    categories: tuple[dict, ...] = ()
+    tags: tuple[dict, ...] = ()
     error: str | None = None
 
 
@@ -86,8 +93,8 @@ def _size(value) -> int | None:
 def _prompt(raw: dict) -> Prompt | None:
     """One entry from the wire, or None if it is too broken to show.
 
-    An id, a tab and both picture links are the whole bar. A card with no
-    token still renders — that is the not-licensed case, not damage.
+    An id, a tab and both picture links are the whole bar. A card that is
+    not usable still renders — that is the not-licensed case, not damage.
     """
     if not isinstance(raw, dict):
         return None
@@ -97,21 +104,38 @@ def _prompt(raw: dict) -> Prompt | None:
     full = str(raw.get("full_url") or "").strip()
     if not (entry_id and tab and thumb and full):
         return None
-    token = raw.get("token")
     title = str(raw.get("title") or "").strip() or None
+    category = str(raw.get("category") or "").strip() or None
+    tags = raw.get("tags")
     return Prompt(
         id=entry_id,
         tab=tab,
         title=title,
+        category=category,
+        tags=tuple(str(tag) for tag in tags if isinstance(tag, str))
+        if isinstance(tags, list) else (),
         width=_size(raw.get("width")),
         height=_size(raw.get("height")),
         thumb=thumb,
         full=full,
-        token=token if isinstance(token, str) and token else None,
+        usable=raw.get("usable") is True,
     )
 
 
-def _fetch(tab, skip, limit) -> Library:
+def _rows(raw) -> tuple[dict, ...]:
+    """A filter's rows from the wire: {key, label, count}, well-formed only."""
+    if not isinstance(raw, list):
+        return ()
+    return tuple(
+        {"key": row["key"], "label": row["label"],
+         "count": row["count"] if isinstance(row.get("count"), int) else 0}
+        for row in raw
+        if isinstance(row, dict) and isinstance(row.get("key"), str)
+        and isinstance(row.get("label"), str)
+    )
+
+
+def _fetch(tab, category, tags, skip, limit) -> Library:
     """One trip to /v1/prompt-library, every failure turned into `error`."""
     if not LICENSE_API_URL or not LICENSE_KEY:
         return Library(
@@ -128,6 +152,10 @@ def _fetch(tab, skip, limit) -> Library:
     }
     if tab:
         payload["tab"] = tab
+    if category:
+        payload["category"] = category
+    if tags:
+        payload["tags"] = list(tags)
 
     try:
         status, body = server.post("/v1/prompt-library", payload, FETCH_TIMEOUT)
@@ -156,10 +184,13 @@ def _fetch(tab, skip, limit) -> Library:
         skip=skip, limit=limit,
         tabs={str(key): count for key, count in tabs.items()
               if isinstance(count, int)} if isinstance(tabs, dict) else {},
+        categories=_rows(body.get("categories")),
+        tags=_rows(body.get("tags")),
     )
 
 
-def library(tab: str | None = None, skip: int = 0, limit: int = 24,
+def library(tab: str | None = None, category: str | None = None,
+            tags: tuple[str, ...] = (), skip: int = 0, limit: int = 24,
             force: bool = False) -> Library:
     """One page of the library, from cache when it is fresh enough.
 
@@ -177,7 +208,8 @@ def library(tab: str | None = None, skip: int = 0, limit: int = 24,
       an empty page     caching "nothing here yet" would make an entry
                         just switched on look missing for five minutes.
     """
-    key = (tab, skip, limit)
+    tags = tuple(sorted(set(tags)))
+    key = (tab, category, tags, skip, limit)
 
     with _cache_lock:
         hit = _cache.get(key)
@@ -187,7 +219,7 @@ def library(tab: str | None = None, skip: int = 0, limit: int = 24,
     # Fetched outside the lock: this is a network call, and holding the
     # lock across it would make a slow server serialise every other
     # filter change behind it.
-    result = _fetch(tab, skip, limit)
+    result = _fetch(tab, category, tags, skip, limit)
 
     if result.error is None and result.prompts:
         with _cache_lock:
@@ -199,3 +231,26 @@ def library(tab: str | None = None, skip: int = 0, limit: int = 24,
                 _cache.clear()
                 _cache[key] = (time.time(), result)
     return result
+
+
+def token(entry_id: str) -> tuple[str | None, str | None]:
+    """One card's settings token, or (None, a short human reason).
+
+    Not cached here: it is asked for once per press of Use or Copy, and
+    the server keeps every token it has read.
+    """
+    if not LICENSE_API_URL or not LICENSE_KEY:
+        return None, "This build has no licence server to read the library from."
+    payload = {"license_key": LICENSE_KEY, "instance_id": server.instance_id(),
+               "id": entry_id}
+    try:
+        status, body = server.post("/v1/prompt-library/token", payload,
+                                   FETCH_TIMEOUT)
+    except Exception as exc:                # transport: DNS, refused, TLS
+        log.warning("Could not fetch a prompt library token (%s)", exc)
+        return None, f"Could not reach the server ({exc})."
+    value = body.get("token")
+    if status == 200 and body.get("ok") and isinstance(value, str) and value:
+        return value, None
+    return None, (body.get("message")
+                  or f"The server answered HTTP {status} for that card.")
