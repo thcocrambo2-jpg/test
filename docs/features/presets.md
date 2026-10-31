@@ -8,9 +8,9 @@ writes presets, and for someone changing how they apply.
 
 Picking a preset writes every control below it — model, steps, CFG,
 resolution, sampler, seed, batch count, the whole LoRA stack — and
-**leaves the prompt boxes alone.** That is the entire difference between
-a preset and a [prompt-library](prompt-library.md) card: same settings
-blob, same guarding, minus the words.
+**leaves the prompt boxes alone.** That is the difference between a
+preset and a settings token, which carries the words too — and is what a
+[prompt-library](prompt-library.md) card loads.
 
 Presets live on the licence server, so changing one changes it for every
 customer without shipping a binary. The pod's side is
@@ -57,8 +57,7 @@ one.
 
 🎥 MiniMax I2V and 🎞️ MiniMax T2V run one model over one LoRA list, so
 they share one preset list, filed under `minimax_i2v`. Both are
-generation tabs, so both read it and both have the save tickbox (without
-the publish one — there is no prompt library behind them). A MiniMax
+generation tabs, so both read it and both have the save tickbox. A MiniMax
 preset carries its `model`; ones saved before the tabs had a Model
 dropdown have none, which the licence server's `OPTIONAL_MODEL_TABS`
 accepts for this tab, and which leave the dropdown alone. One that names
@@ -70,7 +69,7 @@ saved from T2V carries an aspect ratio that I2V skips. See
 ## Ember Lite has a list of its own
 
 ⚡ Ember Lite reads and saves its own list, filed under `zimage_t2i`, with
-the save tickbox and no publish one, like MiniMax. An Ember Lite preset
+the save tickbox, like MiniMax. An Ember Lite preset
 carries the model, steps, CFG, resolution, resolution multiplier,
 sampler, the Upscale tick, seed, randomize, batch count and the LoRA
 stack. No preset is seeded for it, so the tab opens on its compiled
@@ -105,17 +104,15 @@ server's `PRESET_TABS`. See
 
 ## Only an admin can write one
 
-Same gesture as publishing a prompt, and the same rule behind it. An
-admin pod grows a `💾 Save these settings as a preset` checkbox next to
-the publish one, with an optional name box beside it. Tick it, press
-Generate: whatever the controls hold at that moment is saved and appears
-in the dropdown for every pod on its next start or 🔄. The box unticks
-itself when the run finishes, exactly like publishing.
+An admin pod grows a `💾 Save these settings as a preset` checkbox above
+Generate, with an optional name box beside it. Tick it, press Generate:
+whatever the controls hold at that moment is saved and appears in the
+dropdown for every pod on its next start or 🔄. The box unticks itself
+when the run finishes, so it cannot stay armed into the next generation.
 
-Unlike publishing, this one **reports back** — a first line on the status
-box saying `✅ Preset "Portrait · soft light" saved.` or why it did not.
-Prompt capture is silent because the customer was never told it happens;
-a preset is a box you deliberately ticked and are waiting on.
+It **reports back** — a first line on the status box saying
+`✅ Preset "Portrait · soft light" saved.` or why it did not. A preset is
+a box you deliberately ticked and are waiting on.
 
 The customer's half of the tab is read-only: the checkbox is hidden
 (their input list is fixed at build time, and a hidden checkbox sends
@@ -208,8 +205,8 @@ compiled values stay the floor — they are what the controls are built
 with, and what a pod that cannot reach the server keeps.
 
 Re-running the seed updates the settings and **never touches the two
-flags** — a preset you switched off stays off — the same `$set` /
-`$setOnInsert` split `seed-prompts` makes.
+flags** — a preset you switched off stays off: content is `$set`, the
+flags are `$setOnInsert`.
 
 ## What a preset costs at startup
 
@@ -223,13 +220,13 @@ every page load.
 
 ## Cross-pod safety
 
-Identical to the prompt library's, and the same code: an unknown model,
+Identical to a settings token's, and the same code: an unknown model,
 resolution or sampler leaves its control alone, a LoRA id the tab does
 not offer resets that slot to `None`, numbers are clamped into their
 slider's range, and a preset name that has since been disabled or
 renamed applies nothing rather than blanking the tab.
 
-One wrinkle worth knowing, shared with the library's **Use** button:
+One wrinkle worth knowing, shared with loading a settings token:
 applying a preset that names a *different* model fires the Model
 dropdown's own change handler, so Steps and CFG land on that model's
 variant defaults rather than the preset's. Everything else applies as
@@ -239,5 +236,6 @@ unaffected.
 
 ## Related
 
-- [prompt library](prompt-library.md) — the same blob, with the words.
+- [prompt library](prompt-library.md) — pictures and the settings tokens
+  that made them.
 - [the catalogue](../pipelines/catalogue.md) — why ids and not file names.

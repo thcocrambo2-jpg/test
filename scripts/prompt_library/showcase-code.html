@@ -1,0 +1,41 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="robots" content="noindex, nofollow">
+<title>Showcase</title>
+<style>
+  :root { color-scheme: dark; }
+  body { margin:0; min-height:100vh; display:grid; place-items:center; background:#0b0c10; color:#e8e8ec; font:15px/1.5 system-ui, sans-serif; }
+  form { display:grid; gap:12px; width:min(320px, 86vw); text-align:center; }
+  h1 { font-weight:600; font-size:20px; margin:0 0 4px; }
+  p { margin:0; color:#9a9caa; }
+  input { font:inherit; font-size:22px; letter-spacing:.3em; text-align:center; padding:10px; border-radius:10px; border:1px solid #2a2c36; background:#14151b; color:inherit; }
+  button { font:inherit; padding:10px; border-radius:10px; border:0; background:#f0b45a; color:#111; font-weight:600; cursor:pointer; }
+  .error { color:#f28b82; min-height:1.5em; }
+</style>
+</head>
+<body>
+<form id="form">
+  <h1>Showcase</h1>
+  <p>Enter the access code you were given.</p>
+  <input id="code" inputmode="numeric" autocomplete="one-time-code" autofocus>
+  <button>Open</button>
+  <div class="error" id="error"></div>
+</form>
+<script>
+document.getElementById('form').onsubmit = async (event) => {
+  event.preventDefault()
+  const response = await fetch('/api/code', {
+    method: 'POST',
+    headers: { 'content-type': 'application/json' },
+    body: JSON.stringify({ code: document.getElementById('code').value }),
+  })
+  if (response.ok) return location.reload()
+  const data = await response.json().catch(() => ({}))
+  document.getElementById('error').textContent = data.error || 'That did not work.'
+}
+</script>
+</body>
+</html>

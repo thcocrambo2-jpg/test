@@ -195,10 +195,10 @@ FEATURES = (
             needs=("minimax", "catalog")),
     Feature(Key.MINIMAX_T2V, "🎞️ MiniMax T2V",
             needs=("minimax", "catalog")),
-    # Reads a collection on the licence server, so it needs no weights of
-    # its own. It is only useful next to the tabs
-    # it loads prompts into (Krea2 and Krea2 V2) — the cards for a tab
-    # this licence does not grant still render, they just cannot be used.
+    # Reads the library through the licence server, so it needs no weights
+    # of its own. Its cards load into whichever tab made them; a card for
+    # a tab this licence does not grant still shows its picture, it just
+    # cannot be used.
     Feature(Key.COMMUNITY_PROMPTS, "🌟 Prompt Library", default=True),
     # Not a tab: the ⚡ Ember Lite refine section on the image tabs, which
     # re-renders every result with Z-Image. Z-Image's pipeline files

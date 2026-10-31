@@ -26,8 +26,8 @@ from ember.web.schema.fields import (
     _batch_field,
     _model_field,
     _model_negative,
+    _preset_save_fields,
     _refine_fields,
-    _save_fields,
     _seed_fields,
     _stack_slots,
     _triple_tail,
@@ -81,7 +81,7 @@ KREA2_V2_SCHEMA = TabSchema(
               "bool", False, group="post", preset="film_grain",
               wide=True),
         _batch_field(),
-        *_save_fields(),
+        *_preset_save_fields(),
         *_refine_fields(),
         Field("lora_slots", "LoRA stack", "repeat",
               repeat=_triple_tail(

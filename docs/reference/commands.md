@@ -199,7 +199,6 @@ npm run init-db          # create indexes — the serverless path never does
 npm run seed-catalog     # plans + features
 npm run seed-assets      # models, LoRAs, and what each Krea tab offers
 npm run seed-presets     # starting presets (needs seed-assets first)
-npm run seed-prompts     # starter prompts (needs seed-assets first)
 ```
 
 ---
@@ -318,6 +317,24 @@ python scripts\r2_upload_poses.py --dir tmp\pose-stage   # prints the publish li
 cd license-validator
 npm run library -- set poses --version 2 --key libraries/poses/v2/pack.tar --sha256 <hex> --size <bytes> --features qwen_edit_2511
 npm run library -- list
+```
+
+---
+
+### 11.4 The prompt library
+
+What it is and where it lives is in
+[Prompt library](../features/prompt-library.md); these are the commands.
+Both read their R2 keys from `license-validator\.env` — the write pair for
+the admin page, the read pair for the showcase.
+
+**PS**, from the repo root:
+
+```powershell
+python scripts\prompt_library\admin.py                  # http://127.0.0.1:7890
+python scripts\prompt_library\showcase.py               # http://127.0.0.1:7891, prints the code
+python scripts\prompt_library\showcase.py --code 4821   # your own code
+cloudflared tunnel --url http://127.0.0.1:7891          # a link for a remote client
 ```
 
 ## 12. Utilities and troubleshooting

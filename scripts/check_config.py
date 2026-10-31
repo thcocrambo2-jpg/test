@@ -68,10 +68,10 @@ The qualified names
 -------------------
 `QUALIFIED` is a second, separate section, looked up by module and
 attribute rather than searched for across `SOURCES`. It holds the tab keys
-that presets.py, prompts.py and handlers.py each restate for themselves.
+that presets.py and handlers.py each restate for themselves.
 They are recorded because Phase 3 rebuilds them from `features.Key`, and
-a tab key is a contract with stored data: `.recipes.jsonl`, the licence
-server's presets and prompt library are all filed under these exact
+a tab key is a contract with stored data: `.recipes.jsonl` and the
+licence server's presets are filed under these exact
 strings (context §5 rule 7). Its keys stay as they are written here even
 when the modules move; the tuple beside each one is where the name lives
 now.
@@ -135,8 +135,6 @@ QUALIFIED = {
     "presets.TAB_QWEN21_T2I": ("ember.licensing.presets", "TAB_QWEN21_T2I"),
     "presets.TAB_ANIMA": ("ember.licensing.presets", "TAB_ANIMA"),
     "presets.TAB_QWEN_EDIT": ("ember.licensing.presets", "TAB_QWEN_EDIT"),
-    "prompts.TAB_KREA2": ("ember.licensing.prompts", "TAB_KREA2"),
-    "prompts.TAB_KREA2_V2": ("ember.licensing.prompts", "TAB_KREA2_V2"),
     "handlers.KREA_T2I": ("ember.generation.handlers", "KREA_T2I"),
     "handlers.KREA_EDIT": ("ember.generation.handlers", "KREA_EDIT"),
     "handlers.KREA_V2_T2I": ("ember.generation.handlers", "KREA_V2_T2I"),

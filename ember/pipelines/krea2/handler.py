@@ -20,7 +20,6 @@ from ember.generation.loras import (
 )
 from ember.generation.runner import _png_bytes, _run_jobs
 from ember.licensing import presets
-from ember.licensing import prompts
 from ember.pipelines.common import edit_lora_available
 from ember.pipelines.krea2.workflow import build_edit_workflow
 from ember.pipelines.zimage.refine import refine_spec
@@ -29,7 +28,7 @@ from ember.pipelines.zimage.refine import refine_spec
 def _krea_settings(seed, randomize, steps, cfg, resolution, sampler, model,
                    batch_count, lora_slots, refine=False,
                    refine_denoise=0.25) -> dict:
-    """The Krea 2 tab's controls as the prompt library stores them.
+    """The Krea 2 tab's controls as a preset stores them.
 
     Deliberately the *UI* values, not the resolved job dict: what goes in
     here comes back out into these same controls on another pod, so the
@@ -59,9 +58,8 @@ def _krea_settings(seed, randomize, steps, cfg, resolution, sampler, model,
 
 
 def generate_single(prompt, negative, seed, randomize, steps, cfg, resolution,
-                    sampler, model, batch_count, publish, publish_title,
-                    save_preset, preset_name, refine, refine_denoise,
-                    refine_prompt, *lora_slots):
+                    sampler, model, batch_count, save_preset, preset_name,
+                    refine, refine_denoise, refine_prompt, *lora_slots):
     """First tab: run batch_count jobs on sequential seeds."""
     entry, error = _check_model(KREA_T2I, model)
     if error:
@@ -75,15 +73,6 @@ def generate_single(prompt, negative, seed, randomize, steps, cfg, resolution,
     settings = _krea_settings(seed, randomize, steps, cfg, resolution,
                               sampler, model, batch_count, lora_slots,
                               refine, refine_denoise)
-    # After the guard, before the work: a click that could never run does
-    # not belong in the library, but one that fails half way through a
-    # batch still had a recipe worth keeping. Returns instantly and
-    # cannot raise, and decides for itself whether this pod captures
-    # automatically or only on `publish` — see prompts.record.
-    prompts.record(
-        prompts.TAB_KREA2, prompt, negative or "", settings,
-        publish=publish, title=publish_title,
-    )
     notice = _save_preset(presets.TAB_KREA2, save_preset, preset_name, settings)
     base_seed = random.randint(0, 2**32 - 1) if randomize else int(seed)
     width, height = parse_resolution(resolution)

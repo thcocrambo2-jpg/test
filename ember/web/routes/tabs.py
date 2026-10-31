@@ -150,9 +150,6 @@ def _mount_tab(api: APIRouter, schema) -> None:
                     "preset": preset if settings is not None else None,
                     "presetValues": (schema.preset_values(settings)
                                      if settings is not None else None)}
-        if "settings" in body:
-            return {"values": schema.preset_values(body.get("settings") or {}),
-                    "applied": None}
         if "token" in body:
             # A settings token, already decoded by the browser — it is only
             # base32768 (base64url for an ember1 token) over deflate, which
@@ -166,7 +163,7 @@ def _mount_tab(api: APIRouter, schema) -> None:
             values, notes = schema.token_values(data)
             return {"values": values, "notes": notes, "applied": None}
         raise HTTPException(
-            400, "Send a preset name, a recipe, settings or a token.")
+            400, "Send a preset name, a recipe or a token.")
 
     @api.get("/tabs/%s/display" % key, dependencies=gate,
              name="display_" + key)

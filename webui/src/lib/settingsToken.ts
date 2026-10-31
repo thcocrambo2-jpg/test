@@ -36,7 +36,7 @@ import { saveBlob } from '@/lib/util'
  * even with no space, is plainly not part of it.
  *
  * What goes in is what a recipe records (`record` on the field): every
- * control by name, except the publish and save-preset tickboxes and the
+ * control by name, except the save-preset tickbox and its name and the
  * uploaded pictures, which are files and not settings. The LoRA stack goes in
  * by id rather than by slot, as `[id, weight]` for every LoRA that is
  * switched on, so a token outlives a LoRA being added to the tab's list. A

@@ -1,136 +1,154 @@
 # Prompt library
 
-The 🌟 Prompt Library tab: a catalogue of working recipes for the 🎨 Krea2
-and 🔶 Krea2 V2 tabs. For someone using it, for the person reviewing
-submissions, and for someone changing how capture works.
+The 🌟 Prompt Library tab: pictures made in this app, each with the settings
+token that made it. For someone using it, for the person curating it, and
+for someone changing how it works.
 
-Every card carries a prompt and the whole settings blob behind it.
-**Use** writes all of it into that tab's controls and switches to it.
-Two kinds of card:
+A card is a picture. **Use** loads its token into the tab that made it,
+exactly as pasting the token into that tab's Settings token panel would,
+and the toast that says so carries Undo. The braces button copies the
+token. There is no prompt text on the card: a prompt only makes that
+picture together with every other setting, and the token carries all of
+them.
 
-- **⭐ Official** — written by you, with `npm run prompts -- --add`.
-  Public the moment they exist.
-- **👥 Community** — captured from customers' own generations. **Private
-  on arrival**, and invisible until approved.
+A card for a tab this licence does not grant still shows its picture, with
+`🔒 Needs <tab>` instead of the buttons. What a tab you have not bought can
+make is exactly what is worth seeing.
 
-The pod's side is [`ember/licensing/prompts.py`](../../ember/licensing/prompts.py);
-the collection is `community_prompts` on the licence server.
+## Where it lives
 
-## Capture is silent, and deduplicated
+Nowhere but R2. There is no database row behind an entry and no copy on
+any pod. Everything is in the private builds bucket, under one prefix:
 
-`generate_single` in
-[`ember/pipelines/krea2/handler.py`](../../ember/pipelines/krea2/handler.py)
-and `generate_v2` in
-[`ember/pipelines/krea2_v2/handler.py`](../../ember/pipelines/krea2_v2/handler.py)
-call `prompts.record()` with what they were given, right after their
-validation guards and before any work. That call cannot slow generation
-down and cannot fail it: it fingerprints the recipe, drops it on a
-bounded queue, and one daemon thread does the HTTP. Every error on that
-path dies in a `debug` log — **nothing about this is ever shown to the
-customer.**
-
-### The fingerprint
-
-A sha256 over the prompt, the negative and every setting **except the
-seed, the 🎲 toggle and the batch count**. That exclusion is the point:
-with a random seed every click would otherwise look like a new prompt,
-and twenty re-rolls of one idea would be twenty requests and twenty rows.
-
-Those three values are still *stored*, so a loaded prompt arrives with
-the seed it was made with — they just do not decide whether two recipes
-are the same one.
-
-The pod remembers the last 500 fingerprints; the unique index on the
-server collapses whatever gets past that — a restart, a second pod on one
-key, two customers who typed the same thing.
-
-## Your own pods do not capture (`is_admin`)
-
-A licence marked `is_admin` behaves differently, and only here. It is a
-**role, not an entitlement**: it grants no tab and changes nothing about
-what a pod can generate.
-
-```bash
-# bash, in license-validator/
-npm run issue-key -- --name "Internal" --plan admin --seats 3 --admin
-npm run issue-key -- --key EMBER-XXXX-XXXX-XXXX --admin --update
-npm run issue-key -- --key EMBER-XXXX-XXXX-XXXX --no-admin --update
+```
+library/prompts/index.json          every entry, in display order
+library/prompts/<id>/thumb.webp     the grid picture (640 px long edge)
+library/prompts/<id>/full.webp      the full-size picture (2048 px long edge)
 ```
 
-On an admin pod **nothing is captured automatically.** Instead the 🎨
-Krea2 and 🔶 Krea2 V2 tabs grow a `⭐ Publish this prompt to the library`
-checkbox above Generate, off by default, with an optional card title next
-to it. Tick it, press Generate, and that prompt goes live as an **⭐
-official** card immediately — no review, because you are the reviewer.
-Untick it and nothing is stored at all.
+An entry in `index.json` holds the tab, an optional title, the token, two
+switches and its pictures:
 
-The box unticks itself once the run finishes, clearing the title with it:
-publishing is a per-image decision, so it cannot stay armed into the next
-generation by accident.
+- `enabled` — shown to customers in the Prompt Library tab.
+- `public` — shown on the [showcase](#the-showcase).
 
-That split exists so your own testing does not fill the review queue you
-are the one working through, and so an official prompt is something
-chosen rather than something collected.
+The two are independent. `media` is a list rather than two fixed fields so
+a video and its poster can join it later without touching what is there.
 
-Two details worth knowing:
+Three things read that one file:
 
-- The checkbox is **hidden, not disabled**, for customers. A greyed-out
-  "publish to the library" box would tell them their prompts are being
-  saved, which is the one thing this feature must not do. The control is
-  still built — a tab's input list is fixed at build time — and a hidden
-  checkbox sends `False`, so a customer pod captures exactly as before.
-- Publishing **bypasses the deduplication**. It is one deliberate tick of
-  a checkbox, not a recipe the app happened to notice, so publishing the
-  same prompt twice really does create two cards.
+| Reader | Sees | Through |
+| --- | --- | --- |
+| The Prompt Library tab | `enabled` entries, tokens only for granted tabs | `POST /v1/prompt-library` on the licence server, which signs each picture link |
+| The admin page | everything | R2 directly, with the write key |
+| The showcase | `enabled` **and** `public` entries, **never a token** | R2 directly, with the read key |
 
-The server enforces both halves against the licence document rather than
-trusting the pod: `publish: true` from a licence without `is_admin` is
-not an error, it is simply ignored and stored as an ordinary community
-submission.
+The pod's side is [`ember/licensing/prompts.py`](../../ember/licensing/prompts.py),
+the server's is `license-validator/src/promptLibrary.js`. The pictures go
+from R2 straight to the browser through signed links; the pod never
+downloads one.
 
-## Approval
+### Picture links
 
-Nothing a customer submits is public until you say so:
+A link lasts six hours and is signed as if at the top of the current hour.
+So one picture keeps the same link for the whole hour, which lets the
+browser cache it, and every link handed out has at least five hours left.
+A link opens one picture, cannot list anything, and stops working when it
+expires.
+
+### Metadata
+
+Every picture is decoded and re-encoded from its pixels into a fresh image
+on upload, so no EXIF, XMP, ICC profile or PNG text chunk survives — and
+ComfyUI writes the whole prompt and workflow into those text chunks. The
+upload checks the WebP it wrote and refuses one that still carries any.
+Object names are random ids, never the source file's name, which may hold a
+prompt or a seed. The only things in the bucket beside the pixels are a
+Content-Type and a Cache-Control.
+
+## Curating it: the admin page
 
 ```bash
-# bash
-cd license-validator
-npm run prompts                      # the review queue
-npm run prompts -- --show <id>       # prompt, settings, which licence
-npm run prompts -- --approve <id>
-npm run prompts -- --reject  <id>    # decided, and never queued again
+# on your own machine, from the repo root
+python scripts/prompt_library/admin.py        # http://127.0.0.1:7890
 ```
 
-`--reject` is not a delete. It sets `reviewed_at` and leaves `is_public`
-false, so the row leaves the queue for good — and because the fingerprint
-stays unique, the same recipe submitted again tomorrow collapses onto the
-row you already ruled on instead of coming back as new work.
+It reads the R2 **write** key from `license-validator/.env`
+(`R2_WRITE_ACCESS_KEY_ID` / `R2_WRITE_SECRET_ACCESS_KEY`), so it answers
+only to this machine: it binds 127.0.0.1 and refuses any request whose
+`Host` is not localhost. A tunnel pointed at it by mistake gets a 403.
 
-One licence may have at most **200 un-reviewed prompts** waiting. Past
-that its writes are dropped and answered `200`: a customer who was never
-told their prompts are saved cannot be told they have been throttled.
+**Adding pictures.** A pair is a picture and a `.txt` holding its token,
+with the same name — `Krea_00012_.png` and `Krea_00012_.txt`, which is
+exactly what Gallery's zip download and its auto-download write. Drop any
+of these onto the page:
 
-## Cross-pod safety
+- a Gallery zip;
+- a folder (or use *Choose a folder…*), paired file by file;
+- pictures and their `.txt` files together.
 
-A prompt written on one pod is loaded on another that may have different
-models and LoRA files. Every value is checked against what *this* build
-offers before it is applied:
+There is also a single picture + pasted token form. Each pair is checked
+before anything is uploaded: the token must decode, and its tab is read
+from it. A token already in the library is skipped. A picture with no
+token beside it, or a token with no picture, is listed rather than guessed
+at.
 
-- an unknown model, resolution or sampler leaves its control alone;
-- a LoRA id this tab does not offer resets that slot to `None` and
-  switches it off;
-- numbers are clamped into their slider's range.
+**New entries start switched off and not public.** Nothing reaches a
+customer until you tick it.
 
-Models and LoRAs are stored by **catalogue id, never by file name** — see
-[the catalogue](../pipelines/catalogue.md). A card always loads; worst
-case it loads slightly less of itself.
+**Everything else** is on the cards: the *Customers* and *Showcase*
+switches, a title, Copy token, To front, Delete. Select several to switch
+or delete them in one go. Drag cards to set the order customers see (with
+no filter on). Delete takes the entry out of the index first and then
+removes its pictures, so a failure halfway leaves an unreachable object,
+never an entry with a missing picture.
 
-A card for a tab this licence does not grant still renders, with its
-button reading `🔒 Needs Krea2 V2` instead of being hidden. What the tab
-you have not bought can do is exactly the thing worth seeing.
+Every change is saved to R2 at once, as a conditional write against the
+index it read. If the index changed underneath — a second admin page open
+somewhere — the save is refused and the page reloads, rather than one copy
+silently erasing the other's work.
+
+A change reaches customers within about six minutes: the licence server
+reuses one read of the index for a minute, and a pod caches a page for
+five. The tab's Refresh button skips the pod's half.
+
+## The showcase
+
+A page of the library's public pictures for showing a client, run from
+your laptop only while you are showing it.
+
+```bash
+python scripts/prompt_library/showcase.py               # http://127.0.0.1:7891
+python scripts/prompt_library/showcase.py --code 4821   # choose the code
+```
+
+It prints an access code (a fresh six-digit one unless you pass `--code`)
+and asks for it before showing anything. In person, open the local address.
+For someone remote, put a free quick tunnel in front of it and send them
+the link and the code:
+
+```bash
+cloudflared tunnel --url http://127.0.0.1:7891
+```
+
+Stop both when you are done; the tunnel's link dies with it. Ten wrong
+codes lock the page until it is restarted.
+
+What a client can get from it:
+
+- only entries that are on **and** public;
+- a picture, the tab's name and the title — the entries are trimmed to
+  those fields before they leave the process, so **no token or prompt is
+  ever sent**, and the pictures carry no metadata;
+- picture links that load straight from R2 (not through your upload
+  bandwidth) and expire like the app's.
+
+It holds the R2 **read** key only, and sends `noindex`, `no-referrer` and
+`DENY` framing headers.
 
 ## Related
 
-- [presets](presets.md) — the same settings blob and the same guarding,
-  minus the words.
-- [Licensing and features](../architecture/licensing-and-features.md) — what `is_admin` is not.
+- [presets](presets.md) — the settings without the prompt, a dropdown on
+  each tab.
+- [Licensing and features](../architecture/licensing-and-features.md) —
+  `community_prompts` is the feature key, and it needs no weights.

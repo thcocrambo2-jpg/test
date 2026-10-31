@@ -18,15 +18,9 @@ dropdown and nothing else: the controls keep the values compiled into
 the pipeline constants, which is what they were built with anyway.
 
 **Write.** save() is called from the generate handlers when an admin has
-ticked "save these settings as a preset". Unlike prompts.record() this one
-is **synchronous and reports what happened**, because the two writes are
-not the same kind of thing at all:
-
-    record()   silent capture the customer was never told about. Nothing
-               is waiting on it, so it goes on a queue and every failure
-               dies in a debug log.
-    save()     a box someone deliberately ticked. "Did my preset save?"
-               deserves an answer, and the person asking is us.
+ticked "save these settings as a preset". It is **synchronous and reports
+what happened**: a box someone deliberately ticked, and "did my preset
+save?" deserves an answer.
 
 It is still bounded and still cannot raise: one POST with a short timeout
 inside a try/except, returning (ok, message) for the caller to log or show.
@@ -34,8 +28,8 @@ A generate run is never failed by it.
 
 Only an admin licence may write, which the server enforces against the
 licence document rather than trusting the flag — see POST /v1/presets. The
-check here is the same one prompts.record makes: not a security boundary,
-just a reason not to send a request that is certain to be refused.
+check here is not a security boundary, just a reason not to send a request
+that is certain to be refused.
 
 Stdlib-only, like the rest of this package. These modules are siblings
 talking to the same API, none of them needs more than urllib for it, and
@@ -284,8 +278,8 @@ def save(tab: str, name: str, settings: dict) -> tuple[bool, str]:
     from. The message names whichever it got, because that is not always
     the name that was typed. Editing one in place is `npm run presets`.
 
-    An empty name is not a refusal either. The name box is optional in the
-    same way the publish title is: leave it blank and the preset is
+    An empty name is not a refusal either. The name box is optional: leave
+    it blank and the preset is
     stamped with the time instead, which is a worse label than a real one
     but a much better outcome than a ticked box that silently saved
     nothing. Rename it later with `npm run presets -- --rename`.

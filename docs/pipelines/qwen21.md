@@ -187,7 +187,7 @@ and Z-Image LoRAs do not load on this model.
 ## Presets
 
 The tab has its own preset list, filed under `qwen21_edit`, with the save
-tickbox and no prompt-library publish. A preset carries the output size,
+tickbox. A preset carries the output size,
 model, steps, CFG, sampler, scheduler, reference detail, seed, randomize,
 batch count and the LoRA stack — never the reference images. See
 [presets](../features/presets.md).

@@ -4,7 +4,6 @@ import random
 
 from ember.licensing import catalog
 from ember.licensing import presets
-from ember.licensing import prompts
 from ember.generation.handlers import (
     KREA_V2_T2I,
     _check_model,
@@ -82,9 +81,8 @@ def generate_v2(prompt, negative, seed, randomize, model, aspect, megapixels,
                 sampler_mode, bongmath, variance_preset, fine_tune_variance,
                 variance_model_type, variance_schedule, cutoff_step,
                 total_steps, cutoff_strength, shift_strength, sharpen,
-                film_grain, batch_count, publish, publish_title,
-                save_preset, preset_name, refine, refine_denoise,
-                refine_prompt, *lora_slots):
+                film_grain, batch_count, save_preset, preset_name, refine,
+                refine_denoise, refine_prompt, *lora_slots):
     """Krea 2 V2 tab: the Krea2 advanced turbo/raw text-to-image graph."""
     ready, message = v2_status(KREA_V2_T2I, _enabled_lora_ids(lora_slots))
     if not ready:
@@ -117,16 +115,11 @@ def generate_v2(prompt, negative, seed, randomize, model, aspect, megapixels,
         "cutoff_strength": float(cutoff_strength),
         "shift_strength": int(shift_strength),
     }
-    # Both dicts above are already exactly the shape the library wants, so
+    # Both dicts above are already exactly the shape a preset wants, so
     # the settings blob reuses them rather than rebuilding them — the size
     # is stored as the aspect/megapixels/multiple the controls hold, not
-    # the width/height they resolve to, so a loaded prompt puts the three
+    # the width/height they resolve to, so a loaded preset puts the three
     # sliders back where they were. See _krea_settings.
-    #
-    # One blob, two readers: the prompt library stores it alongside the
-    # prompt text, a preset stores it *instead* of the prompt text. Keeping
-    # them the same shape is what lets one set of "load this into the
-    # controls" code serve both.
     settings = {
         "model": model,
         "aspect": aspect,
@@ -144,8 +137,6 @@ def generate_v2(prompt, negative, seed, randomize, model, aspect, megapixels,
                   for on, name, weight
                   in zip(lora_slots[::3], lora_slots[1::3], lora_slots[2::3])],
     }
-    prompts.record(prompts.TAB_KREA2_V2, prompt, negative or "", settings,
-                   publish=publish, title=publish_title)
     notice = _save_preset(presets.TAB_KREA2_V2, save_preset, preset_name,
                           settings)
     notice += _skipped_note(skipped)

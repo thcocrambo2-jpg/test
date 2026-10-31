@@ -187,9 +187,8 @@ and `ember/weights/downloads.py` the transport. Most CivitAI files need
 
 ## Related
 
-- [presets](../features/presets.md) and
-  [prompt library](../features/prompt-library.md) — both store catalogue
-  ids, and both check them against what this build offers before applying
-  anything.
+- [presets](../features/presets.md) and settings tokens — both store
+  catalogue ids, and both check them against what this build offers
+  before applying anything.
 - [Licensing and features](../architecture/licensing-and-features.md) — which features a licence
   grants in the first place.

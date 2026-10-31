@@ -253,14 +253,6 @@ export const httpClient: ApiClient = {
     return body.values
   },
 
-  async applySettings(tabKey: string, settings: Record<string, unknown>) {
-    const body = await send<{ values: Record<string, unknown> }>(
-      `/schema/${encodeURIComponent(tabKey)}/apply`,
-      { settings },
-    )
-    return body.values
-  },
-
   async applyToken(tabKey: string, token: Record<string, unknown>) {
     const body = await send<{ values: Record<string, unknown>; notes?: string[] }>(
       `/schema/${encodeURIComponent(tabKey)}/apply`,

@@ -103,9 +103,8 @@ def _check_model(feature, model_id):
 def _save_preset(tab, save, name, settings) -> str:
     """Save these settings as a preset if asked to; return a status prefix.
 
-    The counterpart of `publish` for the settings half: one tickbox, read
-    on the click that generates, admin-only and enforced on the server
-    against the licence document.
+    One tickbox, read on the click that generates, admin-only and enforced
+    on the server against the licence document.
 
     Every tick is a **new** preset. Loading one, adjusting it and saving is
     the ordinary gesture, and it must not destroy the preset it started
@@ -114,11 +113,8 @@ def _save_preset(tab, save, name, settings) -> str:
     refused. See presets.save; both decisions are why the message below
     names the preset that was actually written.
 
-    It reports, where publishing deliberately does not. Publishing is
-    invisible by design — the customer is never told prompts are saved, so
-    nothing about it may appear in the UI — but a preset is a thing an
-    admin is *waiting on*, and "did it save?" is a fair question. The
-    answer rides on the status box as a first line, so it costs no
+    It reports: a preset is a thing an admin is *waiting on*, and "did it
+    save?" is a fair question. The answer rides on the status box as a first line, so it costs no
     component and is gone on the next run.
 
     Never raises and never blocks the generation: presets.save returns

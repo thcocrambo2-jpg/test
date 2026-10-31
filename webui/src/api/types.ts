@@ -81,9 +81,9 @@ export interface Field {
   /** An images field with a `min`: what the submit bar says, under a
    *  disabled button, while the field holds fewer pictures than that. */
   emptyNote?: string
-  /** `false` for a control that is not a setting — the publish and
-   *  save-preset tickboxes. Absent means true. Recipes and settings tokens
-   *  both leave these out, so loading one cannot re-arm a publish. */
+  /** `false` for a control that is not a setting — the save-preset
+   *  tickbox and its name. Absent means true. Recipes and settings tokens
+   *  both leave these out, so loading one cannot re-arm a save. */
   record?: boolean
 }
 
@@ -532,20 +532,20 @@ export interface Showcase {
 
 // --------------------------------------------------------------- prompts
 
-/** One card in the prompt library, as prompts.Prompt sends it. */
+/** One card in the prompt library, as prompts.Prompt sends it: a picture
+ *  and the settings token that made it. */
 export interface PromptCard {
   id: string
+  /** The feature key of the tab that made it. */
   tab: string
-  source: 'admin' | 'community'
   title: string | null
-  prompt: string
-  negative: string
-  /** The same blob a preset carries — the dials without the words. Opaque
-   *  here: it is guarded and unpacked by `POST /schema/{tab}/apply`, because
-   *  the stored shape is not the form's — an empty LoRA slot is null there
-   *  and `"None"` here, and a V2 row is found by its LoRA id — and tabschema
-   *  already owns that mapping. */
-  settings: Record<string, unknown>
+  width: number | null
+  height: number | null
+  /** Signed R2 links, good for at least five hours. */
+  thumb: string
+  full: string
+  /** The settings token, or null when this licence does not have the tab. */
+  token: string | null
 }
 
 export interface PromptPage {
@@ -553,13 +553,13 @@ export interface PromptPage {
   total: number
   skip: number
   limit: number
+  /** Entries per tab across the whole library, for the filter. */
+  tabs: Record<string, number>
   error: string | null
 }
 
 export interface PromptQuery {
   tab?: string
-  source?: string
-  search?: string
   skip?: number
   limit?: number
 }
@@ -637,7 +637,7 @@ export interface ApiClient {
   /** A preset name or a stored recipe -> the values it is safe to write
    *  into this tab. Server-side, because guarding a value means knowing
    *  which model and LoRA ids this tab's feature offers, and turning the
-   *  stored blob into form values is tabschema's job (see PromptCard). */
+   *  stored blob into form values is tabschema's job. */
   applyPreset(tabKey: string, preset: string): Promise<Record<string, unknown>>
   /** `preset` is the preset that run started from and its values now, or
    *  null for a run on none — or one since taken off offer. */
@@ -652,7 +652,6 @@ export interface ApiClient {
     values: Record<string, unknown>
     preset: null
   }>
-  applySettings(tabKey: string, settings: Record<string, unknown>): Promise<Record<string, unknown>>
   /** A decoded settings token, guarded by the pod. `notes` names every
    *  value that could not go in and every number that was clamped. */
   applyToken(

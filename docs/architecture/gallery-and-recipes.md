@@ -130,7 +130,7 @@ clicking that button is asking for.
 ### What is in one
 
 A recipe is the *UI's* values, not the resolved ComfyUI graph — the same
-call the prompt library and presets make. The dropdown label is what goes
+call presets and settings tokens make. The dropdown label is what goes
 back into a dropdown; the filename it resolved to on this pod is not, and
 would be wrong on the next one.
 
@@ -148,9 +148,9 @@ with no change anywhere.
 
 Two things are deliberately left out:
 
-- **The publish and save-preset boxes.** They are per-run decisions rather
-  than settings, so putting them in a recipe would mean loading one
-  silently re-arms a publish. Both are stored as `None`.
+- **The save-preset box and its name.** A per-run decision rather than a
+  setting, so putting it in a recipe would mean loading one silently
+  re-arms a save. Both are stored as `None`.
 - **Empty LoRA slots**, from the *panel* only. They are recorded — a slot
   has to restore whole — but a dropdown reading "None" beside a weight of
   0.8 is a row of noise.

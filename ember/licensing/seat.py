@@ -89,8 +89,7 @@ _plan_name = None
 # Whether this licence is one of ours rather than a customer's. A role and
 # not an entitlement: it grants no tab, and what the app can run still
 # comes from the `features` array alone. It decides one thing — whether
-# prompts.py captures every new recipe into the library on its own (a
-# customer pod) or only what the operator explicitly publishes (ours).
+# the "save as preset" tickbox may write (presets.py).
 # Defaults to False, so a server too old to send the field, and a dry run
 # that never asks one, both behave like a customer.
 _is_admin = False
@@ -233,8 +232,8 @@ def is_admin() -> bool:
 
     False until acquire_or_exit() has returned, and False for a dry run —
     both are the safe default, because the only thing this decides is
-    whether the prompt library captures generations automatically, and
-    "behave like a customer" is the behaviour every pod already had.
+    whether a preset may be saved, and "behave like a customer" is the
+    behaviour every pod already had.
     """
     return _is_admin
 

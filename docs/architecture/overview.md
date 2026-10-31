@@ -107,9 +107,12 @@ Two services live off the machine:
   the model and LoRA catalogue, the plans behind the pricing page, the
   presets and the prompt library. Every one of those degrades to a cached
   or empty answer rather than failing the app.
-- **R2**, which holds the published binaries. The app never talks to it;
-  the start scripts fetch the build through the licence API before the app
-  exists. See [Publishing](../releasing/publishing.md).
+- **R2**, which holds the published binaries and the prompt library's
+  pictures. The app never talks to it with a key: the start scripts fetch
+  the build through the licence API before the app exists, and the
+  library's pictures load in the browser through links the licence server
+  signs. See [Publishing](../releasing/publishing.md) and the
+  [prompt library](../features/prompt-library.md).
 
 Weights come from Hugging Face and CivitAI, through a mirror when one is
 reachable. [`ember/weights/mirror.py`](../../ember/weights/mirror.py)

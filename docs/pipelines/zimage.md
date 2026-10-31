@@ -226,8 +226,7 @@ trigger words, so type them into the prompt.
 ## Presets
 
 The tab has its own preset list, filed under `zimage_t2i`, with the save
-tickbox and no prompt-library publish — the Prompt Library only knows the
-Krea tabs. A preset carries the model, steps, CFG, resolution,
+tickbox. A preset carries the model, steps, CFG, resolution,
 multiplier, sampler, the Upscale tick, seed, randomize, batch count,
 Denoise and the LoRA stack. See [presets](../features/presets.md).
 

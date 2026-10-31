@@ -88,9 +88,9 @@ finished run while three more wait behind it.
 
 The arguments are read out of the controls at click time and copied into
 the job, so moving a slider afterwards cannot reach work already in the
-line. That extends to the two per-run tickboxes: **publish** and **save as
-preset** are read on the click, then disarmed immediately, because they
-are per-run decisions rather than modes.
+line. That extends to the per-run **save as preset** tickbox: it is read
+on the click, then disarmed immediately, because it is a per-run decision
+rather than a mode.
 
 The preset save itself happens wherever the job runs, which is after the
 click that asked for it has returned. So the save tells the queue

@@ -164,24 +164,6 @@
         },
         {
           "type": "Checkbox",
-          "label": "\u2b50 Publish this prompt to the library",
-          "value": false,
-          "interactive": null,
-          "visible": true,
-          "elem_id": null
-        },
-        {
-          "type": "Textbox",
-          "label": "Card title (optional)",
-          "value": null,
-          "lines": 1,
-          "placeholder": "Golden hour portrait",
-          "interactive": null,
-          "visible": true,
-          "elem_id": null
-        },
-        {
-          "type": "Checkbox",
           "label": "\ud83d\udcbe Save these settings as a preset",
           "value": false,
           "interactive": null,
@@ -1667,24 +1649,6 @@
           "minimum": 1,
           "maximum": 20,
           "step": 1,
-          "interactive": null,
-          "visible": true,
-          "elem_id": null
-        },
-        {
-          "type": "Checkbox",
-          "label": "\u2b50 Publish this prompt to the library",
-          "value": false,
-          "interactive": null,
-          "visible": true,
-          "elem_id": null
-        },
-        {
-          "type": "Textbox",
-          "label": "Card title (optional)",
-          "value": null,
-          "lines": 1,
-          "placeholder": "Golden hour portrait",
           "interactive": null,
           "visible": true,
           "elem_id": null
@@ -18224,8 +18188,6 @@
         "sampler",
         "model",
         "batch_count",
-        "publish",
-        "publish_title",
         "save_preset",
         "preset_name"
       ],
@@ -18261,8 +18223,6 @@
         "sharpen",
         "film_grain",
         "batch_count",
-        "publish",
-        "publish_title",
         "save_preset",
         "preset_name"
       ],

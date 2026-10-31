@@ -1,0 +1,127 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="robots" content="noindex, nofollow">
+<meta name="referrer" content="no-referrer">
+<title>Showcase</title>
+<style>
+  :root { color-scheme: dark; --bg:#0b0c10; --text:#e8e8ec; --dim:#8f92a1; --line:#23252e; --accent:#f0b45a; }
+  * { box-sizing:border-box; }
+  body { margin:0; background:var(--bg); color:var(--text); font:15px/1.5 system-ui, sans-serif; }
+  header { padding:28px clamp(16px, 4vw, 48px) 8px; }
+  h1 { margin:0; font-size:clamp(22px, 3vw, 30px); font-weight:650; letter-spacing:-.01em; }
+  .sub { color:var(--dim); margin-top:4px; }
+  nav { display:flex; flex-wrap:wrap; gap:8px; padding:12px clamp(16px, 4vw, 48px) 20px; position:sticky; top:0; background:linear-gradient(var(--bg) 75%, #0b0c1000); z-index:2; }
+  nav button { font:inherit; font-size:13px; padding:6px 14px; border-radius:99px; border:1px solid var(--line); background:transparent; color:var(--dim); cursor:pointer; }
+  nav button.on { color:#111; background:var(--accent); border-color:var(--accent); }
+  main { columns:4 260px; column-gap:14px; padding:0 clamp(16px, 4vw, 48px) 64px; }
+  figure { margin:0 0 14px; break-inside:avoid; position:relative; border-radius:12px; overflow:hidden; background:#14151b; cursor:zoom-in; }
+  figure img { display:block; width:100%; height:auto; transition:transform .4s ease; }
+  figure:hover img { transform:scale(1.02); }
+  figcaption { position:absolute; inset:auto 0 0 0; padding:28px 12px 10px; font-size:13px; background:linear-gradient(#0000, #000c); opacity:0; transition:opacity .2s; }
+  figure:hover figcaption { opacity:1; }
+  figcaption .tab { color:var(--accent); }
+  .empty { color:var(--dim); text-align:center; padding:80px 20px; }
+  .box { position:fixed; inset:0; background:#000f; display:none; align-items:center; justify-content:center; z-index:10; }
+  .box.open { display:flex; }
+  .box img { max-width:94vw; max-height:90vh; object-fit:contain; }
+  .box .cap { position:absolute; bottom:14px; left:0; right:0; text-align:center; color:var(--dim); font-size:13px; }
+  .box button { position:absolute; background:#ffffff14; border:0; color:#fff; font-size:26px; width:48px; height:48px; border-radius:99px; cursor:pointer; }
+  .box .prev { left:16px; top:50%; transform:translateY(-50%); }
+  .box .next { right:16px; top:50%; transform:translateY(-50%); }
+  .box .close { right:16px; top:16px; font-size:20px; }
+</style>
+</head>
+<body>
+<header>
+  <h1>Showcase</h1>
+  <div class="sub" id="sub">Loading…</div>
+</header>
+<nav id="tabs"></nav>
+<main id="grid"></main>
+<div class="empty" id="empty" hidden>Nothing to show yet.</div>
+<div class="box" id="box">
+  <img alt="">
+  <div class="cap" id="cap"></div>
+  <button class="prev" aria-label="Previous">‹</button>
+  <button class="next" aria-label="Next">›</button>
+  <button class="close" aria-label="Close">✕</button>
+</div>
+<script>
+const $ = (id) => document.getElementById(id)
+let all = []
+let tab = ''
+let shown = []
+let at = -1
+
+const text = (value) => document.createTextNode(String(value ?? ''))
+
+async function load() {
+  const response = await fetch('/api/entries')
+  if (response.status === 401) return location.reload()
+  const data = await response.json()
+  all = data.entries || []
+  const tabs = [...new Set(all.map((e) => e.tab).filter(Boolean))]
+  $('tabs').hidden = tabs.length < 2
+  $('tabs').innerHTML = ''
+  for (const value of ['', ...tabs]) {
+    const button = document.createElement('button')
+    button.append(text(value || 'Everything'))
+    button.onclick = () => { tab = value; render() }
+    button.dataset.tab = value
+    $('tabs').append(button)
+  }
+  render()
+}
+
+function render() {
+  shown = all.filter((e) => !tab || e.tab === tab)
+  $('sub').textContent = `${shown.length} picture${shown.length === 1 ? '' : 's'}`
+  for (const button of $('tabs').children) button.classList.toggle('on', button.dataset.tab === tab)
+  $('empty').hidden = shown.length > 0
+  const grid = $('grid')
+  grid.innerHTML = ''
+  shown.forEach((entry, index) => {
+    const figure = document.createElement('figure')
+    const img = document.createElement('img')
+    img.loading = 'lazy'
+    img.alt = ''
+    img.src = entry.thumb
+    if (entry.width && entry.height) { img.width = entry.width; img.height = entry.height }
+    const caption = document.createElement('figcaption')
+    const label = document.createElement('span')
+    label.className = 'tab'
+    label.append(text(entry.tab))
+    caption.append(label)
+    if (entry.title) caption.append(text(' · ' + entry.title))
+    figure.append(img, caption)
+    figure.onclick = () => open(index)
+    grid.append(figure)
+  })
+}
+
+function open(index) {
+  at = (index + shown.length) % shown.length
+  const entry = shown[at]
+  $('box').querySelector('img').src = entry.full
+  $('cap').textContent = [entry.tab, entry.title].filter(Boolean).join(' · ')
+  $('box').classList.add('open')
+}
+const close = () => { $('box').classList.remove('open'); at = -1 }
+$('box').querySelector('.prev').onclick = (event) => { event.stopPropagation(); open(at - 1) }
+$('box').querySelector('.next').onclick = (event) => { event.stopPropagation(); open(at + 1) }
+$('box').querySelector('.close').onclick = close
+$('box').onclick = (event) => { if (event.target === $('box')) close() }
+document.addEventListener('keydown', (event) => {
+  if (at < 0) return
+  if (event.key === 'Escape') close()
+  if (event.key === 'ArrowLeft') open(at - 1)
+  if (event.key === 'ArrowRight') open(at + 1)
+})
+document.addEventListener('contextmenu', (event) => { if (event.target.tagName === 'IMG') event.preventDefault() })
+load()
+</script>
+</body>
+</html>

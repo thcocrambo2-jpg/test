@@ -179,27 +179,13 @@ def _batch_field(hi=20):
                  step=1, group="seed", preset="batch_count")
 
 
-def _save_fields():
-    """Publish and save-preset — per-run decisions, never in a recipe.
-
-    `record=False` is ui._RECIPE_SKIP: these are disarmed after every
-    click (ui._reset_after_generate), so putting them in a recipe would
-    mean loading one silently re-arms a publish. That is the one thing
-    that must never happen by accident.
-    """
-    return (
-        Field("publish", "⭐ Publish this prompt to the library", "bool",
-              False, group="save", record=False),
-        Field("publish_title", "Card title (optional)", "text", "", lines=1,
-              group="save", record=False, show_if=("publish", True)),
-        *_preset_save_fields(),
-    )
-
-
 def _preset_save_fields():
-    """Save-preset alone — the MiniMax and Z-Image tabs, which have no
-    prompt library to publish to. Same `record=False`, for the same
-    reason."""
+    """Save-preset — a per-run decision, never in a recipe.
+
+    `record=False` is ui._RECIPE_SKIP: the tickbox is disarmed after every
+    click (ui._reset_after_generate), so putting it in a recipe would mean
+    loading one silently re-arms a save.
+    """
     return (
         Field("save_preset", "💾 Save these settings as a preset", "bool",
               False, group="save", record=False),

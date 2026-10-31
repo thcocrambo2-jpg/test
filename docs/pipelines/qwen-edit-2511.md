@@ -137,7 +137,7 @@ The chain sits after Lightning.
 ## Presets
 
 The tab has its own preset list, filed under `qwen_edit_2511`, with the
-save tickbox and no prompt-library publish. A preset carries Speed, model,
+save tickbox. A preset carries Speed, model,
 steps, CFG, sampler, scheduler, seed, randomize, batch count and the LoRA
 stack — never the images. See [presets](../features/presets.md).
 

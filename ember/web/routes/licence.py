@@ -1,7 +1,7 @@
 """What the licence server knows, passed through to the browser.
 
 Plans and their entitlements, the showcase page, each tab's presets and
-the community prompt library. Every one of these is a cached read in
+the prompt library. Every one of these is a cached read in
 `ember.licensing` or `ember.web.showcase`; the routes here only unpack a
 dataclass into JSON and say who is allowed to ask.
 """
@@ -70,16 +70,13 @@ def register(api: APIRouter) -> None:
                                        Depends(require_feature(
                                            features.Key.COMMUNITY_PROMPTS))])
     def prompt_library(tab: str = Query(default=""),
-                       source: str = Query(default=""),
-                       search: str = Query(default=""),
                        skip: int = Query(default=0, ge=0),
-                       limit: int = Query(default=12, ge=1, le=48),
+                       limit: int = Query(default=24, ge=1, le=48),
                        force: bool = Query(default=False)):
-        page = prompts.library(tab=tab or None, source=source or None,
-                               search=search, skip=skip, limit=limit,
+        page = prompts.library(tab=tab or None, skip=skip, limit=limit,
                                force=force)
         return {
             "prompts": [dataclasses.asdict(row) for row in page.prompts],
             "total": page.total, "skip": page.skip, "limit": page.limit,
-            "error": page.error,
+            "tabs": page.tabs, "error": page.error,
         }

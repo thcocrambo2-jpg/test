@@ -2,7 +2,8 @@
  *
  * The card grid is auto-fill rather than a fixed column count, so the page
  * uses whatever width it is given and a card is never cut off by a number
- * chosen at build time. */
+ * chosen at build time. Pictures keep their own shape — cropping one would
+ * hide the very thing the card is there to show. */
 
 .filters {
   display: flex;
@@ -12,42 +13,56 @@
   margin-bottom: var(--s-4);
 }
 
-.search {
-  flex: 1 1 220px;
-  min-width: 200px;
-}
-
 .grid {
   display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(300px, 1fr));
+  grid-template-columns: repeat(auto-fill, minmax(220px, 1fr));
   gap: var(--s-4);
+  align-items: start;
 }
 
-.prompt {
+.card {
   margin: 0;
-  font-size: var(--fs-sm);
-  line-height: 1.55;
-  color: var(--text);
-  white-space: pre-wrap;
-  /* Long enough to judge the prompt, short enough that a page of cards is a
-   * page rather than a scroll. The whole text is in the title attribute. */
-  display: -webkit-box;
-  -webkit-line-clamp: 6;
-  line-clamp: 6;
-  -webkit-box-orient: vertical;
+  display: flex;
+  flex-direction: column;
+  border: 1px solid var(--c-border);
+  border-radius: var(--r-lg);
+  background: var(--c-panel);
   overflow: hidden;
 }
 
-.negative {
-  margin: var(--s-3) 0 0;
-  font-size: var(--fs-xs);
-  line-height: 1.5;
-  color: var(--text-muted);
-  display: -webkit-box;
-  -webkit-line-clamp: 2;
-  line-clamp: 2;
-  -webkit-box-orient: vertical;
+.picture {
+  display: block;
+  padding: 0;
+  border: 0;
+  background: var(--c-media-ground);
+  cursor: zoom-in;
+}
+
+.picture img {
+  display: block;
+  width: 100%;
+  height: auto;
+}
+
+.caption {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--s-2);
+  padding: var(--s-2) var(--s-3);
+}
+
+.label {
+  min-width: 0;
+  font-size: var(--t-xs);
+  color: var(--c-text-muted);
+  white-space: nowrap;
   overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.title {
+  color: var(--c-text);
 }
 
 .pager {
@@ -59,14 +74,33 @@
 }
 
 .pagerCount {
-  font-size: var(--fs-sm);
-  color: var(--text-muted);
+  font-size: var(--t-sm);
+  color: var(--c-text-muted);
 }
 
-/* Copy and Use, side by side in the card header. */
+/* Copy token and Use, side by side. */
 .actions {
   display: flex;
   align-items: center;
   gap: var(--s-2);
   flex: none;
+}
+
+/* The full picture in the modal, as large as the window allows. */
+.full {
+  display: grid;
+  gap: var(--s-3);
+  justify-items: center;
+}
+
+.full img {
+  display: block;
+  max-width: 100%;
+  max-height: 75vh;
+  height: auto;
+  border-radius: var(--r-md);
+}
+
+.fullActions {
+  justify-self: end;
 }

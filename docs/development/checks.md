@@ -133,8 +133,8 @@ every tab a customer paid for works — and so does one they did not.
 The partial backstop is that weights for ungranted features are never
 fetched, so most ungranted tabs would fail at "that model is not
 downloaded yet". One would not: `community_prompts` declares `needs=()`
-because it has no weights of its own — the Prompt Library reads a
-collection on the licence server — so it would be **fully functional**
+because it has no weights of its own — the Prompt Library reads its
+index through the licence server — so it would be **fully functional**
 for a licence that does not include it. It is named explicitly in the
 check so that a future refactor cannot quietly drop it by making the loop
 cleverer.

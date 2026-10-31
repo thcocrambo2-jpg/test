@@ -223,9 +223,7 @@
     "presets.TAB_QWEN21": "'qwen21_edit'",
     "presets.TAB_QWEN21_T2I": "'qwen21_t2i'",
     "presets.TAB_QWEN_EDIT": "'qwen_edit_2511'",
-    "presets.TAB_ZIMAGE": "'zimage_t2i'",
-    "prompts.TAB_KREA2": "'krea_t2i'",
-    "prompts.TAB_KREA2_V2": "'krea_v2_t2i'"
+    "presets.TAB_ZIMAGE": "'zimage_t2i'"
   },
   "sources": [
     "config"

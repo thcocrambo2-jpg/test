@@ -39,8 +39,7 @@ Key = features.Key
 # controls. What Krea2 has no control for sits where it belongs: the
 # resolution multiplier with the resolution in Output, and the upscale
 # tick in a section of its own, because it switches a whole second pass
-# on. Presets like the MiniMax tabs — its own list, and no prompt library
-# to publish to. The LoRA stack is Z-Image's own catalogue list, since
+# on. Presets like the MiniMax tabs — its own list. The LoRA stack is Z-Image's own catalogue list, since
 # Krea LoRAs do not load on this model. The optional start image sits
 # in a closed section in the right column, above the result, like the
 # Video tab's start frame, so the tab reads as text to image until it is

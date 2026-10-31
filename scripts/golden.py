@@ -47,8 +47,7 @@ What is stubbed, and why each one is necessary
 * `free_models` -> nothing. `_release_on_swap` calls it whenever two
   consecutive jobs need different weights, which is every handler after
   the first one here.
-* `prompts.record` and `presets.save` -> nothing. Both POST to the licence
-  server.
+* `presets.save` -> nothing. It POSTs to the licence server.
 
 The models and LoRAs come from the catalogue (catalog.py). Unless
 EMBER_CATALOG_FILE is already set, this points it at the seed document,
@@ -223,7 +222,7 @@ class Capture:
 
     def __init__(self):
         self.workflows = []
-        self.settings = None      # the blob prompts.record was handed
+        self.settings = None      # the blob presets.save was handed
 
     def run(self, workflow, timeout=None):
         self.workflows.append(workflow)
@@ -281,7 +280,6 @@ def patch(users, capture) -> None:
     """
     from ember.comfy import client
     from ember.licensing import presets
-    from ember.licensing import prompts
 
     for name in (
         "model_file_available", "lora_file_available", "edit_lora_available",
@@ -322,20 +320,13 @@ def patch(users, capture) -> None:
     # upload_image is pinned to UPLOADED below.
     _patch_all(users, "_run_tag", lambda: "golden00")
 
-    # Silent by contract in the app; a POST to the licence server here.
-    # Kept rather than discarded: the fourth positional is the settings
-    # blob the licence server stores, and it is the thing tabschema has to
-    # reproduce byte for byte (see check_settings).
-    def record(tab, prompt, negative, settings, **_kwargs):
-        capture.settings = settings
-
-    # The MiniMax tabs keep no prompt library, so their blob is only ever
-    # seen by a preset save — captured the same way, for the same check.
+    # A POST to the licence server in the app. Kept rather than discarded:
+    # the settings blob is what the licence server stores, and it is the
+    # thing tabschema has to reproduce byte for byte (see check_settings).
     def save(tab, name, settings):
         capture.settings = settings
         return True, "stubbed"
 
-    prompts.record = record
     presets.save = save
 
     for comfy_client in (client.client, client.wan_client):
@@ -466,7 +457,7 @@ def cases(module) -> dict:
         "generate_single": (
             "a lighthouse in a storm, 35mm", "blurry, watermark",
             1234567, False, 9, 1.7, "1216×832 (Landscape)", "euler",
-            model, 2, False, "", False, "",
+            model, 2, True, "",
         ) + REFINE_OFF + krea_triples,
 
         # The two-input edit: the second reference is on, so the snapshot
@@ -484,21 +475,21 @@ def cases(module) -> dict:
             4567890, False, v2_model, "16:9 (Landscape Wide)", 2.25, 32,
             0.35, "res_2m", "beta57", 13, 0.85, 2.4, "unsample", False,
             "🌿 Balanced", 37, "🖼️ Qwen-Image", "decreasing",
-            7, 23, 0.65, 140, True, True, 2, False, "", False, "",
+            7, 23, 0.65, 140, True, True, 2, True, "",
         ) + REFINE_OFF + v2_triples(module.KREA_V2_T2I),
 
         # The ⚡ Ember Lite refine on a generate tab, its prompt box empty:
         # the two V2 graphs, then one Z-Image image-to-image graph per
         # picture, at 0.3 on the picture's own seed, refining with the
         # tab's prompt, with no LoRAs, and each saved as its original's
-        # prefix plus "_refined". The blob prompts.record keeps has the
+        # prefix plus "_refined". The blob presets.save keeps has the
         # tick on.
         "generate_v2_refine": (
             "a lighthouse in a storm, 35mm", "blurry, watermark",
             4567891, False, v2_model, "16:9 (Landscape Wide)", 2.25, 32,
             0.35, "res_2m", "beta57", 13, 0.85, 2.4, "unsample", False,
             "🌿 Balanced", 37, "🖼️ Qwen-Image", "decreasing",
-            7, 23, 0.65, 140, False, False, 2, False, "", False, "",
+            7, 23, 0.65, 140, False, False, 2, True, "",
             True, 0.3, "",
         ) + v2_triples(module.KREA_V2_T2I),
 
@@ -778,15 +769,16 @@ def check_settings(name, args, settings) -> None:
     The other half of the preset contract, and the half that cannot be
     checked at import: the two tabs that write a settings blob are the two
     whose handlers guard on `v2_status()` and on the weights being
-    downloaded, so reaching the `prompts.record` call at all needs the
+    downloaded, so reaching the `presets.save` call at all needs the
     stubs this file already installs.
 
     tabschema asserts the *Krea 2* blob against krea2._krea_settings at
     import, because that one is a plain function. The V2 blob is built
     inline inside generate_v2, so the only way to see it is to run the
-    handler — which is what happens here. The two MiniMax cases and the
-    first Z-Image, Qwen 2.1 Reference, Qwen 2.1, Anima and Qwen Edit 2511
-    cases tick the save-preset box, so their blobs (_minimax_settings,
+    handler — which is what happens here. Every case that writes a blob
+    ticks the save-preset box so it is captured: the Krea 2 and V2 cases,
+    the two MiniMax cases and the first Z-Image, Qwen 2.1 Reference, Qwen 2.1, Anima and Qwen Edit 2511
+    cases, so their blobs (_krea_settings, _minimax_settings,
     _zimage_settings, _qwen21_settings, _qwen21_t2i_settings,
     _anima_settings, _qwen_edit_settings) are checked too.
 

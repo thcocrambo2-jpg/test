@@ -351,7 +351,7 @@ class Field:
         if self.library:
             row["library"] = self.library
         # Only when off: the settings token leaves these out for the reason
-        # the recipe does — loading one must never re-arm a publish.
+        # the recipe does — loading one must never re-arm a save.
         if not self.record:
             row["record"] = False
         return row
@@ -521,9 +521,9 @@ class TabSchema:
         by label, so a reworded label or a moved control orphans the
         history rather than failing loudly. The two rules it reproduces:
 
-          * a control that is not a *setting* — the publish and preset
-            tickboxes, `ui._RECIPE_SKIP` — is stored as None, so loading a
-            recipe cannot silently re-arm a publish;
+          * a control that is not a *setting* — the save-preset tickbox
+            and its name, `ui._RECIPE_SKIP` — is stored as None, so loading
+            a recipe cannot silently re-arm a save;
           * an uploaded file is stored as the name `kept` gives it — the
             copy sources.py keeps so a recipe can hand the picture back —
             or as None when there is no copy, as it always used to be. A

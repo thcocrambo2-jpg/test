@@ -24,7 +24,7 @@ For someone with the app in front of them.
 
 | Page | What it covers |
 | --- | --- |
-| [Prompt library](features/prompt-library.md) | Shared prompts, silent capture, and approval |
+| [Prompt library](features/prompt-library.md) | Pictures and their settings tokens from R2, the local admin page, and the client showcase |
 | [Settings presets](features/presets.md) | Saved settings, who may write one, and what they cost at startup |
 | [The pricing page](features/pricing-page.md) | Plans, billing cycles and the feature showcase |
 | [Prompt undo / redo](features/undo-redo.md) | The four cases, and why the buttons exist |
