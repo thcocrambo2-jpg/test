@@ -46,3 +46,5 @@ prompts/
 context.md
 windows/
 windows-docker/
+
+.dryrun

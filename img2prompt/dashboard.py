@@ -5,7 +5,8 @@
 Read-only. Serves dashboard.html, a run's state.json (the newest, or
 ?run=<name>) plus the live config.json, the list of runs, and the files
 under runs/. /i2v lists a run's image-to-video prompts (each image
-folder's i2v.json). Every number on the page comes from state.json, which only
+folder's i2v.json). /prompts lists the hand-written prompt library in
+prompts.json. Every number on the page comes from state.json, which only
 run.py writes.
 """
 
@@ -49,6 +50,12 @@ class Handler(BaseHTTPRequestHandler):
         elif path == "/api/i2v":
             run = parse_qs(url.query).get("run", [None])[0]
             self.send(200, json.dumps(self.i2v(run)).encode("utf-8"),
+                      "application/json")
+        elif path == "/prompts":
+            self.send(200, (HERE / "prompts.html").read_bytes(),
+                      "text/html; charset=utf-8")
+        elif path == "/api/prompts":
+            self.send(200, (HERE / "prompts.json").read_bytes(),
                       "application/json")
         elif path == "/api/runs":
             self.send(200, json.dumps(self.runs()).encode("utf-8"),

@@ -1,0 +1,125 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Prompt library</title>
+<style>
+  :root {
+    --bg: #f6f5f2; --panel: #ffffff; --ink: #1d1d1b; --muted: #6b6a66;
+    --line: #e3e1db; --accent: #c2410c; --good: #15803d; --bad: #b91c1c; --chip: #efede8;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root { --bg: #161615; --panel: #1f1f1d; --ink: #ecebe7; --muted: #9c9a94;
+            --line: #33322f; --accent: #fb923c; --good: #4ade80; --bad: #f87171; --chip: #2a2927; }
+  }
+  * { box-sizing: border-box; }
+  body { margin: 0; background: var(--bg); color: var(--ink);
+         font: 14px/1.45 system-ui, -apple-system, "Segoe UI", sans-serif; }
+  main { max-width: 1100px; margin: 0 auto; padding: 20px 16px 48px; }
+  h1 { font-size: 20px; margin: 0; }
+  a { color: var(--accent); }
+  .top { display: flex; flex-wrap: wrap; gap: 8px 14px; align-items: center; justify-content: space-between; }
+  .sub { color: var(--muted); font-size: 13px; margin-top: 2px; }
+  .bar { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 14px; align-items: center; }
+  input, button { font: inherit; font-size: 13px; color: var(--ink); background: var(--chip);
+                  border: 1px solid var(--line); border-radius: 6px; padding: 4px 10px; }
+  input { min-width: 220px; flex: 1; max-width: 340px; }
+  button { cursor: pointer; }
+  button:hover { border-color: var(--accent); }
+  button.on { border-color: var(--accent); color: var(--accent); font-weight: 600; }
+  .card { background: var(--panel); border: 1px solid var(--line); border-radius: 10px;
+          padding: 14px; margin-top: 14px; }
+  .head { display: flex; flex-wrap: wrap; gap: 6px 10px; align-items: center; }
+  .head .name { font-weight: 600; }
+  .id { color: var(--muted); font: 12px ui-monospace, Consolas, monospace; }
+  .pill { display: inline-block; padding: 2px 10px; border-radius: 99px; background: var(--chip);
+          font-size: 12px; font-weight: 600; }
+  .pill.nsfw { color: var(--bad); } .pill.sfw { color: var(--good); } .pill.suggestive { color: var(--accent); }
+  .meta { color: var(--muted); font-size: 13px; margin-top: 4px; }
+  .btns { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 8px; }
+  pre { white-space: pre-wrap; font: 12px/1.5 ui-monospace, Consolas, monospace; background: var(--chip);
+        padding: 10px; border-radius: 6px; max-height: 260px; overflow: auto; margin: 8px 0 0; }
+  pre.open { max-height: none; }
+  details { margin-top: 6px; } summary { cursor: pointer; color: var(--muted); font-size: 13px; }
+  .muted { color: var(--muted); }
+</style>
+</head>
+<body>
+<main>
+  <div class="top">
+    <div>
+      <h1>Prompt library</h1>
+      <div class="sub" id="where">Loading…</div>
+    </div>
+    <div><a href="/">← img2prompt dashboard</a></div>
+  </div>
+  <div class="bar" id="cats"></div>
+  <div class="bar"><span id="filters"></span>
+    <input id="q" type="search" placeholder="Search title, scene, angle or text…" aria-label="Search"></div>
+  <div id="list"></div>
+</main>
+<script>
+const KINDS = {"": "All", "sfw": "SFW", "suggestive": "Suggestive", "nsfw": "NSFW"};
+let data = null, filter = "", cat = "", query = "";
+const esc = s => String(s).replace(/[&<>"]/g, c => ({"&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;"}[c]));
+const negative = p => (p.drop || []).reduce((base, d) => base.replace(", " + d, ""), data.negatives[p.kind])
+  + ", " + p.neg.replace(/[.,\s]+$/, "") + ".";
+
+async function copy(text, b) {
+  try { await navigator.clipboard.writeText(text); }
+  catch { const t = document.createElement("textarea"); t.value = text; document.body.append(t);
+          t.select(); document.execCommand("copy"); t.remove(); }
+  const was = b.textContent; b.textContent = "Copied ✓"; setTimeout(() => b.textContent = was, 1500);
+}
+
+function draw() {
+  const q = query.toLowerCase();
+  const inCat = data.items.filter(p => !cat || p.category === cat);
+  const items = inCat.filter(p => (!filter || p.kind === filter) &&
+    (!q || [p.id, p.title, p.scene, p.angle, p.prompt].join(" ").toLowerCase().includes(q)));
+  document.getElementById("where").textContent =
+    `${data.items.length} prompts for Krea 2 V2 + Natural Raw 2 · each with its own negative`;
+  document.getElementById("filters").innerHTML = Object.entries(KINDS).map(([k, label]) => {
+    const n = k ? inCat.filter(p => p.kind === k).length : inCat.length;
+    return `<button data-k="${k}" class="${k === filter ? "on" : ""}">${label} (${n})</button>`;
+  }).join(" ");
+  const cats = Object.assign({"": "All categories"}, data.categories);
+  document.getElementById("cats").innerHTML = Object.entries(cats).map(([k, label]) => {
+    const n = k ? data.items.filter(p => p.category === k).length : data.items.length;
+    return `<button data-c="${k}" class="${k === cat ? "on" : ""}">${esc(label)} (${n})</button>`;
+  }).join(" ");
+  document.getElementById("list").innerHTML = items.map((p, n) => `
+    <div class="card">
+      <div class="head">
+        <span class="pill ${p.kind}">${KINDS[p.kind]}</span>
+        <span class="pill">${esc(data.categories[p.category])}</span>
+        <span class="name">${esc(p.title)}</span>
+        <span class="id">${esc(p.id)}</span>
+      </div>
+      <div class="meta">${esc(p.scene)} · ${esc(p.angle)}</div>
+      <div class="btns">
+        <button data-copy="${n}" data-what="prompt">Copy prompt</button>
+        <button data-copy="${n}" data-what="neg">Copy negative</button>
+        <button data-expand="${n}">Expand</button>
+      </div>
+      <pre id="pre${n}">${esc(p.prompt)}</pre>
+      <details><summary>Negative prompt</summary><pre>${esc(negative(p))}</pre></details>
+    </div>`).join("") || `<p class="muted">Nothing matches.</p>`;
+  document.querySelectorAll("[data-copy]").forEach(b => b.onclick = () => {
+    const p = items[+b.dataset.copy];
+    copy(b.dataset.what === "neg" ? negative(p) : p.prompt, b);
+  });
+  document.querySelectorAll("[data-expand]").forEach(b => b.onclick = () => {
+    const open = document.getElementById("pre" + b.dataset.expand).classList.toggle("open");
+    b.textContent = open ? "Collapse" : "Expand";
+  });
+  document.querySelectorAll("[data-k]").forEach(b => b.onclick = () => { filter = b.dataset.k; draw(); });
+  document.querySelectorAll("[data-c]").forEach(b => b.onclick = () => { cat = b.dataset.c; draw(); });
+}
+
+document.getElementById("q").oninput = e => { query = e.target.value; draw(); };
+fetch("/api/prompts").then(r => r.json()).then(d => { data = d; draw(); });
+</script>
+</body>
+</html>
