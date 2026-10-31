@@ -440,6 +440,14 @@ export function useTokenLoader() {
   }
 }
 
+/** The token of one generated file's recipe, or null when it has none.
+ *  Throws when the recipe cannot be fetched. */
+export async function recipeToken(schema: TabSchema, id: string): Promise<string | null> {
+  const { values, preset } = await api.applyRecipe(schema.key, id)
+  if (Object.keys(values).length === 0) return null
+  return encodeToken(schema, tokenData(schema, { ...defaultsFor(schema), ...values }, preset ?? undefined))
+}
+
 /** The settings token of one generated file: its recipe, as a token.
  *
  *  Built from the recipe rather than the form, so it is the settings that
@@ -468,15 +476,11 @@ export function useImageToken(item: MediaItem | undefined) {
     if (!item || !schema) return null
     setBusy(true)
     try {
-      const { values, preset } = await api.applyRecipe(schema.key, item.id)
-      if (Object.keys(values).length === 0) {
+      const next = await recipeToken(schema, item.id)
+      if (next === null) {
         toast('No settings on file for that one.')
         return null
       }
-      const next = await encodeToken(
-        schema,
-        tokenData(schema, { ...defaultsFor(schema), ...values }, preset ?? undefined),
-      )
       setBuilt({ id: item.id, token: next })
       return next
     } catch (error) {

@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { useQueryClient } from '@tanstack/react-query'
 import { api } from '@/api/client'
-import { useGallery } from '@/api/queries'
+import { useGallery, useSchemas } from '@/api/queries'
 import type { MediaItem, MediaKind } from '@/api/types'
 import {
   Alert,
@@ -13,7 +13,8 @@ import {
   useToast,
 } from '@/components/ui'
 import { packColumns, useColumnCount } from '@/lib/masonry'
-import { cx, fileName, relativeTime, saveFile, useCopy } from '@/lib/util'
+import { cx, fileName, relativeTime, saveBlob, useCopy } from '@/lib/util'
+import { buildZip, uniqueNames, type ZipEntry } from '@/lib/zip'
 import { useQueue } from '@/store/queue'
 import { useTabState } from '@/store/tabState'
 import {
@@ -27,8 +28,19 @@ import {
   TrashIcon,
   VideoIcon,
 } from './icons'
+import { recipeToken } from '@/components/SettingsToken'
 import { Lightbox } from './Lightbox'
 import s from './gallery.module.css'
+
+/** `20261031-142305`: a zip name that sorts by when it was saved and does not
+ *  collide with the one saved a minute ago. */
+function zipStamp(when: Date): string {
+  const pad = (n: number) => String(n).padStart(2, '0')
+  return (
+    `${when.getFullYear()}${pad(when.getMonth() + 1)}${pad(when.getDate())}-` +
+    `${pad(when.getHours())}${pad(when.getMinutes())}${pad(when.getSeconds())}`
+  )
+}
 
 type Density = 'comfortable' | 'compact' | 'large'
 type Filter = 'all' | MediaKind
@@ -93,6 +105,7 @@ export function Gallery() {
   const queryClient = useQueryClient()
   const toast = useToast()
   const confirm = useConfirm()
+  const { data: schemas } = useSchemas()
 
   /* The selection.
    *
@@ -283,13 +296,18 @@ export function Gallery() {
     toast('Deleted')
   }
 
-  /** Save the selection, one file at a time.
+  /** Save the selection, each file with its settings token beside it, as one
+   *  zip.
    *
-   *  Serially and not `Promise.all`: a browser handed forty downloads in one
-   *  tick drops most of them, and it also means `busy` clears when the last
-   *  file has been taken rather than when the first fetch resolved. The
-   *  browser asks once, up front, whether this site may save several files —
-   *  answering no is why the count is reported rather than assumed.
+   *  One zip and not one download per file, because a browser set to ask
+   *  where to save each download asks once per file — fifty dialogs for a
+   *  page. A token is named after its picture, `Krea_00012_.png` beside
+   *  `Krea_00012_.txt`, so a folder sorted by name keeps the pair together;
+   *  a file with no recipe goes in alone. A single file with no token is
+   *  saved as itself, there being nothing to pair it with.
+   *
+   *  Fetched serially so `busy` clears when the archive is handed over, not
+   *  when the first fetch resolved.
    *
    *  Only what is on this page can be saved, which is the same rule the
    *  selection itself follows: it is cleared when the page turns. */
@@ -297,25 +315,53 @@ export function Gallery() {
     const chosen = (items ?? []).filter((item) => selected.has(item.id))
     if (chosen.length === 0 || busy) return
     setBusy(true)
-    let saved = 0
     try {
-      for (const item of chosen) {
+      // Deduped up front so a token follows its picture's final name.
+      const names = uniqueNames(chosen.map((item) => fileName(item.id)))
+      const entries: ZipEntry[] = []
+      let files = 0
+      let tokens = 0
+      for (const [i, item] of chosen.entries()) {
         try {
-          await saveFile(item.url, fileName(item.id))
-          saved += 1
+          const response = await fetch(item.url)
+          if (!response.ok) throw new Error(response.statusText)
+          entries.push({ name: names[i], data: await response.blob() })
+          files += 1
         } catch {
           /* Counted, not thrown: one unreadable file should not cost the
            * other thirty-nine. */
+          continue
+        }
+        const schema = schemas?.find((candidate) => candidate.key === item.tab)
+        try {
+          const token = schema ? await recipeToken(schema, item.id) : null
+          if (token !== null) {
+            entries.push({ name: names[i].replace(/\.[^.]+$/, '') + '.txt', data: new Blob([`${token}\n`]) })
+            tokens += 1
+          }
+        } catch {
+          /* A picture without its token is still worth having. */
         }
       }
+      if (files === 0) {
+        toast('None of those files could be read')
+        return
+      }
+      if (entries.length === 1) {
+        saveBlob(entries[0].data, entries[0].name)
+      } else {
+        saveBlob(await buildZip(entries), `ember-${zipStamp(new Date())}.zip`)
+      }
+      const saved =
+        files === chosen.length
+          ? `Saved ${files} file${files === 1 ? '' : 's'}`
+          : `Saved ${files} of ${chosen.length} files (the rest could not be read)`
+      toast(tokens > 0 ? `${saved} and ${tokens} settings token${tokens === 1 ? '' : 's'}` : saved)
+    } catch (error) {
+      toast(error instanceof Error ? error.message : 'The files could not be saved')
     } finally {
       setBusy(false)
     }
-    toast(
-      saved === chosen.length
-        ? `Saved ${saved} file${saved === 1 ? '' : 's'}`
-        : `Saved ${saved} of ${chosen.length}; the rest could not be read`,
-    )
   }
 
   /** Delete the selection. One request, one confirmation, one refetch. */
