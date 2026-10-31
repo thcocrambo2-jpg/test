@@ -16,7 +16,8 @@ easy to get wrong. For whoever calls this API or changes it.
 | `GET` | `/v1/start.sh` | 302 to a signed URL for the Linux start script. Unauthenticated — the RunPod template fetches it |
 | `GET` | `/v1/start.ps1` | The same for the Windows start script, fetched by a desktop shortcut |
 | `GET` | `/v1/plans` | Public catalogue — `is_public` plans, enabled features, enabled billing cycles |
-| `POST` | `/v1/prompt-library` | The Prompt Library: enabled entries with signed picture links, plus each entry's settings token when the licence has its tab. `{license_key, instance_id, tab?, skip?, limit?}`. Takes no seat |
+| `POST` | `/v1/prompt-library` | The Prompt Library: enabled entries with signed picture links and whether each is `usable` on this licence — no tokens. `{license_key, instance_id, tab?, category?, tags?, skip?, limit?}`. Takes no seat |
+| `POST` | `/v1/prompt-library/token` | One card's settings token, when its Use or Copy is pressed. `{license_key, instance_id, id}`; the entry must be enabled and its tab granted. Takes no seat |
 | `POST` | `/v1/presets` | The app saving one preset. Needs `is_admin`; answers a real error when it refuses |
 | `GET` | `/v1/presets` | Enabled presets, all tabs or `?tab=` |
 | `GET` | `/health` | Liveness + DB reachability |
@@ -63,7 +64,14 @@ index file and its pictures in the private builds bucket:
 library/prompts/index.json          every entry, in display order
 library/prompts/<id>/thumb.webp     the grid picture
 library/prompts/<id>/full.webp      the full-size picture
+library/prompts/<id>/token.txt      its settings token
 ```
+
+The index carries each entry's category key and tag keys, and the two
+lists (key and label, display order) beside the entries. A token is a
+file of its own so that a page is answered from a small index alone; the
+token route fetches one token.txt, and each token read is kept for the
+life of the instance, since it never changes.
 
 Only the operator's local admin page writes them (the app repo's
 `scripts/prompt_library/admin.py`); this service only reads, with the read
@@ -71,10 +79,19 @@ key, and reuses one read of the index for a minute (`src/promptLibrary.js`).
 
 The licence must be valid and grant `community_prompts`. Only entries
 switched on (`enabled: true`) are served, each with signed links to its two
-pictures and its settings token — but the token goes **only to a licence
-that also has that entry's tab**. A tab they have not bought still shows
+pictures and `usable` — whether this licence has the entry's tab. The
+token itself comes from `/v1/prompt-library/token`, **only for a licence
+that has that entry's tab**. A tab they have not bought still shows
 its pictures; they just cannot load the recipe. `tabs` counts the enabled
 entries per tab, for the filter.
+
+`category` narrows to one category key and `tags` to entries carrying
+every tag key listed. `categories` and `tags` in the answer are the
+filters' rows, `{key, label, count}`, each counted with the *other*
+filters applied — the category counts under the chosen tab and tags, the
+tag counts under the chosen tab, category and other tags — so a chip says
+how many pictures picking it would give. Rows with nothing behind them
+are left out, except the ones chosen.
 
 Picture links last six hours and are signed as if at the top of the hour,
 so a picture keeps the same link for the whole hour (the browser caches

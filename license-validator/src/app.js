@@ -86,7 +86,7 @@ import {
   presignGet,
   r2Configured,
 } from "./r2.js";
-import { entryWire, loadEntries, URL_TTL_SECONDS } from "./promptLibrary.js";
+import { entryWire, loadLibrary, tokenFor, URL_TTL_SECONDS } from "./promptLibrary.js";
 import telegramRouter from "./telegram/router.js";
 import { createHash, timingSafeEqual } from "node:crypto";
 import { CRON_SECRET } from "./config.js";
@@ -954,14 +954,26 @@ app.get(
 //
 // A licensed read, unlike /v1/plans: the tokens are the recipes, and they
 // are what a licence pays for. The key must be valid and grant the Prompt
-// Library; each entry's token then goes only to a licence that also has
-// that entry's tab. Disabled entries never leave this function.
+// Library. A page carries pictures and whether each card is usable — no
+// tokens; POST /v1/prompt-library/token hands out one token when a card's
+// Use or Copy is pressed, and only to a licence that also has that entry's
+// tab. Disabled entries never leave either route.
+//
+// Filters: `tab`, `category` (one key) and `tags` (keys, all of which an
+// entry must carry). The counts answer "how many would I get if I picked
+// this", so each list is counted with every *other* filter applied: the
+// category counts under the chosen tab and tags, the tag counts under the
+// chosen tab, category and other tags. Only categories and tags with
+// something behind them are listed.
 const PROMPT_PAGE_MAX = 48;
 
 app.post(
   "/v1/prompt-library",
   wrap(async (req, res) => {
-    const { license_key, instance_id, tab } = req.body || {};
+    const { license_key, instance_id, tab, category } = req.body || {};
+    const tags = Array.isArray(req.body?.tags)
+      ? req.body.tags.filter((key) => typeof key === "string" && key)
+      : [];
     if (!license_key) return badRequest(res, "license_key is required.");
     const { licenses } = await collections();
     const license = await licenses.findOne({ key: license_key });
@@ -979,8 +991,10 @@ app.post(
     }
 
     let entries;
+    let library;
     try {
-      entries = (await loadEntries()).filter((entry) => entry.enabled === true);
+      library = await loadLibrary();
+      entries = library.entries.filter((entry) => entry.enabled === true);
     } catch (error) {
       console.error(`prompts  could not read the library index: ${error.message}`);
       return res.status(503).json({
@@ -992,7 +1006,32 @@ app.post(
 
     const tabs = {};
     for (const entry of entries) tabs[entry.tab] = (tabs[entry.tab] || 0) + 1;
-    const wanted = typeof tab === "string" && tab ? entries.filter((e) => e.tab === tab) : entries;
+
+    const entryTags = (entry) => (Array.isArray(entry.tags) ? entry.tags : []);
+    const inTab = typeof tab === "string" && tab ? entries.filter((e) => e.tab === tab) : entries;
+    const hasTags = (entry, keys) => keys.every((key) => entryTags(entry).includes(key));
+    const wantCategory = typeof category === "string" && category ? category : null;
+
+    const forCategories = inTab.filter((entry) => hasTags(entry, tags));
+    const categories = library.categories
+      .map(({ key, label }) => ({
+        key,
+        label,
+        count: forCategories.filter((entry) => entry.category === key).length,
+      }))
+      .filter((row) => row.count > 0 || row.key === wantCategory);
+
+    const forTags = inTab.filter((entry) => !wantCategory || entry.category === wantCategory);
+    const tagCounts = library.tags
+      .map(({ key, label }) => ({
+        key,
+        label,
+        count: forTags.filter((entry) =>
+          hasTags(entry, [...tags.filter((other) => other !== key), key])).length,
+      }))
+      .filter((row) => row.count > 0 || tags.includes(row.key));
+
+    const wanted = forCategories.filter((entry) => !wantCategory || entry.category === wantCategory);
 
     const skip = Math.max(0, Number.parseInt(req.body.skip, 10) || 0);
     const limit = Math.min(
@@ -1001,7 +1040,7 @@ app.post(
     );
     console.log(
       `prompts  key=${license_key} instance=${instance_id || "-"} ` +
-        `tab=${tab || "*"} skip=${skip}`,
+        `tab=${tab || "*"} category=${wantCategory || "*"} tags=${tags.join("+") || "-"} skip=${skip}`,
     );
     res.json({
       ok: true,
@@ -1010,10 +1049,55 @@ app.post(
         .map((entry) => entryWire(entry, granted.includes(entry.tab))),
       total: wanted.length,
       tabs,
+      categories,
+      tags: tagCounts,
       skip,
       limit,
       url_expires_in: URL_TTL_SECONDS,
     });
+  }),
+);
+
+// One card's settings token, when its Use or Copy is pressed. The same
+// licence checks as the page, plus: the entry must be switched on, and the
+// licence must have its tab.
+app.post(
+  "/v1/prompt-library/token",
+  wrap(async (req, res) => {
+    const { license_key, instance_id, id } = req.body || {};
+    if (!license_key || typeof id !== "string" || !/^[0-9a-f]{12}$/.test(id)) {
+      return badRequest(res, "license_key and an entry id are required.");
+    }
+    const { licenses } = await collections();
+    const license = await licenses.findOne({ key: license_key });
+    const problem = licenseProblem(license);
+    if (problem) return res.status(403).json({ ok: false, ...problem });
+
+    const { features } = await resolveEntitlement(license);
+    const granted = Array.isArray(features) ? features : [];
+    let entry;
+    let token;
+    try {
+      entry = (await loadLibrary()).entries.find((row) => row.id === id && row.enabled === true);
+      if (entry && granted.includes("community_prompts") && granted.includes(entry.tab)) {
+        token = await tokenFor(id);
+      }
+    } catch (error) {
+      console.error(`prompts  could not read token ${id}: ${error.message}`);
+      return res.status(503).json({
+        ok: false,
+        error: "server_error",
+        message: "The prompt library is not available. Try again later.",
+      });
+    }
+    if (!entry) {
+      return res.status(404).json({ ok: false, error: "not_found", message: "That card is no longer in the library." });
+    }
+    if (!token) {
+      return res.status(403).json({ ok: false, error: "not_granted", message: "That card's tab is not part of this licence." });
+    }
+    console.log(`prompts  token key=${license_key} instance=${instance_id || "-"} id=${id}`);
+    res.json({ ok: true, token });
   }),
 );
 
