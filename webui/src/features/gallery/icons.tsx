@@ -224,3 +224,12 @@ export function FlipVIcon() {
     </svg>
   )
 }
+
+/** A lightning bolt, for the ⚡ Ember Lite refine. */
+export function RefineIcon() {
+  return (
+    <svg className={cx(s.btnIcon, s.btnIconAlone)} viewBox="0 0 24 24" aria-hidden="true">
+      <path d="M13 2 4 14h7l-1 8 9-12h-7l1-8z" />
+    </svg>
+  )
+}

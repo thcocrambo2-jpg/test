@@ -82,6 +82,31 @@ section says.
 If a refine fails, the click stops there with a ⚠️ status; every picture
 already made is kept.
 
+### Refining a picture later
+
+For a picture made with the refine off, the Gallery viewer's zoom,
+rotate and flip toolbar (🛠, or **T**) has a ⚡ **Refine in Ember Lite**
+button. It opens Ember Lite with the run the refine would have made:
+
+| Control | Filled with |
+|---|---|
+| Start image | the picture, as saved (rotate and flip only change the view) |
+| Prompt | that run's Refine prompt box if it had text; else its own prompt on a generate tab, or the realism prompt on an edit tab |
+| Seed | the seed it ran on, Random seed off |
+| Denoise | 0.25 |
+| Steps, CFG, sampler, size | 12, 1, er_sde, the picture's pixel count as below |
+
+A picture with no recipe (an upload, or one from before recipes) gets
+the realism prompt and Ember Lite's own random seed. Change anything and
+press Generate; the result is an ordinary Ember Lite picture.
+
+The button is on stills only, and only for a licence with the Ember Lite
+tab. It is not on Ember Lite's own pictures, refined ones included,
+where **Load these settings** already does this. Underneath it is the
+Ember Lite tab's apply route with `{"refine": <file>}`, which builds the
+recipe with `gallery_recipe` in refine.py from the same code the refine
+files its recipes with.
+
 ## How it runs
 
 [`ember/pipelines/zimage/refine.py`](../../ember/pipelines/zimage/refine.py)

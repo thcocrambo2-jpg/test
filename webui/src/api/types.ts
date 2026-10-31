@@ -641,6 +641,13 @@ export interface ApiClient {
     values: Record<string, unknown>
     preset: { name: string; values: Record<string, unknown> } | null
   }>
+  /** Ember Lite's form, ready to refine one Gallery picture: the picture
+   *  as the start image, with the refine tick's prompt, seed and denoise.
+   *  `preset` is always null — the refine runs on none. */
+  applyRefine(tabKey: string, pathId: string): Promise<{
+    values: Record<string, unknown>
+    preset: null
+  }>
   applySettings(tabKey: string, settings: Record<string, unknown>): Promise<Record<string, unknown>>
   /** A decoded settings token, guarded by the pod. `notes` names every
    *  value that could not go in and every number that was clamped. */

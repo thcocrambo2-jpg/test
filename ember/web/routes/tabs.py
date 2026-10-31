@@ -11,6 +11,7 @@ from ember.web import gallery_index
 from ember.generation import queue as jobqueue
 from ember.licensing import presets
 from ember.generation import recipes
+from ember.pipelines.zimage import refine as zimage_refine
 from ember.web import tabschema
 from ember.web.routes import autoprompt
 from ember.web.routes.common import (
@@ -56,7 +57,8 @@ def _mount_tab(api: APIRouter, schema) -> None:
     @api.post("/schema/%s/apply" % key, dependencies=gate,
               name="apply_" + key)
     def apply(body: dict = Body(default={})):
-        """A preset name, a stored recipe or a settings token -> values.
+        """A preset name, a stored recipe, a settings token or a Gallery
+        picture to refine -> values.
 
         Server-side, and it has to be: guarding a value means knowing
         whether this pod has that LoRA file and what this build's slider
@@ -77,6 +79,21 @@ def _mount_tab(api: APIRouter, schema) -> None:
                 return {"values": {}, "applied": None}
             return {"values": schema.preset_values(settings),
                     "applied": name}
+        if "refine" in body:
+            # The Gallery's ⚡ Refine: a picture opened in Ember Lite ready
+            # to refine, as the recipe the refine tick would have filed
+            # for it (pipelines/zimage/refine.py). Loaded as any recipe is,
+            # so every other tab answers that it belongs to Ember Lite.
+            try:
+                target = gallery_index.safe_path(str(body.get("refine")))
+            except (ValueError, OSError):
+                raise HTTPException(404, "No such file.")
+            if not target.is_file():
+                raise HTTPException(404, "No such file.")
+            try:
+                body = {"recipe": zimage_refine.gallery_recipe(target)}
+            except OSError:
+                raise HTTPException(400, "That file is not a picture.")
         if "recipe" in body:
             stored = body.get("recipe")
             if isinstance(stored, str):

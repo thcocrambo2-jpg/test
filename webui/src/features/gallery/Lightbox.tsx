@@ -16,6 +16,7 @@ import {
   DownloadIcon,
   FlipHIcon,
   FlipVIcon,
+  RefineIcon,
   ResetIcon,
   RotateIcon,
   ToolsIcon,
@@ -93,6 +94,7 @@ export function Lightbox({
    * whatever the phone was holding before. */
   const toast = useToast()
   const reuse = useReuse(item)
+  const refine = useRefine(item)
   const settings = useImageToken(item)
   const [saving, setSaving] = useState(false)
   const still = item !== undefined && item.kind !== 'video'
@@ -456,6 +458,25 @@ export function Lightbox({
             >
               <FlipVIcon />
             </button>
+            {refine.can && (
+              <>
+                <span className={s.viewSep} aria-hidden="true" />
+                <button
+                  type="button"
+                  className={s.viewTool}
+                  disabled={refine.busy}
+                  onClick={() => {
+                    void refine.load().then((loaded) => {
+                      if (loaded) onClose()
+                    })
+                  }}
+                  aria-label="Refine in Ember Lite"
+                  title="Refine in ⚡ Ember Lite — opens it with this picture as the start image"
+                >
+                  <RefineIcon />
+                </button>
+              </>
+            )}
             {/* Always there, and only enabled once there is something to
                 undo. Appearing on the first change slid every button left of
                 it along by its width, from under the finger that had just
@@ -593,13 +614,56 @@ async function sourceFile(url: string): Promise<File | null> {
  */
 function useReuse(item: MediaItem | undefined) {
   const { data: schemas } = useSchemas()
+  const schema = schemas?.find((candidate) => candidate.key === item?.tab)
+  const { busy, load } = useLoadInto(schema, () => api.applyRecipe(schema!.key, item!.id), {
+    loaded: 'Settings loaded.',
+    empty: 'No recipe on file for that one.',
+  })
+  return { can: Boolean(item && schema), busy, load, label: schema?.label ?? '' }
+}
+
+/** The ⚡ Ember Lite tab's key: the refine's tab, and the Gallery's. */
+const EMBER_LITE = 'zimage_t2i'
+
+/** "⚡ Refine in Ember Lite" for one picture made with the refine off.
+ *
+ *  Opens Ember Lite ready to refine it — the picture as the start image,
+ *  its prompt (or the realism prompt for an edit, or for a picture with no
+ *  recipe), its seed, the refine's denoise, steps and size — which is the
+ *  run the refine tick would have made (pipelines/zimage/refine.py). The
+ *  server builds it, from the picture's recipe and its pixel count.
+ *
+ *  Offered on stills only, and only for a licence with the Ember Lite tab,
+ *  which is what `schemas` holding it says. Not on Ember Lite's own output,
+ *  refined pictures included: "Load these settings" already opens that run
+ *  again, start image and all. */
+function useRefine(item: MediaItem | undefined) {
+  const { data: schemas } = useSchemas()
+  const schema = schemas?.find((candidate) => candidate.key === EMBER_LITE)
+  const { busy, load } = useLoadInto(schema, () => api.applyRefine(EMBER_LITE, item!.id), {
+    loaded: 'Ready to refine — press Generate.',
+    empty: 'That picture could not be opened.',
+  })
+  const can = Boolean(item && schema && item.kind !== 'video' && item.tab !== EMBER_LITE)
+  return { can, busy, load }
+}
+
+/** One apply answer, handed to `schema`'s form and shown.
+ *
+ *  `ask` asks the server for the values; `notes` are the two toasts. Shared
+ *  by the two buttons that open a tab from a picture. */
+function useLoadInto(
+  schema: TabSchema | undefined,
+  ask: () => Promise<{
+    values: Record<string, unknown>
+    preset: { name: string; values: Record<string, unknown> } | null
+  }>,
+  notes: { loaded: string; empty: string },
+) {
   const navigate = useNavigate()
   const offer = useHandoff((state) => state.offer)
   const toast = useToast()
   const [busy, setBusy] = useState(false)
-
-  const schema = schemas?.find((candidate) => candidate.key === item?.tab)
-  const can = Boolean(item && schema)
 
   /** True when the values actually went somewhere, so the caller can shut
    *  the dialog on the way out. Worth reporting rather than assuming: from
@@ -607,12 +671,12 @@ function useReuse(item: MediaItem | undefined) {
    *  on screen and moves nothing, so closing is the only thing that says
    *  the click was heard. */
   async function load(): Promise<boolean> {
-    if (!item || !schema) return false
+    if (!schema) return false
     setBusy(true)
     try {
-      const { values, preset } = await api.applyRecipe(schema.key, item.id)
+      const { values, preset } = await ask()
       if (Object.keys(values).length === 0) {
-        toast('No recipe on file for that one.')
+        toast(notes.empty)
         return false
       }
       /* The preset dropdown follows the recipe: the preset that run started
@@ -629,12 +693,12 @@ function useReuse(item: MediaItem | undefined) {
       )
       offer(schema.key, await withSources(schema, values))
       navigate(schema.route)
-      /* Names the seed, because the form does not: the box now holds the
-       * number this picture ran on and the control above it says, quite
-       * correctly, that it is being ignored. Somebody who came here for
-       * that exact frame would otherwise have no way of knowing they are
-       * one tick away from it. */
-      toast('Settings loaded.')
+      /* Said, because the dialog closing is the only other sign: for
+       * "Load these settings" the box now holds the number this picture
+       * ran on and the control above it says, quite correctly, that it is
+       * being ignored — somebody who came for that exact frame would
+       * otherwise not know they are one tick away from it. */
+      toast(notes.loaded)
       return true
     } catch (error) {
       toast(error instanceof Error ? error.message : String(error))
@@ -644,5 +708,5 @@ function useReuse(item: MediaItem | undefined) {
     }
   }
 
-  return { can, busy, load, label: schema?.label ?? '' }
+  return { busy, load }
 }

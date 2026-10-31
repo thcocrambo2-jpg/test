@@ -290,6 +290,16 @@ export const httpClient: ApiClient = {
     return { values: body.values, preset }
   },
 
+  /** Ember Lite's form, ready to refine one Gallery picture — the refine
+   *  tick's run, after the fact (pipelines/zimage/refine.py). */
+  async applyRefine(tabKey: string, pathId: string) {
+    const body = await send<{ values: Record<string, unknown> }>(
+      `/schema/${encodeURIComponent(tabKey)}/apply`,
+      { refine: pathId },
+    )
+    return { values: body.values, preset: null }
+  },
+
   /* One EventSource for the whole application.
    *
    * SSE and not websockets, and the reason is the server rather than taste:

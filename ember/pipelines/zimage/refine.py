@@ -47,6 +47,7 @@ from ember.generation.handlers import ZIMAGE_REFINE, _check_model
 from ember.generation.runner import _png_bytes
 from ember.pipelines.zimage.constants import (
     REFINE_CFG,
+    REFINE_DEFAULT_DENOISE,
     REFINE_EDIT_PROMPT,
     REFINE_FIELD_LABEL,
     REFINE_RESOLUTION,
@@ -128,37 +129,87 @@ class Refine:
         }
 
     def recipe(self, path, seed: int) -> dict:
-        """The refined picture's recipe: the Ember Lite run it amounts to.
+        """The refined picture's recipe: the Ember Lite run it amounts to."""
+        return ember_lite_recipe(path, self.prompt, self.denoise, seed,
+                                 self.model_id)
 
-        What recipes.begin would have filed had the Ember Lite tab made
-        it, with the original kept as its start image. Without a kept copy
-        the start image slot is empty and loading it leaves the drop zone
-        alone, as for any recipe whose source is gone. `refined_from` names
-        the original.
-        """
-        # Late: tabschema imports every tab's handler, and those import
-        # this module.
-        from ember.web.schema.tabs.zimage import ZIMAGE_SCHEMA
 
-        with Image.open(path) as image:
-            fmt = image.format
-            multiplier = refine_multiplier(*image.size)
-        kept = sources.keep(path, fmt)
-        values = ZIMAGE_SCHEMA.defaults()
-        values.update(
-            prompt=self.prompt, negative="", seed=int(seed), randomize=False,
-            steps=REFINE_STEPS, cfg=REFINE_CFG, resolution=REFINE_RESOLUTION,
-            multiplier=multiplier, sampler=REFINE_SAMPLER,
-            model=self.model_id, upscale=False, batch_count=1,
-            denoise=self.denoise)
-        return {
-            "tab": str(ZIMAGE_SCHEMA.key), "tab_label": ZIMAGE_SCHEMA.title(),
-            "tab_id": ZIMAGE_SCHEMA.tab_id,
-            "fields": ZIMAGE_SCHEMA.recipe_fields(
-                values, {"image": kept} if kept else {}),
-            "seed": int(seed), "preset": "",
-            "refined_from": recipes.key_for(path),
-        }
+def ember_lite_recipe(path, prompt, denoise, seed=None, model=None) -> dict:
+    """The Ember Lite recipe that refines the picture at `path`.
+
+    What recipes.begin would have filed had the Ember Lite tab made it,
+    with the picture kept as its start image: the prompt, denoise and seed
+    given, 12 steps at CFG 1 on er_sde, no LoRAs, at the picture's pixel
+    count. Without a kept copy the start image slot is empty and loading
+    it leaves the drop zone alone, as for any recipe whose source is gone.
+    `refined_from` names the picture. A seed or model of None leaves the
+    tab's own (its Random seed tick, its default model).
+    """
+    # Late: tabschema imports every tab's handler, and those import this
+    # module.
+    from ember.web.schema.tabs.zimage import ZIMAGE_SCHEMA
+
+    with Image.open(path) as image:
+        fmt = image.format
+        multiplier = refine_multiplier(*image.size)
+    kept = sources.keep(path, fmt)
+    values = ZIMAGE_SCHEMA.defaults()
+    values.update(
+        prompt=prompt, negative="", steps=REFINE_STEPS, cfg=REFINE_CFG,
+        resolution=REFINE_RESOLUTION, multiplier=multiplier,
+        sampler=REFINE_SAMPLER, upscale=False, batch_count=1,
+        denoise=float(denoise))
+    if seed is not None:
+        values.update(seed=int(seed), randomize=False)
+    if model is not None:
+        values.update(model=model)
+    return {
+        "tab": str(ZIMAGE_SCHEMA.key), "tab_label": ZIMAGE_SCHEMA.title(),
+        "tab_id": ZIMAGE_SCHEMA.tab_id,
+        "fields": ZIMAGE_SCHEMA.recipe_fields(
+            values, {"image": kept} if kept else {}),
+        "seed": None if seed is None else int(seed), "preset": "",
+        "refined_from": recipes.key_for(path),
+    }
+
+
+def gallery_recipe(path) -> dict:
+    """The Ember Lite recipe for refining a Gallery picture after the fact.
+
+    The Gallery's ⚡ Refine: a picture made with the refine off, or an
+    upload, opened in Ember Lite ready to refine — the same run the tick
+    would have made. The prompt comes from the picture's own recipe as the
+    refine's does (refine_prompt), the seed is the one it ran on, and the
+    denoise is the default. With no recipe, the realism prompt and the
+    tab's random seed.
+    """
+    from ember.web import tabschema   # late, as in ember_lite_recipe
+
+    stored = recipes.for_path(path) or {}
+    schema = tabschema.BY_KEY.get(str(stored.get("tab")))
+    if schema is None:
+        return ember_lite_recipe(path, REFINE_EDIT_PROMPT,
+                                 REFINE_DEFAULT_DENOISE)
+    values = schema.restore_recipe(stored.get("fields") or [])
+    text = refine_prompt(values.get("refine_prompt"),
+                         values.get(schema.prompt_field),
+                         edit=schema.category == "edit")
+    return ember_lite_recipe(path, text, REFINE_DEFAULT_DENOISE,
+                             stored.get("seed"))
+
+
+def refine_prompt(box, main_prompt, edit=False) -> str:
+    """What a refine is prompted with: the box's text when it has some.
+
+    Empty, the generate tabs refine with their own `main_prompt` — a
+    description of the picture — and the edit tabs (`edit`) with
+    REFINE_EDIT_PROMPT, because theirs is an instruction.
+    """
+    text = str(box or "").strip()
+    if text:
+        return text
+    return (REFINE_EDIT_PROMPT if edit
+            else str(main_prompt or "").strip() or REFINE_EDIT_PROMPT)
 
 
 def refine_spec(on, denoise, prompt, main_prompt, edit=False):
@@ -169,10 +220,8 @@ def refine_spec(on, denoise, prompt, main_prompt, edit=False):
     it at off anyway). An error when it is on and cannot run, so the click
     is refused before anything renders rather than half way through.
 
-    The prompt is the box's when it has one. Empty, the generate tabs
-    refine with their own `main_prompt` — a description of the picture —
-    and the edit tabs (`edit`) with REFINE_EDIT_PROMPT, because theirs is
-    an instruction.
+    The prompt is refine_prompt's choice between the box, `main_prompt`
+    and the realism prompt.
     """
     if not on or not features.enabled(features.Key.ZIMAGE_REFINE):
         return None, None
@@ -185,8 +234,5 @@ def refine_spec(on, denoise, prompt, main_prompt, edit=False):
                       "yet (missing: %s) — restart the app so the download "
                       "step can fetch them, or untick the refine."
                       % ", ".join(missing))
-    text = str(prompt or "").strip()
-    if not text:
-        text = (REFINE_EDIT_PROMPT if edit
-                else str(main_prompt or "").strip() or REFINE_EDIT_PROMPT)
-    return Refine(text, float(denoise), entry.id, entry.file), None
+    return Refine(refine_prompt(prompt, main_prompt, edit), float(denoise),
+                  entry.id, entry.file), None
