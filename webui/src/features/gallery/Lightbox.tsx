@@ -16,6 +16,7 @@ import {
   DownloadIcon,
   FlipHIcon,
   FlipVIcon,
+  HeartIcon,
   RefineIcon,
   ResetIcon,
   RotateIcon,
@@ -74,12 +75,16 @@ export function Lightbox({
   onIndex,
   onClose,
   onDelete,
+  onLike,
 }: {
   items: MediaItem[]
   index: number
   onIndex: (next: number) => void
   onClose: () => void
   onDelete?: (item: MediaItem) => void
+  /** Heart or un-heart the file on screen. The Gallery's; a tab's own
+   *  results do not offer it. */
+  onLike?: (item: MediaItem) => void
 }) {
   const item = items[index]
   const stripRef = useRef<HTMLDivElement>(null)
@@ -132,11 +137,15 @@ export function Lightbox({
    * zoom step. */
   const viewKeys = useRef<(event: KeyboardEvent) => boolean>(() => false)
   viewKeys.current = (event) => {
-    if (!still) return false
-    if (!event.ctrlKey && !event.metaKey && !event.altKey && (event.key === 't' || event.key === 'T')) {
+    if (still && !event.ctrlKey && !event.metaKey && !event.altKey && (event.key === 't' || event.key === 'T')) {
       setTools((on) => !on)
       return true
     }
+    if (onLike && item && !event.ctrlKey && !event.metaKey && !event.altKey && (event.key === 'l' || event.key === 'L')) {
+      onLike(item)
+      return true
+    }
+    if (!still) return false
     return view.onKey(event)
   }
 
@@ -213,6 +222,23 @@ export function Lightbox({
           <Pill>
             {index + 1} / {items.length}
           </Pill>
+          {/* First of the actions, where a thumb finds it on a phone: the
+              viewer is where a phone likes things, since a tap on a tile
+              opens it rather than reaching the tile's own heart. */}
+          {onLike && (
+            <Button
+              size="sm"
+              variant="ghost"
+              iconOnly
+              className={cx(item.liked && s.likeButtonOn)}
+              onClick={() => onLike(item)}
+              aria-pressed={Boolean(item.liked)}
+              aria-label={item.liked ? 'Unlike' : 'Like'}
+              title={item.liked ? 'Remove from Favourites (L)' : 'Add to Favourites (L)'}
+            >
+              <HeartIcon filled={item.liked} alone />
+            </Button>
+          )}
           {still && (
             <Button
               size="sm"

@@ -19,6 +19,7 @@ from PIL import Image
 
 from ember import features
 from ember.web import gallery_index
+from ember.web import likes
 from ember.generation import queue as jobqueue
 from ember.generation import recipes
 from ember.generation import sources
@@ -294,6 +295,7 @@ def _media(path, recipe=None) -> dict:
         "width": 16 if is_video else 0,
         "height": 9 if is_video else 0,
         "createdAt": "",
+        "liked": likes.is_liked(key),
     }
     try:
         stat = Path(path).stat()

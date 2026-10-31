@@ -345,6 +345,8 @@ export interface MediaItem {
   seed?: number
   prompt?: string
   tab?: string
+  /** Hearted in the Gallery. Kept on the pod, so every device sees it. */
+  liked?: boolean
 }
 
 export interface QueueJob {
@@ -602,7 +604,7 @@ export interface ApiClient {
    *  only, which is what the reuse strip under an upload field wants — a
    *  page of the whole listing taken on a video tab is mostly clips, and
    *  an image input cannot take one. Both kinds are the gallery's filter. */
-  getGallery(cursor: string | null, kind?: MediaKind): Promise<GalleryPage>
+  getGallery(cursor: string | null, kind?: MediaKind, liked?: boolean): Promise<GalleryPage>
   /** The Recent uploads strip's list. Not gated on the Gallery feature. */
   getRecentUploads(): Promise<RecentUploads>
   deleteMedia(id: string): Promise<void>
@@ -618,6 +620,8 @@ export interface ApiClient {
   /** Delete a selection in one request. Partial success is normal — the
    *  ids that would not go come back in `failed`. */
   deleteMediaMany(ids: string[]): Promise<{ deleted: number; failed: string[] }>
+  /** Heart or un-heart files. `failed` names the ids that are not files. */
+  likeMedia(ids: string[], liked: boolean): Promise<{ changed: number; failed: string[] }>
   /** One run's latest yield, over plain HTTP. The `display` stream event's
    *  twin, and the half of the polling fallback that carries images —
    *  `getQueue` carries statuses and no media at all.

@@ -30,6 +30,19 @@ The Gallery is **a reflowing masonry of tiles, plus a lightbox over it**.
   manager does — and deleted in one request through
   `POST /api/v1/gallery/delete`.
 
+- **Favourites.** A heart on a tile (top right; shown on hover, and always
+  once given), in the lightbox header, and **L** on a focused tile or in the
+  lightbox likes a file; the selection bar likes a whole selection. The ♡
+  toggle beside the filter narrows the listing to liked files on the server
+  (`?liked=1`), on top of the kind, for the same cursor reason. On a phone,
+  where a tap on a tile opens it, the lightbox heart is the way in.
+  Likes are kept on the pod in `<output>/.likes.json` — dotted, so the index
+  and the zip skip it — not in the browser, so a heart given on the phone is
+  there on the desktop. `POST /api/v1/gallery/like` takes
+  `{ids, liked}`; a delete drops the file's like. The UI paints a heart at
+  once and only marks the Favourites listing stale, so un-hearting a
+  picture there does not pull it out from under the finger.
+
 Where you were and how you had it looking — the cursor, the filter and the density —
 live in per-tab state, because the page unmounts the instant you glance at
 a generate tab and paging to the fourth screen is work. The lightbox

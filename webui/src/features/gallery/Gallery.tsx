@@ -2,7 +2,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { useQueryClient } from '@tanstack/react-query'
 import { api } from '@/api/client'
 import { useGallery, useSchemas } from '@/api/queries'
-import type { MediaItem, MediaKind } from '@/api/types'
+import type { GalleryPage, MediaItem, MediaKind } from '@/api/types'
 import {
   Alert,
   Button,
@@ -22,6 +22,7 @@ import {
   ComfortableIcon,
   CompactIcon,
   DownloadIcon,
+  HeartIcon,
   ImageIcon,
   LargeIcon,
   PlayIcon,
@@ -91,6 +92,9 @@ export function Gallery() {
    * that skips past the rest. A narrowed listing is a different list, so
    * changing the filter starts it from the top. */
   const [filter, setFilterState] = useTabState<Filter>('gallery.filter', 'all')
+  /* Favourites only, on top of the kind: "my liked videos" is one question.
+   * Asked of the server for the same reason as the kind. */
+  const [likedOnly, setLikedOnlyState] = useTabState<boolean>('gallery.liked', false)
   /* Which file the lightbox is showing, by id and not by position.
    *
    * An index would be a position into a list that moves under it: the
@@ -101,7 +105,11 @@ export function Gallery() {
    * not grow as a batch landed. An id names one file for as long as it
    * exists, so the list is free to move. */
   const [openId, setOpenId] = useState<string | null>(null)
-  const { data, isLoading, error } = useGallery(cursor, filter === 'all' ? undefined : filter)
+  const { data, isLoading, error } = useGallery(
+    cursor,
+    filter === 'all' ? undefined : filter,
+    likedOnly,
+  )
   const queryClient = useQueryClient()
   const toast = useToast()
   const confirm = useConfirm()
@@ -130,6 +138,9 @@ export function Gallery() {
 
   const items = data?.items
   const selecting = selected.size > 0
+  /* What the selection bar's heart does: un-heart only when every picked
+   * file already has one, so a mixed selection is liked whole. */
+  const allLiked = selecting && (items ?? []).every((item) => !selected.has(item.id) || item.liked)
   /* What the lightbox has been shown, kept for as long as it is open.
    *
    * A page holds 50 files and new ones arrive at the front, so a refresh
@@ -271,14 +282,60 @@ export function Gallery() {
     void queryClient.invalidateQueries({ queryKey: ['gallery'] })
   }
 
-  function setFilter(next: Filter) {
-    if (next === filter) return
-    setFilterState(next)
+  /** Start a narrowed listing from the top. */
+  function restart() {
     setOpenId(null)
     setSelected(new Set())
     anchor.current = null
     setStack([])
     setCursor(null)
+  }
+
+  function setFilter(next: Filter) {
+    if (next === filter) return
+    setFilterState(next)
+    restart()
+  }
+
+  function setLikedOnly(next: boolean) {
+    if (next === likedOnly) return
+    setLikedOnlyState(next)
+    restart()
+  }
+
+  /** Heart or un-heart `ids`.
+   *
+   *  Painted at once and told to the server after, because a heart that
+   *  waits a round trip over the tunnel feels broken on a phone. Every
+   *  cached page under `['gallery']` is patched — the grid, the reuse strip
+   *  under the image inputs, the other filters — so whichever one is
+   *  looked at next already agrees.
+   *
+   *  The favourites listing is only marked stale, not refetched: un-hearting
+   *  the picture you are looking at in Favourites should not whisk it off
+   *  the screen from under your thumb. It goes the next time the list is
+   *  loaded, and a slip of the finger can be put right before then. */
+  async function like(ids: string[], liked: boolean) {
+    if (ids.length === 0) return
+    const wanted = new Set(ids)
+    queryClient.setQueriesData<GalleryPage>({ queryKey: ['gallery'] }, (page) =>
+      page && {
+        ...page,
+        items: page.items.map((item) => (wanted.has(item.id) ? { ...item, liked } : item)),
+      },
+    )
+    try {
+      await api.likeMedia(ids, liked)
+      void queryClient.invalidateQueries({
+        queryKey: ['gallery'],
+        predicate: (query) => query.queryKey[2] === 'liked',
+        refetchType: 'none',
+      })
+    } catch (error) {
+      // Back to what the pod actually has.
+      void queryClient.invalidateQueries({ queryKey: ['gallery'] })
+      toast(error instanceof Error ? error.message : 'That could not be saved')
+    }
   }
 
   /** Delete one file, from the lightbox. */
@@ -425,6 +482,16 @@ export function Gallery() {
               <Button
                 size="sm"
                 variant="ghost"
+                disabled={busy}
+                onClick={() => void like([...selected], !allLiked)}
+                aria-pressed={allLiked}
+                title={allLiked ? 'Remove these from Favourites' : 'Add these to Favourites'}
+              >
+                <HeartIcon filled={allLiked} /> {allLiked ? 'Unlike' : 'Like'}
+              </Button>
+              <Button
+                size="sm"
+                variant="ghost"
                 loading={busy}
                 onClick={() => void downloadSelected()}
                 title={`Download ${selected.size} file${selected.size === 1 ? '' : 's'}`}
@@ -443,7 +510,9 @@ export function Gallery() {
             </div>
           ) : (
             <span className={s.count}>
-              {data ? `${data.total} ${NOUN[filter][data.total === 1 ? 0 : 1]}` : ' '}
+              {data
+                ? `${data.total} ${likedOnly ? 'liked ' : ''}${NOUN[filter][data.total === 1 ? 0 : 1]}`
+                : ' '}
             </span>
           )}
           {pending > 0 && (
@@ -492,6 +561,20 @@ export function Gallery() {
               },
             ]}
           />
+          {/* A toggle and not a fourth segment: it narrows whichever kind is
+              chosen rather than replacing it. */}
+          <Button
+            size="sm"
+            variant="ghost"
+            iconOnly
+            className={cx(likedOnly && s.likedFilterOn)}
+            onClick={() => setLikedOnly(!likedOnly)}
+            aria-pressed={likedOnly}
+            aria-label="Favourites only"
+            title={likedOnly ? 'Showing favourites — show everything' : 'Show favourites only'}
+          >
+            <HeartIcon filled={likedOnly} alone />
+          </Button>
           <Segmented
             value={density}
             ariaLabel="Tile size"
@@ -530,12 +613,25 @@ export function Gallery() {
                     anySelected={selecting}
                     onSelect={(range) => toggle(index, range)}
                     onOpen={() => setOpenId(item.id)}
+                    onLike={() => void like([item.id], !item.liked)}
                   />
                 )
               })}
             </div>
           ))}
         </div>
+      ) : likedOnly ? (
+        <EmptyState
+          icon="♡"
+          title={`No liked ${NOUN[filter][1]} yet`}
+          action={
+            <Button size="sm" onClick={() => setLikedOnly(false)}>
+              Show everything
+            </Button>
+          }
+        >
+          Tap the heart on a picture, here or in the viewer, to keep it in Favourites.
+        </EmptyState>
       ) : filter === 'all' ? (
         <EmptyState icon="🖼️" title="Nothing here yet">
           Everything you generate lands here automatically, newest first.
@@ -584,6 +680,7 @@ export function Gallery() {
           onIndex={(next) => setOpenId(viewing[next]?.id ?? null)}
           onClose={() => setOpenId(null)}
           onDelete={(item) => void remove(item)}
+          onLike={(item) => void like([item.id], !item.liked)}
         />
       )}
     </>
@@ -602,6 +699,7 @@ function Tile({
   anySelected,
   onSelect,
   onOpen,
+  onLike,
 }: {
   item: MediaItem
   selected: boolean
@@ -610,11 +708,12 @@ function Tile({
   anySelected: boolean
   onSelect: (range: boolean) => void
   onOpen: () => void
+  onLike: () => void
 }) {
   const { copied, copy } = useCopy()
   return (
     <div
-      className={cx(s.tile, selected && s.tileSelected)}
+      className={cx(s.tile, selected && s.tileSelected, item.liked && s.tileLiked)}
       style={{ ['--ratio' as string]: `${item.width} / ${item.height}` }}
       role="button"
       tabIndex={0}
@@ -637,6 +736,7 @@ function Tile({
           event.preventDefault()
           onSelect(false)
         }
+        if (event.key === 'l' || event.key === 'L') onLike()
       }}
     >
       {/* The 512px WebP, not the multi-megabyte original: a page of tiles is
@@ -688,6 +788,23 @@ function Tile({
           <PlayIcon />
         </span>
       )}
+      {/* Top right, beside the clip marker. A given heart always shows, so
+          Favourites can be seen at a glance on any screen; an empty one only
+          on hover, which a phone does not have — there a tap opens the
+          picture, and the viewer's heart is the way to give one. */}
+      <button
+        type="button"
+        className={cx(s.heart, item.liked && s.heartOn)}
+        onClick={(event) => {
+          event.stopPropagation()
+          onLike()
+        }}
+        aria-pressed={Boolean(item.liked)}
+        aria-label={item.liked ? 'Unlike' : 'Like'}
+        title={item.liked ? 'Remove from Favourites (L)' : 'Add to Favourites (L)'}
+      >
+        <HeartIcon filled={item.liked} alone />
+      </button>
       <label
         className={cx(s.pick, (selected || anySelected) && s.pickShown)}
         onClick={(event) => event.stopPropagation()}

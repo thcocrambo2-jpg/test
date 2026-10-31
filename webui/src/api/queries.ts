@@ -88,11 +88,12 @@ export function useShowcase() {
  *  server pages a *narrowed* listing, so the stills page and the everything
  *  page are two different lists with two different cursors. Both sit under
  *  `['gallery', …]`, so the `invalidateQueries({ queryKey: ['gallery'] })`
- *  every delete already does still reaches both. */
-export function useGallery(cursor: string | null, kind?: MediaKind) {
+ *  every delete already does still reaches both. `liked` — the favourites
+ *  filter — is the same kind of narrowing, and keyed the same way. */
+export function useGallery(cursor: string | null, kind?: MediaKind, liked = false) {
   return useQuery({
-    queryKey: ['gallery', kind ?? 'all', cursor],
-    queryFn: () => api.getGallery(cursor, kind),
+    queryKey: ['gallery', kind ?? 'all', liked ? 'liked' : 'any', cursor],
+    queryFn: () => api.getGallery(cursor, kind, liked),
     staleTime: 30_000,
   })
 }

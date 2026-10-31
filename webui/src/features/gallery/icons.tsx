@@ -21,6 +21,20 @@ export function TrashIcon() {
   )
 }
 
+/** The heart: outlined, or filled once given. `alone` drops the gap a
+ *  label beside it would want. */
+export function HeartIcon({ filled = false, alone = false }: { filled?: boolean; alone?: boolean }) {
+  return (
+    <svg
+      className={cx(s.btnIcon, alone && s.btnIconAlone, filled && s.heartFilled)}
+      viewBox="0 0 24 24"
+      aria-hidden="true"
+    >
+      <path d="M12 20s-7-4.4-7-10a4 4 0 0 1 7-2.6A4 4 0 0 1 19 10c0 5.6-7 10-7 10z" />
+    </svg>
+  )
+}
+
 /** The tray with an arrow into it. */
 export function DownloadIcon() {
   return (

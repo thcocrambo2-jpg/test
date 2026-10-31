@@ -128,6 +128,80 @@
   margin-left: 1px;
 }
 
+/* ---------------------------------------------------------------- hearts
+
+   The tile's heart, top right — the clip marker's corner, which slides one
+   box to the left whenever a heart is there to share it. The same box and
+   scrim as `.pick` and `.playBadge`, so the corners stay one family.
+
+   Hidden until hover, like the checkbox, unless the heart has been given: a
+   liked tile says so on any screen. The hover reveal is limited to pointers
+   that hover, because a phone's tap fakes a hover on its way to opening the
+   picture, and a heart flashing up under a finger that is already leaving
+   is a target nobody can hit.
+
+   The red is `--c-error`'s, borrowed for its colour and not its meaning:
+   it is the pink-red every phone draws a heart in. */
+.heart {
+  position: absolute;
+  inset: var(--s-2) var(--s-2) auto auto;
+  z-index: 1;
+  display: grid;
+  place-items: center;
+  width: 26px;
+  height: 26px;
+  padding: 0;
+  border: 0;
+  border-radius: var(--r-sm);
+  background: var(--c-media-scrim);
+  color: #fff;
+  cursor: pointer;
+  opacity: 0;
+  transition: opacity var(--d-fast) var(--e-out), transform var(--d-fast) var(--e-out);
+  line-height: 0;
+}
+
+.heart:active {
+  transform: scale(0.88);
+}
+
+.heartOn,
+.tile:focus-within .heart {
+  opacity: 1;
+}
+
+.heartOn {
+  color: var(--c-error);
+}
+
+@media (hover: hover) {
+  .tile:hover .heart {
+    opacity: 1;
+  }
+
+  .tile:hover .playBadge {
+    right: calc(var(--s-2) + 26px + var(--s-1));
+  }
+}
+
+.tileLiked .playBadge,
+.tile:focus-within .playBadge {
+  right: calc(var(--s-2) + 26px + var(--s-1));
+}
+
+/* A given heart is drawn solid. */
+.heartFilled {
+  fill: currentColor;
+}
+
+/* The toolbar's Favourites toggle and the viewer's heart: red once on. */
+.likedFilterOn,
+.likedFilterOn:hover,
+.likeButtonOn,
+.likeButtonOn:hover {
+  color: var(--c-error);
+}
+
 /* The count's slot while a selection exists. */
 /* The bar's left half. `.bar` is space-between, so a third child would be
    pushed to the middle of the row rather than sitting beside the count it

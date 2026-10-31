@@ -18,6 +18,7 @@ from fastapi.responses import FileResponse
 
 from ember import features
 from ember.web import gallery_index
+from ember.web import likes
 from ember.generation import recipes
 from ember.generation import sources
 from ember.web import tabschema
@@ -166,8 +167,14 @@ def register(api: APIRouter) -> None:
                                            features.Key.GALLERY))])
     def gallery(cursor: str = Query(default=""),
                 limit: int = Query(default=50, ge=1, le=100),
-                kind: str = Query(default="")):
+                kind: str = Query(default=""),
+                liked: bool = Query(default=False)):
         """One page of the listing, newest first.
+
+        `liked=1` narrows it to the favourites, on top of `kind`, and for
+        the same reason as `kind`: the cursor is an offset into the
+        listing, so hiding the unliked files from a page in hand would
+        leave a few hearts and an Older button that skips the rest.
 
         `kind=image` narrows it to stills, which is what the reuse strip
         under every upload field asks for; `kind=image` and `kind=video`
@@ -186,7 +193,12 @@ def register(api: APIRouter) -> None:
         paths = (gallery_index.list_images() if kind == "image"
                  else gallery_index.list_videos() if kind == "video"
                  else gallery_index.list_media())
-        start = int(cursor) if cursor.isdigit() else 0
+        if liked:
+            # _rel_key rather than key_for: the same spelling for anything
+            # the index listed, without a resolve() per file in the tree.
+            hearts = likes.liked_keys()
+            paths = [p for p in paths if gallery_index._rel_key(p) in hearts]
+        start =int(cursor) if cursor.isdigit() else 0
         page = paths[start:start + limit]
         nxt = start + limit
         return {
@@ -234,8 +246,52 @@ def register(api: APIRouter) -> None:
                 failed.append(path_id)
                 continue
             recipes.forget(target)
+            likes.forget(gallery_index.key_for(target))
             deleted += 1
         return {"deleted": deleted, "failed": failed}
+
+    @api.post("/gallery/like",
+              dependencies=[Depends(require_auth),
+                            Depends(require_feature(features.Key.GALLERY))])
+    def gallery_like(body: dict = Body(default={})):
+        """Like or unlike files: `{"ids": [...], "liked": true|false}`.
+
+        A list, so the selection bar can heart a whole selection in one
+        request; the tile and the lightbox send a list of one. Only ids
+        that name a generated file still on disk are recorded — anything
+        else comes back in `failed`, the same shape the bulk delete uses.
+        """
+        ids = body.get("ids")
+        liked = body.get("liked")
+        if not isinstance(ids, list) or not ids:
+            raise HTTPException(400, "Send an `ids` array.")
+        if not isinstance(liked, bool):
+            raise HTTPException(400, "Send `liked` as true or false.")
+        if len(ids) > MAX_BULK_DELETE:
+            raise HTTPException(
+                400, "That is more than %d files in one request."
+                % MAX_BULK_DELETE)
+
+        keys, failed = [], []
+        for raw in ids:
+            path_id = str(raw)
+            try:
+                target = gallery_index.safe_path(path_id)
+            except (ValueError, OSError):
+                failed.append(path_id)
+                continue
+            key = gallery_index.key_for(target)
+            # Unliking a file that has gone is still allowed — it is the
+            # way a stale heart gets cleared.
+            if key is None or (liked and not target.exists()):
+                failed.append(path_id)
+                continue
+            keys.append(key)
+        try:
+            changed = likes.set_liked(keys, liked) if keys else 0
+        except OSError:
+            raise HTTPException(500, "The favourites could not be saved.")
+        return {"changed": changed, "failed": failed}
 
     @api.delete("/gallery/{path_id:path}",
                 dependencies=[Depends(require_auth),
@@ -248,6 +304,7 @@ def register(api: APIRouter) -> None:
         if not gallery_index.delete(target):
             raise HTTPException(500, "That file could not be deleted.")
         recipes.forget(target)
+        likes.forget(gallery_index.key_for(target))
         return {"ok": True}
 
     @api.get("/recipe/{path_id:path}", dependencies=[Depends(require_auth)])

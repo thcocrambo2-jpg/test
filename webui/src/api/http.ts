@@ -164,10 +164,11 @@ export const httpClient: ApiClient = {
     ),
   getPresets: (tab) => get<PresetList>(`/presets/${encodeURIComponent(tab)}`),
 
-  getGallery: (cursor, kind) => {
+  getGallery: (cursor, kind, liked) => {
     const params = new URLSearchParams()
     if (cursor) params.set('cursor', cursor)
     if (kind) params.set('kind', kind)
+    if (liked) params.set('liked', '1')
     const suffix = params.toString()
     return get<GalleryPage>(`/gallery${suffix ? `?${suffix}` : ''}`)
   },
@@ -184,6 +185,10 @@ export const httpClient: ApiClient = {
    * tunnel in front of this app — that it is not worth the elegance. */
   deleteMediaMany(ids: string[]) {
     return send<{ deleted: number; failed: string[] }>('/gallery/delete', { ids })
+  },
+
+  likeMedia(ids: string[], liked: boolean) {
+    return send<{ changed: number; failed: string[] }>('/gallery/like', { ids, liked })
   },
 
   async submit(schema: TabSchema, values: SubmitValues, preset = ''): Promise<SubmitResult> {
