@@ -58,7 +58,6 @@ npm run init-db               # creates indexes — run once per cluster
 npm run seed-catalog          # writes the plans + features collections
 npm run seed-assets           # writes the models, LoRAs and per-tab lists
 npm run seed-presets          # writes each tab's Default preset (needs seed-assets)
-npm run seed-prompts          # writes the starter prompt library (optional; needs seed-assets)
 npm run issue-key -- --name "Acme Corp" --plan creator --seats 2
 npm start
 ```

@@ -15,7 +15,7 @@ await ensureIndexes();
 
 console.log(`database        ${DB_NAME}`);
 console.log(
-  "collections     licenses, sessions, plans, features, prompts, presets, " +
+  "collections     licenses, sessions, plans, features, presets, " +
     "builds, downloads, orders, telegram_users, loras, models, " +
     "feature_assets",
 );
@@ -28,7 +28,7 @@ console.log("\nindexes:");
 // creates it until the first customer talks to the bot — Mongo makes a
 // collection on its first write, and an empty one would be misleading.
 for (const name of [
-  "licenses", "sessions", "prompts", "presets", "orders", "loras",
+  "licenses", "sessions", "presets", "orders", "loras",
 ]) {
   for (const index of await db.collection(name).indexes()) {
     console.log(`  ${name}.${index.name}`);

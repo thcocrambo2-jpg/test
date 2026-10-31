@@ -441,7 +441,7 @@ export async function updateLicense({
  * A renewal must never mint a new key. The key is baked into the pod's
  * environment, into the Docker `.env`, and on Windows into a persisted user
  * environment variable; it is what `/v1/build` resolves a release channel
- * against, and what the `sessions` and `prompts` rows reference. Rotating
+ * against, and what the `sessions` rows reference. Rotating
  * it every cycle would break a working machine and orphan its history, in
  * exchange for nothing.
  *

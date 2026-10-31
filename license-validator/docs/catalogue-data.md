@@ -24,7 +24,7 @@ Three collections, all keyed by a readable string id:
   tab's dropdowns hold. The first model is the tab's default. An id may sit in
   any number of features.
 
-**Ids are permanent.** Presets and prompts store them, so renaming one
+**Ids are permanent.** Presets store them, so renaming one
 orphans every preset that names it. Fix a label with `name`, never with
 the id. To retire a record, switch it off.
 
@@ -233,7 +233,7 @@ file's.
 
 ## Settings blobs
 
-Presets and prompts store a tab's settings, and every model and LoRA in
+Presets store a tab's settings, and every model and LoRA in
 them is **an id**, never a file name or a label:
 
 ```js
@@ -285,5 +285,5 @@ existing — a preset naming one is not wrong, the tab just leaves that slot
 empty while it is off. The rest of the blob belongs to the tabs and is only
 bounded in size.
 
-`seed-presets` and `seed-prompts` apply the same check, so **run
+`seed-presets` applies the same check, so **run
 `seed-assets` first** — against an empty catalogue they refuse every row.

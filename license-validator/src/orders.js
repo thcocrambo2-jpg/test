@@ -344,9 +344,7 @@ export async function markExpiredUnpaid(orderId) {
 /**
  * How many invoices this customer has open.
  *
- * The cap the caller applies with this is the same shape as the existing
- * MAX_PENDING_PER_LICENSE cap on prompt submissions: check before writing,
- * and answer benignly rather than with an error. It exists so one person
+ * The caller checks it before writing, and answers benignly rather than with an error. It exists so one person
  * tapping "buy" repeatedly cannot fill the collection with CREATED rows.
  */
 export async function countOpenOrders(telegramUserId) {

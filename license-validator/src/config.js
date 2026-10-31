@@ -155,15 +155,14 @@ export const EMBER_NODE_TAG =
 // Guards POST /internal/cron/sweep, which Vercel Cron calls.
 //
 // Deliberately NOT ADMIN_TOKEN. That one token already authorises
-// publishing a build, promoting a release channel and moderating prompts;
+// publishing a build, promoting a release channel and editing the catalogue;
 // the sweep needs none of that, and widening a token that powerful so a
 // cron job can retry a provisioning step would trade a real blast radius
 // for a saved environment variable.
 export const CRON_SECRET = process.env.CRON_SECRET || "";
 
 // How many orders one Telegram user may have open (CREATED or INVOICED) at
-// once. The same shape as the existing cap on pending prompt submissions:
-// checked before the write, answered benignly, and there to stop one user
+// once. Checked before the write, answered benignly, and there to stop one user
 // filling the collection with invoices they never intend to pay — not to
 // police honest customers, who have one open order at a time.
 export const ORDER_MAX_OPEN_PER_USER = int("ORDER_MAX_OPEN_PER_USER", 10);

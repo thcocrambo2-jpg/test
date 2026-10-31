@@ -16,17 +16,13 @@ easy to get wrong. For whoever calls this API or changes it.
 | `GET` | `/v1/start.sh` | 302 to a signed URL for the Linux start script. Unauthenticated — the RunPod template fetches it |
 | `GET` | `/v1/start.ps1` | The same for the Windows start script, fetched by a desktop shortcut |
 | `GET` | `/v1/plans` | Public catalogue — `is_public` plans, enabled features, enabled billing cycles |
-| `POST` | `/v1/prompts` | A pod submitting one prompt + its settings. Private on arrival, unless `publish` and the licence is `is_admin` |
-| `GET` | `/v1/prompts` | Public library — approved prompts only. `?tab=&source=&q=&skip=&limit=` |
+| `POST` | `/v1/prompt-library` | The Prompt Library: enabled entries with signed picture links, plus each entry's settings token when the licence has its tab. `{license_key, instance_id, tab?, skip?, limit?}`. Takes no seat |
 | `POST` | `/v1/presets` | The app saving one preset. Needs `is_admin`; answers a real error when it refuses |
 | `GET` | `/v1/presets` | Enabled presets, all tabs or `?tab=` |
 | `GET` | `/health` | Liveness + DB reachability |
 | `GET` | `/v1/admin/licenses` | Every licence with live usage and **resolved** features (needs `ADMIN_TOKEN`) |
 | `GET` | `/v1/admin/plans` | Every plan with the number of licences on it |
 | `GET` | `/v1/admin/sessions` | Recent sessions, `?license_key=` to filter |
-| `GET` | `/v1/admin/prompts` | The library, `?pending=1` for the review queue. Includes `license_key` |
-| `POST` | `/v1/admin/prompts` | Author an ⭐ official prompt. Public immediately |
-| `POST` | `/v1/admin/prompts/review` | `{id, approve}` — publish or reject one prompt |
 | `GET` | `/v1/admin/presets` | Every preset, switched-off ones included |
 | `POST` | `/v1/admin/presets` | Author or edit a preset, including `enabled`, `is_default` and `sort_order` |
 | `POST` | `/v1/admin/presets/state` | `{id, enabled?, is_default?}` — flip one flag without restating the preset |
@@ -58,53 +54,43 @@ the same way `/v1/acquire` resolves it — for a licence on a plan that is
 not written on the licence at all. A row whose plan is missing reports
 `plan_error` instead of taking down the whole listing.
 
-## The prompt library's two halves
+## The Prompt Library
 
-The two `/v1/prompts` routes are the halves of the prompt library and they
-do not mirror each other. The write is authenticated by the licence key and
-stores a row that **no client can read**; the read is unauthenticated,
-serves only `is_public: true`, and projects `license_key` away — so who
-submitted a prompt never leaves this service. Pods write to it silently and
-customers are not told it happens, which is why the write answers `200` for
-everything they could not have known was wrong: a duplicate fingerprint, or
-a licence that has hit its cap of `MAX_PENDING_PER_LICENSE` (200) pending
-rows. See the app's docs for the capture and deduplication rules, and
-`npm run prompts` for moderation.
+`POST /v1/prompt-library` has no collection behind it. The library is one
+index file and its pictures in the private builds bucket:
 
-The write takes one optional flag, `publish`, which asks for the row to be
-created as a public ⭐ official prompt instead of a pending submission. It
-is honoured **only when the licence document has `is_admin: true`** —
-`publish` is a request and the record is the grant. A non-admin sending it
-is not rejected; the flag is ignored and the prompt is stored the ordinary
-way. A published row also gets a freshly generated fingerprint rather than
-the one the pod sent, because deduplicating it against an existing
-community row would silently turn "publish this" into a counter bump.
+```
+library/prompts/index.json          every entry, in display order
+library/prompts/<id>/thumb.webp     the grid picture
+library/prompts/<id>/full.webp      the full-size picture
+```
 
-`POST /v1/presets` is the deliberate contrast. It is a button someone
-pressed, so it answers a real error when it refuses — including `403
-forbidden` when the licence is perfectly valid but simply not an admin.
+Only the operator's local admin page writes them (the app repo's
+`scripts/prompt_library/admin.py`); this service only reads, with the read
+key, and reuses one read of the index for a minute (`src/promptLibrary.js`).
+
+The licence must be valid and grant `community_prompts`. Only entries
+switched on (`enabled: true`) are served, each with signed links to its two
+pictures and its settings token — but the token goes **only to a licence
+that also has that entry's tab**. A tab they have not bought still shows
+its pictures; they just cannot load the recipe. `tabs` counts the enabled
+entries per tab, for the filter.
+
+Picture links last six hours and are signed as if at the top of the hour,
+so a picture keeps the same link for the whole hour (the browser caches
+it) and every link handed out has at least five hours left. An index that
+cannot be read answers `503`, never an empty library.
 
 ## Catalogue ids are checked on every write
 
-Every write that stores a settings blob — `POST /v1/prompts`,
-`POST /v1/presets`, `POST /v1/admin/presets` and `POST /v1/admin/prompts` —
-checks its model and LoRA ids against the catalogue and answers `400`
-naming the bad value (see
-[Settings blobs](catalogue-data.md#settings-blobs)). That includes the
-silent pod write: a recipe whose ids name nothing is a malformed body, not
-something the pod could not have known. A blob is also bounded at
-`MAX_SETTINGS_BYTES` (8 KB) rather than validated field by field.
+Every write that stores a settings blob — `POST /v1/presets` and
+`POST /v1/admin/presets` — checks its model and LoRA ids against the
+catalogue and answers `400` naming the bad value (see
+[Settings blobs](catalogue-data.md#settings-blobs)). A blob is also bounded
+at `MAX_SETTINGS_BYTES` (8 KB) rather than validated field by field.
 
-## Seeding the library
-
-`npm run seed-prompts` writes one starter prompt of each kind — an ⭐
-official one that is live immediately, and a 👥 community one sitting in
-the review queue so there is something there the first time you look.
-`scripts/seed-prompts.js` carries the field-by-field notes; edit
-`SEED_PROMPTS` and re-run to add more. It is idempotent (keyed on
-`fingerprint`) and **never un-approves**: content is `$set`, moderation
-state is `$setOnInsert`, so a prompt you have already ruled on keeps that
-ruling across seed runs.
+`POST /v1/presets` answers a real error when it refuses — including `403
+forbidden` when the licence is perfectly valid but simply not an admin.
 
 ## Status codes are the contract
 

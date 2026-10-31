@@ -68,13 +68,17 @@ const encodePath = (key) => key.split("/").map(uriEncode).join("/");
  * download already in flight is not cut off at the deadline — but a retry
  * after it is will fail. That is why the caller's window is generous
  * relative to how long the transfer itself takes.
+ *
+ * `signedAt` is when the window starts, now by default. The prompt library
+ * passes the top of the current hour, so a picture's link is the same
+ * string for the whole hour and the browser can cache the picture.
  */
-export function presignGet(key, expiresIn) {
+export function presignGet(key, expiresIn, signedAt = new Date()) {
   if (!r2Configured()) throw new Error("R2 is not configured");
 
   const host = r2Host();
   // YYYYMMDDTHHMMSSZ, the only format SigV4 accepts for X-Amz-Date.
-  const amzDate = new Date().toISOString().replace(/[-:]|\.\d{3}/g, "");
+  const amzDate = signedAt.toISOString().replace(/[-:]|\.\d{3}/g, "");
   const dateStamp = amzDate.slice(0, 8);
   const scope = `${dateStamp}/${REGION}/${SERVICE}/aws4_request`;
 

@@ -25,8 +25,7 @@
 // written.
 //
 // Otherwise `settings` belongs to the app's tabs and is stored as given.
-// It carries **no prompt text** — a preset is settings, and the prompt
-// library is what carries prompts. The tab shapes are NOT
+// It carries **no prompt text** — a preset is settings. The tab shapes are NOT
 // interchangeable:
 //
 //   krea_t2i      flat. `resolution` is a preset label. Eight LoRA slots.
@@ -214,7 +213,7 @@ function die(...lines) {
 
 // ── Validate before writing anything ───────────────────────────────────
 //
-// All of it, and only then write — same rule as seed-prompts: a half-seeded
+// All of it, and only then write: a half-seeded
 // set is worse than an unseeded one, because you would have to work out
 // which rows made it before you could safely re-run.
 
@@ -290,8 +289,8 @@ async function upsertAll(docs) {
       {
         // Content is $set, so editing a preset here and re-running updates
         // it. Both flags are $setOnInsert, so a preset you switched off in
-        // Atlas stays off across a re-seed — the same split seed-prompts
-        // makes between content and the decisions you made about it.
+        // Atlas stays off across a re-seed: content is ours, the flags are
+        // the decisions you made about it.
         $set: { ...content, updated_at: now },
         $setOnInsert: {
           tab,

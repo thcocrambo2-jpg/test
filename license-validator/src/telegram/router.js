@@ -63,8 +63,8 @@ const router = express.Router();
 
 // Its own parser, at a limit of its own. The global express.json in
 // app.js is capped at 16kb, and that cap is a deliberate bound on what a
-// pod may submit to /v1/prompts — raising it to fit a Telegram update
-// would loosen an unrelated endpoint. An update with a long caption and a
+// pod may send — raising it to fit a Telegram update would loosen every
+// other endpoint. An update with a long caption and a
 // callback payload can approach 16kb, and the failure would be an opaque
 // 400 that Telegram then retries for a day.
 router.use(express.json({ limit: "64kb" }));

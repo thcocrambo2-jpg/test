@@ -3,16 +3,16 @@
 // Three endpoints the app calls for its seat (/v1/acquire, /v1/heartbeat,
 // /v1/release), one the *start script* calls before the app exists at all
 // (/v1/build), one licensed read it builds its Krea tabs from at startup
-// (POST /v1/catalog — the model and LoRA lists), three public reads it
-// renders pages from (/v1/plans, /v1/prompts, /v1/presets), one public
-// write it makes silently (POST /v1/prompts) and one it makes on an
+// (POST /v1/catalog — the model and LoRA lists), two public reads it
+// renders pages from (/v1/plans, /v1/presets), one licensed read for the
+// Prompt Library (POST /v1/prompt-library), one write it makes on an
 // admin's say-so (POST /v1/presets), plus health and the admin surface —
 // which includes /v1/admin/assets, /v1/admin/loras, /v1/admin/models and
 // /v1/admin/feature-assets for editing that catalogue.
 //
-// Every preset and prompt write checks the settings blob's model id and
-// LoRA rows against the catalogue (src/assets.js) and answers 400 naming
-// the bad value — an id that names nothing is a preset no pod can load.
+// Every preset write checks the settings blob's model id and LoRA rows
+// against the catalogue (src/assets.js) and answers 400 naming the bad
+// value — an id that names nothing is a preset no pod can load.
 //
 // The status code carries the contract, and the Python client branches on
 // exactly this — keep it stable:
@@ -42,7 +42,6 @@
 // as an accusation — and a real violation must never look transient, or
 // the grace window makes it survivable.
 
-import { randomUUID } from "node:crypto";
 
 import express from "express";
 import cors from "cors";
@@ -87,10 +86,8 @@ import {
   presignGet,
   r2Configured,
 } from "./r2.js";
+import { entryWire, loadEntries, URL_TTL_SECONDS } from "./promptLibrary.js";
 import telegramRouter from "./telegram/router.js";
-// A second import from node:crypto rather than an edit to the one above,
-// so that every line this project adds to app.js is an addition. Same
-// module, no runtime cost.
 import { createHash, timingSafeEqual } from "node:crypto";
 import { CRON_SECRET } from "./config.js";
 import { sweep } from "./sweep.js";
@@ -109,7 +106,7 @@ app.disable("x-powered-by");   // no need to advertise the framework/version
 // everything, exactly as the admin routes do without an ADMIN_TOKEN.
 //
 // Mounted ABOVE the global body parser on purpose. The 16kb limit below
-// is a deliberate bound on what a pod may submit to /v1/prompts, and it
+// is a deliberate bound on what a pod may send, and it
 // applies to every route registered after it — so a Telegram router
 // mounted underneath would be capped at 16kb however large its own
 // parser was, and an update that exceeded it would 413 and be retried by
@@ -221,11 +218,8 @@ const countLive = (sessions, license_key) =>
 // `is_admin` is a *role*, and the only one this service has. It is not an
 // entitlement and grants no tab — what a licence can run still comes from
 // `features` alone, so marking a key admin never changes what it can
-// generate. It changes one thing: whether the app captures prompts into
-// the library automatically. Ordinary pods do, silently; an admin pod does
-// not, and publishes only what its operator ticks the box for. That way
-// your own test generations do not fill the review queue you are the one
-// working through.
+// generate. It changes one thing: an admin pod may save presets from the
+// app's own tickbox (POST /v1/presets).
 async function seatPayload(license, inUse) {
   const entitlement = await resolveEntitlement(license);
   return {
@@ -953,245 +947,82 @@ app.get(
 
 // ── Prompt library ──────────────────────────────────────────────────────
 //
-// Two halves that never meet: pods write here on every generation whose
-// recipe they have not sent before, and the library tab reads back only
-// what an admin has approved. A submission is private until then — that
-// gap is the whole moderation story, and it is enforced by the `is_public`
-// filter on the read, not by anything the writer sends.
+// Pictures and the settings tokens that made them, curated by the operator
+// and kept in R2 — see src/promptLibrary.js. Nothing here writes: the
+// library is edited only from the local admin page, which saves straight to
+// the bucket.
 //
-// The customer is not told any of this happens, which sets the error
-// contract for the write: it answers 200 for everything the pod could not
-// have known was wrong (a duplicate, a cap it has hit), because the pod has
-// nothing useful to do with a failure it cannot show anyone. Only a bad
-// licence or a malformed body gets a real error code, and even those the
-// client only logs.
+// A licensed read, unlike /v1/plans: the tokens are the recipes, and they
+// are what a licence pays for. The key must be valid and grant the Prompt
+// Library; each entry's token then goes only to a licence that also has
+// that entry's tab. Disabled entries never leave this function.
+const PROMPT_PAGE_MAX = 48;
 
-// Which tabs a prompt can be replayed into. A hard list rather than the
-// feature catalogue: replaying means writing values back into a specific
-// set of form controls, so a tab is only valid here once the app has code
-// that knows how to do that for it. A new tab joins this list in the same
-// commit that teaches the client to load it.
-const PROMPT_TABS = ["krea_t2i", "krea_v2_t2i"];
-
-// Bounds on one submitted document. The body limit above already caps the
-// request at 16kb; these cap what is *stored*, so one pod with a runaway
-// prompt box cannot bloat a collection everyone else reads from.
-const MAX_PROMPT_CHARS = 4000;
-const MAX_SETTINGS_BYTES = 8192;
-
-// How many un-reviewed prompts one licence may have waiting. Past this the
-// write is dropped silently: the point is to keep the review queue workable
-// when a pod misbehaves, and a customer who is not told their prompts are
-// saved cannot be told they have been throttled either.
-const MAX_PENDING_PER_LICENSE = 200;
-
-/** A trimmed string of at most `max` chars, or "" for anything else. */
-function text(value, max) {
-  return typeof value === "string" ? value.trim().slice(0, max) : "";
-}
-
-/** One prompt as clients read it. `license_key` can never reach this. */
-function promptWire(row) {
-  return {
-    id: String(row._id),
-    tab: row.tab,
-    source: row.source || "community",
-    title: row.title || null,
-    prompt: row.prompt || "",
-    negative: row.negative || "",
-    settings: row.settings || {},
-    created_at: row.created_at || null,
-  };
-}
-
-// ── Submit ──────────────────────────────────────────────────────────────
-//
-// The pod has already decided this recipe is new to it — see prompts.py,
-// which fingerprints everything except the seed, the 🎲 toggle and the
-// batch count, so re-rolling the same prompt is not a submission. This end
-// does the same job for the cases that memory cannot cover: a restarted
-// pod, a second pod on one licence, two customers who typed the same
-// thing. The unique index on `fingerprint` makes the upsert below collapse
-// all of them into one document with a `seen_count`.
 app.post(
-  "/v1/prompts",
+  "/v1/prompt-library",
   wrap(async (req, res) => {
-    const { license_key, instance_id, tab, fingerprint } = req.body || {};
-    if (!license_key || !instance_id) {
-      return badRequest(res, "license_key and instance_id are required.");
-    }
-    if (!PROMPT_TABS.includes(tab)) {
-      return badRequest(res, `tab must be one of: ${PROMPT_TABS.join(", ")}.`);
-    }
-    // 64 hex chars — a sha256 digest. Checked because it is a unique index
-    // key chosen by the client: anything else stored here would be a row
-    // that can never be deduplicated against.
-    if (typeof fingerprint !== "string" || !/^[0-9a-f]{64}$/.test(fingerprint)) {
-      return badRequest(res, "fingerprint must be a 64-character sha256 hex.");
-    }
-
-    const prompt = text(req.body.prompt, MAX_PROMPT_CHARS);
-    if (!prompt) return badRequest(res, "prompt is required.");
-    const negative = text(req.body.negative, MAX_PROMPT_CHARS);
-
-    const settings = req.body.settings;
-    if (settings === null || typeof settings !== "object" ||
-        Array.isArray(settings)) {
-      return badRequest(res, "settings must be an object.");
-    }
-    if (JSON.stringify(settings).length > MAX_SETTINGS_BYTES) {
-      return badRequest(res, "settings is too large.");
-    }
-
-    const { licenses, prompts } = await collections();
+    const { license_key, instance_id, tab } = req.body || {};
+    if (!license_key) return badRequest(res, "license_key is required.");
+    const { licenses } = await collections();
     const license = await licenses.findOne({ key: license_key });
     const problem = licenseProblem(license);
     if (problem) return res.status(403).json({ ok: false, ...problem });
 
-    // A malformed body, and so a real 400 despite this route's silence:
-    // a recipe whose model or LoRA ids name nothing can never be replayed,
-    // and storing it would put a card in the library that loads nothing.
-    const bad = await checkSettings(settings);
-    if (bad) return badRequest(res, bad);
-
-    const now = new Date();
-
-    // An admin publishing from the app's own checkbox. Checked against the
-    // licence document, never against what the body claims — `publish` is
-    // a request, and `is_admin` on the record is the only thing that grants
-    // it. A non-admin sending publish:true is not an error, it is simply
-    // ignored and stored the ordinary way.
-    if (req.body.publish === true && license.is_admin === true) {
-      const doc = {
-        // Generated here, not the fingerprint the pod sent. An official
-        // prompt must always be created: deduplicating it against an
-        // existing community row would silently turn "publish this" into
-        // a no-op that bumps a counter.
-        fingerprint: randomUUID().replace(/-/g, "").padEnd(64, "0"),
-        tab,
-        source: "admin",
-        is_public: true,
-        reviewed_at: now,
-        title: text(req.body.title, 120) || null,
-        prompt,
-        negative,
-        settings,
-        license_key: null,          // an official prompt has no submitter
-        seen_count: 0,
-        created_at: now,
-        updated_at: now,
-      };
-      await prompts.insertOne(doc);
-      console.log(`prompt   published ${doc._id} tab=${tab} by=${license_key}`);
-      return res.json({ ok: true, stored: true, published: true });
+    const { features } = await resolveEntitlement(license);
+    const granted = Array.isArray(features) ? features : [];
+    if (!granted.includes("community_prompts")) {
+      return res.status(403).json({
+        ok: false,
+        error: "not_granted",
+        message: "The Prompt Library is not part of this licence.",
+      });
     }
 
-    // Counted before the write, and only against rows nobody has looked at
-    // yet — an approved or rejected prompt has left the queue and should
-    // not hold a slot against the licence that submitted it.
-    const pending = await prompts.countDocuments({
-      license_key,
-      reviewed_at: null,
-    });
-    if (pending >= MAX_PENDING_PER_LICENSE) {
-      return res.json({ ok: true, stored: false });
+    let entries;
+    try {
+      entries = (await loadEntries()).filter((entry) => entry.enabled === true);
+    } catch (error) {
+      console.error(`prompts  could not read the library index: ${error.message}`);
+      return res.status(503).json({
+        ok: false,
+        error: "server_error",
+        message: "The prompt library is not available. Try again later.",
+      });
     }
 
-    const result = await prompts.updateOne(
-      { fingerprint },
-      {
-        // Everything about the recipe is $setOnInsert: a second pod sending
-        // the same fingerprint has by definition the same prompt, and
-        // letting it rewrite the fields would let a later submission edit a
-        // document an admin has already read and approved.
-        $setOnInsert: {
-          fingerprint,
-          tab,
-          source: "community",
-          is_public: false,
-          reviewed_at: null,
-          title: null,
-          prompt,
-          negative,
-          settings,
-          license_key,
-          created_at: now,
-        },
-        $inc: { seen_count: 1 },
-        $set: { updated_at: now },
-      },
-      { upsert: true },
-    );
+    const tabs = {};
+    for (const entry of entries) tabs[entry.tab] = (tabs[entry.tab] || 0) + 1;
+    const wanted = typeof tab === "string" && tab ? entries.filter((e) => e.tab === tab) : entries;
 
-    res.json({ ok: true, stored: result.upsertedCount > 0 });
-  }),
-);
-
-// ── Library ─────────────────────────────────────────────────────────────
-//
-// Public and unauthenticated like /v1/plans, and for a stronger reason: the
-// only rows it can reach are ones an admin has deliberately made public,
-// and `license_key` is projected away so who wrote one never leaves this
-// service. Filtering, searching and paging all happen here rather than in
-// the client, so a pod holds one page at a time however large the library
-// grows.
-app.get(
-  "/v1/prompts",
-  wrap(async (req, res) => {
-    const filter = { is_public: true };
-    if (PROMPT_TABS.includes(req.query.tab)) filter.tab = req.query.tab;
-    if (req.query.source === "admin" || req.query.source === "community") {
-      filter.source = req.query.source;
-    }
-
-    const search = text(req.query.q, 200);
-    if (search) {
-      // Escaped before it becomes a RegExp. An unescaped query string
-      // compiled into a pattern is a denial of service someone else pays
-      // for — a handful of nested quantifiers is all it takes to hang a
-      // serverless invocation until it times out.
-      const safe = search.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
-      const pattern = new RegExp(safe, "i");
-      filter.$or = [{ prompt: pattern }, { title: pattern }];
-    }
-
-    const skip = Math.max(0, Number.parseInt(req.query.skip, 10) || 0);
+    const skip = Math.max(0, Number.parseInt(req.body.skip, 10) || 0);
     const limit = Math.min(
-      48,
-      Math.max(1, Number.parseInt(req.query.limit, 10) || 12),
+      PROMPT_PAGE_MAX,
+      Math.max(1, Number.parseInt(req.body.limit, 10) || 24),
     );
-
-    const { prompts } = await collections();
-    const [rows, total] = await Promise.all([
-      prompts
-        .find(filter, { projection: { license_key: 0 } })
-        // Admin prompts first — "admin" sorts before "community" — then
-        // newest first within each group. Curated content leads the page
-        // without needing a rank field nobody would maintain.
-        .sort({ source: 1, created_at: -1 })
-        .skip(skip)
-        .limit(limit)
-        .toArray(),
-      prompts.countDocuments(filter),
-    ]);
-
+    console.log(
+      `prompts  key=${license_key} instance=${instance_id || "-"} ` +
+        `tab=${tab || "*"} skip=${skip}`,
+    );
     res.json({
       ok: true,
-      prompts: rows.map(promptWire),
-      total,
+      prompts: wanted
+        .slice(skip, skip + limit)
+        .map((entry) => entryWire(entry, granted.includes(entry.tab))),
+      total: wanted.length,
+      tabs,
       skip,
       limit,
+      url_expires_in: URL_TTL_SECONDS,
     });
   }),
 );
 
 // ── Settings presets ────────────────────────────────────────────────────
 //
-// A preset is a named settings blob for one tab: the same shape the prompt
-// library stores, minus the prompt text. Pods read them into a dropdown and
-// applying one writes every control below it. Two halves, like the prompt
-// library, but the moderation story is the opposite way round — there is no
-// queue, because only an admin licence can write one at all:
+// A preset is a named settings blob for one tab, without the prompt text.
+// Pods read them into a dropdown and applying one writes every control
+// below it. There is no review queue, because only an admin licence can
+// write one at all:
 //
 //   write   POST /v1/presets from the app's own tickbox. Refused outright
 //           unless the licence document says `is_admin`.
@@ -1201,22 +1032,27 @@ app.get(
 // one-field edit rather than a delete: it stops being offered, and the pods
 // already holding it in a dropdown lose it on their next read.
 
-// The prompt library's list, and necessarily so: applying a preset means
-// writing values into a specific set of form controls, which is exactly
-// what replaying a prompt does. A tab joins both lists in the commit that
-// teaches the client to load it.
-//
-// Plus MiniMax, Z-Image, the two Qwen 2.1 tabs, Anima and Qwen Edit 2511,
-// which have presets and no prompt library: one list shared by both
-// MiniMax tabs, filed under the image tab's key, and one each for the
-// other five.
+// Applying a preset means writing values into a specific set of form
+// controls, so a tab joins this list in the commit that teaches the client
+// to load one. One list is shared by both MiniMax tabs, filed under the
+// image tab's key.
 const PRESET_TABS = [
-  ...PROMPT_TABS, "minimax_i2v", "zimage_t2i", "qwen21_edit", "qwen21_t2i",
-  "anima_t2i", "qwen_edit_2511",
+  "krea_t2i", "krea_v2_t2i", "minimax_i2v", "zimage_t2i", "qwen21_edit",
+  "qwen21_t2i", "anima_t2i", "qwen_edit_2511",
 ];
 
 const MAX_PRESET_NAME_CHARS = 60;
 const MAX_PRESET_DESCRIPTION_CHARS = 200;
+
+// Bounds on what one preset stores. The body limit above already caps the
+// request at 16kb; this caps the settings blob, so one runaway write cannot
+// bloat a collection every pod reads from.
+const MAX_SETTINGS_BYTES = 8192;
+
+/** A trimmed string of at most `max` chars, or "" for anything else. */
+function text(value, max) {
+  return typeof value === "string" ? value.trim().slice(0, max) : "";
+}
 
 // How many presets may share a name on one tab before the write is refused.
 // The suffix walk below is O(attempts) round trips, so this is both a naming
@@ -1319,10 +1155,8 @@ function presetBody(body) {
 // name it got. Editing a preset in place is the admin route's job, where
 // naming an existing preset is the whole point of the call.
 //
-// Unlike POST /v1/prompts this answers a real error when it refuses. That
-// endpoint is silent because the customer was never told it exists; this
-// one is a button someone deliberately pressed, and "did my preset save?"
-// deserves an answer.
+// It answers a real error when it refuses: this is a button someone
+// deliberately pressed, and "did my preset save?" deserves an answer.
 app.post(
   "/v1/presets",
   wrap(async (req, res) => {
@@ -1339,7 +1173,7 @@ app.post(
     if (problem) return res.status(403).json({ ok: false, ...problem });
 
     // Checked against the licence document, never against what the body
-    // claims — same rule as publishing a prompt. A customer build hides
+    // claims. A customer build hides
     // the tickbox entirely, so anything arriving here without the role is
     // not a mistake worth being gentle about.
     if (license.is_admin !== true) {
@@ -1999,118 +1833,6 @@ app.get(
   }),
 );
 
-// The moderation surface, and the first admin routes here that write.
-//
-// `?pending=1` is the queue: everything nobody has ruled on yet, oldest
-// first. Unlike the public listing this one carries `license_key`, which is
-// the reason it is behind a token — a prompt that is abusive is only
-// actionable if you can see which licence sent it.
-app.get(
-  "/v1/admin/prompts",
-  requireAdmin,
-  wrap(async (req, res) => {
-    const { prompts } = await collections();
-    const filter = {};
-    if (req.query.pending === "1") filter.reviewed_at = null;
-    if (PROMPT_TABS.includes(req.query.tab)) filter.tab = req.query.tab;
-    const rows = await prompts
-      .find(filter)
-      .sort({ reviewed_at: 1, created_at: 1 })
-      .limit(200)
-      .toArray();
-    res.json({
-      ok: true,
-      prompts: rows.map((row) => ({
-        ...promptWire(row),
-        license_key: row.license_key || null,
-        is_public: row.is_public === true,
-        reviewed_at: row.reviewed_at || null,
-        seen_count: row.seen_count ?? 0,
-      })),
-      pending: await prompts.countDocuments({ reviewed_at: null }),
-    });
-  }),
-);
-
-// Approve or reject. Both set `reviewed_at`, and that is what takes a
-// prompt out of the queue — a rejection is a decision, so it must not come
-// back tomorrow looking like it was never read. Only approval sets
-// `is_public`, which is the single field the public listing filters on.
-app.post(
-  "/v1/admin/prompts/review",
-  requireAdmin,
-  wrap(async (req, res) => {
-    const { id, approve } = req.body || {};
-    if (!id || !ObjectId.isValid(id)) {
-      return badRequest(res, "id must be a prompt's _id.");
-    }
-    if (typeof approve !== "boolean") {
-      return badRequest(res, "approve must be true or false.");
-    }
-    const { prompts } = await collections();
-    const row = await prompts.findOneAndUpdate(
-      { _id: new ObjectId(String(id)) },
-      { $set: { is_public: approve, reviewed_at: new Date() } },
-      { returnDocument: "after" },
-    );
-    if (!row) return badRequest(res, "no prompt with that id.");
-    console.log(`review   ${id} ${approve ? "approved" : "rejected"}`);
-    res.json({ ok: true, prompt: promptWire(row), is_public: row.is_public });
-  }),
-);
-
-// Author an admin prompt — the curated half of the library. Public the
-// moment it is written, because the thing approval protects against is
-// content nobody chose, and this is content someone chose.
-//
-// The fingerprint is generated rather than derived from the content: it
-// exists only to satisfy the unique index, and deriving it would let an
-// admin prompt collide with a community submission of the same recipe and
-// silently do nothing.
-app.post(
-  "/v1/admin/prompts",
-  requireAdmin,
-  wrap(async (req, res) => {
-    const { tab } = req.body || {};
-    if (!PROMPT_TABS.includes(tab)) {
-      return badRequest(res, `tab must be one of: ${PROMPT_TABS.join(", ")}.`);
-    }
-    const prompt = text(req.body.prompt, MAX_PROMPT_CHARS);
-    if (!prompt) return badRequest(res, "prompt is required.");
-    const settings = req.body.settings;
-    if (settings === null || typeof settings !== "object" ||
-        Array.isArray(settings)) {
-      return badRequest(res, "settings must be an object.");
-    }
-    if (JSON.stringify(settings).length > MAX_SETTINGS_BYTES) {
-      return badRequest(res, "settings is too large.");
-    }
-    const bad = await checkSettings(settings);
-    if (bad) return badRequest(res, bad);
-
-    const now = new Date();
-    const { prompts } = await collections();
-    const doc = {
-      fingerprint: randomUUID().replace(/-/g, "").padEnd(64, "0"),
-      tab,
-      source: "admin",
-      is_public: true,
-      reviewed_at: now,
-      title: text(req.body.title, 120) || null,
-      prompt,
-      negative: text(req.body.negative, MAX_PROMPT_CHARS),
-      settings,
-      license_key: null,
-      seen_count: 0,
-      created_at: now,
-      updated_at: now,
-    };
-    await prompts.insertOne(doc);
-    console.log(`prompt   admin ${doc._id} tab=${tab}`);
-    res.json({ ok: true, prompt: promptWire(doc) });
-  }),
-);
-
 // ── Builds ──────────────────────────────────────────────────────────────
 //
 // build.sh calls the first of these once it has uploaded the artifact to
@@ -2292,7 +2014,7 @@ app.post(
 //
 // Guarded by CRON_SECRET and deliberately NOT by ADMIN_TOKEN. That token
 // already authorises publishing a build, promoting a release channel and
-// moderating prompts; a job that retries a stuck provisioning step needs
+// editing the catalogue; a job that retries a stuck provisioning step needs
 // none of that, and widening the blast radius of the most privileged
 // credential in the service to save an environment variable is a bad
 // trade. Unset, this route answers 404 like the admin routes do.

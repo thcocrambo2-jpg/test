@@ -10,7 +10,7 @@
 //   feature_assets   per feature key, the ordered model ids and LoRA ids
 //                    that tab offers. The first model is the tab's default.
 //
-// Ids are the contract. Presets, prompts and every form value on a pod
+// Ids are the contract. Presets and every form value on a pod
 // carry ids, and the only place an id turns back into a filename is the
 // pod's catalog.py, when a download or a ComfyUI graph needs the name on
 // disk. So an id is never renamed and never reused: a preset that names
@@ -20,7 +20,7 @@
 //
 // Four things write these collections — the admin routes, seed-assets,
 // the assets CLI, and (for settings blobs that *reference* them) the
-// preset and prompt routes — and a rule that is only enforced by three of
+// preset routes — and a rule that is only enforced by three of
 // them is not a rule. They all import this module. The pod checks the
 // same things again on read (catalog.py), because a record edited by hand
 // in Atlas never passed through here, and a file name becomes a path on
@@ -47,8 +47,7 @@ export const MODEL_VARIANTS = ["turbo", "raw"];
 // answer and end up as dropdown labels.
 const MAX_NAME_CHARS = 120;
 const MAX_TRIGGER_CHARS = 500;
-// A model's default negative prompt. Wan's built-in one is ~600 characters;
-// this is the room the prompt library gives a negative.
+// A model's default negative prompt. Wan's built-in one is ~600 characters.
 const MAX_NEGATIVE_CHARS = 4000;
 // A model's `arch` — which graph it runs, for a feature with more than one
 // (Wan: "14b" or "5b"). Shaped like an id, and checked as nothing more:
@@ -358,7 +357,7 @@ export function idListProblems(list, known, what) {
 
 // ── Settings blobs ─────────────────────────────────────────────────────
 //
-// Presets and prompts store a tab's settings, and every model and LoRA in
+// Presets store a tab's settings, and every model and LoRA in
 // them is referenced by id. This is the one part of a settings blob the
 // server does interpret: the rest belongs to the tabs and is only bounded
 // in size, but an id that names nothing is a preset that loads a model
@@ -399,7 +398,7 @@ export function defaultScope(row) {
  * What is wrong with a settings blob's model and LoRA rows, or null.
  *
  * `ids` is `{models: Set, loras: Set}` — see assetIds(). `tab` is the
- * preset tab the blob is for, when there is one (a prompt has none).
+ * preset tab the blob is for, when there is one.
  *
  *   settings.model   an existing model id — required, except on an
  *                    OPTIONAL_MODEL_TABS tab, where it may be left out

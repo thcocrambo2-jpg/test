@@ -261,8 +261,8 @@ export const FEATURES = [
     name: "Prompt Library",
     tab_label: "🌟 Prompt Library",
     description:
-      "Browse ready-made prompts and load one into Krea2 or Krea2 V2 " +
-      "with every setting already dialled in",
+      "Browse example pictures and load the settings behind one into " +
+      "its tab, every dial already set",
     category: "tools",
     // 65, after krea_edit (40) and ahead of the video tabs (90 and up), so
     // it reads with the rest of the everyday set rather than trailing the

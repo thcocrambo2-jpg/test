@@ -117,6 +117,6 @@ time.
 
 The cron route is guarded by `CRON_SECRET`, deliberately **not**
 `ADMIN_TOKEN`. That token already authorises publishing a build, promoting
-a release channel and moderating prompts; the sweep needs none of it, and
+a release channel and editing the catalogue; the sweep needs none of it, and
 widening it so a cron job can retry a provisioning step would trade a real
 blast radius for a saved environment variable.

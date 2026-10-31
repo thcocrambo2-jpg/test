@@ -18,12 +18,9 @@ the database directly.
 
 `is_admin` grants **no tab and no capability** — what a licence can run is
 `features` and nothing else, so marking one admin cannot change what it
-generates. It decides exactly two things: an ordinary pod captures every
-new prompt into the library silently while an admin pod captures nothing
-and publishes only what its operator ticks, and only an admin licence may
-save a preset through `POST /v1/presets`. Put it on the keys you generate
-from yourself (`--admin`), or your own testing fills the review queue you
-are the one working through.
+generates. It decides one thing: only an admin licence may save a preset
+through `POST /v1/presets`. Put it on the keys you generate from yourself
+(`--admin`).
 
 Two optional fields pin builds: `build_sha` and `build_channel`, both
 absent on an ordinary licence. Absent `build_channel` is stable, and
@@ -117,27 +114,9 @@ one small query, warm invocations pay nothing.
 `created_at` on a session row is never overwritten, so the gap between it
 and `last_seen` is how long that instance has been up.
 
-## `prompts` — the prompt library
+## `presets` — named settings blobs
 
-```js
-{ fingerprint: "<64-char sha256>",   // unique; the deduplication key
-  tab: "krea_t2i" | "krea_v2_t2i",
-  source: "community" | "admin",
-  is_public: false,                  // approval flips this; the read filters on it
-  reviewed_at: null,                 // null = still in the queue
-  title: null,                       // admin prompts only
-  prompt: "...", negative: "...",
-  settings: { ... },                 // the whole replay blob; models and LoRAs by id
-  license_key: "EMBER-...",          // never projected to any client
-  seen_count: 3,                     // how many pods sent this same recipe
-  created_at: ISODate, updated_at: ISODate }
-```
-
-`fingerprint` is computed by the pod over the prompt and every setting
-*except* the seed, the randomize toggle and the batch count. It is the one
-client-chosen unique key in this database, which is why the write validates
-it is really 64 hex characters: anything else would be a row that can never
-be deduplicated against.
+A tab's settings, without the prompt, under a name.
 
 `settings` is interpreted here in exactly one respect: its `model` and its
 `loras` rows are catalogue ids, and a write whose ids name nothing is
@@ -147,13 +126,9 @@ it would couple this service to a UI it should know nothing about. It is
 bounded (8 KB) rather than checked, and the client guards every value
 against what its own build offers before applying any of it.
 
-## `presets` — named settings blobs
-
-The same blob shape as a prompt, under a name, per tab.
-
 ```js
 { _id: ObjectId, tab: "krea_t2i", name: "Portrait",
-  settings: { ... },                 // validated exactly like a prompt's
+  settings: { ... },                 // models and LoRAs by catalogue id
   enabled: true,                     // off = still stored, no longer offered
   is_default: false,                 // at most one per tab and model
   sort_order: 0,
@@ -296,8 +271,6 @@ valid.
 - `licenses`: unique `key`; `plan_id`; sparse `telegram_user_id`.
 - `sessions`: unique `(license_key, instance_id)`; `(license_key,
   last_seen)`; TTL on `last_seen`.
-- `prompts`: unique `fingerprint`; `(is_public, tab, created_at)`;
-  `(reviewed_at, created_at)`; `(license_key, reviewed_at)`.
 - `presets`: unique `(tab, name)`; `(enabled, tab, sort_order, name)`.
 - `builds`: `(channels, platform)` — the channel lookup is now a pair, so
   the channel alone no longer identifies one document — and

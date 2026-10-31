@@ -15,10 +15,8 @@
 // ── What a preset is, and is not ───────────────────────────────────────
 //
 // A named settings blob for one tab: model, steps, CFG, resolution, the
-// LoRA stack — everything the tab's controls hold **except the prompt**.
-// Prompts live in the prompt library and carry their settings with them;
-// presets are the other way round, a way to move every dial at once and
-// then type whatever you like.
+// LoRA stack — everything the tab's controls hold **except the prompt**:
+// a way to move every dial at once and then type whatever you like.
 //
 // Only an admin licence can write one from the app (the tickbox next to
 // Generate). Customers only read, and only ever see `enabled` rows.
@@ -133,8 +131,8 @@ if (opts.show) {
 // ── Author one from a settings file ────────────────────────────────────
 //
 // The file is the settings object as the tab stores it — the quickest way
-// to get one that is certainly right is to copy it out of a prompt:
-// `npm run prompts -- --show <id>` prints exactly this shape.
+// to get one that is certainly right is `npm run presets -- --show` on an
+// existing preset, which prints exactly this shape.
 
 if (opts.add) {
   if (!PRESET_TABS.includes(opts.tab)) {

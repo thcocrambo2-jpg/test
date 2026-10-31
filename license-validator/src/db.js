@@ -49,16 +49,9 @@ export async function collections() {
     // need no unique index of their own and a seed run is a plain upsert.
     plans: db.collection("plans"),
     features: db.collection("features"),
-    // The prompt library. Unlike the two above this is written by pods, so
-    // it carries a generated _id and is deduplicated on `fingerprint` — see
-    // ensureIndexes.
-    prompts: db.collection("prompts"),
     // Settings presets: a named settings blob per tab, offered to every pod
-    // in a dropdown. The sibling of `prompts` and deliberately not the same
-    // collection — a prompt is a whole recipe *including its text* and
-    // arrives from customers for review, a preset carries no prompt text,
-    // is only ever written by an admin, and is keyed by a name people read
-    // rather than by a fingerprint nobody does.
+    // in a dropdown. A preset carries no prompt text, is only ever written
+    // by an admin, and is keyed by a name people read.
     //
     // `enabled` is what the public read filters on: a preset that is off
     // stays in the collection and simply stops being offered, which is the
@@ -111,7 +104,7 @@ export async function collections() {
     telegram_users: db.collection("telegram_users"),
     // The model and LoRA catalogue the Krea and MiniMax tabs are built from — see
     // src/assets.js for the rules every write goes through. All three are
-    // keyed by a readable string `_id` that presets and prompts store, so
+    // keyed by a readable string `_id` that presets store, so
     // an id is permanent: renaming one orphans every preset that names it.
     //
     // `loras`: one record per LoRA file. `sort_order` is the order POST
@@ -140,7 +133,7 @@ export async function collections() {
  */
 export async function ensureIndexes() {
   const {
-    licenses, sessions, prompts, presets, builds, downloads, orders, loras,
+    licenses, sessions, presets, builds, downloads, orders, loras,
   } = await collections();
   await licenses.createIndex({ key: 1 }, { unique: true, name: "key_unique" });
   await sessions.createIndex(
@@ -168,36 +161,6 @@ export async function ensureIndexes() {
   await licenses.createIndex(
     { telegram_user_id: 1 },
     { sparse: true, name: "telegram_user" },
-  );
-
-  // The prompt library. `fingerprint` is the deduplication key and the one
-  // index that is load-bearing rather than an optimisation: the pod already
-  // skips a recipe it has submitted before, but that memory is per-process,
-  // so a restart, a second pod on the same licence, or two customers who
-  // happen to type the same thing all arrive here as a repeat. Unique means
-  // the upsert collapses every one of them into a single document instead
-  // of quietly filling the collection with copies.
-  await prompts.createIndex(
-    { fingerprint: 1 },
-    { unique: true, name: "fingerprint_unique" },
-  );
-  // The public listing: is_public first because it filters out almost
-  // everything, then tab, then newest-first within that.
-  await prompts.createIndex(
-    { is_public: 1, tab: 1, created_at: -1 },
-    { name: "public_tab_recent" },
-  );
-  // The review queue — oldest first, so the backlog is worked from the end
-  // that has been waiting longest.
-  await prompts.createIndex(
-    { reviewed_at: 1, created_at: 1 },
-    { name: "review_queue" },
-  );
-  // Only for moderation: "what else has this licence submitted?", and the
-  // pending-count cap that POST /v1/prompts checks on every write.
-  await prompts.createIndex(
-    { license_key: 1, reviewed_at: 1 },
-    { name: "license_pending" },
   );
 
   // Settings presets. A name identifies a preset within its tab — it is

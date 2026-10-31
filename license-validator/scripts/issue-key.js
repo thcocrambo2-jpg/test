@@ -21,11 +21,9 @@
 //
 // A role, not an entitlement. It grants no tab and never has — what a key
 // can run is `features` and nothing else, so marking one admin cannot
-// change what it generates. What it changes is the prompt library: an
-// ordinary pod captures every new recipe into it silently, an admin pod
-// captures nothing and publishes only what its operator ticks the box for.
-// Put it on the keys you generate from yourself, or your own testing fills
-// the review queue you are the one working through.
+// change what it generates. What it changes is presets: an admin pod gets
+// the "save as preset" tickbox (POST /v1/presets). Put it on the keys you
+// generate from yourself.
 //
 // The generated key is what the customer puts in EMBER_LICENSE_KEY on
 // their pod. Keys are stored in plain text so you can match a key to a
@@ -314,8 +312,7 @@ const key = doc.key;
 console.log(`\n  customer   ${opts.name}`);
 console.log(`  key        ${key}`);
 console.log(`  seats      ${seats}`);
-console.log(`  admin      ${doc.is_admin ? "yes — prompts are not captured "
-  + "automatically; publish with the checkbox" : "no"}`);
+console.log(`  admin      ${doc.is_admin ? "yes — can save presets from the app" : "no"}`);
 await report(doc);
 console.log(
   `  expires    ${doc.expires_at ? doc.expires_at.toISOString() : "never"}`,
