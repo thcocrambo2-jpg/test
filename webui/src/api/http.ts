@@ -5,6 +5,9 @@ import type {
   AutoPromptTask,
   Catalogue,
   DisplayResult,
+  FaceLoraOptions,
+  FaceLoraPublish,
+  FaceLoraState,
   GalleryPage,
   PresetList,
   PromptPage,
@@ -389,6 +392,37 @@ export const httpClient: ApiClient = {
       source?.close()
       source = null
     }
+  },
+
+  // ── 🎭 Face LoRA ──
+  getFaceLora() {
+    return get<FaceLoraState>('/face-lora/state')
+  },
+  async getFaceLoraPhotos(run: string) {
+    const body = await get<{ photos: string[] }>(`/face-lora/photos/${encodeURIComponent(run)}`)
+    return body.photos
+  },
+  /** The photo as the raw body: it lands in the run's own folder, not in the
+   *  generic upload store, so it does not need an id round trip. */
+  async addFaceLoraPhoto(run: string, file: Blob, name: string) {
+    const response = await fetch(
+      `${BASE}/face-lora/photos/${encodeURIComponent(run)}/${encodeURIComponent(name)}`,
+      { method: 'POST', body: file },
+    )
+    if (!response.ok) throw new Error(await errorText(response))
+  },
+  async removeFaceLoraPhoto(run: string, name: string) {
+    await send<unknown>(
+      `/face-lora/photos/${encodeURIComponent(run)}/${encodeURIComponent(name)}`,
+      undefined,
+      'DELETE',
+    )
+  },
+  trainFaceLora(name: string, options: FaceLoraOptions) {
+    return send<{ jobId: string; place: number }>('/face-lora/train', { name, options })
+  },
+  async publishFaceLora(request: FaceLoraPublish) {
+    await send<unknown>('/face-lora/publish', request)
   },
 }
 

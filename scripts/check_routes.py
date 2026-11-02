@@ -76,6 +76,7 @@ settings.log_startup()
 # never quietly stop covering it.
 NO_WEIGHTS_BACKSTOP = {
     "community_prompts": "/api/v1/prompts",
+    "face_lora": "/api/v1/face-lora/state",
 }
 
 # The picture libraries, each with a tab whose images field names it. They

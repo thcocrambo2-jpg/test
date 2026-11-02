@@ -1789,6 +1789,68 @@ app.post(
   privateLoraRoute((body) => revokePrivateLora(body.id, body.keys, { all: body.all === true })),
 );
 
+// The same two writes for the app's 🎭 Face LoRA page, authorised by the
+// pod's own licence instead of ADMIN_TOKEN: the key must be valid and
+// grant `face_lora`, which is hand-picked (never on a plan, never in
+// "all"). The file is already in the bucket by then — the page uploads it
+// with an R2 key typed in for that publish.
+async function faceLoraLicence(req, res) {
+  const { license_key } = req.body || {};
+  if (!license_key) {
+    badRequest(res, "license_key is required.");
+    return null;
+  }
+  const { licenses } = await collections();
+  const license = await licenses.findOne({ key: license_key });
+  const problem = licenseProblem(license);
+  if (problem) {
+    res.status(403).json({ ok: false, ...problem });
+    return null;
+  }
+  const { features } = await resolveEntitlement(license);
+  if (!features || !features.includes("face_lora")) {
+    res.status(403).json({
+      ok: false,
+      error: "not_granted",
+      message: "Face LoRA is not part of this licence.",
+    });
+    return null;
+  }
+  return license;
+}
+
+const faceLoraRoute = (fn) =>
+  wrap(async (req, res) => {
+    const license = await faceLoraLicence(req, res);
+    if (!license) return;
+    try {
+      const result = await fn(req.body || {});
+      console.log(`facelora key=${license.key} ${req.path} id=${req.body?.id}`);
+      res.json({ ok: true, ...result });
+    } catch (err) {
+      if (err instanceof PrivateLoraError) return badRequest(res, err.message);
+      throw err;
+    }
+  });
+
+app.post(
+  "/v1/face-lora/register",
+  faceLoraRoute((body) =>
+    upsertPrivateLora({
+      id: body.id,
+      file: body.file,
+      name: body.name,
+      trigger: body.trigger,
+      default_strength: body.default_strength ?? 1.0,
+    }),
+  ),
+);
+
+app.post(
+  "/v1/face-lora/grant",
+  faceLoraRoute((body) => grantPrivateLora(body.id, body.keys)),
+);
+
 /** One catalogue row as the clients read it — `key`, never Mongo's `_id`. */
 function featureWire(row) {
   return {

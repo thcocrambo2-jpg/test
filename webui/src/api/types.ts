@@ -694,4 +694,85 @@ export interface ApiClient {
   cancelAutoPrompt(tabKey: string, taskId: string): Promise<AutoPromptTask>
   /** One SSE connection for the whole app. Returns an unsubscribe. */
   subscribe(onEvent: (event: StreamEvent) => void): () => void
+  // ── 🎭 Face LoRA (licences granting `face_lora` only) ──
+  getFaceLora(): Promise<FaceLoraState>
+  getFaceLoraPhotos(run: string): Promise<string[]>
+  addFaceLoraPhoto(run: string, file: Blob, name: string): Promise<void>
+  removeFaceLoraPhoto(run: string, name: string): Promise<void>
+  trainFaceLora(name: string, options: FaceLoraOptions): Promise<{ jobId: string; place: number }>
+  /** Upload, register and grant, in the background — follow it in
+   *  `getFaceLora().publish`. The R2 key is sent once, for this publish. */
+  publishFaceLora(request: FaceLoraPublish): Promise<void>
+}
+
+/** The trainer's settings, as ember/trainer/run.py DEFAULTS has them. */
+export interface FaceLoraOptions {
+  trigger: string
+  caption: string
+  steps: number
+  rank: number
+  learning_rate: number
+  resolution: number
+  save_every: number
+  blocks_to_swap: number
+}
+
+export interface FaceLoraProgress {
+  done: number
+  total: number
+  elapsed: number | null
+  eta: number | null
+  seconds_per_it: number | null
+}
+
+/** One run's state.json. */
+export interface FaceLoraRun {
+  name: string
+  options: FaceLoraOptions
+  phase: string
+  status: 'running' | 'done' | 'failed' | 'stopped'
+  error: string | null
+  started_at: number
+  finished_at: number | null
+  progress: FaceLoraProgress | null
+  loss: number | null
+  phases: Record<string, number>
+  checkpoints: string[]
+  lora_file: string | null
+  log_tail: string[]
+  images?: number
+}
+
+export interface FaceLoraPublishState {
+  status: 'idle' | 'running' | 'done' | 'failed'
+  step: string | null
+  sent: number
+  total: number
+  done: string[]
+  error: string | null
+  lora: string | null
+}
+
+export interface FaceLoraState {
+  active: FaceLoraRun | null
+  busy: boolean
+  job: string | null
+  runs: FaceLoraRun[]
+  loras: string[]
+  publish: FaceLoraPublishState
+  defaults: FaceLoraOptions
+  phases: string[]
+  licenceKey: string
+  bucket: string
+  now: number
+}
+
+export interface FaceLoraPublish {
+  lora: string
+  id: string
+  name: string
+  trigger: string
+  strength: number
+  keys: string
+  r2: { account: string; accessKey: string; secret: string; bucket: string }
 }

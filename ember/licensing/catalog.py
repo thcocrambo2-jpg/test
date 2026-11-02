@@ -460,11 +460,42 @@ def feature_models(key) -> tuple:
 
 
 def feature_loras(key) -> tuple:
-    return get().feature_loras(key)
+    listed = get().feature_loras(key)
+    extra = _extras.get(str(key))
+    if not extra:
+        return listed
+    # A LoRA the catalogue lists already (it was published and granted
+    # since) keeps its catalogue row; the extra stands down.
+    have = {row.id for row in listed} | {row.file for row in listed}
+    return listed + tuple(row for row in extra
+                          if row.id not in have and row.file not in have)
 
 
 def lora(lora_id) -> Lora | None:
-    return get().lora(lora_id)
+    return get().lora(lora_id) or next(
+        (row for rows in _extras.values() for row in rows if row.id == lora_id),
+        None)
+
+
+# ── LoRAs made on this pod ─────────────────────────────────────────────
+# The 🎭 Face LoRA page adds each LoRA it trains to the Krea tabs' lists
+# here, so it can be tried in the real tab before it is published, and
+# without a restart: the forms read their LoRA rows late (web/schema).
+# Only the module-level readers above see them — the frozen Catalogue,
+# which the downloads and the saved .catalog.json work from, never does.
+# Appended after the catalogue's own rows, so no row the tabs already
+# have moves. Nothing here survives a restart; the page re-adds the files
+# it finds on its next start (trainer/loras.py).
+
+_extras: dict[str, tuple] = {}
+
+
+def add_extra(features: tuple, row: Lora) -> None:
+    """Offer `row` on each of `features`' LoRA lists, after the catalogue's."""
+    with _lock:
+        for key in features:
+            current = tuple(r for r in _extras.get(str(key), ()) if r.id != row.id)
+            _extras[str(key)] = current + (row,)
 
 
 def model(model_id) -> Model | None:

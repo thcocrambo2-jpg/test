@@ -22,8 +22,8 @@ export const CATEGORY_LABEL: Record<TabCategory, string> = {
 
 export const CATEGORY_ORDER: TabCategory[] = ['generate', 'edit', 'video', 'library']
 
-/** Tabs with no schema-driven form — bespoke pages. Gallery and Prompt Library
- *  are the only two that are genuinely their own thing. */
+/** Tabs with no schema-driven form — bespoke pages: Gallery, Prompt Library
+ *  and Face LoRA (the last only for licences granting `face_lora`). */
 export interface BespokeNavItem {
   key: string
   label: string
@@ -49,5 +49,13 @@ export const BESPOKE_TABS: BespokeNavItem[] = [
     category: 'library',
     route: '/library/prompts',
     ready: false,
+  },
+  {
+    key: 'face_lora',
+    label: 'Face LoRA',
+    icon: '\u{1F3AD}',
+    category: 'library',
+    route: '/library/face-lora',
+    ready: true,
   },
 ]

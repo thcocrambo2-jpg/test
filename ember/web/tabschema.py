@@ -189,6 +189,8 @@ BESPOKE = (
      "category": "library", "route": "/library/gallery"},
     {"key": str(Key.COMMUNITY_PROMPTS), "label": "Prompt Library",
      "icon": "🌟", "category": "library", "route": "/library/prompts"},
+    {"key": str(Key.FACE_LORA), "label": "Face LoRA", "icon": "🎭",
+     "category": "library", "route": "/library/face-lora"},
 )
 
 

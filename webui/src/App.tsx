@@ -9,6 +9,7 @@ import { QueuePanel } from '@/features/queue/QueuePanel'
 import { GenerateTab } from '@/features/tabs/GenerateTab'
 import { Gallery } from '@/features/gallery/Gallery'
 import { PromptLibrary } from '@/features/library/PromptLibrary'
+import { FaceLora } from '@/features/facelora/FaceLora'
 import { Pricing } from '@/features/pricing/Pricing'
 import { EmptyState, Skeleton } from '@/components/ui'
 import type { TabSchema } from '@/api/types'
@@ -74,6 +75,14 @@ export function App() {
               element={
                 <Page title="Prompt Library" icon="🌟" blurb="Prompts that already work.">
                   <PromptLibrary />
+                </Page>
+              }
+            />
+            <Route
+              path="/library/face-lora"
+              element={
+                <Page title="Face LoRA" icon="🎭" blurb="Train a face, try it, publish it to chosen licences.">
+                  <FaceLora />
                 </Page>
               }
             />

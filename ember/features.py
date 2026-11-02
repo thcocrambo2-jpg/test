@@ -80,6 +80,7 @@ class Key(str, Enum):
     MINIMAX_T2V = "minimax_t2v"
     COMMUNITY_PROMPTS = "community_prompts"
     ZIMAGE_REFINE = "zimage_refine"
+    FACE_LORA = "face_lora"
 
     __str__ = str.__str__
 
@@ -206,6 +207,12 @@ FEATURES = (
     # a key can have the refine without the Ember Lite tab. See ADDONS.
     Feature(Key.ZIMAGE_REFINE, "⚡ Ember Lite refine",
             needs=("zimage", "catalog")),
+    # Train a face LoRA on Krea 2 Raw and publish it as a private LoRA.
+    # For hand-picked licences only, never on a plan. No weights of its
+    # own: training reuses the Krea2 V2 tab's model and fetches what else
+    # it needs at the first run (ember/trainer), so needs=() and the route
+    # gate is the whole of it — see ember/web/routes/face_lora.py.
+    Feature(Key.FACE_LORA, "🎭 Face LoRA"),
 )
 
 # Features that switch fields on other tabs on rather than a tab of their

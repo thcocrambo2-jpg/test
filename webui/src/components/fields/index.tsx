@@ -61,11 +61,15 @@ export function TextField({
   onChange,
   placeholder,
   mono,
+  secret,
 }: Common & {
   value: string
   onChange: (next: string) => void
   placeholder?: string
   mono?: boolean
+  /** Masked, and never offered to the browser's autofill — a key typed in
+   *  for one use (Face LoRA's Publish). */
+  secret?: boolean
 }) {
   const id = useId()
   return (
@@ -75,6 +79,8 @@ export function TextField({
         className={cx(s.input, mono && s.mono)}
         value={value ?? ''}
         placeholder={placeholder}
+        type={secret ? 'password' : undefined}
+        autoComplete={secret ? 'off' : undefined}
         onChange={(event) => onChange(event.target.value)}
       />
     </FieldShell>

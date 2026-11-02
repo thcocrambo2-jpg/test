@@ -273,9 +273,25 @@ export const FEATURES = [
     sort_order: 65,
     enabled: true,
   },
+  // Train a face LoRA and publish it as a private one. Hand-picked keys
+  // only: never on a plan, off here so /v1/plans and the bot never list
+  // it, and left out of "all" (HAND_PICKED below) so a key issued with
+  // --features all does not pick it up. Grant it by name.
+  {
+    key: "face_lora",
+    name: "Face LoRA",
+    tab_label: "🎭 Face LoRA",
+    description: "Train a face LoRA and publish it to chosen licences",
+    category: "tools",
+    sort_order: 99,
+    enabled: false,
+  },
 ];
 
 export const FEATURE_KEYS = FEATURES.map((feature) => feature.key);
+
+// Granted only when named: "all" skips these (applyToken).
+export const HAND_PICKED = ["face_lora"];
 
 /**
  * Every feature, by key, in sort_order — from Mongo, cached like plans.
@@ -379,7 +395,9 @@ export function normalizeFeatures(value) {
 /** Apply one CLI token to the accumulating list. Returns an error, or null. */
 function applyToken(token, out, known) {
   if (token === "all") {
-    for (const key of known) if (!out.includes(key)) out.push(key);
+    for (const key of known) {
+      if (!out.includes(key) && !HAND_PICKED.includes(key)) out.push(key);
+    }
     return null;
   }
   if (token === "none") {

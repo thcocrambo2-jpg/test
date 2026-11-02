@@ -58,6 +58,7 @@ from ember.web import tabschema
 from ember.comfy.server import GPU_COUNT
 from ember.logs import log
 from ember.web.routes import events
+from ember.web.routes import face_lora
 from ember.web.routes import library
 from ember.web.routes import licence
 from ember.web.routes import media
@@ -159,6 +160,7 @@ def create_app() -> FastAPI:
     media.register(api)
     licence.register(api)
     library.register(api)
+    face_lora.register(api)
     tabs._mount_tabs(api)
     events.register(api)
 

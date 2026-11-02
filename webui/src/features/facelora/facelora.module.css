@@ -1,0 +1,146 @@
+/* 🎭 Face LoRA — four cards, top to bottom, in the app's own tokens. */
+
+.page {
+  display: flex;
+  flex-direction: column;
+  gap: var(--s-4);
+  max-width: 1100px;
+}
+
+.grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(190px, 1fr));
+  gap: var(--s-3);
+}
+
+.grid2 {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: var(--s-3);
+}
+
+.split {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: var(--s-4);
+  margin-top: var(--s-3);
+}
+
+@media (max-width: 760px) {
+  .split,
+  .grid2 {
+    grid-template-columns: 1fr;
+  }
+}
+
+.muted {
+  color: var(--c-text-muted);
+  font-size: var(--t-sm);
+}
+
+.actions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--s-3);
+  margin-top: var(--s-4);
+}
+
+/* Photos: pick files, pick a folder, or drop either on the box. */
+.drop {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--s-3);
+  margin-top: var(--s-4);
+  padding: var(--s-3);
+  border: 1px dashed var(--c-border-strong);
+  border-radius: var(--r-md);
+}
+
+.dropOver {
+  border-color: var(--c-accent);
+  background: var(--c-accent-soft);
+}
+
+.thumbs {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--s-2);
+  margin-top: var(--s-3);
+}
+
+.thumb {
+  position: relative;
+  margin: 0;
+}
+
+.thumb img {
+  width: 92px;
+  height: 92px;
+  object-fit: cover;
+  border-radius: var(--r-sm);
+}
+
+.thumbRemove {
+  position: absolute;
+  top: 3px;
+  right: 3px;
+  padding: 0 6px;
+  border: 0;
+  border-radius: var(--r-full);
+  background: rgba(0, 0, 0, 0.6);
+  color: #fff;
+  font-size: var(--t-xs);
+  cursor: pointer;
+}
+
+.phases {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--s-2);
+  margin-bottom: var(--s-3);
+}
+
+.stats {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--s-6);
+  margin: var(--s-3) 0;
+}
+
+.stat b {
+  display: block;
+  font-size: var(--t-lg);
+  font-variant-numeric: tabular-nums;
+}
+
+.stat span {
+  color: var(--c-text-faint);
+  font-size: var(--t-xs);
+}
+
+.log {
+  max-height: 180px;
+  overflow: auto;
+  margin: var(--s-3) 0 0;
+  padding: var(--s-3);
+  border-radius: var(--r-sm);
+  background: var(--c-panel);
+  color: var(--c-text-muted);
+  font-size: var(--t-xs);
+  white-space: pre-wrap;
+}
+
+.loraList,
+.doneList {
+  display: flex;
+  flex-direction: column;
+  gap: var(--s-2);
+  margin-top: var(--s-2);
+}
+
+.doneList {
+  color: var(--c-text-muted);
+  font-size: var(--t-sm);
+}

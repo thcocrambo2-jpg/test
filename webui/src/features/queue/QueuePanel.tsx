@@ -1,6 +1,7 @@
 import { useRef, useState, type KeyboardEvent, type PointerEvent } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { useSchemas } from '@/api/queries'
+import { BESPOKE_TABS } from '@/lib/nav'
 import type { JobMove } from '@/api/types'
 import { isLive, useQueue, waitingLine, type Job } from '@/store/queue'
 import { Button, EmptyState, ProgressBar, useToast } from '@/components/ui'
@@ -110,7 +111,10 @@ function useOpenJob(job: Job, onNavigate: () => void) {
   const navigate = useNavigate()
   const { data: schemas } = useSchemas()
   const select = useQueue((state) => state.select)
-  const route = schemas?.find((schema) => schema.key === job.tabKey)?.route
+  // A bespoke page's job (a Face LoRA training run) opens that page.
+  const route =
+    schemas?.find((schema) => schema.key === job.tabKey)?.route ??
+    BESPOKE_TABS.find((item) => item.key === job.tabKey)?.route
   return () => {
     select(job.tabKey, job.id)
     if (route) navigate(route)
