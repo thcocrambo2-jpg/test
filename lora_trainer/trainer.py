@@ -9,7 +9,7 @@ own models, so it survives a pod Stop with the rest of /workspace:
     trainer/models/qwen_image_vae.safetensors
                                only if the app has no Qwen-Image VAE (a
                                V2-only pod has just the Wan one)
-    trainer/models/raw_bf16_from_pod.safetensors
+    trainer/models/raw_bf16_from_pod_v2.safetensors
                                the app's Krea 2 Raw, dequantised to bf16
                                once (raw.safetensors instead, if musubi
                                refused that and the official one was
@@ -49,7 +49,9 @@ RAW_FILE = "raw.safetensors"
 # The app's Raw UNet (catalogue file krea2_raw_fp8_scaled.safetensors),
 # and what it becomes once dequantised for musubi.
 POD_RAW_GLOB = "krea2_raw*.safetensors"
-CONVERTED_FILE = "raw_bf16_from_pod.safetensors"
+# v2: the first converter missed the x.weight_scale spelling and wrote
+# unscaled weights, so a file under the old name must never be reused.
+CONVERTED_FILE = "raw_bf16_from_pod_v2.safetensors"
 VAE_FILE = "qwen_image_vae.safetensors"
 # Where the app itself fetches that VAE from (pipelines/krea2/constants.py).
 VAE_REPO, VAE_PATH = "Comfy-Org/Krea-2", "vae/" + VAE_FILE
@@ -81,7 +83,7 @@ BAR_RE = re.compile(r"(\d+)/(\d+) \[([\d:]+)<([\d:?]+),\s*([\d.]+)\s*(s/it|it/s)
 LOSS_RE = re.compile(r"avr_loss=([\d.]+)")
 
 # A ComfyUI fp8_scaled checkpoint → plain bf16, run in the trainer's venv:
-# every fp8 weight times its own scale_weight, the scale and marker keys
+# every fp8 weight times its own scale (x.weight_scale or x.scale_weight), the scale and marker keys
 # dropped, ComfyUI's "model.diffusion_model." prefix stripped. Written to a
 # .part file first so a killed conversion never looks finished.
 CONVERT_CODE = r"""
@@ -92,22 +94,30 @@ from tqdm import tqdm
 src, dst = sys.argv[1], sys.argv[2]
 FP8 = (torch.float8_e4m3fn, torch.float8_e5m2)
 PREFIX = "model.diffusion_model."
+SCALE_SUFFIXES = (".scale_weight", ".scale_input", ".weight_scale", ".input_scale")
 out = {}
+scaled = 0
 with safe_open(src, "pt") as f:
     keys = list(f.keys())
     have = set(keys)
     for key in tqdm(keys, desc="convert"):
-        if key.endswith((".scale_weight", ".scale_input")) or key == "scaled_fp8":
+        if key.endswith(SCALE_SUFFIXES) or key == "scaled_fp8":
             continue
         t = f.get_tensor(key)
         if t.dtype in FP8:
-            scale = key[:-len("weight")] + "scale_weight" if key.endswith(".weight") else None
-            t = t.to(torch.float32)
-            if scale in have:
-                t = t * f.get_tensor(scale).to(torch.float32)
-            t = t.to(torch.bfloat16)
+            # Two spellings: older files say x.scale_weight, the current
+            # quant format (the pod's krea2_raw_fp8_scaled) says
+            # x.weight_scale. Without its scale a weight is garbage.
+            stem = key[:-len("weight")] if key.endswith(".weight") else None
+            scales = [s for s in (stem and (stem + "scale_weight", key + "_scale"))
+                      or () if s in have]
+            if not scales:
+                sys.exit("no scale found for fp8 tensor %s" % key)
+            t = (t.to(torch.float32) * f.get_tensor(scales[0]).to(torch.float32)
+                 ).to(torch.bfloat16)
+            scaled += 1
         out[key[len(PREFIX):] if key.startswith(PREFIX) else key] = t
-print("converted %d tensors" % len(out))
+print("converted %d tensors, %d of them dequantised from fp8" % (len(out), scaled))
 save_file(out, dst + ".part")
 os.replace(dst + ".part", dst)
 """
@@ -392,7 +402,15 @@ class Run:
         """The official bf16 Raw DiT, once (~24 GB)."""
         target = self.official_dit()
         if not target.exists():
-            self._hf(RAW_REPO, RAW_FILE, target.parent)
+            try:
+                self._hf(RAW_REPO, RAW_FILE, target.parent)
+            except RuntimeError:
+                if self._log_says(("GatedRepoError", "403")):
+                    raise RuntimeError(
+                        "%s is gated and this HF_TOKEN's account has no access "
+                        "— request it at https://huggingface.co/%s, or keep "
+                        "training from the pod's own Raw." % (RAW_REPO, RAW_REPO))
+                raise
         self.dit = target
 
     def text_encoder(self) -> Path:
