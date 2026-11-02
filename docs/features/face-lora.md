@@ -26,7 +26,7 @@ out. Grant it by name.
    LoRA). Publish stores the file privately and puts it on the Krea tabs of
    every pod that runs with **this pod's licence key** — no other licence
    is sent it, and there is no key or list to type. The card lists what the
-   licence has published (5 at most) with an Unpublish button each; the
+   licence has published (no limit on how many) with an Unpublish button each; the
    trained file on the pod stays when one is unpublished.
 
 The upload goes from the pod straight to storage through a link the

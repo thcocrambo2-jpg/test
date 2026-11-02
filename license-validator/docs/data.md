@@ -191,7 +191,7 @@ granted to its owner only (`private_loras`); `npm run private-lora --
 grant` can share one further by hand. `tabs` puts it on those tabs'
 lists for the licences sent it, so nothing a customer does edits
 `feature_assets`. `owner`, `tabs`, `size`, `md5` and `consent` never reach
-a pod. At most 5 per licence.
+a pod. A licence may publish any number.
 
 ## `models` — `_id` is the model id
 

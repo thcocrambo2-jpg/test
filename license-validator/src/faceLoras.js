@@ -28,8 +28,6 @@ import { FACE_BUCKET, PRIVATE_LORA_PREFIX, loraProblems } from "./assets.js";
 import { faceR2Configured, presignFace } from "./r2.js";
 import { DEFAULT_FEATURES, PrivateLoraError } from "./privateLoras.js";
 
-/** How many Face LoRAs one licence may keep. */
-export const MAX_FACE_LORAS = 5;
 // A rank-16 Krea 2 LoRA is ~235 MB; rank 32 about twice that.
 export const MAX_FACE_LORA_BYTES = 600 * 1024 * 1024;
 // Long enough for a slow pod to send ~500 MB once, short enough to be useless later.
@@ -97,22 +95,12 @@ async function ownRecord(licence, names, md5) {
   return row;
 }
 
-async function underQuota(licence) {
-  const { loras } = await collections();
-  const count = await loras.countDocuments({ owner: licence.key });
-  if (count >= MAX_FACE_LORAS) {
-    fail(`This licence already has ${count} Face LoRAs, the most it may keep — ` +
-      "delete one first.", 409);
-  }
-}
-
 /** Step 1: a PUT link for the file, or `already` when it is published. */
 export async function faceUpload(licence, { name, size, md5, consent }) {
   checkUpload({ size, md5, consent });
   const names = faceNames(licence.key, name);
   const existing = await ownRecord(licence, names, md5);
   if (existing) return { ...names, already: true };
-  await underQuota(licence);
   return {
     ...names,
     already: false,
@@ -146,7 +134,6 @@ export async function faceRegister(licence, { name, trigger = "", size, md5, con
   checkUpload({ size, md5, consent });
   const names = faceNames(licence.key, name);
   const existing = await ownRecord(licence, names, md5);
-  if (!existing) await underQuota(licence);
 
   const found = await head(names.key);
   if (!found) fail("The file is not in storage — upload it first.", 409);
@@ -207,7 +194,6 @@ export async function faceMine(licence) {
     .sort({ created_at: -1 })
     .toArray();
   return {
-    limit: MAX_FACE_LORAS,
     loras: rows.map((row) => ({
       id: row._id,
       name: row.name,
