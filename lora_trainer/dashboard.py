@@ -68,6 +68,31 @@ def _training() -> bool:
     return _active is not None and _active.state["status"] == "running"
 
 
+def _app_busy() -> str | None:
+    """Why training must not start now, or None.
+
+    Training takes the whole GPU, and the app's queue would keep feeding
+    ComfyUI underneath it — two jobs on 32 GB, both crawling or one
+    dying. So it waits until the app has nothing running or waiting.
+    """
+    try:
+        queue = render._call("GET", render.APP_API + "/queue", timeout=5)
+    except Exception:
+        return None                    # no app answering: nothing to fight
+    running, waiting = queue.get("running") or 0, queue.get("waiting") or 0
+    if running or waiting:
+        return ("The app is busy — %d job(s) running and %d waiting in its "
+                "queue. Training needs the whole GPU, so start it once the "
+                "queue is empty." % (running, waiting))
+    try:
+        comfy = render._call("GET", render.COMFY + "/queue", timeout=5)
+    except Exception:
+        return None
+    if comfy.get("queue_running") or comfy.get("queue_pending"):
+        return "ComfyUI is still working on something — try again when it is idle."
+    return None
+
+
 def _render_job(body: dict) -> None:
     lora = body["lora"]
     started = time.time()
@@ -221,6 +246,9 @@ class Handler(BaseHTTPRequestHandler):
                     return self.error("%s is still training." % _active.name)
                 if _render["status"] == "running":
                     return self.error("Wait for the render to finish.")
+                busy = None if DRY_RUN else _app_busy()
+                if busy:
+                    return self.error(busy)
                 options = {k: body["options"][k]
                            for k in trainer.DEFAULTS
                            if k in (body.get("options") or {})}

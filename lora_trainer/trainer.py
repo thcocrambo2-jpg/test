@@ -4,8 +4,11 @@ Everything a run needs lives under BASE_DIR/trainer/, beside the app's
 own models, so it survives a pod Stop with the rest of /workspace:
 
     trainer/musubi-tuner/      the trainer (cloned once)
-    trainer/venv/              its interpreter (--system-site-packages, so
-                               the torch the app installed is reused)
+    trainer/venv/              its interpreter (the app's packages on its
+                               path, so the app's torch is reused)
+    trainer/models/qwen_image_vae.safetensors
+                               only if the app has no Qwen-Image VAE (a
+                               V2-only pod has just the Wan one)
     trainer/models/raw_bf16_from_pod.safetensors
                                the app's Krea 2 Raw, dequantised to bf16
                                once (raw.safetensors instead, if musubi
@@ -34,6 +37,7 @@ import shutil
 import signal
 import subprocess
 import sys
+import sysconfig
 import threading
 import time
 import urllib.request
@@ -47,6 +51,8 @@ RAW_FILE = "raw.safetensors"
 POD_RAW_GLOB = "krea2_raw*.safetensors"
 CONVERTED_FILE = "raw_bf16_from_pod.safetensors"
 VAE_FILE = "qwen_image_vae.safetensors"
+# Where the app itself fetches that VAE from (pipelines/krea2/constants.py).
+VAE_REPO, VAE_PATH = "Comfy-Org/Krea-2", "vae/" + VAE_FILE
 TEXT_ENCODERS = ("qwen3vl_4b_abliterated.safetensors",
                  "qwen3vl_4b_bf16.safetensors")
 COMFY = "http://127.0.0.1:8188"
@@ -135,6 +141,7 @@ class Run:
         self.dir = root / "runs" / name
         self.proc: subprocess.Popen | None = None
         self.dit: Path | None = None      # chosen by _base_model
+        self.vae: Path | None = None      # chosen by _base_model
         self.stopping = False
         self.lock = threading.Lock()
         self.save_lock = threading.Lock()
@@ -293,10 +300,21 @@ class Run:
                        self.musubi])
         marker = self.root / "venv" / ".installed"
         if not marker.exists():
-            # The app's torch (system site-packages) is reused; pip only
-            # adds what musubi needs on top of it.
-            self._run([sys.executable, "-m", "venv",
-                       "--system-site-packages", self.root / "venv"])
+            # The app's torch is reused rather than downloaded again. On
+            # the pod it lives in /opt/venv, which --system-site-packages
+            # would not reach (that means the *base* interpreter's), so a
+            # .pth puts this interpreter's packages on the new venv's path
+            # behind its own: pip sees torch as installed, and anything it
+            # does add lands in trainer/venv, never in the app's venv.
+            self._run([sys.executable, "-m", "venv", self.root / "venv"])
+            child = subprocess.run(
+                [str(self.python), "-c",
+                 "import sysconfig; print(sysconfig.get_paths()['purelib'])"],
+                capture_output=True, text=True, check=True).stdout.strip()
+            parent = sysconfig.get_paths()["purelib"]
+            (Path(child) / "_app_packages.pth").write_text(
+                parent + "\n", encoding="utf-8")
+            self.line("Reusing the app's packages from %s." % parent)
             self._run([self.python, "-m", "pip", "install",
                        "--index-url", "https://pypi.org/simple",
                        "-e", self.musubi])
@@ -327,8 +345,9 @@ class Run:
         self.phase("base_model")
         if self.dry_run:
             self._fake("convert", 5)
-            self.dit = self.converted_dit()
+            self.dit = self.vae = self.converted_dit()
             return
+        self._pick_vae()
         for ready in (self.official_dit(), self.converted_dit()):
             if ready.exists():
                 self.dit = ready
@@ -345,15 +364,35 @@ class Run:
         self._run([self.python, "-c", CONVERT_CODE, source, target])
         self.dit = target
 
+    def _pick_vae(self) -> None:
+        """The Qwen-Image VAE musubi encodes with: the app's, else fetched.
+
+        A pod licensed only for the V2 tabs has the Wan 2.1 VAE alone
+        (V2 decodes with it); the Qwen-Image one is ~250 MB from the repo
+        the app itself downloads it from.
+        """
+        own = self.models_dir / "vae" / VAE_FILE
+        if own.exists():
+            self.vae = own
+            return
+        folder = self.root / "models"
+        self.vae = folder / VAE_PATH
+        if not self.vae.exists():
+            self.line("The app has no %s — fetching it (~250 MB)." % VAE_FILE)
+            self._hf(VAE_REPO, VAE_PATH, folder)
+
+    def _hf(self, repo: str, path: str, folder: Path) -> None:
+        """One file from Hugging Face into folder/path, HF_TOKEN if set."""
+        code = ("import sys; from huggingface_hub import hf_hub_download; "
+                "hf_hub_download(sys.argv[1], sys.argv[2], local_dir=sys.argv[3], "
+                "token=__import__('os').environ.get('HF_TOKEN') or None)")
+        self._run([self.python, "-c", code, repo, path, folder])
+
     def _download(self) -> None:
         """The official bf16 Raw DiT, once (~24 GB)."""
         target = self.official_dit()
         if not target.exists():
-            code = ("import sys; from huggingface_hub import hf_hub_download; "
-                    "hf_hub_download(sys.argv[1], sys.argv[2], local_dir=sys.argv[3], "
-                    "token=__import__('os').environ.get('HF_TOKEN') or None)")
-            self._run([self.python, "-c", code, RAW_REPO, RAW_FILE,
-                       target.parent])
+            self._hf(RAW_REPO, RAW_FILE, target.parent)
         self.dit = target
 
     def text_encoder(self) -> Path:
@@ -421,7 +460,7 @@ class Run:
         self.phase("cache_latents")
         self._run([self.python, scripts / "krea2_cache_latents.py",
                    "--dataset_config", toml,
-                   "--vae", self.models_dir / "vae" / VAE_FILE,
+                   "--vae", self.vae,
                    "--batch_size", "1", "--skip_existing"], cwd=self.musubi)
         self.phase("cache_text")
         self._run([self.python, scripts / "krea2_cache_text_encoder_outputs.py",
@@ -474,7 +513,7 @@ class Run:
             "--num_cpu_threads_per_process", "1", "--mixed_precision", "bf16",
             self.musubi / "src" / "musubi_tuner" / "krea2_train_network.py",
             "--dit", self.dit,
-            "--vae", self.models_dir / "vae" / VAE_FILE,
+            "--vae", self.vae,
             "--dataset_config", self.dir / "dataset.toml",
             "--sdpa", "--mixed_precision", "bf16",
             "--timestep_sampling", "shift", "--weighting_scheme", "none",
