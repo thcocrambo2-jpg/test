@@ -23,6 +23,8 @@
   button.ghost { background:transparent; color:var(--text); border:1px solid var(--line); }
   button:disabled { opacity:.45; cursor:default; }
   .row { display:flex; gap:10px; align-items:center; flex-wrap:wrap; margin-top:12px; }
+  .drop { border:1px dashed var(--line); border-radius:8px; padding:10px; }
+  .drop.over { border-color:var(--accent); background:#1f1a14; }
   .thumbs { display:flex; gap:8px; flex-wrap:wrap; margin-top:12px; }
   .thumbs figure { margin:0; position:relative; }
   .thumbs img { width:96px; height:96px; object-fit:cover; border-radius:6px; display:block; }
@@ -66,9 +68,13 @@
       <label>Save every (steps) <input id="save_every" type="number" min="50" step="50"></label>
       <label>Blocks to swap <input id="blocks_to_swap" type="number" min="0" max="26" title="0 = all on GPU. Raise only if it runs out of VRAM."></label>
     </div>
-    <div class="row">
-      <input id="files" type="file" accept=".jpg,.jpeg,.png,.webp" multiple>
+    <div class="row drop" id="drop">
+      <button class="ghost" id="pickFiles">Choose photos…</button>
+      <button class="ghost" id="pickFolder">Choose a folder…</button>
+      <span class="muted">or drop photos / a folder here</span>
       <span class="muted" id="count"></span>
+      <input id="files" type="file" accept=".jpg,.jpeg,.png,.webp" multiple hidden>
+      <input id="folder" type="file" webkitdirectory multiple hidden>
     </div>
     <div class="thumbs" id="thumbs"></div>
     <div class="row">
@@ -151,17 +157,57 @@ async function showDataset() {
 }
 
 $("name").onchange = showDataset;
-$("files").onchange = async e => {
+const IMAGE = /\.(jpe?g|png|webp)$/i;
+
+async function upload(files) {
   const run = $("name").value.trim();
   $("trainError").textContent = "";
-  if (!run) { $("trainError").textContent = "Give the run a name first."; e.target.value = ""; return; }
-  for (const f of e.target.files) {
+  if (!run) { $("trainError").textContent = "Give the run a name first."; return; }
+  // A folder brings everything in it; only the photos go up.
+  const photos = [...files].filter(f => IMAGE.test(f.name));
+  let sent = 0;
+  for (const f of photos) {
+    $("count").textContent = `uploading ${++sent}/${photos.length}…`;
     try {
       await api(`/api/upload?run=${run}&file=${encodeURIComponent(f.name.replace(/[^A-Za-z0-9._ ()-]/g, "_"))}`, f, true);
     } catch (err) { $("trainError").textContent = err.message; }
   }
-  e.target.value = "";
+  if (!photos.length) $("trainError").textContent = "No jpg, png or webp photos in that selection.";
   showDataset();
+}
+
+// Everything under a dropped folder, recursively (webkitGetAsEntry).
+async function dropped(items) {
+  const files = [];
+  async function walk(entry) {
+    if (entry.isFile) files.push(await new Promise(ok => entry.file(ok)));
+    else if (entry.isDirectory) {
+      const reader = entry.createReader();
+      for (;;) {
+        const batch = await new Promise(ok => reader.readEntries(ok));
+        if (!batch.length) break;
+        for (const child of batch) await walk(child);
+      }
+    }
+  }
+  // Read every entry before the first await: the browser empties the
+  // drop's item list as soon as the event handler yields.
+  const entries = [...items].map(i => i.webkitGetAsEntry && i.webkitGetAsEntry())
+                            .filter(Boolean);
+  for (const entry of entries) await walk(entry);
+  return files;
+}
+
+$("pickFiles").onclick = () => $("files").click();
+$("pickFolder").onclick = () => $("folder").click();
+for (const id of ["files", "folder"])
+  $(id).onchange = async e => { await upload(e.target.files); e.target.value = ""; };
+const drop = $("drop");
+drop.ondragover = e => { e.preventDefault(); drop.classList.add("over"); };
+drop.ondragleave = () => drop.classList.remove("over");
+drop.ondrop = async e => {
+  e.preventDefault(); drop.classList.remove("over");
+  await upload(await dropped(e.dataTransfer.items));
 };
 
 $("train").onclick = async () => {
