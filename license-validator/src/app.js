@@ -1151,11 +1151,11 @@ app.post(
 
 // Applying a preset means writing values into a specific set of form
 // controls, so a tab joins this list in the commit that teaches the client
-// to load one. One list is shared by both MiniMax tabs, filed under the
-// image tab's key.
+// to load one. One list is shared by the MiniMax image and text tabs,
+// filed under the image tab's key; MiniMax R2V keeps one of its own.
 const PRESET_TABS = [
   "krea_t2i", "krea_v2_t2i", "minimax_i2v", "zimage_t2i", "qwen21_edit",
-  "qwen21_t2i", "anima_t2i", "qwen_edit_2511",
+  "qwen21_t2i", "anima_t2i", "qwen_edit_2511", "minimax_r2v",
 ];
 
 const MAX_PRESET_NAME_CHARS = 60;

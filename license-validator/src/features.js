@@ -256,6 +256,20 @@ export const FEATURES = [
     sort_order: 94,
     enabled: true,
   },
+  // Reference to video on the same H3 stack, with a ref2va checkpoint. On
+  // no plan yet, so off here like Z-Image: see that entry. 96, after the
+  // other two MiniMax tabs.
+  {
+    key: "minimax_r2v",
+    name: "MiniMax Reference to Video",
+    tab_label: "🖼️ MiniMax R2V",
+    description:
+      "A short clip with sound that keeps the people, outfits and places " +
+      "from up to 9 pictures",
+    category: "video",
+    sort_order: 96,
+    enabled: false,
+  },
   {
     key: "community_prompts",
     name: "Prompt Library",

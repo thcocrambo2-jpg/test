@@ -379,7 +379,9 @@ export function featureProblem(key) {
 // fixed set of weights named in the app's
 // ember/pipelines/minimax/constants.py, so an empty `models` list is what
 // they are rather than a tab with nothing to run.
-export const BUILTIN_MODEL_FEATURES = new Set(["minimax_i2v", "minimax_t2v", "wan_i2v"]);
+export const BUILTIN_MODEL_FEATURES = new Set([
+  "minimax_i2v", "minimax_t2v", "minimax_r2v", "wan_i2v",
+]);
 
 /**
  * The "a tab needs a model" rule for one feature's `models` list, or null.

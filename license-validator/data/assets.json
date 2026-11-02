@@ -4,7 +4,7 @@
     "Also the offline catalogue: POST /v1/catalog answers in this same shape, and the pod reads this file when EMBER_CATALOG_FILE points at it (dry runs and tests).",
     "ids are what presets and prompts store. Never change or reuse one.",
     "Each feature's lists are what its tab offers, in dropdown order; the first model is the default. An id may appear in any number of features.",
-    "A feature with built-in models (minimax_i2v, minimax_t2v, wan_i2v — src/assets.js BUILTIN_MODEL_FEATURES) may have an empty models list: its tab then runs the built-in models the app carries (MINIMAX_BUILTIN_MODEL, WAN_BUILTIN_MODELS), whose ids the database records use.",
+    "A feature with built-in models (minimax_i2v, minimax_t2v, minimax_r2v, wan_i2v — src/assets.js BUILTIN_MODEL_FEATURES) may have an empty models list: its tab then runs the built-in models the app carries (MINIMAX_BUILTIN_MODEL, MINIMAX_R2V_BUILTIN_MODEL, WAN_BUILTIN_MODELS), whose ids the database records use.",
     "An empty loras list is allowed: the tab's LoRA stack then offers \"None\" alone until LoRAs are added to the list."
   ],
   "loras": [
@@ -1410,6 +1410,32 @@
         "motion-booster-v0-2",
         "deepthroat-v0-2",
         "brstplay-v2-0"
+      ]
+    },
+    "minimax_r2v": {
+      "models": [
+        "eros-max-beta5"
+      ],
+      "loras": [
+        "hmnsfw-aio-v2-5",
+        "vgna",
+        "hmcshot-v1-0",
+        "hmbrst",
+        "hmmisdog",
+        "hmpenis-v2-0",
+        "brstplay-v1-0",
+        "humanmotion-v1-0",
+        "fingering-v1",
+        "perfect-fingering-v1-0",
+        "mysticxxx-mmh3-v4",
+        "nsfw-unlocked-v2",
+        "vbvr-pro",
+        "doggyside-mh3-v1-0",
+        "messy-bj",
+        "motion-booster-v0-2",
+        "deepthroat-v0-2",
+        "brstplay-v2-0"
+
       ]
     },
     "wan_i2v": {
