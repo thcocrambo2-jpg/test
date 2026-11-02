@@ -42,6 +42,7 @@ asset groups it needs.
 | `wan_i2v` | 🎬 Wan Video | ~48 GB |
 | `minimax_i2v` | 🎥 MiniMax I2V (video with sound) | ~56 GB, shared with `minimax_t2v` |
 | `minimax_t2v` | 🎞️ MiniMax T2V (video with sound) | shared with `minimax_i2v` |
+| `minimax_r2v` | 🖼️ MiniMax R2V (video with sound, from reference pictures) — on no plan yet | shared with `minimax_i2v`, plus its ref2va checkpoint (Eros Max's is the I2V tab's) |
 | `community_prompts` | 🌟 Prompt Library | none |
 
 The three shipped plans stack: `starter` is `krea_t2i`, the gallery and
@@ -56,8 +57,8 @@ once. `krea_v2_edit` is the same trick one level up: it shares the
 Identity Edit LoRA with `krea_edit` and the ~17 GB of V2 weights with
 `krea_v2_t2i`, so its own cost is only whichever of those two is not
 already granted. `krea_edit_v2` shares the V2 weights the same way, but
-not the edit LoRA: its two are V2's own. The MiniMax pair name one group between them, which is
-why the second tab is free, and so do the two Qwen 2.1 tabs.
+not the edit LoRA: its two are V2's own. The MiniMax tabs name one group between them, which is
+why the second and third tabs are free, and so do the two Qwen 2.1 tabs.
 
 A new tab lands on the internal `admin` plan first and is added to a
 public plan in `license-validator/src/plans.js` when it should be
@@ -69,7 +70,7 @@ tabs through `Field.feature`, and a licence without it never sees the
 section — see [Ember Lite refine](../features/ember-lite-refine.md#licensing).
 
 A tab can also be on no plan at all, which is where `zimage_t2i`, `zimage_refine`,
-`qwen21_t2i`, `qwen21_edit`, `qwen_edit_2511` and `anima_t2i` are. A key gets one through
+`qwen21_t2i`, `qwen21_edit`, `qwen_edit_2511`, `anima_t2i` and `minimax_r2v` are. A key gets one through
 `features_extra` (`npm run issue-key -- --key <key> --features-extra
 zimage_t2i,qwen21_t2i,qwen21_edit --update`), and its row in the `features` collection is `enabled: false`, so neither `/v1/plans` nor the Telegram
 bot mentions it. That flag never touches an entitlement, so the key still

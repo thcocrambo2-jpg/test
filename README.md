@@ -13,8 +13,9 @@ image kept consistent with up to 10 reference images), 🪄 Qwen Edit 2511
 (instruction editing on Qwen-Image-Edit-2511 with up to 3 images, Lightning
 or normal, on no plan), 🌸 Anima (anime
 text-to-image, on no plan), 🎬 Wan Video (Wan 2.2 image-to-video), and 🎥
-MiniMax I2V and 🎞️ MiniMax T2V
-(MiniMax H3 video with sound). Alongside them are a gallery, a job queue
+MiniMax I2V, 🎞️ MiniMax T2V and 🖼️ MiniMax R2V
+(MiniMax H3 video with sound; R2V builds the clip from up to 9 reference
+pictures, on no plan). Alongside them are a gallery, a job queue
 with ETAs, recipes, a prompt library, settings presets and a pricing page.
 
 ## The four ways to run it

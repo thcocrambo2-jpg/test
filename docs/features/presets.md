@@ -16,7 +16,7 @@ Presets live on the licence server, so changing one changes it for every
 customer without shipping a binary. The pod's side is
 [`ember/licensing/presets.py`](../../ember/licensing/presets.py), whose
 `TABS` is `krea_t2i`, `krea_v2_t2i`, `minimax_i2v`, `zimage_t2i`,
-`qwen21_edit`, `qwen21_t2i`, `anima_t2i` and `qwen_edit_2511`.
+`qwen21_edit`, `qwen21_t2i`, `anima_t2i`, `qwen_edit_2511` and `minimax_r2v`.
 
 ## The Edit tabs read the same list
 
@@ -65,6 +65,13 @@ a model but not the Sampling controls added since (scheduler, shift,
 turbo LoRA) takes that model's recipe for them. A preset
 saved from T2V carries an aspect ratio that I2V skips. See
 [minimax.md](../pipelines/minimax.md#presets).
+
+🖼️ MiniMax R2V is not on that list. It runs ref2va checkpoints and has no
+Turbo LoRA control, so it keeps its own under `minimax_r2v`: model, steps,
+aspect, Reference size, resolution, duration, sampler, scheduler, both
+shifts, seed, randomize, batch count and the LoRA stack, and never the
+pictures. Saving needs `minimax_r2v` in the licence server's `PRESET_TABS`.
+See [minimax.md](../pipelines/minimax.md#reference-to-video).
 
 ## Ember Lite has a list of its own
 

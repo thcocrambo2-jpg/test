@@ -1,16 +1,18 @@
 # Video with sound (MiniMax H3)
 
-Two tabs on one model. **🎥 MiniMax I2V** animates an uploaded image and
-**🎞️ MiniMax T2V** builds the clip from the prompt alone, and both come
-back **with a soundtrack**. For someone using the tabs, and for someone
-changing the graph.
+Three tabs on one model family. **🎥 MiniMax I2V** animates an uploaded
+image, **🎞️ MiniMax T2V** builds the clip from the prompt alone, and
+**🖼️ MiniMax R2V** builds it from up to nine reference pictures — see
+[Reference to video](#reference-to-video). All three come back **with a
+soundtrack**. For someone using the tabs, and for someone changing the
+graph.
 
 MiniMax H3 is a packed audio+video DiT: one sampler pass produces the
 frames and the audio together. That is the difference from Wan, and it is
 why the prompt on these tabs describes what things *sound* like as well
 as how they move.
 
-Feature keys `minimax_i2v` and `minimax_t2v`. Built by
+Feature keys `minimax_i2v`, `minimax_t2v` and `minimax_r2v`. Built by
 [`ember/pipelines/minimax/workflow.py`](../../ember/pipelines/minimax/workflow.py),
 with the model facts in
 [`ember/pipelines/minimax/constants.py`](../../ember/pipelines/minimax/constants.py).
@@ -188,6 +190,76 @@ frames and 15 s is 362, which is the trained range.
 
 Clips are saved as MP4 under `output/minimax/` and appear in the Gallery
 like Wan's.
+
+## Reference to video
+
+🖼️ MiniMax R2V (`minimax_r2v`, on no plan yet) takes **1 to 9 reference
+pictures** and a prompt that names them `<Picture 1>`, `<Picture 2>`… in
+the order the form numbers them, and makes a new shot: the person from
+one picture, wearing the outfit from another, in the place from a third.
+No picture is a frame of the clip — that is the difference from I2V, where
+the upload *is* frame 0. The camera, pose and composition come from the
+prompt; what each picture contributes comes from the prompt too, so say
+what to keep from each.
+
+**The graph** is I2V's with `MiniMaxH3ReferenceToVideo` in place of
+`MiniMaxH3ImageToVideo`: one `LoadImage` per picture, wired to the node's
+`ref_images.ref_image_0` … `ref_image_8` (an Autogrow input; those are its
+API names), and the audio VAE wired to the node as well. The node encodes
+each picture at its own aspect and packs it in as a reference block the
+model reads at every step and never denoises. Everything after it — the
+guider, sampler, decode, `CreateVideo` — is the same graph. The node is
+core ComfyUI and shipped with the others in v0.34.0.
+
+**The checkpoint has to be a ref2va one.** H3 ships reference-to-video as
+a second model (`ref2va`) beside the image one (`fl2va`); fl2va would run
+the graph but was not trained on references. The tab offers the
+catalogue's `minimax_r2v` models, which in the database is
+**`eros-max-beta5`** — the same file the I2V tab offers, so it costs no
+download. TenStrip's "TURBO-hybrid" beta5 is ref2va underneath: compared
+on Hugging Face, its norm weights are byte-identical to Comfy-Org's
+ref2va int8 and its adaLN tables sit next to ref2va's, while the large
+attention and MLP matrices are a blend of the two plus the merged NSFW
+and turbo deltas. With the database listing nothing, the tab falls back to
+the built-in `minimax-h3-ref2va-int8` (Comfy-Org's ref2va int8, ~21 GB,
+20 steps, euler / simple, no turbo LoRA — the template's RefMod recipe),
+downloaded only then.
+
+**No Turbo LoRA control.** The only turbo LoRA the app downloads is
+lightx2v's fl2v one; the template's R2V graph uses a separate ref2v build
+instead. Eros Max has turbo merged in, so the tab leaves the LoRA out
+altogether. A graph never has a `turbo` node here.
+
+**Reference size** is the node's `ref_image_size`. *Match the clip* (the
+default, the node's own) scales each picture down to the clip's pixel
+area; *Full detail* uses a 2048 short edge, which the template picks and
+which holds a face better, but every reference token rides through every
+sampling step, so it is several times slower and heavier with several
+pictures. Pictures are turned upright, put on white where transparent,
+and cut to a 2048 short edge before upload — never enlarged, never
+cropped.
+
+The clip's shape is the **Aspect ratio**'s, at Standard or Native, as on
+T2V. Duration, steps, sampler, scheduler and both shifts are the other
+tabs' controls, and follow the Model dropdown the same way. The LoRA stack
+is eight blank rows over `minimax_r2v`'s list, which is I2V's.
+
+**Presets** are a list of its own, `minimax_r2v` — not the shared MiniMax
+one, since the checkpoints and controls differ. A preset carries the
+model, steps, aspect, Reference size, resolution, duration, sampler,
+scheduler, both shifts, seed, batch count and the LoRA stack, and never
+the pictures.
+
+**No Auto prompt.** Its system prompt writes the I2V/T2V shape, not one
+that says what to keep from each `<Picture n>`. The template's R2V
+workflow writes that shape with an LLM in its Reference Pack node:
+`subject_definitions`, a summary, `retention_analysis` per subject, then
+the shots and sound.
+
+Not yet offered: the node's reference videos (three, with their
+soundtracks) and standalone reference audio (three). Not yet checked: a
+GPU render. Both golden graphs pass the pinned ComfyUI's prompt validator
+with zero-byte weights.
 
 ## Auto prompt
 

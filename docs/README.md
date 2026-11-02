@@ -50,7 +50,7 @@ and LoRAs a licence can see.
 | [Qwen Edit 2511](pipelines/qwen-edit-2511.md) | 🪄 Instruction editing on Qwen-Image-Edit-2511: up to 3 images, Lightning or normal |
 | [Anima](pipelines/anima.md) | 🌸 Anima anime text-to-image, and why it is on no plan |
 | [Video](pipelines/wan.md) | Wan 2.2 image-to-video, and the parallel instance |
-| [Video with sound](pipelines/minimax.md) | MiniMax H3, both tabs, and the LoRA stack |
+| [Video with sound](pipelines/minimax.md) | MiniMax H3, its three tabs (image, text and reference pictures), and the LoRA stack |
 
 ## Changing the code
 

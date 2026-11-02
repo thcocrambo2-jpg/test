@@ -23,10 +23,10 @@ validation rules — is documented in
   that tab offers. The first model is the tab's default. An id may appear
   in any number of features.
 
-Thirteen features have a `feature_assets` entry: `krea_t2i`, `krea_edit`,
+Fourteen features have a `feature_assets` entry: `krea_t2i`, `krea_edit`,
 `krea_v2_t2i`, `krea_v2_edit`, `krea_edit_v2`, `zimage_t2i`,
 `zimage_refine`, `qwen21_t2i`, `qwen21_edit`, `qwen_edit_2511`,
-`anima_t2i`, `minimax_i2v` and `minimax_t2v`.
+`anima_t2i`, `minimax_i2v`, `minimax_t2v` and `minimax_r2v`.
 
 `zimage_t2i` lists one model, `z-image-turbo-bf16`, and LoRAs trained
 for Z-Image; the Krea LoRAs do not load on it, so none are shared.
@@ -55,12 +55,12 @@ LoRAs yet. Its record is never mirrored: see
 
 The MiniMax and Wan tabs ran fixed weights before their models were
 catalogue records, so the app carries those as **built-in models**:
-`MINIMAX_BUILTIN_MODEL` in
+`MINIMAX_BUILTIN_MODEL` (and `MINIMAX_R2V_BUILTIN_MODEL`, the ref2va one) in
 [`ember/pipelines/minimax/constants.py`](../../ember/pipelines/minimax/constants.py)
 and `WAN_BUILTIN_MODELS` in
 [`ember/pipelines/wan/constants.py`](../../ember/pipelines/wan/constants.py).
-When the catalogue lists no model for `minimax_i2v`, `minimax_t2v` or
-`wan_i2v` — an older server, or a database not yet given one — the pod
+When the catalogue lists no model for `minimax_i2v`, `minimax_t2v`,
+`minimax_r2v` or `wan_i2v` — an older server, or a database not yet given one — the pod
 offers the built-in ones instead (`Catalogue.builtin`), so the tab runs
 exactly what it always did. The database records use the same ids, so a
 preset, recipe or token that names one means the same model either way.
@@ -140,7 +140,7 @@ source of truth for them.
 
 ## The two shapes of LoRA stack
 
-| | Krea2, Krea2 Edit, Ember Lite, MiniMax I2V, MiniMax T2V | Krea2 V2, Krea2 V2 Edit, Krea2 Edit V2 |
+| | Krea2, Krea2 Edit, Ember Lite, MiniMax I2V, MiniMax T2V, MiniMax R2V | Krea2 V2, Krea2 V2 Edit, Krea2 Edit V2 |
 | --- | --- | --- |
 | rows | `MAX_LORA_SLOTS` blank slots (currently 8), all empty | one row per LoRA in the feature's list, in that order |
 | starting state | every slot `None` and off | every row off, at its record's `default_strength` |
