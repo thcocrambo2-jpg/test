@@ -633,6 +633,31 @@ def cases(module) -> dict:
             "euler", "beta", 8.0, 6.0, 0.7, 1, False, "",
         ) + minimax_triples({}),
 
+        # MiniMax R2V on Eros Max beta5 (ref2va underneath, turbo merged
+        # in): three references of different shapes wired to ref_image_0..2
+        # in order, the audio VAE on the node too, no LoadImage first frame
+        # and no turbo node. 9:16 at Standard is 640×1152. Saves a preset,
+        # so its blob (no turbo_strength, a ref_size) is checked.
+        "generate_minimax_r2v": (
+            references[:3], "The woman from <Picture 1> in the jacket from "
+            "<Picture 2> walks into the café in <Picture 3>",
+            "eros-max-beta5", "9:16 (Portrait Widescreen)",
+            "Match the clip (faster)", 6543210, False, 6,
+            "Standard (0.7 MP — the template default)", 5, "lcm", "simple",
+            12.0, 3.0, 1, True, "Golden",
+        ) + minimax_triples({0: (True, "mysticxxx-mmh3-v4")}),
+
+        # All nine, the node's limit, at full detail ("max") on the native
+        # canvas with another shift: ref_image_0..ref_image_8, and the
+        # MiniMaxH3SigmaShift node after the LoRAs.
+        "generate_minimax_r2v_nine": (
+            references[:9], "<Picture 1> to <Picture 9> at one table",
+            "eros-max-beta5", "16:9 (Widescreen)",
+            "Full detail (2048 short edge, slower)", 6543201, False, 8,
+            "Native 768p (short edge 768, slower)", 7, "euler", "simple",
+            10.0, 3.0, 1, False, "",
+        ) + minimax_triples({}),
+
         # Z-Image, the Upscale tick off: the template's Turbo graph and
         # nothing else. 1472×1140 at 1.15 is 1692.8×1311.0, which the
         # SimpleMath+ rounding puts at 1693×1311.
@@ -760,7 +785,8 @@ CASE_HANDLERS = {"generate_zimage_upscale": "generate_zimage",
                  "generate_wan_video_smooth": "generate_wan_video",
                  "generate_wan_video_5b_smooth": "generate_wan_video",
                  "generate_minimax_video_eros": "generate_minimax_video",
-                 "generate_minimax_t2v_shift": "generate_minimax_t2v"}
+                 "generate_minimax_t2v_shift": "generate_minimax_t2v",
+                 "generate_minimax_r2v_nine": "generate_minimax_r2v"}
 
 
 def check_settings(name, args, settings) -> None:
@@ -777,7 +803,7 @@ def check_settings(name, args, settings) -> None:
     inline inside generate_v2, so the only way to see it is to run the
     handler — which is what happens here. Every case that writes a blob
     ticks the save-preset box so it is captured: the Krea 2 and V2 cases,
-    the two MiniMax cases and the first Z-Image, Qwen 2.1 Reference, Qwen 2.1, Anima and Qwen Edit 2511
+    the two MiniMax cases and the first MiniMax R2V, Z-Image, Qwen 2.1 Reference, Qwen 2.1, Anima and Qwen Edit 2511
     cases, so their blobs (_krea_settings, _minimax_settings,
     _zimage_settings, _qwen21_settings, _qwen21_t2i_settings,
     _anima_settings, _qwen_edit_settings) are checked too.

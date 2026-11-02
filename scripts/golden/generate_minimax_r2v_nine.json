@@ -1,0 +1,268 @@
+[
+  {
+    "audio_vae": {
+      "class_type": "VAELoader",
+      "inputs": {
+        "vae_name": "minimax_h3_audio_vae_fp32.safetensors"
+      }
+    },
+    "clip": {
+      "class_type": "CLIPLoader",
+      "inputs": {
+        "clip_name": "qwen3vl_32b_minimax_h3_int8_convrot.safetensors",
+        "device": "default",
+        "type": "minimax"
+      }
+    },
+    "decode": {
+      "class_type": "VAEDecode",
+      "inputs": {
+        "samples": [
+          "sample",
+          0
+        ],
+        "vae": [
+          "vae",
+          0
+        ]
+      }
+    },
+    "decode_audio": {
+      "class_type": "VAEDecodeAudio",
+      "inputs": {
+        "samples": [
+          "sample",
+          0
+        ],
+        "vae": [
+          "audio_vae",
+          0
+        ]
+      }
+    },
+    "guider": {
+      "class_type": "BasicGuider",
+      "inputs": {
+        "conditioning": [
+          "r2v",
+          0
+        ],
+        "model": [
+          "shift",
+          0
+        ]
+      }
+    },
+    "noise": {
+      "class_type": "RandomNoise",
+      "inputs": {
+        "noise_seed": 6543201
+      }
+    },
+    "r2v": {
+      "class_type": "MiniMaxH3ReferenceToVideo",
+      "inputs": {
+        "audio_vae": [
+          "audio_vae",
+          0
+        ],
+        "clip": [
+          "clip",
+          0
+        ],
+        "height": 768,
+        "length": 175,
+        "prompt": "<Picture 1> to <Picture 9> at one table",
+        "ref_image_size": "max",
+        "ref_images.ref_image_0": [
+          "ref0",
+          0
+        ],
+        "ref_images.ref_image_1": [
+          "ref1",
+          0
+        ],
+        "ref_images.ref_image_2": [
+          "ref2",
+          0
+        ],
+        "ref_images.ref_image_3": [
+          "ref3",
+          0
+        ],
+        "ref_images.ref_image_4": [
+          "ref4",
+          0
+        ],
+        "ref_images.ref_image_5": [
+          "ref5",
+          0
+        ],
+        "ref_images.ref_image_6": [
+          "ref6",
+          0
+        ],
+        "ref_images.ref_image_7": [
+          "ref7",
+          0
+        ],
+        "ref_images.ref_image_8": [
+          "ref8",
+          0
+        ],
+        "vae": [
+          "vae",
+          0
+        ],
+        "width": 1344
+      }
+    },
+    "ref0": {
+      "class_type": "LoadImage",
+      "inputs": {
+        "image": "golden_upload.png"
+      }
+    },
+    "ref1": {
+      "class_type": "LoadImage",
+      "inputs": {
+        "image": "golden_upload.png"
+      }
+    },
+    "ref2": {
+      "class_type": "LoadImage",
+      "inputs": {
+        "image": "golden_upload.png"
+      }
+    },
+    "ref3": {
+      "class_type": "LoadImage",
+      "inputs": {
+        "image": "golden_upload.png"
+      }
+    },
+    "ref4": {
+      "class_type": "LoadImage",
+      "inputs": {
+        "image": "golden_upload.png"
+      }
+    },
+    "ref5": {
+      "class_type": "LoadImage",
+      "inputs": {
+        "image": "golden_upload.png"
+      }
+    },
+    "ref6": {
+      "class_type": "LoadImage",
+      "inputs": {
+        "image": "golden_upload.png"
+      }
+    },
+    "ref7": {
+      "class_type": "LoadImage",
+      "inputs": {
+        "image": "golden_upload.png"
+      }
+    },
+    "ref8": {
+      "class_type": "LoadImage",
+      "inputs": {
+        "image": "golden_upload.png"
+      }
+    },
+    "sample": {
+      "class_type": "SamplerCustomAdvanced",
+      "inputs": {
+        "guider": [
+          "guider",
+          0
+        ],
+        "latent_image": [
+          "r2v",
+          1
+        ],
+        "noise": [
+          "noise",
+          0
+        ],
+        "sampler": [
+          "sampler",
+          0
+        ],
+        "sigmas": [
+          "sigmas",
+          0
+        ]
+      }
+    },
+    "sampler": {
+      "class_type": "KSamplerSelect",
+      "inputs": {
+        "sampler_name": "euler"
+      }
+    },
+    "save": {
+      "class_type": "SaveVideo",
+      "inputs": {
+        "codec": "h264",
+        "filename_prefix": "minimax/MiniMaxR2V_golden00",
+        "format": "mp4",
+        "video": [
+          "video",
+          0
+        ]
+      }
+    },
+    "shift": {
+      "class_type": "MiniMaxH3SigmaShift",
+      "inputs": {
+        "model": [
+          "unet",
+          0
+        ],
+        "shift_audio": 3.0,
+        "shift_video": 10.0
+      }
+    },
+    "sigmas": {
+      "class_type": "BasicScheduler",
+      "inputs": {
+        "denoise": 1.0,
+        "model": [
+          "shift",
+          0
+        ],
+        "scheduler": "simple",
+        "steps": 8
+      }
+    },
+    "unet": {
+      "class_type": "UNETLoader",
+      "inputs": {
+        "unet_name": "10Eros_Max_h3_TURBO-hybrid_beta5_int8.safetensors",
+        "weight_dtype": "default"
+      }
+    },
+    "vae": {
+      "class_type": "VAELoader",
+      "inputs": {
+        "vae_name": "minimax_h3_video_vae_fp16.safetensors"
+      }
+    },
+    "video": {
+      "class_type": "CreateVideo",
+      "inputs": {
+        "audio": [
+          "decode_audio",
+          0
+        ],
+        "fps": 24.0,
+        "images": [
+          "decode",
+          0
+        ]
+      }
+    }
+  }
+]
