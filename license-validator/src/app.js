@@ -87,6 +87,14 @@ import {
   r2Configured,
 } from "./r2.js";
 import { entryWire, loadLibrary, tokenFor, URL_TTL_SECONDS } from "./promptLibrary.js";
+import {
+  DEFAULT_FEATURES as DEFAULT_PRIVATE_FEATURES,
+  PrivateLoraError,
+  grantPrivateLora,
+  listPrivateLoras,
+  revokePrivateLora,
+  upsertPrivateLora,
+} from "./privateLoras.js";
 import telegramRouter from "./telegram/router.js";
 import { createHash, timingSafeEqual } from "node:crypto";
 import { CRON_SECRET } from "./config.js";
@@ -1732,6 +1740,53 @@ app.post(
       loras: row.loras,
     });
   }),
+);
+
+// Private LoRAs — what the trainer page's Publish calls after it has put
+// the file in the bucket itself (this service's R2 key is read-only and
+// stays that way). The same writes as `npm run private-lora`, in
+// src/privateLoras.js, and as idempotent: publishing twice changes nothing.
+const privateLoraRoute = (fn) =>
+  wrap(async (req, res) => {
+    try {
+      res.json({ ok: true, ...(await fn(req.body || {})) });
+    } catch (err) {
+      if (err instanceof PrivateLoraError) return badRequest(res, err.message);
+      throw err;
+    }
+  });
+
+app.get(
+  "/v1/admin/private-loras",
+  requireAdmin,
+  wrap(async (_req, res) => res.json({ ok: true, loras: await listPrivateLoras() })),
+);
+
+app.post(
+  "/v1/admin/private-loras",
+  requireAdmin,
+  privateLoraRoute((body) =>
+    upsertPrivateLora({
+      id: body.id,
+      file: body.file,
+      name: body.name,
+      trigger: body.trigger,
+      default_strength: body.default_strength ?? 1.0,
+      features: Array.isArray(body.features) ? body.features : DEFAULT_PRIVATE_FEATURES,
+    }),
+  ),
+);
+
+app.post(
+  "/v1/admin/private-loras/grant",
+  requireAdmin,
+  privateLoraRoute((body) => grantPrivateLora(body.id, body.keys)),
+);
+
+app.post(
+  "/v1/admin/private-loras/revoke",
+  requireAdmin,
+  privateLoraRoute((body) => revokePrivateLora(body.id, body.keys, { all: body.all === true })),
 );
 
 /** One catalogue row as the clients read it — `key`, never Mongo's `_id`. */

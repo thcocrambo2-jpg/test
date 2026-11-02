@@ -121,6 +121,38 @@
     <div class="error" id="renderError"></div>
     <div class="gallery" id="gallery"></div>
   </section>
+
+  <section class="card">
+    <h2>4 · Publish as a private LoRA</h2>
+    <p class="muted" style="margin:0 0 10px">Uploads it to private R2, adds it to the Krea2 V2 and Krea2 LoRA lists,
+      and grants it to the keys below — nobody else is ever sent it. Safe to press again: the same file is not
+      uploaded twice. The R2 key and admin token are used for this publish only and never saved.</p>
+    <div class="grid">
+      <label>LoRA <select id="pubLora"></select></label>
+      <label>Id <input id="pubId" placeholder="face-sayara"></label>
+      <label>Name in the app <input id="pubName" placeholder="Sayara"></label>
+      <label>Trigger <input id="pubTrigger"></label>
+      <label>Default strength <input id="pubStrength" type="number" min="0" max="2" step="0.05" value="1"></label>
+    </div>
+    <div class="two" style="margin-top:10px">
+      <label>Licence keys (one per line, or comma separated) <textarea id="pubKeys" placeholder="EMBER-XXXX-XXXX"></textarea></label>
+      <div class="grid" style="grid-template-columns:1fr 1fr">
+        <label>R2 account id <input id="r2Account"></label>
+        <label>Bucket <input id="r2Bucket"></label>
+        <label>R2 access key id <input id="r2Key" autocomplete="off"></label>
+        <label>R2 secret access key <input id="r2Secret" type="password" autocomplete="off"></label>
+        <label>Licence server <input id="apiUrl"></label>
+        <label>Admin token <input id="apiToken" type="password" autocomplete="off"></label>
+      </div>
+    </div>
+    <div class="row">
+      <button id="publish">Publish</button>
+      <span class="muted" id="pubStatus"></span>
+    </div>
+    <div class="bar" id="pubBarWrap" style="margin-top:10px; display:none"><div id="pubBar" style="width:0"></div></div>
+    <div class="error" id="pubError"></div>
+    <pre id="pubDone" style="display:none"></pre>
+  </section>
 </main>
 
 <script>
@@ -302,6 +334,71 @@ function showRender(s) {
   if ($("gallery").innerHTML !== html) $("gallery").innerHTML = html;
 }
 
+// ── Publish ────────────────────────────────────────────────────────
+// The non-secret fields are remembered in this browser; the R2 secret,
+// access key and admin token never are.
+const REMEMBER = ["r2Account", "r2Bucket", "apiUrl"];
+const fileToId = f => f.replace(/\.safetensors$/, "").toLowerCase().replace(/[^a-z0-9-]+/g, "-").replace(/^-+|-+$/g, "");
+
+function fillPublishLoras(s) {
+  const triggers = {};
+  for (const r of s.runs) triggers["face_" + r.name + ".safetensors"] = r.options?.trigger || "";
+  const html = s.loras.map(f => `<option data-trigger="${triggers[f] || ""}">${f}</option>`).join("")
+    || "<option value=''>— train one first —</option>";
+  if ($("pubLora").innerHTML !== html) {
+    const current = $("pubLora").value;
+    $("pubLora").innerHTML = html;
+    if (current && s.loras.includes(current)) $("pubLora").value = current;
+    pubPicked();
+  }
+}
+
+function pubPicked() {
+  const f = $("pubLora").value;
+  if (!f) return;
+  $("pubId").value = fileToId(f);
+  $("pubTrigger").value = $("pubLora").selectedOptions[0]?.dataset.trigger || "";
+  const stem = f.replace(/^face_/, "").replace(/\.safetensors$/, "");
+  $("pubName").value = stem.charAt(0).toUpperCase() + stem.slice(1);
+}
+$("pubLora").onchange = pubPicked;
+
+function showPublish(s) {
+  const p = s.publish;
+  $("publish").disabled = p.status === "running";
+  const uploading = p.status === "running" && p.step === "uploading" && p.total;
+  $("pubBarWrap").style.display = uploading ? "" : "none";
+  if (uploading) $("pubBar").style.width = (100 * p.sent / p.total) + "%";
+  $("pubStatus").textContent = p.status === "running"
+    ? (uploading ? `uploading ${(p.sent / 1e6).toFixed(0)} / ${(p.total / 1e6).toFixed(0)} MB` : (p.step || "") + "…")
+    : p.status === "done" ? "✅ Published " + (p.lora || "") : "";
+  $("pubError").textContent = p.error || "";
+  $("pubDone").style.display = p.done.length ? "" : "none";
+  $("pubDone").textContent = p.done.map(d => "✓ " + d).join("\n");
+}
+
+$("publish").onclick = async () => {
+  $("pubError").textContent = "";
+  for (const id of REMEMBER) localStorage.setItem("pub." + id, $(id).value);
+  const body = {
+    lora: $("pubLora").value, id: $("pubId").value.trim(), name: $("pubName").value.trim(),
+    trigger: $("pubTrigger").value.trim(), strength: Number($("pubStrength").value),
+    keys: $("pubKeys").value,
+    r2: {account: $("r2Account").value, access_key: $("r2Key").value,
+         secret: $("r2Secret").value, bucket: $("r2Bucket").value},
+    api: {url: $("apiUrl").value, token: $("apiToken").value},
+  };
+  try { await api("/api/publish", body); poll(); }
+  catch (err) { $("pubError").textContent = err.message; }
+};
+
+async function loadPublishDefaults() {
+  const d = await api("/api/publish/defaults");
+  $("r2Bucket").value = localStorage.getItem("pub.r2Bucket") || d.bucket;
+  $("apiUrl").value = localStorage.getItem("pub.apiUrl") || d.api_url;
+  $("r2Account").value = localStorage.getItem("pub.r2Account") || "";
+}
+
 let timer = null;
 async function poll() {
   clearTimeout(timer);
@@ -313,7 +410,7 @@ async function poll() {
       filled = true;
     }
     $("train").disabled = !!(s.active && s.active.status === "running");
-    showRun(s); fillLoras(s); showRender(s);
+    showRun(s); fillLoras(s); showRender(s); fillPublishLoras(s); showPublish(s);
     const name = (s.active || s.runs[0] || {}).name;
     if (name && name !== lastRun && !$("name").value) { $("name").value = name; showDataset(); }
     lastRun = name;
@@ -327,7 +424,7 @@ async function loadPresets() {
   if (p.error) $("renderError").textContent = p.error;
 }
 
-poll(); loadPresets();
+poll(); loadPresets(); loadPublishDefaults();
 </script>
 </body>
 </html>

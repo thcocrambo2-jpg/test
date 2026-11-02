@@ -29,6 +29,7 @@ from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
 from urllib.parse import parse_qs, unquote, urlparse
 
+import publish
 import render
 import trainer
 from ember import settings
@@ -46,6 +47,10 @@ _active: trainer.Run | None = None
 _render = {"status": "idle", "done": 0, "total": 0, "images": [],
            "error": None, "started_at": None, "seconds_per_image": None}
 _lock = threading.Lock()
+# The last Publish: its steps, for the page. Never holds the R2 key or the
+# admin token — those live only in the job's own arguments.
+_publish = {"status": "idle", "step": None, "sent": 0, "total": 0,
+            "done": [], "error": None, "lora": None}
 
 
 def _runs() -> list:
@@ -91,6 +96,50 @@ def _app_busy() -> str | None:
     if comfy.get("queue_running") or comfy.get("queue_pending"):
         return "ComfyUI is still working on something — try again when it is idle."
     return None
+
+
+def _publish_job(job: dict) -> None:
+    """Upload, register, grant — publish.py does the work, this keeps score."""
+    def step(name, sent=0, total=0):
+        with _lock:
+            _publish.update(step=name, sent=sent, total=total)
+
+    def done(line):
+        with _lock:
+            _publish["done"].append(line)
+
+    try:
+        if DRY_RUN:
+            size = 50_000_000
+            for sent in range(0, size + 1, 5_000_000):
+                step("uploading", sent, size)
+                time.sleep(0.3)
+            done("uploaded 50.0 MB (dry run)")
+            done("created %s (dry run)" % job["id"])
+            if job["keys"]:
+                done("granted to %d key(s) (dry run)" % len(job["keys"]))
+        else:
+            done(publish.upload(MODELS / "loras" / job["file"], job["r2"], step))
+            step("registering")
+            done(publish.register(job["api"], {
+                "id": job["id"], "file": job["file"], "name": job["name"],
+                "trigger": job["trigger"], "default_strength": job["strength"]}))
+            if job["keys"]:
+                step("granting")
+                done(publish.grant(job["api"], job["id"], job["keys"]))
+            else:
+                done("not granted to anyone yet — publish again with keys")
+        with _lock:
+            _publish.update(status="done", step=None)
+    except publish.PublishError as exc:
+        with _lock:
+            _publish.update(status="failed", error=str(exc))
+    except Exception as exc:              # never the URL: see publish.py
+        with _lock:
+            _publish.update(status="failed",
+                            error="%s: %s" % (type(exc).__name__, exc))
+    finally:
+        job["r2"] = job["api"] = None     # drop the secrets with the job
 
 
 def _render_job(body: dict) -> None:
@@ -179,10 +228,16 @@ class Handler(BaseHTTPRequestHandler):
             with _lock:
                 rendering = dict(_render)
             active = _active.state if _active else None
+            with _lock:
+                publishing = dict(_publish, done=list(_publish["done"]))
             self.json({"active": active, "runs": _runs(),
                        "loras": _face_loras(), "render": rendering,
+                       "publish": publishing,
                        "defaults": trainer.DEFAULTS, "phases": trainer.PHASES,
                        "dry_run": DRY_RUN, "now": time.time()})
+        elif path == "/api/publish/defaults":
+            self.json({"api_url": settings.LICENSE_API_URL,
+                       "bucket": "krea2-builds"})
         elif path == "/api/presets":
             try:
                 answer = ({"names": ["Dry run"], "default": "Dry run"}
@@ -274,6 +329,39 @@ class Handler(BaseHTTPRequestHandler):
             if url.path == "/api/stop":
                 if _training():
                     _active.stop()
+                return self.json({"ok": True})
+
+            if url.path == "/api/publish":
+                with _lock:
+                    if _publish["status"] == "running":
+                        return self.error("A publish is already running.")
+                lora = str(body.get("lora") or "")
+                if lora not in _face_loras():
+                    return self.error("Pick a trained LoRA (a checkpoint is "
+                                      "publishable once it has been rendered with).")
+                r2, api = body.get("r2") or {}, body.get("api") or {}
+                job = {
+                    "file": lora,
+                    "id": str(body.get("id") or publish.lora_id(lora)).strip(),
+                    "name": str(body.get("name") or "").strip(),
+                    "trigger": str(body.get("trigger") or "").strip(),
+                    "strength": max(0.0, min(2.0, float(body.get("strength") or 1.0))),
+                    "keys": publish.licence_keys(body.get("keys")),
+                    "r2": {k: str(r2.get(k) or "").strip()
+                           for k in ("account", "access_key", "secret", "bucket")},
+                    "api": {"url": str(api.get("url") or "").strip(),
+                            "token": str(api.get("token") or "").strip()},
+                }
+                try:
+                    publish.check(job)
+                except publish.PublishError as exc:
+                    return self.error(str(exc))
+                with _lock:
+                    _publish.update(status="running", step="starting", sent=0,
+                                    total=0, done=[], error=None,
+                                    lora="%s → %s" % (lora, job["id"]))
+                threading.Thread(target=_publish_job, args=(job,),
+                                 daemon=True).start()
                 return self.json({"ok": True})
 
             if url.path == "/api/render":

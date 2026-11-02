@@ -57,7 +57,7 @@ def _uri_encode(value: str, keep_slash: bool = False) -> str:
 
 
 def presign(method: str, key: str, expires: int, now: str | None = None,
-            bucket: str | None = None) -> str:
+            bucket: str | None = None, creds: dict | None = None) -> str:
     """A presigned URL for one object.
 
     `bucket` defaults to R2_BUILDS_BUCKET, which is what build.sh wants and
@@ -65,7 +65,19 @@ def presign(method: str, key: str, expires: int, now: str | None = None,
     builds bucket is not the only one: the showcase images live in their
     own public bucket, and that uploader signs with this same credential
     rather than growing a second copy of SigV4 (see r2_upload_showcase.py).
+
+    `creds` ({account, access_key, secret}) signs with a key held in
+    memory instead of the environment — the trainer page's Publish, where
+    the key is typed in for one upload and never written anywhere. Without
+    it nothing changes.
     """
+    if creds is not None:
+        if not (bucket and all(creds.get(k) for k in
+                               ("account", "access_key", "secret"))):
+            raise ValueError("r2_presign: creds need account, access_key, "
+                             "secret and a bucket")
+        return _sign(method, key, expires, now, bucket, creds["account"],
+                     creds["access_key"], creds["secret"])
     required = ["R2_ACCOUNT_ID", "R2_ACCESS_KEY_ID", "R2_SECRET_ACCESS_KEY"]
     if bucket is None:
         required.append("R2_BUILDS_BUCKET")
@@ -77,7 +89,13 @@ def presign(method: str, key: str, expires: int, now: str | None = None,
     access_key = os.environ["R2_ACCESS_KEY_ID"]
     secret = os.environ["R2_SECRET_ACCESS_KEY"]
     bucket = bucket or os.environ["R2_BUILDS_BUCKET"]
+    return _sign(method, key, expires, now, bucket, account, access_key,
+                 secret)
 
+
+def _sign(method: str, key: str, expires: int, now: str | None, bucket: str,
+          account: str, access_key: str, secret: str) -> str:
+    """SigV4 query-string signing of one request — presign's arithmetic."""
     host = f"{account}.r2.cloudflarestorage.com"
     amz_date = now or time.strftime("%Y%m%dT%H%M%SZ", time.gmtime())
     date_stamp = amz_date[:8]
