@@ -429,7 +429,7 @@ def _failure(status: str, text: str):
     as a success. FAILED itself is the narrower case: the handler raised.
 
     The cross is the whole convention and it is used consistently across
-    all thirteen handlers, so matching on it is matching on a rule this app
+    all fourteen handlers, so matching on it is matching on a rule this app
     already keeps rather than on a coincidence.
     """
     line = (text or "").strip()

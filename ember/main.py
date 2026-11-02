@@ -44,6 +44,7 @@ from ember.pipelines.krea2_v2.constants import V2_NODE_REPOS
 from ember.pipelines.minimax.constants import (
     MINIMAX_COMFYUI_MIN,
     MINIMAX_NODE,
+    MINIMAX_R2V_NODE,
 )
 from ember.pipelines.qwen21.constants import (
     QWEN21_COMFYUI_MIN,
@@ -189,6 +190,9 @@ def main() -> None:
         # carries them — which is what an existing volume has until
         # bootstrap.repin_checkout has moved it to the pin.
         comfy.verify_core_node(MINIMAX_NODE, MINIMAX_COMFYUI_MIN)
+    if features.enabled(features.Key.MINIMAX_R2V):
+        # The reference node shipped with the other MiniMax ones.
+        comfy.verify_core_node(MINIMAX_R2V_NODE, MINIMAX_COMFYUI_MIN)
     if (features.enabled(features.Key.QWEN21_EDIT)
             or features.enabled(features.Key.QWEN21_T2I)):
         # Core ComfyUI too, and newer still: a checkout the repin could not

@@ -129,6 +129,7 @@ from ember.web.schema.tabs.krea2_v2 import KREA2_V2_SCHEMA
 from ember.web.schema.tabs.krea2_v2_edit import KREA2_V2_EDIT_SCHEMA
 from ember.web.schema.tabs.minimax import (
     MINIMAX_I2V_SCHEMA,
+    MINIMAX_R2V_SCHEMA,
     MINIMAX_T2V_SCHEMA,
 )
 from ember.web.schema.tabs.qwen21 import QWEN21_REF_SCHEMA, QWEN21_T2I_SCHEMA
@@ -139,7 +140,7 @@ from ember.web.schema.tabs.zimage import ZIMAGE_SCHEMA
 Key = features.Key
 
 
-# ═════════════════════════════════════════════════ the thirteen tabs
+# ═════════════════════════════════════════════════ the fourteen tabs
 # Order is the order they appear in the navigation, which is ui.TAB_ORDER's
 # order with the two bespoke tabs (Gallery, Prompt Library) taken out —
 # those have no form and so no schema.
@@ -158,6 +159,7 @@ SCHEMAS = (
     WAN_SCHEMA,
     MINIMAX_I2V_SCHEMA,
     MINIMAX_T2V_SCHEMA,
+    MINIMAX_R2V_SCHEMA,
 )
 
 BY_KEY = {str(schema.key): schema for schema in SCHEMAS}
@@ -220,7 +222,8 @@ _V2_FEATURES = (handlers.KREA_V2_T2I, handlers.KREA_V2_EDIT,
 # shift, turbo strength): a checkpoint with turbo merged in runs a recipe
 # of its own, and the browser deals a row's defaults into the controls of
 # the same name when the model is picked.
-_MINIMAX_FEATURES = (handlers.MINIMAX_I2V, handlers.MINIMAX_T2V)
+_MINIMAX_FEATURES = (handlers.MINIMAX_I2V, handlers.MINIMAX_T2V,
+                     handlers.MINIMAX_R2V)
 
 
 def _model_rows(feature):

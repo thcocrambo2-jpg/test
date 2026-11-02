@@ -14,6 +14,8 @@ and weights/downloads.py can read it without a GPU or a licence.
 # MiniMaxH3ImageToVideo node takes an *optional* first frame, so text-to-
 # video is the same workflow with LoadImage left out. Two feature keys
 # ("minimax_i2v", "minimax_t2v"), one asset group ("minimax") between them.
+# A third tab, reference to video ("minimax_r2v"), swaps that node for
+# MiniMaxH3ReferenceToVideo on a ref2va checkpoint — see further down.
 #
 # Transcribed from the two Custom Prompt workflows in
 # hearmeman/comfyui-minimax-template:v8 (kept under tmp/minimax-reference/,
@@ -100,6 +102,53 @@ MINIMAX_BUILTIN_MODEL = {
     "steps": MINIMAX_DEFAULTS["steps"],
     "cfg": 1.0,
 }
+
+# ── Reference to video ────────────────────────────────────────────────────────
+# The third tab, 🖼️ MiniMax R2V ("minimax_r2v"), builds the clip from up to
+# nine reference pictures instead of a first frame: the core
+# MiniMaxH3ReferenceToVideo node packs each one in as a reference block the
+# model reads at every step and never denoises, and the prompt names them
+# <Picture 1>, <Picture 2>... It needs a checkpoint trained on that, which
+# fl2va (MINIMAX_UNET) is not — H3 ships the task as a second model, ref2va.
+#
+# The built-in one is Comfy-Org's ref2va int8, run the way the template's
+# RefMod graph runs it: 20 steps, euler / simple, no turbo LoRA. The
+# template's R2V graph adds lightx2v's ref2v turbo LoRA instead, but the
+# tab is meant for catalogue checkpoints with turbo merged in — Eros Max's
+# turbo-hybrid beta5 is ref2va underneath (its norms and adaLN tables are
+# ref2va's, byte for byte) — so it offers no Turbo LoRA control, and the
+# only turbo LoRA the app downloads (fl2v's) is never put on a ref2va model.
+# Like MINIMAX_BUILTIN_MODEL, this record is only used when the licence
+# server lists no model for the feature, and only then downloaded.
+MINIMAX_R2V_UNET = "minimax_h3_ref2va_pruned_int8_convrot.safetensors"   # ~21.0 GB
+MINIMAX_R2V_BUILTIN_MODEL = {
+    "id": "minimax-h3-ref2va-int8",
+    "name": "MiniMax H3 ref2va int8 (template default)",
+    "file": MINIMAX_R2V_UNET,
+    "source": {"kind": "hf", "repo": MINIMAX_HF_REPO,
+               "path": f"diffusion_models/{MINIMAX_R2V_UNET}"},
+    "variant": "base",
+    "steps": 20,
+    "cfg": 1.0,
+    "turbo_strength": 0,
+}
+# The node's limit: ref_images is an Autogrow of ref_image_0..ref_image_8.
+# Videos and audio clips (three of each) are not offered yet.
+MINIMAX_R2V_MAX_REFERENCES = 9
+MINIMAX_R2V_NODE = "MiniMaxH3ReferenceToVideo"
+# The node's ref_image_size. "match" scales each reference (down only) to
+# the clip's pixel area, "max" to a 2048 short edge — the reference
+# pipeline's own size and the template's choice, best for likeness, but the
+# reference tokens ride through every step, so it is several times slower
+# and much heavier with several pictures. The tab defaults to match.
+MINIMAX_R2V_REF_SIZES = {
+    "Match the clip (faster)": "match",
+    "Full detail (2048 short edge, slower)": "max",
+}
+MINIMAX_R2V_DEFAULT_REF_SIZE = "Match the clip (faster)"
+# The node never enlarges a reference and shrinks past this short edge
+# itself, so anything bigger is cut down to it before the upload.
+MINIMAX_R2V_REF_SHORT_EDGE = 2048
 
 # Geometry. 24 fps, and the frame count has to sit on the model's "17k + 5"
 # grid: 124 frames is 5 s and the node's default, 362 is 15 s and the top

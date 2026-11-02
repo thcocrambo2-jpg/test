@@ -54,7 +54,10 @@ from pathlib import Path
 from ember import settings
 from ember.logs import log
 # Data modules: they import nothing, so this package stays stdlib-only.
-from ember.pipelines.minimax.constants import MINIMAX_BUILTIN_MODEL
+from ember.pipelines.minimax.constants import (
+    MINIMAX_BUILTIN_MODEL,
+    MINIMAX_R2V_BUILTIN_MODEL,
+)
 from ember.pipelines.wan.constants import WAN_BUILTIN_MODELS
 from ember.settings import (
     BASE_DIR,
@@ -326,7 +329,9 @@ def _builtin() -> dict:
     """Each feature's built-in models, parsed the way a served record is."""
     minimax = (_model(MINIMAX_BUILTIN_MODEL),)
     wan = tuple(_model(raw) for raw in WAN_BUILTIN_MODELS)
-    return {"minimax_i2v": minimax, "minimax_t2v": minimax, "wan_i2v": wan}
+    return {"minimax_i2v": minimax, "minimax_t2v": minimax,
+            "minimax_r2v": (_model(MINIMAX_R2V_BUILTIN_MODEL),),
+            "wan_i2v": wan}
 
 
 def parse(document: dict, origin: str) -> Catalogue:

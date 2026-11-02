@@ -63,6 +63,7 @@ ANIMA_T2I = str(Key.ANIMA_T2I)
 # list is read.
 MINIMAX_I2V = str(Key.MINIMAX_I2V)
 MINIMAX_T2V = str(Key.MINIMAX_T2V)
+MINIMAX_R2V = str(Key.MINIMAX_R2V)
 
 
 def _snap(value, lo: int = 512, hi: int = 2048) -> int:

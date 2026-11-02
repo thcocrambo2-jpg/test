@@ -78,6 +78,7 @@ class Key(str, Enum):
     WAN_I2V = "wan_i2v"
     MINIMAX_I2V = "minimax_i2v"
     MINIMAX_T2V = "minimax_t2v"
+    MINIMAX_R2V = "minimax_r2v"
     COMMUNITY_PROMPTS = "community_prompts"
     ZIMAGE_REFINE = "zimage_refine"
     FACE_LORA = "face_lora"
@@ -195,6 +196,12 @@ FEATURES = (
     Feature(Key.MINIMAX_I2V, "🎥 MiniMax I2V",
             needs=("minimax", "catalog")),
     Feature(Key.MINIMAX_T2V, "🎞️ MiniMax T2V",
+            needs=("minimax", "catalog")),
+    # Reference to video: the same shared encoder and VAEs, and a ref2va
+    # checkpoint from the catalogue (Eros Max's beta5 is one). "minimax"
+    # also brings the fl2v turbo LoRA, which this tab never loads — 2 GB a
+    # licence granted only this tab carries for nothing.
+    Feature(Key.MINIMAX_R2V, "🖼️ MiniMax R2V",
             needs=("minimax", "catalog")),
     # Reads the library through the licence server, so it needs no weights
     # of its own. Its cards load into whichever tab made them; a card for

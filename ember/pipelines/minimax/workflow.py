@@ -6,6 +6,11 @@ sampler pass produces the frames and the soundtrack together, and the core
 image-to-video and text-to-video are the same graph with `LoadImage`
 present or absent. That is the whole difference between the two tabs.
 
+The third tab, reference to video, is the same graph again with
+`MiniMaxH3ReferenceToVideo` in that node's place: one LoadImage per
+reference picture instead of a first frame, the audio VAE wired in as
+well, on a ref2va checkpoint (constants.py, "Reference to video").
+
 Transcribed from the two "Custom Prompt" workflows in
 hearmeman/comfyui-minimax-template:v8 (kept under tmp/minimax-reference/,
 which is not shipped). Every node used here is core ComfyUI:
@@ -79,19 +84,22 @@ from ember.pipelines.minimax.constants import (
 )
 
 
-def _required(unet: str = MINIMAX_UNET) -> dict:
-    """Local path of every file both tabs load, by the name a message uses.
+def _required(unet: str = MINIMAX_UNET, turbo: bool = True) -> dict:
+    """Local path of every file the tabs load, by the name a message uses.
 
     `unet` is the chosen checkpoint's file (a catalogue model's `file`);
-    everything else is shared by every H3 checkpoint.
+    everything else is shared by every H3 checkpoint. `turbo` False leaves
+    the turbo LoRA out, for the reference tab, which never loads it.
     """
-    return {
+    required = {
         "diffusion model": MODELS_DIR / "diffusion_models" / unet,
         "text encoder": MODELS_DIR / "text_encoders" / MINIMAX_TEXT_ENCODER,
         "video VAE": MODELS_DIR / "vae" / MINIMAX_VIDEO_VAE,
         "audio VAE": MODELS_DIR / "vae" / MINIMAX_AUDIO_VAE,
-        "turbo LoRA": MODELS_DIR / "loras" / MINIMAX_TURBO_LORA,
     }
+    if turbo:
+        required["turbo LoRA"] = MODELS_DIR / "loras" / MINIMAX_TURBO_LORA
+    return required
 
 
 def model_defaults(model) -> dict:
@@ -117,15 +125,16 @@ def model_defaults(model) -> dict:
     }
 
 
-def minimax_missing(unet: str = MINIMAX_UNET) -> list[str]:
-    """Which of the five files are not on disk yet, by human name."""
-    return [name for name, path in _required(unet).items()
+def minimax_missing(unet: str = MINIMAX_UNET, turbo: bool = True) -> list[str]:
+    """Which of the files are not on disk yet, by human name."""
+    return [name for name, path in _required(unet, turbo).items()
             if not path.exists()]
 
 
-def minimax_models_available(unet: str = MINIMAX_UNET) -> bool:
+def minimax_models_available(unet: str = MINIMAX_UNET,
+                             turbo: bool = True) -> bool:
     """True once every file the graph loads has been downloaded."""
-    return not minimax_missing(unet)
+    return not minimax_missing(unet, turbo)
 
 
 def frames_for(seconds: float) -> int:
@@ -299,6 +308,8 @@ def build_minimax_video_workflow(
     shift_audio: float = MINIMAX_SAMPLING_DEFAULTS["shift_audio"],
     turbo_strength: float = MINIMAX_TURBO_LORA_STRENGTH,
     image_name: str | None = None,
+    reference_names=None,
+    ref_image_size: str = "match",
     loras=(),
     filename_prefix: str = "minimax/MiniMaxH3",
     unet: str = MINIMAX_UNET,
@@ -327,6 +338,15 @@ def build_minimax_video_workflow(
     merged in), and a shift other than the model's own 12/3 adds a
     MiniMaxH3SigmaShift after the LoRAs; at the defaults neither changes
     the graph.
+
+    `reference_names` makes it the reference tab's graph: uploaded files,
+    in the order the prompt numbers them, each loaded and wired to
+    MiniMaxH3ReferenceToVideo's ref_images.ref_image_<n> in place of the
+    image node — <Picture 1> is the first. That node also takes the audio
+    VAE, so the references condition the soundtrack as well, and
+    `ref_image_size` ("match" or "max") is how large it encodes them. Its
+    two outputs are the image node's, so everything after it is the same
+    graph. `image_name` is ignored then.
     """
     wf = {
         "unet": {
@@ -400,21 +420,33 @@ def build_minimax_video_workflow(
         "clip": clip_ref, "vae": vae_ref, "prompt": prompt,
         "width": int(width), "height": int(height), "length": int(length),
     }
-    if image_name is not None:
-        wf["source"] = {
-            "class_type": "LoadImage",
-            "inputs": {"image": image_name},
-        }
-        conditioning["first_frame"] = ["source", 0]
+    if reference_names is not None:
+        conditioning["audio_vae"] = audio_vae_ref
+        conditioning["ref_image_size"] = ref_image_size
+        for i, name in enumerate(reference_names):
+            wf[f"ref{i}"] = {
+                "class_type": "LoadImage",
+                "inputs": {"image": name},
+            }
+            conditioning[f"ref_images.ref_image_{i}"] = [f"ref{i}", 0]
+        cond_node, cond_class = "r2v", "MiniMaxH3ReferenceToVideo"
+    else:
+        if image_name is not None:
+            wf["source"] = {
+                "class_type": "LoadImage",
+                "inputs": {"image": image_name},
+            }
+            conditioning["first_frame"] = ["source", 0]
+        cond_node, cond_class = "i2v", "MiniMaxH3ImageToVideo"
     # Outputs: 0 = positive conditioning, 1 = the empty audio+video latent.
-    wf["i2v"] = {
-        "class_type": "MiniMaxH3ImageToVideo",
+    wf[cond_node] = {
+        "class_type": cond_class,
         "inputs": conditioning,
     }
 
     wf["guider"] = {
         "class_type": "BasicGuider",
-        "inputs": {"model": model_ref, "conditioning": ["i2v", 0]},
+        "inputs": {"model": model_ref, "conditioning": [cond_node, 0]},
     }
     wf["noise"] = {
         "class_type": "RandomNoise",
@@ -435,7 +467,7 @@ def build_minimax_video_workflow(
         "inputs": {"noise": ["noise", 0], "guider": ["guider", 0],
                    "sampler": ["sampler", 0],
                    "sigmas": ["sigmas", 0],
-                   "latent_image": ["i2v", 1]},
+                   "latent_image": [cond_node, 1]},
     }
     # The one latent carries both streams; each VAE decodes its half.
     wf["decode"] = {

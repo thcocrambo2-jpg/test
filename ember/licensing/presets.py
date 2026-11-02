@@ -65,19 +65,22 @@ from ember.settings import LICENSE_API_URL, LICENSE_KEY
 # prompt library behind it: presets are the only settings blob these tabs
 # write.
 #
-# Z-Image, the two Qwen 2.1 tabs, Qwen Edit 2511 and Anima are lists of
-# their own, each saved and read by its one tab. Like MiniMax they have no
-# prompt library behind them.
+# Z-Image, the two Qwen 2.1 tabs, Qwen Edit 2511, Anima and 🖼️ MiniMax R2V
+# are lists of their own, each saved and read by its one tab. Like MiniMax
+# they have no prompt library behind them. MiniMax R2V is not on the MiniMax
+# list because it runs other checkpoints (ref2va) and has no Turbo LoRA
+# control, so a preset from the other two would not mean the same there.
 TAB_KREA2 = str(features.Key.KREA_T2I)
 TAB_KREA2_V2 = str(features.Key.KREA_V2_T2I)
 TAB_MINIMAX = str(features.Key.MINIMAX_I2V)
+TAB_MINIMAX_R2V = str(features.Key.MINIMAX_R2V)
 TAB_ZIMAGE = str(features.Key.ZIMAGE_T2I)
 TAB_QWEN21 = str(features.Key.QWEN21_EDIT)
 TAB_QWEN21_T2I = str(features.Key.QWEN21_T2I)
 TAB_ANIMA = str(features.Key.ANIMA_T2I)
 TAB_QWEN_EDIT = str(features.Key.QWEN_EDIT_2511)
 TABS = (TAB_KREA2, TAB_KREA2_V2, TAB_MINIMAX, TAB_ZIMAGE, TAB_QWEN21,
-        TAB_QWEN21_T2I, TAB_ANIMA, TAB_QWEN_EDIT)
+        TAB_QWEN21_T2I, TAB_ANIMA, TAB_QWEN_EDIT, TAB_MINIMAX_R2V)
 
 # How long a fetched set is served without asking again. The same 300s as
 # plans.py and prompts.py: presets change when we save one, which is not

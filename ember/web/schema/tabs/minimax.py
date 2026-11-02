@@ -1,4 +1,4 @@
-"""The MiniMax H3 tabs: 🎥 MiniMax I2V and 🎞️ MiniMax T2V."""
+"""The MiniMax H3 tabs: 🎥 MiniMax I2V, 🎞️ MiniMax T2V and 🖼️ MiniMax R2V."""
 
 from ember import features
 from ember.generation import handlers
@@ -13,17 +13,22 @@ from ember.pipelines.minimax.constants import (
     MINIMAX_DEFAULT_SECONDS,
     MINIMAX_MAX_SECONDS,
     MINIMAX_MIN_SECONDS,
+    MINIMAX_R2V_DEFAULT_REF_SIZE,
+    MINIMAX_R2V_MAX_REFERENCES,
+    MINIMAX_R2V_REF_SIZES,
     MINIMAX_RESOLUTIONS,
     MINIMAX_SAMPLING_DEFAULTS,
     MINIMAX_SCHEDULERS,
     MINIMAX_T2V_RESOLUTIONS,
 )
 from ember.pipelines.minimax.handler import (
+    generate_minimax_r2v,
     generate_minimax_t2v,
     generate_minimax_video,
 )
 from ember.pipelines.minimax.workflow import model_defaults
 from ember.web.schema.fields import (
+    GEN_PRESET_NOTE,
     G_PROMPT,
     G_SAVE_PRESET,
     G_SEED,
@@ -96,9 +101,12 @@ def _sampling_fields(feature):
     )
 
 
-def _recipe_fields(feature):
-    """Sampler through Turbo LoRA, after Duration in submission order."""
-    return (
+def _recipe_fields(feature, turbo=True):
+    """Sampler through Turbo LoRA, after Duration in submission order.
+
+    `turbo` False stops at Shift (audio), for the reference tab.
+    """
+    fields = (
         Field("sampler", "Sampler", "select",
               _minimax_default(feature, "sampler"),
               choices=MINIMAX_SAMPLERS, group="sampling",
@@ -115,6 +123,10 @@ def _recipe_fields(feature):
               _minimax_default(feature, "shift_audio"),
               lo=1, hi=20, step=0.5, group="sampling", preset="shift_audio",
               hint="3 is the model's own."),
+    )
+    if not turbo:
+        return fields
+    return fields + (
         Field("turbo_strength", "Turbo LoRA", "slider",
               _minimax_default(feature, "turbo_strength"),
               lo=0, hi=1.5, step=0.05, group="sampling",
@@ -205,5 +217,73 @@ MINIMAX_T2V_SCHEMA = TabSchema(
         *_preset_save_fields(),
         Field("lora_slots", "LoRA stack", "repeat",
               repeat=_blank_lora_tail(handlers.MINIMAX_T2V)),
+    ),
+)
+
+# Reference to video: the text tab's form with the numbered pictures in the
+# right column, like Qwen 2.1 Reference's, and a Reference size beside the
+# aspect. The clip has no first frame, so its shape is the Aspect ratio's.
+# No Turbo LoRA control — the tab runs ref2va checkpoints, and the only
+# turbo LoRA the app has is fl2v's (constants.py, "Reference to video") —
+# and no Auto prompt: its system prompt writes the image and text tabs'
+# prompt, not one that says what to keep from each <Picture n>. Presets
+# are a list of its own (presets.TAB_MINIMAX_R2V).
+MINIMAX_R2V_SCHEMA = TabSchema(
+    model_registry=handlers.MINIMAX_R2V,
+    key=Key.MINIMAX_R2V, handler=generate_minimax_r2v,
+    lane=runner.COMFY_LANE, prompt_field="prompt",
+    result_keys=VIDEO_KEYS, tab_id="minimax_r2v", output="video",
+    icon="🖼️", blurb="A clip with sound that keeps the people, outfits and "
+                     "places from up to 9 pictures.",
+    category="video", route="/video/minimax-r2v",
+    submit_label="Generate", preset_tab=presets.TAB_MINIMAX_R2V,
+    preset_note=GEN_PRESET_NOTE,
+    model_follows=_minimax_follows(handlers.MINIMAX_R2V),
+    groups=(Group("references", "References", column="right",
+                  stack_first=True),
+            G_PROMPT, Group("core", "Output", dense=True),
+            Group("sampling", "Sampling", dense=True), G_SEED,
+            G_SAVE_PRESET),
+    fields=(
+        Field("references", "Reference pictures (paste with Ctrl+V)",
+              "images", (), lo=1, hi=MINIMAX_R2V_MAX_REFERENCES,
+              group="references", column="right",
+              hint="Name them in the prompt as <Picture 1>, <Picture 2>… "
+                   "in this order.",
+              empty_note="Add at least one reference picture to generate."),
+        Field("prompt", "Prompt (who and what from each picture, the "
+                        "motion, and the sound)",
+              "textarea", "", lines=6, group="prompt",
+              placeholder="The woman from <Picture 1>, keeping her face and "
+                          "hair, wearing the jacket from <Picture 2>, walks "
+                          "into the café in <Picture 3> and sits by the "
+                          "window. Slow dolly-in, rain against the glass, "
+                          "a coffee machine hissing."),
+        _model_field(handlers.MINIMAX_R2V),
+        Field("aspect", "Aspect ratio", "select", MINIMAX_DEFAULT_ASPECT,
+              choices=list(MINIMAX_ASPECT_RATIOS), group="core",
+              preset="aspect", wide=True),
+        Field("ref_size", "Reference size", "radio",
+              MINIMAX_R2V_DEFAULT_REF_SIZE,
+              choices=list(MINIMAX_R2V_REF_SIZES), group="core",
+              preset="ref_size", wide=True,
+              hint="Full detail holds a face better but is much slower "
+                   "with several pictures."),
+        *_seed_fields(),
+        *_sampling_fields(handlers.MINIMAX_R2V),
+        Field("resolution", "Resolution", "radio",
+              MINIMAX_DEFAULT_RESOLUTION,
+              choices=MINIMAX_T2V_RESOLUTIONS, group="core",
+              preset="resolution", wide=True),
+        Field("seconds", "Duration (seconds)", "slider",
+              MINIMAX_DEFAULT_SECONDS, lo=MINIMAX_MIN_SECONDS,
+              hi=MINIMAX_MAX_SECONDS, step=1.0, group="sampling",
+              preset="seconds", wide=True,
+              hint="Snapped to the model's frame grid at 24 fps."),
+        *_recipe_fields(handlers.MINIMAX_R2V, turbo=False),
+        _batch_field(hi=10),
+        *_preset_save_fields(),
+        Field("lora_slots", "LoRA stack", "repeat",
+              repeat=_blank_lora_tail(handlers.MINIMAX_R2V)),
     ),
 )

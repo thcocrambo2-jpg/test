@@ -18,7 +18,7 @@ import { cx } from '@/lib/util'
 import s from './form.module.css'
 
 /*
- * One form for thirteen of the fifteen tabs.
+ * One form for fourteen of the sixteen tabs.
  *
  * The schema says what the fields are, in what order they submit, which column
  * they belong to and how they group. This renders that. There is no per-tab
