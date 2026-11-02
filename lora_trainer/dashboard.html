@@ -1,0 +1,275 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Face LoRA trainer</title>
+<style>
+  :root { --bg:#111317; --card:#1a1d23; --line:#2a2e36; --text:#e6e8eb;
+          --dim:#8b919c; --accent:#f08a24; --ok:#3fb950; --bad:#f85149; }
+  * { box-sizing:border-box; }
+  body { margin:0; background:var(--bg); color:var(--text);
+         font:14px/1.45 system-ui, -apple-system, Segoe UI, sans-serif; }
+  main { max-width:1100px; margin:0 auto; padding:20px; display:grid; gap:16px; }
+  h1 { font-size:20px; margin:0; } h2 { font-size:15px; margin:0 0 12px; }
+  .card { background:var(--card); border:1px solid var(--line); border-radius:10px; padding:16px; }
+  .grid { display:grid; grid-template-columns:repeat(auto-fill,minmax(160px,1fr)); gap:10px; }
+  label { display:flex; flex-direction:column; gap:4px; color:var(--dim); font-size:12px; }
+  input, select, textarea { background:#0d0f12; color:var(--text); border:1px solid var(--line);
+         border-radius:6px; padding:7px 9px; font:inherit; }
+  textarea { resize:vertical; min-height:70px; }
+  button { background:var(--accent); color:#111; border:0; border-radius:6px; padding:8px 16px;
+           font-weight:600; cursor:pointer; }
+  button.ghost { background:transparent; color:var(--text); border:1px solid var(--line); }
+  button:disabled { opacity:.45; cursor:default; }
+  .row { display:flex; gap:10px; align-items:center; flex-wrap:wrap; margin-top:12px; }
+  .thumbs { display:flex; gap:8px; flex-wrap:wrap; margin-top:12px; }
+  .thumbs figure { margin:0; position:relative; }
+  .thumbs img { width:96px; height:96px; object-fit:cover; border-radius:6px; display:block; }
+  .thumbs button { position:absolute; top:2px; right:2px; padding:0 6px; font-size:12px; }
+  .phases { display:flex; gap:6px; flex-wrap:wrap; margin-bottom:12px; }
+  .phase { padding:3px 9px; border-radius:99px; border:1px solid var(--line); color:var(--dim); font-size:12px; }
+  .phase.done { color:var(--ok); border-color:var(--ok); }
+  .phase.now { color:#111; background:var(--accent); border-color:var(--accent); }
+  .phase.bad { color:var(--bad); border-color:var(--bad); }
+  .bar { height:10px; background:#0d0f12; border-radius:99px; overflow:hidden; }
+  .bar > div { height:100%; background:var(--accent); transition:width .5s; }
+  .stats { display:flex; gap:22px; flex-wrap:wrap; margin-top:10px; }
+  .stats b { display:block; font-size:18px; } .stats span { color:var(--dim); font-size:12px; }
+  pre { background:#0d0f12; border-radius:6px; padding:10px; max-height:180px; overflow:auto;
+        font-size:12px; color:var(--dim); white-space:pre-wrap; margin:12px 0 0; }
+  .error { color:var(--bad); margin-top:10px; white-space:pre-wrap; }
+  .muted { color:var(--dim); font-size:12px; }
+  .gallery { display:grid; grid-template-columns:repeat(auto-fill,minmax(220px,1fr)); gap:10px; margin-top:12px; }
+  .gallery img { width:100%; border-radius:6px; display:block; }
+  .two { display:grid; grid-template-columns:2fr 1fr; gap:10px; }
+  @media (max-width:700px) { .two { grid-template-columns:1fr; } }
+</style>
+</head>
+<body>
+<main>
+  <div class="row" style="margin:0; justify-content:space-between">
+    <h1>🎭 Face LoRA trainer <span class="muted">Krea 2 Raw · musubi-tuner</span></h1>
+    <span id="dry" class="muted"></span>
+  </div>
+
+  <section class="card">
+    <h2>1 · Photos and settings</h2>
+    <div class="grid">
+      <label>Name <input id="name" placeholder="e.g. riya" pattern="[a-z0-9][a-z0-9_-]*"></label>
+      <label>Trigger word <input id="trigger"></label>
+      <label>Caption <input id="caption"></label>
+      <label>Steps <input id="steps" type="number" min="50" max="6000" step="50"></label>
+      <label>Rank <select id="rank"><option>8</option><option>16</option><option>32</option></select></label>
+      <label>Train resolution <select id="resolution"><option>512</option><option>768</option><option>1024</option></select></label>
+      <label>Learning rate <input id="learning_rate" type="number" step="0.00001"></label>
+      <label>Save every (steps) <input id="save_every" type="number" min="50" step="50"></label>
+      <label>Blocks to swap <input id="blocks_to_swap" type="number" min="0" max="26" title="0 = all on GPU. Raise only if it runs out of VRAM."></label>
+    </div>
+    <div class="row">
+      <input id="files" type="file" accept=".jpg,.jpeg,.png,.webp" multiple>
+      <span class="muted" id="count"></span>
+    </div>
+    <div class="thumbs" id="thumbs"></div>
+    <div class="row">
+      <button id="train">Train</button>
+      <button id="stop" class="ghost">Stop</button>
+      <span class="muted">5–6 photos work; 10–20 varied ones hold the face better.</span>
+    </div>
+    <div class="error" id="trainError"></div>
+  </section>
+
+  <section class="card">
+    <h2>2 · Progress <span class="muted" id="runName"></span></h2>
+    <div class="phases" id="phases"></div>
+    <div class="bar"><div id="bar" style="width:0"></div></div>
+    <div class="stats">
+      <div><b id="step">—</b><span>step</span></div>
+      <div><b id="eta">—</b><span>phase ETA</span></div>
+      <div><b id="speed">—</b><span>speed</span></div>
+      <div><b id="loss">—</b><span>loss</span></div>
+      <div><b id="elapsed">—</b><span>total elapsed</span></div>
+    </div>
+    <div class="error" id="runError"></div>
+    <pre id="log"></pre>
+  </section>
+
+  <section class="card">
+    <h2>3 · Render with the app</h2>
+    <div class="grid">
+      <label>LoRA <select id="lora"></select></label>
+      <label>Preset (🔶 Krea2 V2) <select id="preset"></select></label>
+      <label>Strength <input id="strength" type="number" min="0" max="2" step="0.05" value="1"></label>
+      <label>Pictures <input id="nimg" type="number" min="1" max="8" value="2"></label>
+      <label>Seed (blank = random) <input id="seed" type="number"></label>
+    </div>
+    <div class="two" style="margin-top:10px">
+      <label>Prompt <textarea id="prompt" placeholder="the trigger word is added in front if you leave it out"></textarea></label>
+      <label>Negative (blank = the preset's) <textarea id="negative"></textarea></label>
+    </div>
+    <div class="row">
+      <button id="render">Render</button>
+      <span class="muted" id="renderStatus"></span>
+    </div>
+    <div class="error" id="renderError"></div>
+    <div class="gallery" id="gallery"></div>
+  </section>
+</main>
+
+<script>
+const $ = id => document.getElementById(id);
+const OPTION_KEYS = ["trigger","caption","steps","rank","resolution","learning_rate","save_every","blocks_to_swap"];
+let state = null, filled = false, lastRun = null;
+
+function clock(s) {
+  if (s == null) return "—";
+  s = Math.max(0, Math.round(s));
+  const h = Math.floor(s / 3600), m = Math.floor(s % 3600 / 60), sec = s % 60;
+  return (h ? h + ":" + String(m).padStart(2, "0") : m) + ":" + String(sec).padStart(2, "0");
+}
+
+async function api(path, body, raw) {
+  const opts = body === undefined ? {} : {method: "POST",
+    body: raw ? body : JSON.stringify(body)};
+  const res = await fetch(path, opts);
+  const data = await res.json();
+  if (!res.ok) throw new Error(data.error || res.statusText);
+  return data;
+}
+
+async function showDataset() {
+  const run = $("name").value.trim();
+  if (!run) { $("thumbs").innerHTML = ""; $("count").textContent = ""; return; }
+  const {images} = await api("/api/dataset?run=" + encodeURIComponent(run));
+  $("count").textContent = images.length + " photo(s) in " + run;
+  $("thumbs").innerHTML = images.map(n =>
+    `<figure><img src="/dataset/${run}/${encodeURIComponent(n)}"><button class="ghost" data-n="${n}">✕</button></figure>`).join("");
+  $("thumbs").querySelectorAll("button").forEach(b => b.onclick = async () => {
+    await api(`/api/remove?run=${run}&file=${encodeURIComponent(b.dataset.n)}`, {});
+    showDataset();
+  });
+}
+
+$("name").onchange = showDataset;
+$("files").onchange = async e => {
+  const run = $("name").value.trim();
+  $("trainError").textContent = "";
+  if (!run) { $("trainError").textContent = "Give the run a name first."; e.target.value = ""; return; }
+  for (const f of e.target.files) {
+    try {
+      await api(`/api/upload?run=${run}&file=${encodeURIComponent(f.name.replace(/[^A-Za-z0-9._ ()-]/g, "_"))}`, f, true);
+    } catch (err) { $("trainError").textContent = err.message; }
+  }
+  e.target.value = "";
+  showDataset();
+};
+
+$("train").onclick = async () => {
+  $("trainError").textContent = "";
+  const options = {};
+  for (const k of OPTION_KEYS) {
+    const v = $(k).value;
+    options[k] = ["trigger","caption"].includes(k) ? v : Number(v);
+  }
+  try { await api("/api/train", {name: $("name").value.trim(), options}); poll(); }
+  catch (err) { $("trainError").textContent = err.message; }
+};
+$("stop").onclick = () => api("/api/stop", {});
+
+$("render").onclick = async () => {
+  $("renderError").textContent = "";
+  const pick = $("lora").value.split("|");
+  const body = {prompt: $("prompt").value, negative: $("negative").value,
+    preset: $("preset").value, strength: Number($("strength").value),
+    count: Number($("nimg").value), seed: $("seed").value,
+    trigger: $("lora").selectedOptions[0]?.dataset.trigger || $("trigger").value};
+  if (pick[0] === "ckpt") { body.run = pick[1]; body.checkpoint = pick[2]; }
+  else body.lora = pick[1];
+  try { await api("/api/render", body); poll(); }
+  catch (err) { $("renderError").textContent = err.message; }
+};
+
+function fillLoras(s) {
+  const current = $("lora").value;
+  const opts = [];
+  const triggers = {};
+  for (const r of s.runs) triggers["face_" + r.name + ".safetensors"] = r.options?.trigger;
+  for (const f of s.loras)
+    opts.push(`<option value="lora|${f}" data-trigger="${triggers[f] || ""}">${f}</option>`);
+  for (const r of s.runs)
+    for (const c of r.checkpoints || [])
+      if (c !== r.name + ".safetensors")
+        opts.push(`<option value="ckpt|${r.name}|${c}" data-trigger="${r.options?.trigger || ""}">↳ ${c} (checkpoint)</option>`);
+  const html = opts.join("") || "<option value=''>— train one first —</option>";
+  if ($("lora").innerHTML !== html) { $("lora").innerHTML = html; if (current) $("lora").value = current; }
+  if (!$("lora").value && $("lora").options.length) $("lora").selectedIndex = 0;
+}
+
+function showRun(s) {
+  const run = s.active || s.runs[0];
+  if (!run) return;
+  $("runName").textContent = "— " + run.name + " · " + run.status;
+  const at = s.phases.indexOf(run.phase);
+  $("phases").innerHTML = s.phases.map((p, i) => {
+    let cls = i < at || run.phase === "done" ? "done" : i === at ? "now" : "";
+    if (i === at && run.status !== "running" && run.status !== "done") cls = "bad";
+    const took = run.phases[p] != null ? " " + clock(run.phases[p]) : "";
+    return `<span class="phase ${cls}">${p.replace("_", " ")}${took}</span>`;
+  }).join("");
+  const pr = run.progress;
+  const pct = run.phase === "done" ? 100 : pr ? 100 * pr.done / pr.total : 0;
+  $("bar").style.width = pct + "%";
+  $("step").textContent = pr ? `${pr.done}/${pr.total}` : "—";
+  $("eta").textContent = run.status === "running" && pr ? clock(pr.eta) : "—";
+  $("speed").textContent = pr && pr.seconds_per_it ? pr.seconds_per_it.toFixed(2) + " s/it" : "—";
+  $("loss").textContent = run.loss != null ? run.loss.toFixed(4) : "—";
+  $("elapsed").textContent = clock((run.finished_at || s.now) - run.started_at);
+  $("runError").textContent = run.error || "";
+  $("log").textContent = (run.log_tail || []).slice(-15).join("\n");
+  $("stop").disabled = run.status !== "running";
+}
+
+function showRender(s) {
+  const r = s.render;
+  const training = s.active && s.active.status === "running";
+  $("render").disabled = training || r.status === "running";
+  if (training) $("renderStatus").textContent = "Waiting for training to finish.";
+  else if (r.status === "running") {
+    const per = r.seconds_per_image;
+    const left = per ? clock(per * (r.total - r.done)) : "first picture loads the model";
+    $("renderStatus").textContent = `Rendering ${r.done}/${r.total} — ${left}`;
+  } else $("renderStatus").textContent = r.status === "done" ? "Done." : "";
+  $("renderError").textContent = r.error || "";
+  const html = r.images.map(u => `<a href="${u}" target="_blank"><img src="${u}" loading="lazy"></a>`).join("");
+  if ($("gallery").innerHTML !== html) $("gallery").innerHTML = html;
+}
+
+let timer = null;
+async function poll() {
+  clearTimeout(timer);
+  try {
+    const s = state = await api("/api/state");
+    if (!filled) {
+      for (const k of OPTION_KEYS) $(k).value = s.defaults[k];
+      $("dry").textContent = s.dry_run ? "dry run — nothing really trains" : "";
+      filled = true;
+    }
+    $("train").disabled = !!(s.active && s.active.status === "running");
+    showRun(s); fillLoras(s); showRender(s);
+    const name = (s.active || s.runs[0] || {}).name;
+    if (name && name !== lastRun && !$("name").value) { $("name").value = name; showDataset(); }
+    lastRun = name;
+  } catch (err) { $("runError").textContent = "Dashboard not answering: " + err.message; }
+  timer = setTimeout(poll, 2000);
+}
+
+async function loadPresets() {
+  const p = await api("/api/presets");
+  $("preset").innerHTML = p.names.map(n => `<option${n === p.default ? " selected" : ""}>${n}</option>`).join("");
+  if (p.error) $("renderError").textContent = p.error;
+}
+
+poll(); loadPresets();
+</script>
+</body>
+</html>
