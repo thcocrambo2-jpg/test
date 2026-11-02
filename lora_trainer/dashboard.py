@@ -15,7 +15,8 @@ time; rendering waits for it.
 --dry-run fakes every training command and the render, so the page can
 be exercised off a GPU.
 
-HF_TOKEN, if set, is used for the one-time Krea 2 Raw download.
+Training starts from the app's own Krea 2 Raw. HF_TOKEN matters only if
+musubi refuses that and the official Raw has to be downloaded instead.
 """
 
 import argparse

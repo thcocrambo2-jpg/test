@@ -6,16 +6,20 @@ own models, so it survives a pod Stop with the rest of /workspace:
     trainer/musubi-tuner/      the trainer (cloned once)
     trainer/venv/              its interpreter (--system-site-packages, so
                                the torch the app installed is reused)
-    trainer/models/raw.safetensors
-                               the official Krea 2 Raw DiT (downloaded once)
+    trainer/models/raw_bf16_from_pod.safetensors
+                               the app's Krea 2 Raw, dequantised to bf16
+                               once (raw.safetensors instead, if musubi
+                               refused that and the official one was
+                               downloaded)
     trainer/runs/<name>/       dataset/, cache/, output/, train.log,
                                state.json
 
-The VAE and the text encoder are the app's own files. The text encoder
-is the abliterated one the app renders with, so the captions are
-encoded during training exactly as they are encoded at render time.
+The base model, the VAE and the text encoder are the app's own files.
+The text encoder is the abliterated one the app renders with, so the
+captions are encoded during training exactly as they are encoded at
+render time.
 
-Phases, in order: setup → download → prepare → free_gpu → cache_latents
+Phases, in order: setup → base_model → prepare → free_gpu → cache_latents
 → cache_text → train → install → done. Each subprocess's tqdm bar is
 parsed as it streams, so state.json always says which phase is running,
 step N of M, its speed and its ETA. With dry_run every command is
@@ -38,6 +42,10 @@ from pathlib import Path
 MUSUBI_REPO = "https://github.com/kohya-ss/musubi-tuner"
 RAW_REPO = "krea/Krea-2-Raw"
 RAW_FILE = "raw.safetensors"
+# The app's Raw UNet (catalogue file krea2_raw_fp8_scaled.safetensors),
+# and what it becomes once dequantised for musubi.
+POD_RAW_GLOB = "krea2_raw*.safetensors"
+CONVERTED_FILE = "raw_bf16_from_pod.safetensors"
 VAE_FILE = "qwen_image_vae.safetensors"
 TEXT_ENCODERS = ("qwen3vl_4b_abliterated.safetensors",
                  "qwen3vl_4b_bf16.safetensors")
@@ -45,7 +53,7 @@ COMFY = "http://127.0.0.1:8188"
 IMAGE_SUFFIXES = (".jpg", ".jpeg", ".png", ".webp")
 NAME_RE = re.compile(r"^[a-z0-9][a-z0-9_-]{0,40}$")
 
-PHASES = ("setup", "download", "prepare", "free_gpu", "cache_latents",
+PHASES = ("setup", "base_model", "prepare", "free_gpu", "cache_latents",
           "cache_text", "train", "install", "done")
 
 # What the page starts on: a face from 5-20 photos in about half an hour
@@ -65,6 +73,43 @@ DEFAULTS = {
 # tqdm: " 12%|█▎        | 96/800 [01:40<12:13,  1.04s/it, avr_loss=0.112]"
 BAR_RE = re.compile(r"(\d+)/(\d+) \[([\d:]+)<([\d:?]+),\s*([\d.]+)\s*(s/it|it/s)")
 LOSS_RE = re.compile(r"avr_loss=([\d.]+)")
+
+# A ComfyUI fp8_scaled checkpoint → plain bf16, run in the trainer's venv:
+# every fp8 weight times its own scale_weight, the scale and marker keys
+# dropped, ComfyUI's "model.diffusion_model." prefix stripped. Written to a
+# .part file first so a killed conversion never looks finished.
+CONVERT_CODE = r"""
+import os, sys, torch
+from safetensors import safe_open
+from safetensors.torch import save_file
+from tqdm import tqdm
+src, dst = sys.argv[1], sys.argv[2]
+FP8 = (torch.float8_e4m3fn, torch.float8_e5m2)
+PREFIX = "model.diffusion_model."
+out = {}
+with safe_open(src, "pt") as f:
+    keys = list(f.keys())
+    have = set(keys)
+    for key in tqdm(keys, desc="convert"):
+        if key.endswith((".scale_weight", ".scale_input")) or key == "scaled_fp8":
+            continue
+        t = f.get_tensor(key)
+        if t.dtype in FP8:
+            scale = key[:-len("weight")] + "scale_weight" if key.endswith(".weight") else None
+            t = t.to(torch.float32)
+            if scale in have:
+                t = t * f.get_tensor(scale).to(torch.float32)
+            t = t.to(torch.bfloat16)
+        out[key[len(PREFIX):] if key.startswith(PREFIX) else key] = t
+print("converted %d tensors" % len(out))
+save_file(out, dst + ".part")
+os.replace(dst + ".part", dst)
+"""
+
+# What musubi prints when the converted file's keys are not the layout
+# its Krea 2 model expects — the cue to fall back to the official file.
+LAYOUT_ERRORS = ("Missing key", "Unexpected key", "size mismatch",
+                 "Error(s) in loading state_dict")
 
 
 def clock_seconds(text: str) -> int | None:
@@ -89,6 +134,7 @@ class Run:
         self.dry_run = dry_run
         self.dir = root / "runs" / name
         self.proc: subprocess.Popen | None = None
+        self.dit: Path | None = None      # chosen by _base_model
         self.stopping = False
         self.lock = threading.Lock()
         self.save_lock = threading.Lock()
@@ -173,7 +219,7 @@ class Run:
     def _main(self) -> None:
         try:
             self._setup()
-            self._download()
+            self._base_model()
             self._prepare()
             self._free_gpu()
             self._cache()
@@ -256,25 +302,59 @@ class Run:
                        "-e", self.musubi])
             marker.write_text(time.ctime(), encoding="utf-8")
 
-    def raw_dit(self) -> Path:
+    def official_dit(self) -> Path:
         return self.root / "models" / RAW_FILE
 
-    def _download(self) -> None:
-        """The official Raw DiT. The pod's krea2_raw_fp8_scaled is ComfyUI's
-        pre-quantised layout, which musubi does not load; it quantises the
-        official bf16 file itself (--fp8_base --fp8_scaled)."""
-        self.phase("download")
+    def converted_dit(self) -> Path:
+        return self.root / "models" / CONVERTED_FILE
+
+    def pod_raw(self) -> Path | None:
+        """The app's own Krea 2 Raw UNet, if it has downloaded one."""
+        folder = self.models_dir / "diffusion_models"
+        found = sorted(folder.glob(POD_RAW_GLOB))
+        return found[0] if found else None
+
+    def _base_model(self) -> None:
+        """Pick the DiT to train on, making it if it is not there yet.
+
+        musubi loads a bf16 DiT and quantises it itself (--fp8_base
+        --fp8_scaled); its Krea 2 loader refuses weights that are already
+        fp8, which the pod's krea2_raw_fp8_scaled is. So the pod's file is
+        dequantised once (weight × scale_weight → bf16, no download), and
+        the official bf16 Raw is downloaded only when there is no pod file
+        or musubi refuses the converted one (_train).
+        """
+        self.phase("base_model")
         if self.dry_run:
-            self._fake("download", 5)
+            self._fake("convert", 5)
+            self.dit = self.converted_dit()
             return
-        if self.raw_dit().exists():
+        for ready in (self.official_dit(), self.converted_dit()):
+            if ready.exists():
+                self.dit = ready
+                return
+        source = self.pod_raw()
+        if source is None:
+            self.line("No Krea 2 Raw in %s — downloading the official one."
+                      % (self.models_dir / "diffusion_models"))
+            self._download()
             return
-        code = ("import sys; from huggingface_hub import hf_hub_download; "
-                "hf_hub_download(sys.argv[1], sys.argv[2], local_dir=sys.argv[3], "
-                "token=__import__('os').environ.get('HF_TOKEN') or None)")
-        self._run([self.python, "-c", code, RAW_REPO, RAW_FILE,
-                   self.raw_dit().parent],
-                  env={"HF_HUB_ENABLE_HF_TRANSFER": "0"})
+        self.line("Converting the app's %s to bf16 for training." % source.name)
+        target = self.converted_dit()
+        target.parent.mkdir(parents=True, exist_ok=True)
+        self._run([self.python, "-c", CONVERT_CODE, source, target])
+        self.dit = target
+
+    def _download(self) -> None:
+        """The official bf16 Raw DiT, once (~24 GB)."""
+        target = self.official_dit()
+        if not target.exists():
+            code = ("import sys; from huggingface_hub import hf_hub_download; "
+                    "hf_hub_download(sys.argv[1], sys.argv[2], local_dir=sys.argv[3], "
+                    "token=__import__('os').environ.get('HF_TOKEN') or None)")
+            self._run([self.python, "-c", code, RAW_REPO, RAW_FILE,
+                       target.parent])
+        self.dit = target
 
     def text_encoder(self) -> Path:
         for name in TEXT_ENCODERS:
@@ -364,11 +444,36 @@ class Run:
             (out / (self.name + ".safetensors")).write_bytes(b"fake")
             self._checkpoints()
             return
+        try:
+            self._run(self._train_args(), cwd=self.musubi)
+        except RuntimeError:
+            if self.stopping or self.dit != self.converted_dit() \
+                    or not self._log_says(LAYOUT_ERRORS):
+                raise
+            # The converted pod file is not the layout musubi's model
+            # wants. The official file is; fetch it and go again. The
+            # next run finds it first and never converts.
+            self.line("musubi refused the converted pod model — "
+                      "downloading the official Krea 2 Raw and retrying.")
+            self._download()
+            self._run(self._train_args(), cwd=self.musubi)
+        self._checkpoints()
+
+    def _log_says(self, needles) -> bool:
+        """Whether the end of train.log contains any of `needles`."""
+        with (self.dir / "train.log").open("rb") as log:
+            log.seek(0, os.SEEK_END)
+            log.seek(max(0, log.tell() - 400_000))
+            tail = log.read().decode("utf-8", "replace")
+        return any(needle in tail for needle in needles)
+
+    def _train_args(self) -> list:
+        o = self.options
         args = [
             self.python, "-m", "accelerate.commands.launch",
             "--num_cpu_threads_per_process", "1", "--mixed_precision", "bf16",
             self.musubi / "src" / "musubi_tuner" / "krea2_train_network.py",
-            "--dit", self.raw_dit(),
+            "--dit", self.dit,
             "--vae", self.models_dir / "vae" / VAE_FILE,
             "--dataset_config", self.dir / "dataset.toml",
             "--sdpa", "--mixed_precision", "bf16",
@@ -383,7 +488,7 @@ class Run:
             "--network_dim", str(int(o["rank"])),
             "--network_alpha", str(int(o["rank"])),
             "--fp8_base", "--fp8_scaled",
-            "--max_train_steps", str(steps),
+            "--max_train_steps", str(int(o["steps"])),
             "--save_every_n_steps", str(int(o["save_every"])),
             "--seed", "42",
             "--output_dir", self.dir / "output",
@@ -392,8 +497,7 @@ class Run:
         swap = int(o.get("blocks_to_swap") or 0)
         if swap:
             args += ["--blocks_to_swap", str(min(swap, 26))]
-        self._run(args, cwd=self.musubi)
-        self._checkpoints()
+        return args
 
     def _checkpoints(self) -> None:
         out = self.dir / "output"
