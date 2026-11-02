@@ -13,8 +13,15 @@ the database directly.
   features: [...] | null,             // literal override; wins over plan_id
   features_extra: ["wan_i2v"] | null, // granted on top of the plan
   is_admin: false,                    // a role, not an entitlement
+  private_loras: ["face-sayara"],     // optional: private LoRAs it is sent
   created_at: ISODate }
 ```
+
+`private_loras` names the private LoRAs (`source.kind: "r2"`) this key is
+sent in `POST /v1/catalog`. Every other key is sent neither the record nor
+its place in any feature list. Absent is the same as empty, so an ordinary
+licence's catalogue is exactly what it always was. Written by
+`npm run private-lora -- grant | revoke`.
 
 `is_admin` grants **no tab and no capability** — what a licence can run is
 `features` and nothing else, so marking one admin cannot change what it
@@ -154,6 +161,13 @@ flag) in the same operation — `defaultScope` in `src/assets.js`.
   enabled: true, sort_order: 50,
   created_at: ISODate, updated_at: ISODate }
 ```
+
+A **private** LoRA has `source: { kind: "r2", key: "loras/private/<file>" }`
+— an object in the private builds bucket — and `mirror: null` (a mirror is
+public, so one is refused). Only licences whose `private_loras` names it
+are sent it, with a signed six-hour link added to the source as `url`.
+Uploaded by the app repo's `scripts/r2_upload_lora.py`, recorded by
+`npm run private-lora -- add`.
 
 ## `models` — `_id` is the model id
 

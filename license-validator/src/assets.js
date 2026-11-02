@@ -125,6 +125,31 @@ export function sourceProblem(source) {
   return `source.kind ${show(source.kind)} must be "civitai" or "hf"`;
 }
 
+// A private LoRA's object in the R2 bucket the builds live in. Under its own
+// prefix so it can never name a build or a pose pack, and ending in the
+// file it is, so the key alone says what it holds.
+export const PRIVATE_LORA_PREFIX = "loras/private/";
+const PRIVATE_LORA_KEY_RE = /^loras\/private\/[A-Za-z0-9][A-Za-z0-9._-]{0,199}\.safetensors$/;
+
+/** True for a LoRA only the licences that list it may see (`{kind:"r2"}`). */
+export const isPrivateLora = (row) => isObject(row?.source) && row.source.kind === "r2";
+
+/**
+ * A LoRA's source: anything sourceProblem takes, or `{kind:"r2", key}` —
+ * a private LoRA in our own bucket. LoRAs only: a model or a part is
+ * still CivitAI or Hugging Face, so nothing about how they download moves.
+ */
+export function loraSourceProblem(source) {
+  if (isObject(source) && source.kind === "r2") {
+    const extra = Object.keys(source).filter((k) => k !== "kind" && k !== "key");
+    if (extra.length) return `source has unknown field(s): ${extra.join(", ")}`;
+    return typeof source.key === "string" && PRIVATE_LORA_KEY_RE.test(source.key)
+      ? null
+      : `source.key ${show(source.key)} must be ${PRIVATE_LORA_PREFIX}<file>.safetensors`;
+  }
+  return sourceProblem(source);
+}
+
 /** `{repo, path}` — where our own copy of the file lives — or null. */
 export function mirrorProblem(mirror) {
   if (mirror === null) return null;
@@ -156,6 +181,7 @@ const COMMON_RULES = {
 
 const LORA_RULES = {
   ...COMMON_RULES,
+  source: loraSourceProblem,
   default_strength: (value) =>
     isNumber(value) ? null : `default_strength ${show(value)} must be a number`,
   sort_order: (value) =>
@@ -305,8 +331,15 @@ function recordProblems(rules, record, { partial = false, loraIds } = {}) {
   return problems;
 }
 
-export const loraProblems = (record, options) =>
-  recordProblems(LORA_RULES, record, options);
+export function loraProblems(record, options) {
+  const problems = recordProblems(LORA_RULES, record, options);
+  // A mirror is a public Hugging Face copy, which is exactly what a
+  // private LoRA must never have.
+  if (isPrivateLora(record) && record.mirror != null) {
+    problems.push("a private (r2) LoRA cannot have a mirror");
+  }
+  return problems;
+}
 export const modelProblems = (record, options) =>
   recordProblems(MODEL_RULES, record, options);
 
@@ -503,8 +536,11 @@ export function modelWire(row) {
  * Each feature's lists are then cut down to the ids actually being sent,
  * in their stored order, so a list never names something the same answer
  * does not describe.
+ *
+ * Private LoRAs (`source.kind: "r2"`) go only to a licence whose
+ * `private_loras` names them — see catalogFrom.
  */
-export async function buildCatalog() {
+export async function buildCatalog({ granted = [], sign = null } = {}) {
   const { loras, models, feature_assets } = await collections();
   const live = { enabled: { $ne: false } };
   const [loraRows, modelRows, featureRows] = await Promise.all([
@@ -512,24 +548,47 @@ export async function buildCatalog() {
     models.find(live).sort({ _id: 1 }).toArray(),
     feature_assets.find({}).sort({ _id: 1 }).toArray(),
   ]);
-  return catalogFrom(loraRows, modelRows, featureRows);
+  return catalogFrom(loraRows, modelRows, featureRows, { granted, sign });
 }
 
 /**
  * The answer from rows already read: enabled records, in the order they
  * should be sent. Separate from buildCatalog so the filtering can be
  * checked without a database.
+ *
+ * A private LoRA is left out entirely — record and list entries alike —
+ * unless its id is in `granted` (the licence's `private_loras`), so a key
+ * without the grant cannot even learn its name. One that is granted goes
+ * out with a short-lived download link, `sign(key)`, in its source; when
+ * there is no signer (R2 not configured) it is left out too, rather than
+ * sent as a row the pod could never download. With the defaults this is
+ * byte-for-byte the answer it gave before private LoRAs existed.
  */
-export function catalogFrom(loraRows, modelRows, featureRows) {
+export function catalogFrom(loraRows, modelRows, featureRows,
+                            { granted = [], sign = null } = {}) {
+  const allowed = new Set(Array.isArray(granted) ? granted : []);
   const outLoras = [];
   for (const row of loraRows) {
     if (row.enabled === false) continue;
+    if (isPrivateLora(row) && !allowed.has(row._id)) continue;
     const problems = loraProblems(row);
     if (problems.length) {
       console.warn(`catalog  skipping lora ${show(row._id)}: ${problems.join("; ")}`);
       continue;
     }
-    outLoras.push(loraWire(row));
+    const wire = loraWire(row);
+    if (isPrivateLora(row)) {
+      let url = null;
+      try {
+        url = sign ? sign(row.source.key) : null;
+      } catch (err) {
+        console.warn(`catalog  cannot sign private lora ${show(row._id)}: ${err.message}`);
+      }
+      if (!url) continue;
+      wire.source = { kind: "r2", key: row.source.key, url };
+      wire.mirror = null;
+    }
+    outLoras.push(wire);
   }
   const outModels = [];
   for (const row of modelRows) {

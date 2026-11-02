@@ -203,6 +203,20 @@ class Handler(BaseHTTPRequestHandler):
             self.file(RUNS, path[len("/dataset/"):].replace("/", "/dataset/", 1))
         elif path.startswith("/renders/"):
             self.file(RENDERS, path[len("/renders/"):])
+        elif path.startswith("/download/"):
+            # A trained LoRA, to take to the machine that uploads it to
+            # private R2 (scripts/r2_upload_lora.py). Only face_* files.
+            name = path[len("/download/"):]
+            if name not in _face_loras():
+                return self.error("Not found.", 404)
+            data = (MODELS / "loras" / name).read_bytes()
+            self.send_response(200)
+            self.send_header("content-type", "application/octet-stream")
+            self.send_header("content-disposition",
+                             'attachment; filename="%s"' % name)
+            self.send_header("content-length", str(len(data)))
+            self.end_headers()
+            self.wfile.write(data)
         else:
             self.error("Not found.", 404)
 

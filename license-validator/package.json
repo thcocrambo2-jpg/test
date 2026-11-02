@@ -16,6 +16,7 @@
     "presets": "node scripts/presets.js",
     "assets": "node scripts/assets.js",
     "library": "node scripts/library.js",
+    "private-lora": "node scripts/private-lora.js",
     "orders": "node scripts/orders.js",
     "set-webhook": "node scripts/set-webhook.js"
   },

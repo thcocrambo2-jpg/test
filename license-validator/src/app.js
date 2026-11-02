@@ -452,10 +452,24 @@ app.post(
     const problem = licenseProblem(license);
     if (problem) return res.status(403).json({ ok: false, ...problem });
 
-    const catalog = await buildCatalog();
+    // Private LoRAs: only those this licence lists, each with a signed
+    // download link. Six hours, not a build's half hour: a fresh pod
+    // fetches ~90 GB of models before it reaches the LoRAs, and a link
+    // checked when the request starts must still be good by then. A key
+    // with no `private_loras` gets exactly the catalogue it got before
+    // they existed.
+    const granted = Array.isArray(license.private_loras) ? license.private_loras : [];
+    const catalog = await buildCatalog({
+      granted,
+      sign: granted.length && r2Configured()
+        ? (key) => presignGet(key, PRIVATE_LORA_URL_TTL_SECONDS)
+        : null,
+    });
+    const privateCount = catalog.loras.filter((l) => l.source?.kind === "r2").length;
     console.log(
       `catalog  key=${license_key} instance=${instance_id} ` +
-        `models=${catalog.models.length} loras=${catalog.loras.length}`,
+        `models=${catalog.models.length} loras=${catalog.loras.length}` +
+        (granted.length ? ` private=${privateCount}/${granted.length}` : ""),
     );
     res.json({ ok: true, ...catalog });
   }),
@@ -717,6 +731,9 @@ app.post(
 // rate-limit signal, and a pose pack fetched once per machine is not
 // something to spend it on.
 const LIBRARY_RE = /^[a-z][a-z0-9_-]{0,31}$/;
+
+// How long a private LoRA's link in the /v1/catalog answer lasts.
+const PRIVATE_LORA_URL_TTL_SECONDS = 6 * 3600;
 
 app.post(
   "/v1/library",
@@ -1831,6 +1848,7 @@ app.get(
           key: license.key,
           name: license.name || null,
           seats: license.seats,
+          private_loras: Array.isArray(license.private_loras) ? license.private_loras : [],
           active: license.active !== false,
           is_admin: license.is_admin === true,
           expires_at: license.expires_at || null,

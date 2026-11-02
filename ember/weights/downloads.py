@@ -16,7 +16,9 @@ by the "catalog" group, which asks nothing of the pipeline constants at
 all.
 """
 
+import shutil
 import time
+import urllib.request
 from pathlib import Path
 
 import requests
@@ -414,6 +416,30 @@ def _from_record_mirror(dest: Path, record) -> bool:
         return False
 
 
+def fetch_private_file(url: str, dest: Path) -> None:
+    """A private LoRA, through the signed link the catalogue carried.
+
+    No mirror and no manifest: a private file is never copied anywhere
+    public. Written to a .part file and moved into place, so an
+    interrupted download is never mistaken for a cached one. The link is
+    a credential for as long as it lasts, so it is never logged.
+    """
+    part = dest.with_name(dest.name + ".part")
+    dest.parent.mkdir(parents=True, exist_ok=True)
+
+    def get():
+        with urllib.request.urlopen(url, timeout=120) as response, \
+                part.open("wb") as out:
+            shutil.copyfileobj(response, out, 8 << 20)
+        part.replace(dest)
+
+    try:
+        _with_retries(get, desc=f"{dest.name} (private)")
+    finally:
+        part.unlink(missing_ok=True)
+    log.info("✓ %s (private)", dest.relative_to(MODELS_DIR).as_posix())
+
+
 def fetch_catalog_file(record, subdir: str) -> None:
     """Fetch one catalogue model or LoRA into MODELS_DIR/<subdir>/<file>.
 
@@ -441,6 +467,8 @@ def fetch_catalog_file(record, subdir: str) -> None:
     source = record.source
     if source["kind"] == "civitai":
         fetch_civitai_file(source["version"], record.file, subdir=subdir)
+    elif source["kind"] == "r2":
+        fetch_private_file(source["url"], dest)
     else:
         # Upstream's layout (e.g. vae/wan/ or a repo root) need not be
         # ComfyUI's, so the file is placed at dest explicitly.

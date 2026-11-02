@@ -185,6 +185,12 @@ fallback at the *same* revision —
 and `ember/weights/downloads.py` the transport. Most CivitAI files need
 `CIVITAI_TOKEN`.
 
+A private LoRA is the exception: its source is `{kind: "r2", key, url}`,
+sent only to the licences granted it, and the pod fetches it through that
+signed `url` — no mirror, no manifest, and `scripts/mirror_to_hf.py`
+never copies one. A build older than private LoRAs skips such a record
+with a warning.
+
 ## Related
 
 - [presets](../features/presets.md) and settings tokens — both store

@@ -377,6 +377,16 @@ def upstream_only_repos(manifest: dict) -> set[str]:
             if kind == "hf" and repo not in mirrored_from}
 
 
+def _is_private(record) -> bool:
+    """A private LoRA (source kind "r2"), granted to chosen licences only.
+
+    The catalogue only holds one when the key this script runs with is
+    granted it. Its whole point is that it is not public, and a mirror
+    repo is, so it is left out of both the plan and the audit.
+    """
+    return record.source.get("kind") == "r2"
+
+
 def _is_upstream_only(record, upstream: set[str]) -> bool:
     return (record.source.get("kind") == "hf"
             and record.source.get("repo") in upstream)
@@ -406,6 +416,8 @@ def add_catalogue_loras(items: list[Item], cat: catalog.Catalogue,
     """
     by_path = {(i.repo_key, i.path_in_repo): i for i in items}
     for lora in cat.loras.values():
+        if _is_private(lora):
+            continue            # never copied to Hugging Face, ever
         local = MODELS_DIR / "loras" / lora.file
         if lora.mirror:
             key = repo_key_for(repos, user, lora.mirror["repo"])
@@ -460,6 +472,8 @@ def audit(manifest: dict, cat: catalog.Catalogue) -> list[AuditRow]:
     for kind, subdir, records in (("LoRA", "loras", cat.loras),
                                   ("model", "diffusion_models", cat.models)):
         for rec in records.values():
+            if _is_private(rec):
+                continue
             src = rec.source
             origin = (f"CivitAI v{src['version']}" if src["kind"] == "civitai"
                       else f"{src['repo']}:{src['path']}")

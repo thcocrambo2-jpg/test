@@ -116,6 +116,7 @@
     <div class="row">
       <button id="render">Render</button>
       <span class="muted" id="renderStatus"></span>
+      <a id="download" class="muted" style="margin-left:auto" download>⬇ Download this LoRA</a>
     </div>
     <div class="error" id="renderError"></div>
     <div class="gallery" id="gallery"></div>
@@ -249,7 +250,18 @@ function fillLoras(s) {
   const html = opts.join("") || "<option value=''>— train one first —</option>";
   if ($("lora").innerHTML !== html) { $("lora").innerHTML = html; if (current) $("lora").value = current; }
   if (!$("lora").value && $("lora").options.length) $("lora").selectedIndex = 0;
+  showDownload();
 }
+
+// Only an installed face_* file can be downloaded; a checkpoint is
+// installed (and so downloadable) once it has been rendered with.
+function showDownload() {
+  const [kind, name] = $("lora").value.split("|");
+  const ok = kind === "lora" && name;
+  $("download").style.display = ok ? "" : "none";
+  if (ok) $("download").href = "/download/" + encodeURIComponent(name);
+}
+$("lora").onchange = showDownload;
 
 function showRun(s) {
   const run = s.active || s.runs[0];

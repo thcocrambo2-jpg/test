@@ -194,7 +194,7 @@ applies the same rules again on read, in
 | --- | --- |
 | id | `^[a-z0-9][a-z0-9-]{0,62}$` |
 | `file` | `^[A-Za-z0-9][A-Za-z0-9._-]{0,199}\.safetensors$` — a bare file name, no directories |
-| `source` | `{kind: "civitai", version: <positive int>}` or `{kind: "hf", repo: "owner/name", path}` |
+| `source` | `{kind: "civitai", version: <positive int>}` or `{kind: "hf", repo: "owner/name", path}`; a LoRA may also be private, `{kind: "r2", key: "loras/private/<file>"}` (see [data.md](data.md#loras--_id-is-the-lora-id)) |
 | `mirror` | `{repo: "owner/name", path}` or `null` |
 | paths | non-empty, no leading `/`, no `..` segment |
 

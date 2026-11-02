@@ -80,6 +80,10 @@ SAMPLING_NAME_RE = re.compile(r"^[a-z0-9_]{1,40}$")
 # What an empty LoRA slot is called in the forms. Stored as null.
 NONE = "None"
 
+# Where a private LoRA lives in the licence server's bucket. Its record's
+# source is {kind: "r2", key, url}; see license-validator/src/assets.js.
+PRIVATE_LORA_PREFIX = "loras/private/"
+
 
 @dataclass(frozen=True)
 class Lora:
@@ -170,7 +174,7 @@ class Catalogue:
 
 # ── Parsing ────────────────────────────────────────────────────────────
 
-def _source_ok(source) -> bool:
+def _source_ok(source, private_ok: bool = False) -> bool:
     if not isinstance(source, dict):
         return False
     if source.get("kind") == "civitai":
@@ -183,6 +187,13 @@ def _source_ok(source) -> bool:
                 and bool(REPO_RE.match(source["repo"]))
                 and isinstance(path, str) and bool(path)
                 and not path.startswith("/") and ".." not in path.split("/"))
+    if source.get("kind") == "r2" and private_ok:
+        # A private LoRA: the server sends one only to a licence granted
+        # it, with a short-lived signed link to fetch it by.
+        return (isinstance(source.get("key"), str)
+                and source["key"].startswith(PRIVATE_LORA_PREFIX)
+                and isinstance(source.get("url"), str)
+                and source["url"].startswith("https://"))
     return False
 
 
@@ -235,8 +246,10 @@ def _usable(raw, kind: str) -> bool:
         return False                       # switched off: not a problem
     elif not isinstance(raw.get("file"), str) or not FILE_RE.match(raw["file"]):
         problem = "its file name is not a plain .safetensors name"
-    elif not _source_ok(raw.get("source")):
-        problem = "its source is not a CivitAI version or a Hugging Face path"
+    elif not _source_ok(raw.get("source"), private_ok=(kind == "LoRA")):
+        problem = ("its source is not a CivitAI version, a Hugging Face path "
+                   "or a signed private (r2) link" if kind == "LoRA" else
+                   "its source is not a CivitAI version or a Hugging Face path")
     if problem:
         log.warning("Catalogue: skipping %s %r — %s.", kind, rid, problem)
         return False
