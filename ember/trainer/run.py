@@ -37,6 +37,7 @@ replaced by a fake that prints the same bars, which is how the page is
 tested off a GPU.
 """
 
+import hashlib
 import json
 import os
 import re
@@ -49,7 +50,7 @@ import urllib.request
 from pathlib import Path
 
 from ember.comfy.setup import runtime_python
-from ember.settings import COMFY_HOST, COMFY_PORT
+from ember.settings import COMFY_HOST, COMFY_PORT, LICENSE_KEY
 
 MUSUBI_REPO = "https://github.com/kohya-ss/musubi-tuner"
 RAW_REPO = "krea/Krea-2-Raw"
@@ -603,12 +604,29 @@ class Run:
                    "1" if loss else "0", what])
 
 
+def owner_tag(licence_key: str | None = LICENSE_KEY) -> str:
+    """The licence's 8-hex tag, as the licence server derives it
+    (license-validator/src/faceLoras.js ownerTag); "" with no licence."""
+    if not licence_key:
+        return ""
+    return hashlib.sha256(licence_key.encode()).hexdigest()[:8]
+
+
+def lora_file_name(run_name: str, tag: str | None = None) -> str:
+    """face_<tag>_<name>.safetensors — the name a published Face LoRA has
+    on every pod, scoped to its licence so two customers' "anna" differ."""
+    tag = owner_tag() if tag is None else tag
+    return "face_%s%s.safetensors" % (tag + "_" if tag else "", run_name)
+
+
 def install(lora: Path, models_dir: Path) -> str:
     """Copy one trained file into the app's loras/ folder; its name there.
 
-    Prefixed so a trained face can never overwrite a catalogue LoRA.
+    Prefixed so a trained face can never overwrite a catalogue LoRA, and
+    tagged with this pod's licence (lora_file_name) so the name it is
+    published under is the name it already has.
     """
-    name = lora.name if lora.name.startswith("face_") else "face_" + lora.name
+    name = lora.name if lora.name.startswith("face_") else lora_file_name(lora.stem)
     target = models_dir / "loras" / name
     target.parent.mkdir(parents=True, exist_ok=True)
     if not target.exists() or target.stat().st_size != lora.stat().st_size:

@@ -72,6 +72,15 @@ export const R2_ACCESS_KEY_ID = process.env.R2_ACCESS_KEY_ID || "";
 export const R2_SECRET_ACCESS_KEY = process.env.R2_SECRET_ACCESS_KEY || "";
 export const R2_BUILDS_BUCKET = process.env.R2_BUILDS_BUCKET || "krea2-builds";
 
+// The face-LoRA bucket, the one place this service may write. A separate
+// bucket with its own Object Read & Write token scoped to it alone, so the
+// worst a leak of this pair can do is touch face LoRAs — never a build.
+// Pods that train one get a PUT link for a single object from
+// /v1/face-lora/upload; unset, Face LoRA publishing answers 503.
+export const R2_FACE_BUCKET = process.env.R2_FACE_BUCKET || "";
+export const R2_FACE_ACCESS_KEY_ID = process.env.R2_FACE_ACCESS_KEY_ID || "";
+export const R2_FACE_SECRET_ACCESS_KEY = process.env.R2_FACE_SECRET_ACCESS_KEY || "";
+
 // How long a download URL stays usable. Generous on purpose: the artifact
 // is a few hundred megabytes and a pod on a slow link needs room for
 // curl's retries, which restart the request and so are re-checked against

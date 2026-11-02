@@ -169,6 +169,30 @@ are sent it, with a signed six-hour link added to the source as `url`.
 Uploaded by the app repo's `scripts/r2_upload_lora.py`, recorded by
 `npm run private-lora -- add`.
 
+A **Face LoRA** is a private LoRA a licence published itself from the
+app's 🎭 Face LoRA page (`src/faceLoras.js`). It lives in its own bucket,
+`R2_FACE_BUCKET`, the only one this service may write to:
+
+```js
+{ _id: "face-7c94d426-anna", name: "anna",
+  file: "face_7c94d426_anna.safetensors",
+  source: { kind: "r2", bucket: "face",
+            key: "loras/private/7c94d426/face_7c94d426_anna.safetensors" },
+  mirror: null, trigger: "annax", default_strength: 1.0, enabled: true,
+  owner: "<licence key>",               // the licence that published it
+  tabs: ["krea_v2_t2i", "krea_t2i"],    // instead of the shared lists
+  size: 234703472, md5: "<hex>",        // what was checked on register
+  consent: { at: ISODate, text: "I have this person's permission…" } }
+```
+
+The `7c94d426` is the owner's tag — the first 8 hex digits of the
+sha256 of its licence key — so two licences' "anna" never collide. It is
+granted to its owner only (`private_loras`); `npm run private-lora --
+grant` can share one further by hand. `tabs` puts it on those tabs'
+lists for the licences sent it, so nothing a customer does edits
+`feature_assets`. `owner`, `tabs`, `size`, `md5` and `consent` never reach
+a pod. At most 5 per licence.
+
 ## `models` — `_id` is the model id
 
 ```js

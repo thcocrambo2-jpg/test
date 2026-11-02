@@ -13,24 +13,16 @@
   gap: var(--s-3);
 }
 
-.grid2 {
-  display: grid;
-  grid-template-columns: 1fr 1fr;
+.subhead {
+  margin: var(--s-6) 0 var(--s-2);
+  font-size: var(--t-sm);
+}
+
+.published {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
   gap: var(--s-3);
-}
-
-.split {
-  display: grid;
-  grid-template-columns: 1fr 1fr;
-  gap: var(--s-4);
-  margin-top: var(--s-3);
-}
-
-@media (max-width: 760px) {
-  .split,
-  .grid2 {
-    grid-template-columns: 1fr;
-  }
 }
 
 .muted {

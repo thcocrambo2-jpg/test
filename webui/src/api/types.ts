@@ -700,9 +700,11 @@ export interface ApiClient {
   addFaceLoraPhoto(run: string, file: Blob, name: string): Promise<void>
   removeFaceLoraPhoto(run: string, name: string): Promise<void>
   trainFaceLora(name: string, options: FaceLoraOptions): Promise<{ jobId: string; place: number }>
-  /** Upload, register and grant, in the background — follow it in
-   *  `getFaceLora().publish`. The R2 key is sent once, for this publish. */
+  /** Publish to this pod's own licence, in the background — follow it in
+   *  `getFaceLora().publish`. */
   publishFaceLora(request: FaceLoraPublish): Promise<void>
+  /** Unpublish one of this licence's Face LoRAs (the file here stays). */
+  removeFaceLora(id: string): Promise<void>
 }
 
 /** The trainer's settings, as ember/trainer/run.py DEFAULTS has them. */
@@ -753,26 +755,40 @@ export interface FaceLoraPublishState {
   lora: string | null
 }
 
+/** One Face LoRA this licence has published, as the licence server has it. */
+export interface FaceLoraPublished {
+  id: string
+  name: string
+  file: string
+  trigger: string
+  size: number | null
+  created_at: string | null
+}
+
 export interface FaceLoraState {
   active: FaceLoraRun | null
   busy: boolean
   job: string | null
   runs: FaceLoraRun[]
-  loras: string[]
+  /** Trained files on this pod, and the run each one came from. */
+  loras: { file: string; name: string }[]
   publish: FaceLoraPublishState
+  published: {
+    loras: FaceLoraPublished[]
+    limit: number | null
+    error: string | null
+    loaded: boolean
+  }
+  consentText: string
+  /** Free bytes on the volume, and what a run needs of it now. */
+  space: { free: number | null; need: number }
   defaults: FaceLoraOptions
   phases: string[]
-  licenceKey: string
-  bucket: string
   now: number
 }
 
 export interface FaceLoraPublish {
   lora: string
-  id: string
-  name: string
   trigger: string
-  strength: number
-  keys: string
-  r2: { account: string; accessKey: string; secret: string; bucket: string }
+  consent: boolean
 }

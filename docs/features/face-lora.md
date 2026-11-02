@@ -21,15 +21,29 @@ out. Grant it by name.
 3. **Try it.** A finished LoRA is a row on the 🔶 Krea2 V2 (and 🎨 Krea2)
    LoRA stack straight away, named "🎭 <name> (trained here)". Use the
    trigger word in the prompt.
-4. **Publish.** Pick the LoRA, list the licence keys (the pod's own key is
-   filled in) and type an R2 key with write access to the builds bucket.
-   Publish uploads the file to `loras/private/<file>`, registers the LoRA and
-   grants it. The R2 key is used for that publish and never stored.
+4. **Publish.** Pick the LoRA, check its trigger, and tick the box saying
+   you have this person's permission (the server stores the tick with the
+   LoRA). Publish stores the file privately and puts it on the Krea tabs of
+   every pod that runs with **this pod's licence key** — no other licence
+   is sent it, and there is no key or list to type. The card lists what the
+   licence has published (5 at most) with an Unpublish button each; the
+   trained file on the pod stays when one is unpublished.
 
-Publishing again is safe: the same file is not uploaded twice, the record
-and grants are idempotent. A *different* file under a name already in the
-bucket is refused — pods that have the old file keep it by name — so a
-retrained face gets a new run name.
+The upload goes from the pod straight to storage through a link the
+licence server signs for that one file; no storage key is ever on the pod.
+Publishing again is safe: the same file is not uploaded twice. A
+*different* file under a name already published is refused — pods that
+have the old file keep it by name — so a retrained face gets a new run
+name.
+
+Names are scoped to the licence: a run `anna` is installed as
+`face_<tag>_anna.safetensors`, `<tag>` being 8 hex digits derived from the
+licence key, so two customers' "anna" never collide and the name it is
+published under is the one it already has. A file trained before that is
+renamed to match when it is published.
+
+Training checks the volume first: it needs about 3 GB free, plus 27 GB
+the first time, for the bf16 copy of Krea 2 Raw.
 
 ## How it fits together
 
@@ -39,8 +53,8 @@ retrained face gets a new run name.
 | Routes (`/api/v1/face-lora/*`, gated on `face_lora`) | `ember/web/routes/face_lora.py` |
 | Training (musubi-tuner on Krea 2 Raw) | `ember/trainer/run.py` |
 | Trained LoRAs on the Krea tabs | `ember/trainer/loras.py`, `catalog.add_extra` |
-| Upload and publish | `ember/trainer/publish.py`, `ember/trainer/r2.py` |
-| Server side (`/v1/face-lora/register`, `/grant`) | `license-validator/src/app.js`, `src/privateLoras.js` |
+| Upload and publish | `ember/trainer/publish.py` |
+| Server side (`/v1/face-lora/upload`, `/register`, `/mine`, `/remove`) | `license-validator/src/faceLoras.js` |
 
 Training reuses the pod's own Krea 2 Raw: musubi refuses weights that are
 already fp8, so the first run dequantises `krea2_raw_fp8_scaled` to bf16 once
@@ -55,10 +69,10 @@ itself and that row takes over. Only the forms see the local rows — the
 downloads and the saved catalogue never do.
 
 Private LoRAs themselves — `source: {kind: "r2"}`, `licences.private_loras`,
-signed links in `/v1/catalog` — are described in
+signed links in `/v1/catalog`, and the face bucket's records — are described in
 [the catalogue](../pipelines/catalogue.md#where-the-files-come-from) and in
-`license-validator/docs/data.md`. `npm run private-lora` does the same
-writes from a terminal.
+`license-validator/docs/data.md`. `npm run private-lora` grants and
+revokes from a terminal, and can share a Face LoRA with another licence.
 
 The standalone `lora_trainer/` dashboard does all of this on pods running a
 build older than the page, using the same training code.

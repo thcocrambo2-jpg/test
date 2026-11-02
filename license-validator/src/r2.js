@@ -18,6 +18,11 @@
 // key here would mean any path to leaking it is a path to replacing the
 // binary customers download. Uploads use a separate write token that lives
 // only on the build machine — see scripts/r2_presign.py.
+//
+// The one exception is the face-LoRA bucket: a separate bucket with its
+// own Object Read & Write key (R2_FACE_*), which can reach nothing else.
+// Pods that train a Face LoRA get a PUT link for exactly one object from
+// it (/v1/face-lora/upload), so no R2 key ever leaves this service.
 
 import { createHash, createHmac } from "node:crypto";
 
@@ -26,6 +31,9 @@ import {
   R2_ACCESS_KEY_ID,
   R2_SECRET_ACCESS_KEY,
   R2_BUILDS_BUCKET,
+  R2_FACE_ACCESS_KEY_ID,
+  R2_FACE_BUCKET,
+  R2_FACE_SECRET_ACCESS_KEY,
 } from "./config.js";
 
 const ALGORITHM = "AWS4-HMAC-SHA256";
@@ -75,7 +83,42 @@ const encodePath = (key) => key.split("/").map(uriEncode).join("/");
  */
 export function presignGet(key, expiresIn, signedAt = new Date()) {
   if (!r2Configured()) throw new Error("R2 is not configured");
+  return presign({
+    method: "GET",
+    bucket: R2_BUILDS_BUCKET,
+    key,
+    expiresIn,
+    accessKeyId: R2_ACCESS_KEY_ID,
+    secret: R2_SECRET_ACCESS_KEY,
+    signedAt,
+  });
+}
 
+/** True when the face-LoRA bucket and its own key are set. */
+export function faceR2Configured() {
+  return Boolean(
+    R2_ACCOUNT_ID && R2_FACE_ACCESS_KEY_ID && R2_FACE_SECRET_ACCESS_KEY && R2_FACE_BUCKET,
+  );
+}
+
+/**
+ * A presigned `method` (GET, PUT, HEAD, DELETE) for one object in the
+ * face-LoRA bucket — the only bucket the read-write face key can reach.
+ */
+export function presignFace(method, key, expiresIn) {
+  if (!faceR2Configured()) throw new Error("the face LoRA bucket is not configured");
+  return presign({
+    method,
+    bucket: R2_FACE_BUCKET,
+    key,
+    expiresIn,
+    accessKeyId: R2_FACE_ACCESS_KEY_ID,
+    secret: R2_FACE_SECRET_ACCESS_KEY,
+  });
+}
+
+/** SigV4 query signing for one object; the two above are its only callers. */
+function presign({ method, bucket, key, expiresIn, accessKeyId, secret, signedAt = new Date() }) {
   const host = r2Host();
   // YYYYMMDDTHHMMSSZ, the only format SigV4 accepts for X-Amz-Date.
   const amzDate = signedAt.toISOString().replace(/[-:]|\.\d{3}/g, "");
@@ -87,7 +130,7 @@ export function presignGet(key, expiresIn, signedAt = new Date()) {
   // silently produce a signature that does not verify.
   const canonicalQuery = [
     ["X-Amz-Algorithm", ALGORITHM],
-    ["X-Amz-Credential", `${R2_ACCESS_KEY_ID}/${scope}`],
+    ["X-Amz-Credential", `${accessKeyId}/${scope}`],
     ["X-Amz-Date", amzDate],
     ["X-Amz-Expires", String(expiresIn)],
     ["X-Amz-SignedHeaders", "host"],
@@ -98,12 +141,12 @@ export function presignGet(key, expiresIn, signedAt = new Date()) {
     .join("&");
 
   // Path style: R2 puts the bucket in the path, not in the hostname.
-  const canonicalPath = `/${uriEncode(R2_BUILDS_BUCKET)}/${encodePath(key)}`;
+  const canonicalPath = `/${uriEncode(bucket)}/${encodePath(key)}`;
 
   // The trailing "" on the headers line is the blank line SigV4 puts
   // between the canonical headers block and the signed-header list.
   const canonicalRequest = [
-    "GET",
+    method,
     canonicalPath,
     canonicalQuery,
     `host:${host}`,
@@ -119,7 +162,7 @@ export function presignGet(key, expiresIn, signedAt = new Date()) {
     sha256hex(canonicalRequest),
   ].join("\n");
 
-  let signingKey = hmac(`AWS4${R2_SECRET_ACCESS_KEY}`, dateStamp);
+  let signingKey = hmac(`AWS4${secret}`, dateStamp);
   for (const part of [REGION, SERVICE, "aws4_request"]) {
     signingKey = hmac(signingKey, part);
   }

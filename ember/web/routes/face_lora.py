@@ -16,12 +16,15 @@ own models: BASE_DIR/trainer/runs/<name>/ (photos, caches, checkpoints,
 state.json). A finished LoRA is copied into the app's loras/ folder and
 offered on the Krea tabs straight away (ember.trainer.loras).
 
-Publish takes the R2 key in the request body, uses it in a background
-thread for one upload and drops it — see ember.trainer.publish.
+Publish sends a trained LoRA to this pod's own licence, in a background
+thread: the licence server signs a one-object upload link and grants the
+LoRA to this licence alone — see ember.trainer.publish. No R2 key is ever
+on the pod. Publishing needs the consent tick; the server stores it.
 """
 
 import json
 import re
+import shutil
 import threading
 import time
 
@@ -42,13 +45,23 @@ TAB = str(features.Key.FACE_LORA)
 LABEL = "🎭 Face LoRA"
 FILE_RE = re.compile(r"^[A-Za-z0-9][A-Za-z0-9._ ()-]{0,150}$")
 MAX_PHOTO = 40 * 1024 * 1024
+GB = 1024 ** 3
+# What a run needs free on the volume: caches, checkpoints and the final
+# file, plus the one-time bf16 copy of Krea 2 Raw when it is not there yet.
+RUN_SPACE = 3 * GB
+BASE_SPACE = 27 * GB
+# The words beside the tick box (the server stores its own copy).
+CONSENT_TEXT = ("I have this person's permission to train and use a LoRA of "
+                "their face.")
 
 _lock = threading.Lock()
 # The run on the queue (or last on it), and the job carrying it.
 _current: dict = {"run": None, "job": None}
-# The last Publish, for the page. Never holds the R2 key.
+# The last Publish, for the page.
 _publish = {"status": "idle", "step": None, "sent": 0, "total": 0,
             "done": [], "error": None, "lora": None}
+# This licence's published Face LoRAs, as the licence server last said.
+_published = {"loras": [], "limit": None, "error": None, "loaded": False}
 
 
 def _gate():
@@ -87,6 +100,37 @@ def _busy() -> bool:
     status = _job_status(job)
     return status in (jobqueue.QUEUED, jobqueue.RUNNING) or (
         status is None and run.state["phase"] != "setup")
+
+
+def _refresh_published() -> None:
+    """Ask the licence server what this licence has published. Blocking."""
+    try:
+        answer = publish.mine()
+        update = {"loras": answer.get("loras") or [], "limit": answer.get("limit"),
+                  "error": None, "loaded": True}
+    except publish.PublishError as exc:
+        update = {"error": str(exc), "loaded": True}
+    except Exception as exc:
+        update = {"error": "%s: %s" % (type(exc).__name__, exc), "loaded": True}
+    with _lock:
+        _published.update(update)
+
+
+def _in_background(fn, *args) -> None:
+    threading.Thread(target=fn, args=args, daemon=True).start()
+
+
+def _space() -> dict:
+    """Free space on the volume, and what a run needs of it now."""
+    need = RUN_SPACE
+    if not (ROOT / "models" / trainer.CONVERTED_FILE).exists():
+        need += BASE_SPACE
+    try:
+        ROOT.mkdir(parents=True, exist_ok=True)
+        free = shutil.disk_usage(ROOT).free
+    except OSError:
+        free = None
+    return {"free": free, "need": need}
 
 
 def _status_line(run) -> str:
@@ -136,16 +180,11 @@ def _publish_job(job: dict) -> None:
             _publish["done"].append(line)
 
     try:
-        done(publish.upload(MODELS_DIR / "loras" / job["file"], job["r2"], step))
-        step("registering")
-        done(publish.register({
-            "id": job["id"], "file": job["file"], "name": job["name"],
-            "trigger": job["trigger"], "default_strength": job["strength"]}))
-        if job["keys"]:
-            step("granting")
-            done(publish.grant(job["id"], job["keys"]))
-        else:
-            done("not granted to anyone yet — publish again with keys")
+        answer = publish.publish(MODELS_DIR / "loras" / job["file"], job["name"],
+                                 job["trigger"], job["consent"], step, done)
+        if answer.get("file") and answer["file"] != job["file"]:
+            loras.rename(job["file"], answer["file"], job["trigger"])
+            done("renamed %s → %s to match" % (job["file"], answer["file"]))
         with _lock:
             _publish.update(status="done", step=None)
     except publish.PublishError as exc:
@@ -157,7 +196,7 @@ def _publish_job(job: dict) -> None:
             _publish.update(status="failed",
                             error="%s: %s" % (type(exc).__name__, exc))
     finally:
-        job["r2"] = None                  # drop the key with the job
+        _refresh_published()
 
 
 def register(api: APIRouter) -> None:
@@ -165,6 +204,7 @@ def register(api: APIRouter) -> None:
         count = loras.offer_all()
         if count:
             log.info("Face LoRA: %d trained LoRA(s) offered on the Krea tabs", count)
+        _in_background(_refresh_published)
 
     @api.get("/face-lora/state", dependencies=_gate())
     def state():
@@ -172,17 +212,19 @@ def register(api: APIRouter) -> None:
         run = _current["run"]
         with _lock:
             publishing = dict(_publish, done=list(_publish["done"]))
+            published = dict(_published, loras=list(_published["loras"]))
         return {
             "active": run.state if run is not None else None,
             "busy": _busy(),
             "job": _current["job"],
             "runs": _runs(),
-            "loras": _face_loras(),
+            "loras": [{"file": f, "name": loras.run_name(f)} for f in _face_loras()],
             "publish": publishing,
+            "published": published,
+            "consentText": CONSENT_TEXT,
+            "space": _space(),
             "defaults": trainer.DEFAULTS,
             "phases": trainer.PHASES,
-            "licenceKey": LICENSE_KEY or "",
-            "bucket": publish.DEFAULT_BUCKET,
             "now": time.time(),
         }
 
@@ -233,6 +275,11 @@ def register(api: APIRouter) -> None:
         name = str(body.get("name") or "")
         if not trainer.NAME_RE.match(name):
             raise HTTPException(400, "Name: lowercase letters, digits, - and _.")
+        space = _space()
+        if space["free"] is not None and space["free"] < space["need"]:
+            raise HTTPException(
+                507, "Training needs %.0f GB free on the volume; it has %.0f GB."
+                % (space["need"] / GB, space["free"] / GB))
         with _lock:
             if _busy():
                 raise HTTPException(409, "%s is already queued or training."
@@ -249,33 +296,37 @@ def register(api: APIRouter) -> None:
 
     @api.post("/face-lora/publish", dependencies=_gate())
     def publish_lora(body: dict = Body(default={})):
-        """Upload, register and grant, in the background; the page polls."""
+        """Publish to this licence in the background; the page polls."""
         with _lock:
             if _publish["status"] == "running":
                 raise HTTPException(409, "A publish is already running.")
         lora = str(body.get("lora") or "")
         if lora not in _face_loras():
             raise HTTPException(400, "Pick a trained LoRA.")
-        r2 = body.get("r2") or {}
-        job = {
-            "file": lora,
-            "id": str(body.get("id") or publish.lora_id(lora)).strip(),
-            "name": str(body.get("name") or "").strip(),
-            "trigger": str(body.get("trigger") or "").strip(),
-            "strength": max(0.0, min(2.0, float(body.get("strength") or 1.0))),
-            "keys": publish.licence_keys(body.get("keys")),
-            "r2": {"account": str(r2.get("account") or "").strip(),
-                   "access_key": str(r2.get("accessKey") or "").strip(),
-                   "secret": str(r2.get("secret") or "").strip(),
-                   "bucket": str(r2.get("bucket") or publish.DEFAULT_BUCKET).strip()},
-        }
-        try:
-            publish.check(job)
-        except publish.PublishError as exc:
-            raise HTTPException(400, str(exc)) from None
+        if body.get("consent") is not True:
+            raise HTTPException(400, "Tick the box confirming you have this "
+                                     "person's permission.")
+        if not LICENSE_KEY:
+            raise HTTPException(400, "This pod has no licence to publish to.")
+        name = loras.run_name(lora)
+        if not trainer.NAME_RE.match(name):
+            raise HTTPException(400, "%s does not name a run this page can "
+                                     "publish." % lora)
+        job = {"file": lora, "name": name, "consent": True,
+               "trigger": str(body.get("trigger") or "").strip()[:200]}
         with _lock:
             _publish.update(status="running", step="starting", sent=0, total=0,
-                            done=[], error=None,
-                            lora="%s → %s" % (lora, job["id"]))
-        threading.Thread(target=_publish_job, args=(job,), daemon=True).start()
+                            done=[], error=None, lora=lora)
+        _in_background(_publish_job, job)
+        return {"ok": True}
+
+    @api.post("/face-lora/remove", dependencies=_gate())
+    def remove_lora(body: dict = Body(default={})):
+        """Unpublish one of this licence's Face LoRAs. The trained file on
+        this pod stays, and stays on its tabs here."""
+        try:
+            publish.remove(str(body.get("id") or ""))
+        except publish.PublishError as exc:
+            raise HTTPException(400, str(exc)) from None
+        _refresh_published()
         return {"ok": True}

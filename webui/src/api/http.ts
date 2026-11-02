@@ -424,6 +424,9 @@ export const httpClient: ApiClient = {
   async publishFaceLora(request: FaceLoraPublish) {
     await send<unknown>('/face-lora/publish', request)
   },
+  async removeFaceLora(id: string) {
+    await send<unknown>('/face-lora/remove', { id })
+  },
 }
 
 /** A path_id is an OUTPUT_DIR-relative posix path, so it can contain `/`.

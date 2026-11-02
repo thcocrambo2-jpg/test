@@ -1,70 +1,51 @@
-"""Publish a trained LoRA as a private one: R2, the catalogue, the grants.
+"""Publish a trained LoRA as a private one, to this pod's own licence.
 
 The 🎭 Face LoRA page's Publish, in three steps, each safe to repeat:
 
-  1. upload   the file to loras/private/<file> in the private builds
-              bucket, signed with the R2 key typed into the page (r2.py)
-  2. register the `loras` record and its place on the Krea tabs' lists —
-              POST /v1/face-lora/register on the licence server
-  3. grant    it to the licence keys typed in — POST /v1/face-lora/grant
+  1. ask      POST /v1/face-lora/upload — the licence server checks the
+              name, size, the licence's quota and the consent tick, and
+              answers with a PUT link for exactly one object in its face
+              bucket (or `already`: this file is published)
+  2. upload   the file to that link, straight to R2 — no R2 key is on the
+              pod, typed in or otherwise
+  3. register POST /v1/face-lora/register — the server checks what landed
+              (size and MD5) and saves the record, granted to this licence
+              and to no other
 
-Steps 2 and 3 are authorised by this pod's own licence key, which must
-grant `face_lora`; no admin token is involved. The R2 key exists only in
-the running job: never written to disk, logged or kept in any state the
-page can read back, and no error message carries a signed URL (urllib's
-do not).
+All three are authorised by this pod's licence key, which must grant
+`face_lora`. The link is never logged, stored, or put in an error (urllib's
+errors do not carry the URL).
 
-Duplicates:
+Names are scoped to the licence: the server publishes run `anna` as
+face_<tag>_anna.safetensors, the name run.install already gave it. A file
+installed before the tag existed is renamed to match once it is published.
 
-  • the same file under the same name (ETag = its MD5) is not uploaded
-    again — step 1 just says so;
-  • a *different* file under a name already in the bucket is refused: a
-    pod that has the old file keeps it by name and would never fetch the
-    new one, so a retrained LoRA needs a new name;
-  • the record and the grants are idempotent on the server
-    (license-validator/src/privateLoras.js): the same id again updates
-    it, a key that has it already keeps it, a public LoRA's id is refused.
+Duplicates are the server's to refuse (license-validator/src/faceLoras.js):
+the same file again is `already`; a *different* file under a name already
+published is refused, because pods that have the old one keep it by name.
 """
 
 import hashlib
 import json
-import re
 import urllib.error
 import urllib.request
 from pathlib import Path
 
 from ember.settings import LICENSE_API_URL, LICENSE_KEY
-from ember.trainer.r2 import presign
-
-PREFIX = "loras/private/"
-DEFAULT_BUCKET = "krea2-builds"
-ID_RE = re.compile(r"^[a-z0-9][a-z0-9-]{0,62}$")
-FILE_RE = re.compile(r"^[A-Za-z0-9][A-Za-z0-9._-]{0,199}\.safetensors$")
-KEY_SPLIT = re.compile(r"[\s,;]+")
 
 
 class PublishError(Exception):
     """A refusal or failure, worded for the page."""
 
 
-def lora_id(file_name: str) -> str:
-    """face_sayara.safetensors -> face-sayara, the id it is published as."""
-    stem = Path(file_name).stem.lower()
-    return re.sub(r"[^a-z0-9-]+", "-", stem).strip("-")[:63]
-
-
-def licence_keys(text) -> list:
-    """Keys typed one per line, or separated by commas or spaces."""
-    if isinstance(text, list):
-        text = " ".join(str(t) for t in text)
-    return list(dict.fromkeys(k for k in KEY_SPLIT.split(str(text or "")) if k))
-
-
-def _md5(path: Path) -> str:
+def _md5(path: Path, step) -> str:
     digest = hashlib.md5()
+    size, done = path.stat().st_size, 0
     with path.open("rb") as handle:
         for block in iter(lambda: handle.read(8 << 20), b""):
             digest.update(block)
+            done += len(block)
+            step("checking the file", done, size)
     return digest.hexdigest()
 
 
@@ -86,68 +67,6 @@ class _Reader:
         self.handle.close()
 
 
-def _r2(method, key, r2, data=None, headers=None, timeout=60):
-    url = presign(method, key, 3600, **r2)
-    request = urllib.request.Request(url, data=data, method=method,
-                                     headers=headers or {})
-    return urllib.request.urlopen(request, timeout=timeout)
-
-
-def _remote(key: str, r2: dict):
-    """(size, etag) of the object, or None when it is not there."""
-    try:
-        with _r2("HEAD", key, r2) as response:
-            return (int(response.headers.get("Content-Length") or -1),
-                    (response.headers.get("ETag") or "").strip('"').lower())
-    except urllib.error.HTTPError as exc:
-        if exc.code == 404:
-            return None
-        if exc.code in (401, 403):
-            raise PublishError(
-                "R2 refused the key (HTTP %d) — check the account id, access "
-                "key and secret, and that it can read and write %s."
-                % (exc.code, r2["bucket"]))
-        raise PublishError("R2 answered HTTP %d checking the bucket." % exc.code)
-    except urllib.error.URLError as exc:
-        raise PublishError("Could not reach R2 (%s) — is the account id right?"
-                           % exc.reason)
-
-
-def upload(path: Path, r2: dict, step) -> str:
-    """Step 1. `step(name, sent, total)` reports progress. Returns what happened."""
-    key = PREFIX + path.name
-    size = path.stat().st_size
-    step("checking the bucket", 0, size)
-    found = _remote(key, r2)
-    if found is not None:
-        have_size, etag = found
-        if have_size == size and etag == _md5(path):
-            return "already in R2 (same file) — not uploaded again"
-        raise PublishError(
-            "%s is already in R2 but it is a different file. Pods that have "
-            "the old one never fetch it again by the same name, so train this "
-            "one under a new name (e.g. %s_v2) and publish that."
-            % (key, path.stem.replace("face_", "", 1)))
-    reader = _Reader(path, lambda sent: step("uploading", sent, size))
-    try:
-        with _r2("PUT", key, r2, data=reader, timeout=3600, headers={
-                "Content-Type": "application/octet-stream",
-                "Content-Length": str(size)}) as response:
-            if not 200 <= response.status < 300:
-                raise PublishError("R2 answered HTTP %d to the upload." % response.status)
-    except urllib.error.HTTPError as exc:
-        raise PublishError("R2 refused the upload (HTTP %d)." % exc.code)
-    except urllib.error.URLError as exc:
-        raise PublishError("The upload failed (%s)." % exc.reason)
-    finally:
-        reader.close()
-    found = _remote(key, r2)
-    if not found or found[0] != size:
-        raise PublishError("The upload finished but R2 does not have the "
-                           "whole file — publish again.")
-    return "uploaded %.1f MB" % (size / 1e6)
-
-
 def _server(path: str, body: dict) -> dict:
     """POST to the licence server as this pod's licence; its answer."""
     if not LICENSE_API_URL or not LICENSE_KEY:
@@ -164,37 +83,62 @@ def _server(path: str, body: dict) -> dict:
             detail = json.loads(exc.read() or b"{}")
         except ValueError:
             detail = {}
-        if exc.code == 404:
+        if exc.code == 404 and not detail.get("message"):
             raise PublishError(
-                "The licence server has no %s yet — deploy the version with "
-                "Face LoRA first." % path)
+                "The licence server has no %s yet — it needs the version with "
+                "Face LoRA publishing." % path)
         raise PublishError(detail.get("message") or detail.get("error")
                            or "The licence server answered HTTP %d." % exc.code)
     except urllib.error.URLError as exc:
         raise PublishError("Could not reach the licence server (%s)." % exc.reason)
 
 
-def register(lora: dict) -> str:
-    """Step 2."""
-    answer = _server("/v1/face-lora/register", lora)
-    lists = ", ".join("%s %s" % (k, v) for k, v in (answer.get("lists") or {}).items())
-    return "%s %s (%s)" % ("created" if answer.get("created") else "updated",
-                           answer.get("id"), lists)
+def _put(url: str, path: Path, size: int, step) -> None:
+    reader = _Reader(path, lambda sent: step("uploading", sent, size))
+    request = urllib.request.Request(url, data=reader, method="PUT", headers={
+        "Content-Type": "application/octet-stream",
+        "Content-Length": str(size)})
+    try:
+        with urllib.request.urlopen(request, timeout=3600) as response:
+            if not 200 <= response.status < 300:
+                raise PublishError("Storage answered HTTP %d to the upload." % response.status)
+    except urllib.error.HTTPError as exc:
+        raise PublishError("Storage refused the upload (HTTP %d) — publish again."
+                           % exc.code)
+    except urllib.error.URLError as exc:
+        raise PublishError("The upload failed (%s) — publish again." % exc.reason)
+    finally:
+        reader.close()
 
 
-def grant(lora_id_: str, keys: list) -> str:
-    """Step 3."""
-    answer = _server("/v1/face-lora/grant", {"id": lora_id_, "keys": keys})
-    who = ", ".join("%s (%s)" % (l.get("name") or "?", l.get("key"))
-                    for l in answer.get("licences") or [])
-    return "granted to %s — %d new" % (who, answer.get("newly", 0))
+def publish(path: Path, name: str, trigger: str, consent: bool, step, done) -> dict:
+    """All three steps for one installed file. `step(what, sent, total)`
+    reports progress and `done(line)` each finished step. Returns the
+    server's {id, file} for it."""
+    size = path.stat().st_size
+    md5 = _md5(path, step)
+    body = {"name": name, "trigger": trigger, "size": size, "md5": md5,
+            "consent": consent is True}
+    step("asking the licence server")
+    ticket = _server("/v1/face-lora/upload", body)
+    if ticket.get("already"):
+        done("already in storage (same file) — not uploaded again")
+    else:
+        _put(ticket["url"], path, size, step)
+        done("uploaded %.1f MB" % (size / 1e6))
+    step("registering")
+    answer = _server("/v1/face-lora/register", body)
+    done("%s %s — on this licence's 🔶 Krea2 V2 and 🎨 Krea2 tabs"
+         % ("published" if answer.get("created") else "already published as",
+            answer.get("id")))
+    return {"id": answer.get("id"), "file": answer.get("file") or ticket.get("file")}
 
 
-def check(job: dict) -> None:
-    """Everything that can be refused before anything is sent."""
-    if not FILE_RE.match(job["file"]):
-        raise PublishError("%s is not a plain .safetensors name." % job["file"])
-    if not ID_RE.match(job["id"]):
-        raise PublishError("The id may hold a-z, 0-9 and - only.")
-    if not all(job["r2"].get(k) for k in ("account", "access_key", "secret", "bucket")):
-        raise PublishError("Fill in the R2 account id, access key, secret and bucket.")
+def mine() -> dict:
+    """This licence's published Face LoRAs and how many it may keep."""
+    return _server("/v1/face-lora/mine", {})
+
+
+def remove(lora_id: str) -> dict:
+    """Delete one of this licence's Face LoRAs everywhere."""
+    return _server("/v1/face-lora/remove", {"id": lora_id})

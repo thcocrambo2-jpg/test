@@ -83,6 +83,8 @@ import {
 import {
   DEFAULT_FILENAME,
   buildKey,
+  faceR2Configured,
+  presignFace,
   presignGet,
   r2Configured,
 } from "./r2.js";
@@ -95,6 +97,7 @@ import {
   revokePrivateLora,
   upsertPrivateLora,
 } from "./privateLoras.js";
+import { faceMine, faceRegister, faceRemove, faceUpload } from "./faceLoras.js";
 import telegramRouter from "./telegram/router.js";
 import { createHash, timingSafeEqual } from "node:crypto";
 import { CRON_SECRET } from "./config.js";
@@ -465,12 +468,17 @@ app.post(
     // fetches ~90 GB of models before it reaches the LoRAs, and a link
     // checked when the request starts must still be good by then. A key
     // with no `private_loras` gets exactly the catalogue it got before
-    // they existed.
+    // they existed. A Face LoRA a licence published itself is in the face
+    // bucket and signed with that bucket's key; the rest are in the builds
+    // bucket. Either one unconfigured leaves its LoRAs out, not broken.
     const granted = Array.isArray(license.private_loras) ? license.private_loras : [];
     const catalog = await buildCatalog({
       granted,
-      sign: granted.length && r2Configured()
-        ? (key) => presignGet(key, PRIVATE_LORA_URL_TTL_SECONDS)
+      sign: granted.length
+        ? (source) =>
+            source.bucket === "face"
+              ? faceR2Configured() ? presignFace("GET", source.key, PRIVATE_LORA_URL_TTL_SECONDS) : null
+              : r2Configured() ? presignGet(source.key, PRIVATE_LORA_URL_TTL_SECONDS) : null
         : null,
     });
     const privateCount = catalog.loras.filter((l) => l.source?.kind === "r2").length;
@@ -1789,11 +1797,10 @@ app.post(
   privateLoraRoute((body) => revokePrivateLora(body.id, body.keys, { all: body.all === true })),
 );
 
-// The same two writes for the app's 🎭 Face LoRA page, authorised by the
-// pod's own licence instead of ADMIN_TOKEN: the key must be valid and
-// grant `face_lora`, which is hand-picked (never on a plan, never in
-// "all"). The file is already in the bucket by then — the page uploads it
-// with an R2 key typed in for that publish.
+// The app's 🎭 Face LoRA page, authorised by the pod's own licence instead
+// of ADMIN_TOKEN: the key must be valid and grant `face_lora`, which is
+// hand-picked (never on a plan, never in "all"). A licence publishes to
+// itself only — src/faceLoras.js has the rules.
 async function faceLoraLicence(req, res) {
   const { license_key } = req.body || {};
   if (!license_key) {
@@ -1824,32 +1831,21 @@ const faceLoraRoute = (fn) =>
     const license = await faceLoraLicence(req, res);
     if (!license) return;
     try {
-      const result = await fn(req.body || {});
-      console.log(`facelora key=${license.key} ${req.path} id=${req.body?.id}`);
+      const result = await fn(license, req.body || {});
+      console.log(`facelora key=${license.key} ${req.path} ${result.id || ""}`);
       res.json({ ok: true, ...result });
     } catch (err) {
-      if (err instanceof PrivateLoraError) return badRequest(res, err.message);
+      if (err instanceof PrivateLoraError) {
+        return res.status(err.status || 400).json({ ok: false, error: "refused", message: err.message });
+      }
       throw err;
     }
   });
 
-app.post(
-  "/v1/face-lora/register",
-  faceLoraRoute((body) =>
-    upsertPrivateLora({
-      id: body.id,
-      file: body.file,
-      name: body.name,
-      trigger: body.trigger,
-      default_strength: body.default_strength ?? 1.0,
-    }),
-  ),
-);
-
-app.post(
-  "/v1/face-lora/grant",
-  faceLoraRoute((body) => grantPrivateLora(body.id, body.keys)),
-);
+app.post("/v1/face-lora/upload", faceLoraRoute(faceUpload));
+app.post("/v1/face-lora/register", faceLoraRoute(faceRegister));
+app.post("/v1/face-lora/mine", faceLoraRoute(faceMine));
+app.post("/v1/face-lora/remove", faceLoraRoute(faceRemove));
 
 /** One catalogue row as the clients read it — `key`, never Mongo's `_id`. */
 function featureWire(row) {

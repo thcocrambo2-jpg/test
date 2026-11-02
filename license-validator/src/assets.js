@@ -125,11 +125,16 @@ export function sourceProblem(source) {
   return `source.kind ${show(source.kind)} must be "civitai" or "hf"`;
 }
 
-// A private LoRA's object in the R2 bucket the builds live in. Under its own
-// prefix so it can never name a build or a pose pack, and ending in the
-// file it is, so the key alone says what it holds.
+// A private LoRA's object in R2. Under its own prefix so it can never name
+// a build or a pose pack, and ending in the file it is, so the key alone
+// says what it holds. Hand-published ones sit in the builds bucket at
+// loras/private/<file>; a Face LoRA a licence published itself sits in the
+// face bucket (source.bucket "face") one folder deeper, under its owner's
+// tag — loras/private/<tag>/<file> — see src/faceLoras.js.
 export const PRIVATE_LORA_PREFIX = "loras/private/";
-const PRIVATE_LORA_KEY_RE = /^loras\/private\/[A-Za-z0-9][A-Za-z0-9._-]{0,199}\.safetensors$/;
+const PRIVATE_LORA_KEY_RE =
+  /^loras\/private\/(?:[a-f0-9]{6,16}\/)?[A-Za-z0-9][A-Za-z0-9._-]{0,199}\.safetensors$/;
+export const FACE_BUCKET = "face";
 
 /** True for a LoRA only the licences that list it may see (`{kind:"r2"}`). */
 export const isPrivateLora = (row) => isObject(row?.source) && row.source.kind === "r2";
@@ -141,8 +146,11 @@ export const isPrivateLora = (row) => isObject(row?.source) && row.source.kind =
  */
 export function loraSourceProblem(source) {
   if (isObject(source) && source.kind === "r2") {
-    const extra = Object.keys(source).filter((k) => k !== "kind" && k !== "key");
+    const extra = Object.keys(source).filter((k) => !["kind", "key", "bucket"].includes(k));
     if (extra.length) return `source has unknown field(s): ${extra.join(", ")}`;
+    if (source.bucket !== undefined && source.bucket !== FACE_BUCKET) {
+      return `source.bucket ${show(source.bucket)} must be "${FACE_BUCKET}" or absent`;
+    }
     return typeof source.key === "string" && PRIVATE_LORA_KEY_RE.test(source.key)
       ? null
       : `source.key ${show(source.key)} must be ${PRIVATE_LORA_PREFIX}<file>.safetensors`;
@@ -186,6 +194,22 @@ const LORA_RULES = {
     isNumber(value) ? null : `default_strength ${show(value)} must be a number`,
   sort_order: (value) =>
     isNumber(value) ? null : `sort_order ${show(value)} must be a number`,
+  // A Face LoRA a licence published itself (src/faceLoras.js): who owns
+  // it, the tabs it goes on for the licences granted it (instead of the
+  // shared feature lists, which nothing a customer does may edit), what
+  // was uploaded, and the consent ticked when it was. None reaches a pod.
+  owner: (value) =>
+    typeof value === "string" && value ? null : "owner must be a licence key",
+  tabs: (value) =>
+    Array.isArray(value) && value.every((f) => !featureProblem(f))
+      ? null : "tabs must be a list of feature keys",
+  size: (value) =>
+    isNumber(value) && value > 0 ? null : `size ${show(value)} must be a positive number`,
+  md5: (value) =>
+    typeof value === "string" && /^[a-f0-9]{32}$/.test(value) ? null : "md5 must be 32 hex digits",
+  consent: (value) =>
+    isObject(value) && value.at instanceof Date && typeof value.text === "string"
+      ? null : "consent must be {at, text}",
 };
 
 const MODEL_RULES = {
@@ -559,7 +583,7 @@ export async function buildCatalog({ granted = [], sign = null } = {}) {
  * A private LoRA is left out entirely — record and list entries alike —
  * unless its id is in `granted` (the licence's `private_loras`), so a key
  * without the grant cannot even learn its name. One that is granted goes
- * out with a short-lived download link, `sign(key)`, in its source; when
+ * out with a short-lived download link, `sign(source)`, in its source; when
  * there is no signer (R2 not configured) it is left out too, rather than
  * sent as a row the pod could never download. With the defaults this is
  * byte-for-byte the answer it gave before private LoRAs existed.
@@ -580,7 +604,7 @@ export function catalogFrom(loraRows, modelRows, featureRows,
     if (isPrivateLora(row)) {
       let url = null;
       try {
-        url = sign ? sign(row.source.key) : null;
+        url = sign ? sign(row.source) : null;
       } catch (err) {
         console.warn(`catalog  cannot sign private lora ${show(row._id)}: ${err.message}`);
       }
@@ -610,11 +634,19 @@ export function catalogFrom(loraRows, modelRows, featureRows,
     }
     return out;
   };
+  // A granted Face LoRA names its own tabs; it joins the end of each one's
+  // list here, for this answer only.
+  const ownTabs = {};
+  for (const row of loraRows) {
+    if (!loraIds.has(row._id) || !isPrivateLora(row) || !Array.isArray(row.tabs)) continue;
+    for (const tab of row.tabs) (ownTabs[tab] ||= []).push(row._id);
+  }
   const features = {};
   for (const row of featureRows) {
     features[row._id] = {
       models: keep(row.models, modelIds),
-      loras: keep(row.loras, loraIds),
+      loras: keep([...(Array.isArray(row.loras) ? row.loras : []), ...(ownTabs[row._id] || [])],
+        loraIds),
     };
   }
   return { loras: outLoras, models: outModels, features };

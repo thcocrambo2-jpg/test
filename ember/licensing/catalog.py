@@ -498,5 +498,12 @@ def add_extra(features: tuple, row: Lora) -> None:
             _extras[str(key)] = current + (row,)
 
 
+def drop_extra(file: str) -> None:
+    """Stop offering the extra row for `file` (it was renamed)."""
+    with _lock:
+        for key, rows in list(_extras.items()):
+            _extras[key] = tuple(r for r in rows if r.file != file)
+
+
 def model(model_id) -> Model | None:
     return get().model(model_id)
