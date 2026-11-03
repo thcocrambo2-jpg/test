@@ -3,7 +3,7 @@
 The 🎭 Face LoRA page's Publish, in three steps, each safe to repeat:
 
   1. ask      POST /v1/face-lora/upload — the licence server checks the
-              name, size, the licence's quota and the consent tick, and
+              name, size and the consent tick, and
               answers with a PUT link for exactly one object in its face
               bucket (or `already`: this file is published)
   2. upload   the file to that link, straight to R2 — no R2 key is on the
@@ -135,10 +135,5 @@ def publish(path: Path, name: str, trigger: str, consent: bool, step, done) -> d
 
 
 def mine() -> dict:
-    """This licence's published Face LoRAs and how many it may keep."""
+    """The Face LoRAs this licence has now, its own and any shared with it."""
     return _server("/v1/face-lora/mine", {})
-
-
-def remove(lora_id: str) -> dict:
-    """Delete one of this licence's Face LoRAs everywhere."""
-    return _server("/v1/face-lora/remove", {"id": lora_id})

@@ -97,7 +97,7 @@ import {
   revokePrivateLora,
   upsertPrivateLora,
 } from "./privateLoras.js";
-import { faceMine, faceRegister, faceRemove, faceUpload } from "./faceLoras.js";
+import { faceMine, faceRegister, faceUpload } from "./faceLoras.js";
 import telegramRouter from "./telegram/router.js";
 import { createHash, timingSafeEqual } from "node:crypto";
 import { CRON_SECRET } from "./config.js";
@@ -1845,7 +1845,6 @@ const faceLoraRoute = (fn) =>
 app.post("/v1/face-lora/upload", faceLoraRoute(faceUpload));
 app.post("/v1/face-lora/register", faceLoraRoute(faceRegister));
 app.post("/v1/face-lora/mine", faceLoraRoute(faceMine));
-app.post("/v1/face-lora/remove", faceLoraRoute(faceRemove));
 
 /** One catalogue row as the clients read it — `key`, never Mongo's `_id`. */
 function featureWire(row) {

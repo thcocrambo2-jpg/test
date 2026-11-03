@@ -25,13 +25,15 @@ out. Grant it by name.
    you have this person's permission (the server stores the tick with the
    LoRA). Publish stores the file privately and puts it on the Krea tabs of
    every pod that runs with **this pod's licence key** — no other licence
-   is sent it, and there is no key or list to type. The card lists what the
-   licence has published (no limit on how many) with an Unpublish button each; the
-   trained file on the pod stays when one is unpublished.
+   is sent it, and there is no key or list to type. Publishing is final:
+   the page cannot unpublish, and there is no limit on how many. The card
+   lists the Face LoRAs the licence has now, including any the operator
+   shared with it.
 
 The upload goes from the pod straight to storage through a link the
 licence server signs for that one file; no storage key is ever on the pod.
-Publishing again is safe: the same file is not uploaded twice. A
+Publishing again is safe: the same file is not uploaded twice, and it
+does not give the licence back a LoRA the operator took off it. A
 *different* file under a name already published is refused — pods that
 have the old file keep it by name — so a retrained face gets a new run
 name.
@@ -54,7 +56,7 @@ the first time, for the bf16 copy of Krea 2 Raw.
 | Training (musubi-tuner on Krea 2 Raw) | `ember/trainer/run.py` |
 | Trained LoRAs on the Krea tabs | `ember/trainer/loras.py`, `catalog.add_extra` |
 | Upload and publish | `ember/trainer/publish.py` |
-| Server side (`/v1/face-lora/upload`, `/register`, `/mine`, `/remove`) | `license-validator/src/faceLoras.js` |
+| Server side (`/v1/face-lora/upload`, `/register`, `/mine`) | `license-validator/src/faceLoras.js` |
 
 Training reuses the pod's own Krea 2 Raw: musubi refuses weights that are
 already fp8, so the first run dequantises `krea2_raw_fp8_scaled` to bf16 once

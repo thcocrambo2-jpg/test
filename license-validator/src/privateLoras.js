@@ -175,7 +175,7 @@ export async function listPrivateLoras() {
       name: row.name || row._id,
       file: row.file,
       trigger: row.trigger || "",
-      owner: row.owner ? shortKey(row.owner) : null,
+      published_by: row.published_by ? shortKey(row.published_by) : null,
       enabled: row.enabled !== false,
       valid: loraProblems(row).length === 0,
       tabs: Array.isArray(row.tabs) ? row.tabs : lists.map((f) => f._id),
