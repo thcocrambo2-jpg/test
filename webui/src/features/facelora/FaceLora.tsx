@@ -4,7 +4,7 @@ import { useQuery, useQueryClient } from '@tanstack/react-query'
 import { api } from '@/api/client'
 import { useSchemas } from '@/api/queries'
 import type { FaceLoraOptions, FaceLoraRun, FaceLoraState } from '@/api/types'
-import { Alert, Button, Card, EmptyState, Pill, ProgressBar, useConfirm, useToast } from '@/components/ui'
+import { Alert, Button, Card, EmptyState, Pill, ProgressBar, useToast } from '@/components/ui'
 import { BoolField, NumberField, SelectField, TextField } from '@/components/fields'
 import { useTabState } from '@/store/tabState'
 import { cx } from '@/lib/util'
@@ -376,8 +376,6 @@ const triggerByName = (runs: FaceLoraRun[]) =>
 
 function PublishCard({ state }: { state: FaceLoraState }) {
   const toast = useToast()
-  const confirm = useConfirm()
-  const client = useQueryClient()
   const triggers = useMemo(() => triggerByName(state.runs), [state.runs])
   const [picked, setPicked] = useState('')
   const [trigger, setTrigger] = useState<string | null>(null)
@@ -388,8 +386,6 @@ function PublishCard({ state }: { state: FaceLoraState }) {
   const p = state.publish
   const running = p.status === 'running'
   const mine = state.published
-  const full = mine.limit != null && mine.loras.length >= mine.limit
-  const already = lora && mine.loras.some((m) => m.file === lora.file)
 
   async function publish() {
     if (!lora) return
@@ -401,28 +397,10 @@ function PublishCard({ state }: { state: FaceLoraState }) {
     }
   }
 
-  async function remove(id: string, name: string) {
-    const confirmed = await confirm({
-      title: `Unpublish ${name}?`,
-      body:
-        'It is deleted from storage and from this licence, so other pods stop getting it. ' +
-        'The trained file on this pod stays.',
-      confirmLabel: 'Unpublish',
-      tone: 'danger',
-    })
-    if (!confirmed) return
-    try {
-      await api.removeFaceLora(id)
-      client.invalidateQueries({ queryKey: ['face-lora'] })
-    } catch (err) {
-      toast((err as Error).message)
-    }
-  }
-
   return (
     <Card
       title="4 · Publish to this licence"
-      subtitle="Stores it privately and puts it on the 🔶 Krea2 V2 and 🎨 Krea2 tabs of every pod using this licence key — nobody else is sent it. Safe to press again: the same file is not uploaded twice."
+      subtitle="Stores it privately and puts it on the 🔶 Krea2 V2 and 🎨 Krea2 tabs of every pod using this licence key — nobody else is sent it. Publishing is final: it cannot be unpublished from here. Safe to press again: the same file is not uploaded twice."
     >
       {state.loras.length === 0 ? (
         <p className={s.muted}>Train one first.</p>
@@ -447,13 +425,10 @@ function PublishCard({ state }: { state: FaceLoraState }) {
               variant="primary"
               onClick={publish}
               loading={running}
-              disabled={running || !lora || !consent || (full && !already)}
+              disabled={running || !lora || !consent}
             >
               Publish
             </Button>
-            {full && !already && (
-              <span className={s.muted}>This licence has {mine.limit} published — unpublish one first.</span>
-            )}
             {p.status === 'done' && <span className={s.muted}>✅ Published {p.lora}</span>}
           </div>
           {running && (p.step === 'uploading' || p.step === 'checking the file') && p.total > 0 ? (
@@ -476,9 +451,7 @@ function PublishCard({ state }: { state: FaceLoraState }) {
         </>
       )}
 
-      <h4 className={s.subhead}>
-        Published on this licence{mine.limit != null ? ` (${mine.loras.length} of ${mine.limit})` : ''}
-      </h4>
+      <h4 className={s.subhead}>Face LoRAs on this licence</h4>
       {mine.error ? (
         <Alert tone="error">{mine.error}</Alert>
       ) : !mine.loaded ? (
@@ -494,9 +467,6 @@ function PublishCard({ state }: { state: FaceLoraState }) {
                 {m.trigger && <span className={s.muted}> · {m.trigger}</span>}
                 {m.size != null && <span className={s.muted}> · {(m.size / 1e6).toFixed(0)} MB</span>}
               </span>
-              <Button size="sm" variant="danger" onClick={() => remove(m.id, m.name)}>
-                Unpublish
-              </Button>
             </li>
           ))}
         </ul>

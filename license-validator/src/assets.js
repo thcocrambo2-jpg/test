@@ -129,8 +129,9 @@ export function sourceProblem(source) {
 // a build or a pose pack, and ending in the file it is, so the key alone
 // says what it holds. Hand-published ones sit in the builds bucket at
 // loras/private/<file>; a Face LoRA a licence published itself sits in the
-// face bucket (source.bucket "face") one folder deeper, under its owner's
-// tag — loras/private/<tag>/<file> — see src/faceLoras.js.
+// face bucket (source.bucket "face") one folder deeper, under the tag of
+// the key that published it — loras/private/<tag>/<file> — see
+// src/faceLoras.js.
 export const PRIVATE_LORA_PREFIX = "loras/private/";
 const PRIVATE_LORA_KEY_RE =
   /^loras\/private\/(?:[a-f0-9]{6,16}\/)?[A-Za-z0-9][A-Za-z0-9._-]{0,199}\.safetensors$/;
@@ -194,12 +195,13 @@ const LORA_RULES = {
     isNumber(value) ? null : `default_strength ${show(value)} must be a number`,
   sort_order: (value) =>
     isNumber(value) ? null : `sort_order ${show(value)} must be a number`,
-  // A Face LoRA a licence published itself (src/faceLoras.js): who owns
-  // it, the tabs it goes on for the licences granted it (instead of the
-  // shared feature lists, which nothing a customer does may edit), what
-  // was uploaded, and the consent ticked when it was. None reaches a pod.
-  owner: (value) =>
-    typeof value === "string" && value ? null : "owner must be a licence key",
+  // A Face LoRA a licence published itself (src/faceLoras.js): the key
+  // that published it (a record, no rights), the tabs it goes on for the
+  // licences granted it (instead of the shared feature lists, which
+  // nothing a customer does may edit), what was uploaded, and the consent
+  // ticked when it was. None reaches a pod.
+  published_by: (value) =>
+    typeof value === "string" && value ? null : "published_by must be a licence key",
   tabs: (value) =>
     Array.isArray(value) && value.every((f) => !featureProblem(f))
       ? null : "tabs must be a list of feature keys",

@@ -703,8 +703,6 @@ export interface ApiClient {
   /** Publish to this pod's own licence, in the background — follow it in
    *  `getFaceLora().publish`. */
   publishFaceLora(request: FaceLoraPublish): Promise<void>
-  /** Unpublish one of this licence's Face LoRAs (the file here stays). */
-  removeFaceLora(id: string): Promise<void>
 }
 
 /** The trainer's settings, as ember/trainer/run.py DEFAULTS has them. */
@@ -755,7 +753,7 @@ export interface FaceLoraPublishState {
   lora: string | null
 }
 
-/** One Face LoRA this licence has published, as the licence server has it. */
+/** One Face LoRA this licence has, as the licence server has it. */
 export interface FaceLoraPublished {
   id: string
   name: string
@@ -775,7 +773,6 @@ export interface FaceLoraState {
   publish: FaceLoraPublishState
   published: {
     loras: FaceLoraPublished[]
-    limit: number | null
     error: string | null
     loaded: boolean
   }

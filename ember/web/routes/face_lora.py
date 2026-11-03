@@ -61,7 +61,7 @@ _current: dict = {"run": None, "job": None}
 _publish = {"status": "idle", "step": None, "sent": 0, "total": 0,
             "done": [], "error": None, "lora": None}
 # This licence's published Face LoRAs, as the licence server last said.
-_published = {"loras": [], "limit": None, "error": None, "loaded": False}
+_published = {"loras": [], "error": None, "loaded": False}
 
 
 def _gate():
@@ -103,11 +103,10 @@ def _busy() -> bool:
 
 
 def _refresh_published() -> None:
-    """Ask the licence server what this licence has published. Blocking."""
+    """Ask the licence server which Face LoRAs this licence has. Blocking."""
     try:
         answer = publish.mine()
-        update = {"loras": answer.get("loras") or [], "limit": answer.get("limit"),
-                  "error": None, "loaded": True}
+        update = {"loras": answer.get("loras") or [], "error": None, "loaded": True}
     except publish.PublishError as exc:
         update = {"error": str(exc), "loaded": True}
     except Exception as exc:
@@ -318,15 +317,4 @@ def register(api: APIRouter) -> None:
             _publish.update(status="running", step="starting", sent=0, total=0,
                             done=[], error=None, lora=lora)
         _in_background(_publish_job, job)
-        return {"ok": True}
-
-    @api.post("/face-lora/remove", dependencies=_gate())
-    def remove_lora(body: dict = Body(default={})):
-        """Unpublish one of this licence's Face LoRAs. The trained file on
-        this pod stays, and stays on its tabs here."""
-        try:
-            publish.remove(str(body.get("id") or ""))
-        except publish.PublishError as exc:
-            raise HTTPException(400, str(exc)) from None
-        _refresh_published()
         return {"ok": True}

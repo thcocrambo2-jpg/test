@@ -20,10 +20,9 @@ easy to get wrong. For whoever calls this API or changes it.
 | `POST` | `/v1/prompt-library/token` | One card's settings token, when its Use or Copy is pressed. `{license_key, instance_id, id}`; the entry must be enabled and its tab granted. Takes no seat |
 | `POST` | `/v1/presets` | The app saving one preset. Needs `is_admin`; answers a real error when it refuses |
 | `GET` | `/v1/presets` | Enabled presets, all tabs or `?tab=` |
-| `POST` | `/v1/face-lora/upload` | A Face LoRA publish, step 1: `{license_key, name, trigger, size, md5, consent: true}` → its id, file and a 30-minute PUT link for that one object in the face bucket (or `already: true`). The licence must grant `face_lora`; name, size, the 5-per-licence limit and the consent tick are checked here |
-| `POST` | `/v1/face-lora/register` | Step 2, the same body: checks what landed (size, MD5 = ETag; a mismatch is deleted) and saves the record, granted to this licence only. Idempotent |
-| `POST` | `/v1/face-lora/mine` | `{license_key}` → this licence's Face LoRAs and its limit |
-| `POST` | `/v1/face-lora/remove` | `{license_key, id}` — delete one of this licence's own: the object, the record, every grant |
+| `POST` | `/v1/face-lora/upload` | A Face LoRA publish, step 1: `{license_key, name, trigger, size, md5, consent: true}` → its id, file and a 30-minute PUT link for that one object in the face bucket (or `already: true`). The licence must grant `face_lora`; name, size and the consent tick are checked here |
+| `POST` | `/v1/face-lora/register` | Step 2, the same body: checks what landed (size, MD5 = ETag; a mismatch is deleted) and saves the record with `published_by`, granted to this licence only. Idempotent: an existing record, and its grants, are left as they are |
+| `POST` | `/v1/face-lora/mine` | `{license_key}` → the Face LoRAs this licence has now (granted to it, whoever published them). There is no unpublish |
 | `GET` | `/health` | Liveness + DB reachability |
 | `GET` | `/v1/admin/licenses` | Every licence with live usage and **resolved** features (needs `ADMIN_TOKEN`) |
 | `GET` | `/v1/admin/plans` | Every plan with the number of licences on it |
