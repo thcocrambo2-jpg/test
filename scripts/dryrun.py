@@ -247,6 +247,25 @@ def hold_jobs(seconds: float) -> None:
     log.warning("Dry run: every job is held for %gs before it runs", seconds)
 
 
+def mark_auto_trigger(ids: str) -> None:
+    """Set `auto_trigger` on these LoRAs in the loaded catalogue.
+
+    What flipping the field in Atlas does, for this run only. A LoRA with
+    no trigger is named but changes nothing, as on a real pod.
+    """
+    import dataclasses
+    from ember.licensing import catalog
+
+    loras = catalog.get().loras
+    for lora_id in (part.strip() for part in ids.split(",")):
+        lora = loras.get(lora_id)
+        if lora is None:
+            log.warning("--auto-trigger: no LoRA %r in the catalogue", lora_id)
+            continue
+        loras[lora_id] = dataclasses.replace(lora, auto_trigger=True)
+        log.info("--auto-trigger: %s (trigger %r)", lora_id, lora.trigger)
+
+
 def main() -> None:
     parser = argparse.ArgumentParser(
         description="Run the app locally with no GPU, ComfyUI or weights.",
@@ -266,6 +285,12 @@ def main() -> None:
         "--library", metavar="DIR",
         help="serve this folder of picture + .txt token pairs as the "
              "Prompt Library, instead of asking the licence server.",
+    )
+    parser.add_argument(
+        "--auto-trigger", metavar="IDS",
+        help='mark these LoRA ids auto_trigger, e.g. "hm1girl-v1-0,'
+             'bloomgirls-v1-0", so the prompt and the stack keep each '
+             'other in step without editing the DB.',
     )
     parser.add_argument(
         "--tunnel", action="store_true",
@@ -305,6 +330,8 @@ def main() -> None:
         catalog.load(licensing.instance_id())
 
     log.info("Features — %s", features.summary())
+    if args.auto_trigger:
+        mark_auto_trigger(args.auto_trigger)
 
     stub_comfy()
     if args.hold > 0:
