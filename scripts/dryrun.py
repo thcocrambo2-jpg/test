@@ -116,6 +116,93 @@ def stub_comfy() -> None:
     comfy.ensure_alive = ensure_alive
 
 
+def stub_library(folder: str) -> None:
+    """Serve a folder of picture + token pairs as the Prompt Library.
+
+    The pod reads the library from the licence server, which a dry run
+    usually cannot reach with a build that knows the newest routes. This
+    stands in for all three reads — a page, one token, a random pick — from
+    pairs like Gallery's zip download writes (`x.png` beside `x.txt`), so
+    the tab, its shuffle and Random generate can be tried locally. Thumbs
+    go to the browser as data URLs, made on first view. No categories or
+    tags: those live only in the real index.
+    """
+    import base64
+    import hashlib
+    import io
+    import random as stdrandom
+
+    from PIL import Image
+
+    from ember.licensing import prompts, tokens
+
+    entries = []
+    for picture in sorted(Path(folder).iterdir()):
+        if picture.suffix.lower() not in (".png", ".jpg", ".jpeg", ".webp"):
+            continue
+        text = picture.with_suffix(".txt")
+        if not text.is_file():
+            continue
+        try:
+            clean, data = tokens.read_token(text.read_text(encoding="utf-8"))
+        except (ValueError, OSError):
+            continue
+        entry_id = hashlib.sha256(clean.encode()).hexdigest()[:12]
+        entries.append({"id": entry_id, "tab": data["tab"], "token": clean,
+                        "path": picture})
+    log.warning("Prompt Library stubbed from %s: %d entries", folder,
+                len(entries))
+    thumbs: dict[str, tuple[str, int, int]] = {}
+
+    def thumb(entry):
+        if entry["id"] not in thumbs:
+            with Image.open(entry["path"]) as image:
+                image = image.convert("RGB")
+                image.thumbnail((480, 480))
+                buffer = io.BytesIO()
+                image.save(buffer, "WEBP", quality=80)
+                url = ("data:image/webp;base64,"
+                       + base64.b64encode(buffer.getvalue()).decode())
+                thumbs[entry["id"]] = (url, image.width, image.height)
+        return thumbs[entry["id"]]
+
+    def library(tab=None, category=None, tags=(), skip=0, limit=24,
+                force=False, shuffle=None):
+        rows = [e for e in entries if not tab or e["tab"] == tab]
+        if category or tags:
+            rows = []
+        if shuffle is not None:
+            rows.sort(key=lambda e: hashlib.sha256(
+                f"{shuffle}:{e['id']}".encode()).hexdigest())
+        page = []
+        for entry in rows[skip:skip + limit]:
+            url, width, height = thumb(entry)
+            page.append(prompts.Prompt(
+                id=entry["id"], tab=entry["tab"], title=None, category=None,
+                tags=(), width=width, height=height, thumb=url, full=url,
+                usable=True))
+        counts = {}
+        for entry in entries:
+            counts[entry["tab"]] = counts.get(entry["tab"], 0) + 1
+        return prompts.Library(prompts=tuple(page), total=len(rows),
+                               skip=skip, limit=limit, tabs=counts)
+
+    def token(entry_id):
+        found = next((e for e in entries if e["id"] == entry_id), None)
+        return (found["token"], None) if found else (None, "No such card.")
+
+    def pick_random(tab, count, category=None, tags=()):
+        rows = [] if category or tags else [e for e in entries
+                                             if e["tab"] == tab]
+        chosen = stdrandom.sample(rows, min(count, len(rows)))
+        return ([prompts.Picked(e["id"], None, e["token"]) for e in chosen],
+                len(rows), None)
+
+    prompts.library = library
+    prompts.token = token
+    prompts.pick_random = pick_random
+
+
 def hold_jobs(seconds: float) -> None:
     """Keep every job running for `seconds` before its handler starts.
 
@@ -176,6 +263,11 @@ def main() -> None:
              "clicks wait in the queue (default: fail at once).",
     )
     parser.add_argument(
+        "--library", metavar="DIR",
+        help="serve this folder of picture + .txt token pairs as the "
+             "Prompt Library, instead of asking the licence server.",
+    )
+    parser.add_argument(
         "--tunnel", action="store_true",
         help="open a Cloudflare quick tunnel for a public URL (default: "
              "localhost only).",
@@ -217,6 +309,8 @@ def main() -> None:
     stub_comfy()
     if args.hold > 0:
         hold_jobs(args.hold)
+    if args.library:
+        stub_library(args.library)
 
     # Nothing to set: the auth gate is open unless EMBER_UI_REQUIRE_TOKEN
     # says otherwise. It is still why this script refuses to bind anything
