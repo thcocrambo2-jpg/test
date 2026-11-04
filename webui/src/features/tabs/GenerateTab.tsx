@@ -131,6 +131,14 @@ export function GenerateTab({ schema }: { schema: TabSchema }) {
    * would submit twice. */
   const [submitting, setSubmitting] = useState(false)
   const waiting = runs.filter(isLive).length
+  /* Jobs already waiting in this tab's lane, from any tab — the ones a
+   * "Generate next" would jump. With none, plain Generate already runs
+   * next, so the second button is not offered. */
+  const lineLength = useQueue(
+    (state) =>
+      state.jobs.filter((other) => other.status === 'queued' && other.lane === schema.lane)
+        .length,
+  )
 
   /* The line under the Model dropdown — variant, its step and CFG defaults,
    * whether the weights are actually on this pod. It is a hint rather than a
@@ -387,7 +395,7 @@ export function GenerateTab({ schema }: { schema: TabSchema }) {
     [fromToken],
   )
 
-  const submit = useCallback(async () => {
+  const submit = useCallback(async (next = false) => {
     // Somebody who got a token into the box another way — dropped it in,
     // typed it — means the settings, not a prompt made of base64.
     const prompt = String(values[schema.promptField] ?? '')
@@ -397,11 +405,13 @@ export function GenerateTab({ schema }: { schema: TabSchema }) {
     }
     setSubmitting(true)
     try {
-      await submitJob({
+      const id = await submitJob({
         schema,
         prompt: String(values[schema.promptField] ?? ''),
         values,
+        next,
       })
+      if (next && !id.startsWith('local-')) toast('⤒ Queued to run next.')
     } finally {
       // `submitJob` reports a rejected submission as a job carrying the
       // error rather than by throwing, so this is belt and braces — but a
@@ -410,12 +420,12 @@ export function GenerateTab({ schema }: { schema: TabSchema }) {
       // impossible.
       setSubmitting(false)
     }
-  }, [schema, submitJob, values, fromToken])
+  }, [schema, submitJob, values, fromToken, toast])
 
   // The shortcut the footer advertises. Bound while this tab is mounted and
   // unbound when it is not, so it always runs the tab you are looking at.
-  useSubmitHotkey(() => {
-    if (!submitting && !short) void submit()
+  useSubmitHotkey((next) => {
+    if (!submitting && !short) void submit(next)
   })
 
   return (
@@ -470,17 +480,30 @@ export function GenerateTab({ schema }: { schema: TabSchema }) {
             * line". Keyed for the reason SchemaForm is. */}
           <SettingsToken key={`token.${schema.key}`} schema={schema} values={values} />
           <div className={s.submitBar}>
-            <Button
-              variant="primary"
-              size="lg"
-              block
-              loading={submitting}
-              disabled={Boolean(short)}
-              aria-describedby={short ? `${schema.key}-short` : undefined}
-              onClick={() => void submit()}
-            >
-              {submitting ? 'Queueing' : schema.submitLabel}
-            </Button>
+            <div className={s.submitRow}>
+              <Button
+                variant="primary"
+                size="lg"
+                block
+                loading={submitting}
+                disabled={Boolean(short)}
+                aria-describedby={short ? `${schema.key}-short` : undefined}
+                onClick={() => void submit()}
+              >
+                {submitting ? 'Queueing' : schema.submitLabel}
+              </Button>
+              {lineLength > 0 && (
+                <Button
+                  size="lg"
+                  className={s.submitNext}
+                  disabled={submitting || Boolean(short)}
+                  title={`Queue ahead of the ${lineLength} waiting (Ctrl+Shift+Enter)`}
+                  onClick={() => void submit(true)}
+                >
+                  ⤒ Next
+                </Button>
+              )}
+            </div>
             {short && (
               <div className={s.submitHint} id={`${schema.key}-short`}>
                 {short.emptyNote ?? `Add at least ${short.min} to ${short.label}.`}

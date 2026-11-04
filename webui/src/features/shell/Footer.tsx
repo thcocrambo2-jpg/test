@@ -36,7 +36,9 @@ export function Footer() {
         <kbd className={s.kbd}>Ctrl</kbd>
         <span>+</span>
         <kbd className={s.kbd}>Enter</kbd>
-        <span>runs the tab you are on</span>
+        <span>runs the tab you are on · add</span>
+        <kbd className={s.kbd}>Shift</kbd>
+        <span>to run it next</span>
       </div>
 
       <div className={s.footerRight}>

@@ -220,6 +220,17 @@
   background: linear-gradient(transparent, var(--c-bg) 28%);
 }
 
+/* Generate, and beside it "⤒ Next" while jobs are waiting in the lane. */
+.submitRow {
+  display: flex;
+  gap: var(--s-2);
+}
+
+.submitNext {
+  flex: none;
+  white-space: nowrap;
+}
+
 .submitHint {
   display: flex;
   align-items: center;

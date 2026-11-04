@@ -167,6 +167,9 @@ export interface TabSchema {
   category: TabCategory
   route: string
   output: 'image' | 'video'
+  /** The queue lane its jobs wait in. Only jobs of one lane run one after
+   *  another, so "Generate next" only jumps this lane's line. */
+  lane: string
   /** Submission order. Never reorder: index i is positional arg i. */
   fields: Field[]
   groups: GroupSpec[]
@@ -626,8 +629,14 @@ export interface ApiClient {
   getRecentUploads(): Promise<RecentUploads>
   deleteMedia(id: string): Promise<void>
   /** `preset`: the preset dropdown's name at the click, filed with the
-   *  run's recipe so loading it later names that preset again. */
-  submit(schema: TabSchema, values: SubmitValues, preset?: string): Promise<SubmitResult>
+   *  run's recipe so loading it later names that preset again. `next`
+   *  puts the job ahead of everything waiting in its lane. */
+  submit(
+    schema: TabSchema,
+    values: SubmitValues,
+    preset?: string,
+    next?: boolean,
+  ): Promise<SubmitResult>
   cancel(jobId: string): Promise<void>
   /** Reorder a waiting job within its lane's line. `message` is empty when
    *  the job was already there, and starts with ⚠️ when it was refused. */

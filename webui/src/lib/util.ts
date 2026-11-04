@@ -184,16 +184,21 @@ export function saveBlob(blob: Blob, name: string): void {
 
 /** Ctrl/Cmd+Enter runs the tab you are on — the shortcut the footer advertises
  *  and the one thing from the old header worth keeping literally. */
-export function useSubmitHotkey(onSubmit: () => void, enabled = true) {
+export function useSubmitHotkey(
+  onSubmit: (next: boolean) => void,
+  enabled = true,
+) {
   const handler = useRef(onSubmit)
   handler.current = onSubmit
 
   useEffect(() => {
     if (!enabled) return
+    /* Ctrl+Enter queues at the back; Ctrl+Shift+Enter queues to run next.
+     * Callers that have no "next" simply ignore the argument. */
     function onKeyDown(event: KeyboardEvent) {
       if (event.key === 'Enter' && (event.ctrlKey || event.metaKey)) {
         event.preventDefault()
-        handler.current()
+        handler.current(event.shiftKey)
       }
     }
     window.addEventListener('keydown', onKeyDown)

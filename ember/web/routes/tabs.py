@@ -205,6 +205,7 @@ def _mount_tab(api: APIRouter, schema) -> None:
             raise HTTPException(400, "Send a `values` object.")
         preset = body.get("preset")
         preset = preset if isinstance(preset, str) else ""
+        front = body.get("next") is True
         try:
             resolved = _resolve_uploads(schema, raw)
             args, values = schema.submit(resolved)
@@ -221,13 +222,14 @@ def _mount_tab(api: APIRouter, schema) -> None:
             lane=schema.lane, tab=key, tab_label=schema.title(),
             title=_job_title(schema, values),
             fn=_recording(schema, values, kept, preset), args=args,
-            result_keys=schema.result_keys,
+            result_keys=schema.result_keys, front=front,
         )
         ahead = max(0, view.place - 1)
         return {
             "jobId": view.id,
             "place": view.place,
-            "message": ("🕑 Queued — it starts as soon as the GPU is free."
+            "message": ("⤒ Queued to run next." if front else
+                        "🕑 Queued — it starts as soon as the GPU is free."
                         if ahead == 0 else
                         "🕑 Queued — %d job(s) ahead of it." % ahead),
             "queue": _queue_json(),

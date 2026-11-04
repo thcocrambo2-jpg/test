@@ -465,6 +465,7 @@ class TabSchema:
             "category": self.category,
             "route": self.route,
             "output": self.output,
+            "lane": self.lane,
             "submitLabel": self.submit_label,
             "promptField": self.prompt_field,
             "resultKeys": list(self.result_keys),

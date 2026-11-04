@@ -194,11 +194,17 @@ export const httpClient: ApiClient = {
     return send<{ changed: number; failed: string[] }>('/gallery/like', { ids, liked })
   },
 
-  async submit(schema: TabSchema, values: SubmitValues, preset = ''): Promise<SubmitResult> {
+  async submit(
+    schema: TabSchema,
+    values: SubmitValues,
+    preset = '',
+    next = false,
+  ): Promise<SubmitResult> {
     const resolved = await resolveUploads(schema, values)
     return send<SubmitResult>(`/tabs/${encodeURIComponent(schema.key)}/generate`, {
       values: resolved,
       preset,
+      next,
     })
   },
 

@@ -189,11 +189,19 @@ def register_lane(lane: str, interrupt: Callable[[], None]) -> None:
 
 def submit(*, lane: str, tab: str, tab_label: str, title: str,
            fn: Callable, args: tuple,
-           result_keys: tuple = ("images", "status")) -> JobView:
+           result_keys: tuple = ("images", "status"),
+           front: bool = False) -> JobView:
     """Record a click as a job and return its place in the queue.
 
     Returns a JobView rather than an id because the caller's next act is
     always to tell the customer where their work landed.
+
+    `front` puts the job ahead of every job already waiting in its lane —
+    "Generate next". It lands in the slot of the lane's first waiting job,
+    the place move(to="top") would take it to, but in the same lock as the
+    append: a submit-then-move from the browser would leave a moment where
+    the worker could claim a job that was meant to wait behind this one.
+    The running job is never touched.
     """
     job = Job(
         id=uuid.uuid4().hex[:12], lane=lane, tab=str(tab),
@@ -201,12 +209,18 @@ def submit(*, lane: str, tab: str, tab_label: str, title: str,
         fn=fn, args=tuple(args), result_keys=tuple(result_keys),
     )
     with _WAKE:
-        _JOBS.append(job)
+        first = next((i for i, j in enumerate(_JOBS)
+                      if j.lane == lane and j.status == QUEUED), None)
+        if front and first is not None:
+            _JOBS.insert(first, job)
+        else:
+            _JOBS.append(job)
         _stamp(job)
         _trim()
         _WAKE.notify_all()
         view = _view(job)
-    log.info("Queued %s job %s — %s", tab_label, job.id, job.title)
+    log.info("Queued %s job %s%s — %s", tab_label, job.id,
+             " to run next" if front else "", job.title)
     return view
 
 

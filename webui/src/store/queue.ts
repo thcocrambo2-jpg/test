@@ -107,6 +107,8 @@ interface QueueState {
     schema: TabSchema
     prompt: string
     values: SubmitValues
+    /** Ahead of every job already waiting in the tab's lane. */
+    next?: boolean
   }): Promise<string>
   cancel(id: string): void
   /** Reorder a waiting job. Resolves to the server's line when the move was
@@ -517,12 +519,12 @@ export const useQueue = create<QueueState>((set, get) => {
       }
     },
 
-    async submit({ schema, prompt, values }) {
+    async submit({ schema, prompt, values, next = false }) {
       try {
         // Read here rather than passed in, so every way a job is queued —
         // Generate, the auto-prompt loop — files the preset the tab is on.
         const preset = readTabState(`preset.chosen.${schema.key}`, '')
-        const result = await api.submit(schema, values, preset)
+        const result = await api.submit(schema, values, preset, next)
         // Optimistic, and replaced by the next `queue` event a moment
         // later. Without it the button appears to do nothing for up to
         // half a second, which is exactly the feedback gap this rewrite
