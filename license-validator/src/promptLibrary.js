@@ -30,6 +30,8 @@
 // pod is handed has at least five hours left. scripts/prompt_library/
 // store.py signs the same way for the admin page and the showcase.
 
+import { createHash } from "node:crypto";
+
 import { presignGet, r2Configured } from "./r2.js";
 
 export const INDEX_KEY = "library/prompts/index.json";
@@ -135,4 +137,36 @@ export function entryWire(entry, granted) {
     full_url: presignGet(media(entry, "full").key, URL_TTL_SECONDS, signedAt),
     usable: granted,
   };
+}
+
+/**
+ * `entries` in an order fixed by `seed` — the Prompt Library's shuffle.
+ *
+ * Sorted by a hash of the seed and each entry's id rather than shuffled
+ * with Math.random, so one seed always gives one order: the pager's
+ * pages are slices of the same list, a filter change reshuffles nothing
+ * it keeps, and the pod can cache a page under its seed. A new seed —
+ * each visit to the page, or its Shuffle button — is a new order.
+ */
+export function shuffled(entries, seed) {
+  // The first 48 bits of a SHA-256: every character of the seed and the
+  // id moves it, which a cheaper hash does not manage for ids that differ
+  // only at the end.
+  const rank = (id) =>
+    Number.parseInt(createHash("sha256").update(`${seed}:${id}`).digest("hex").slice(0, 12), 16);
+  return entries
+    .map((entry) => ({ entry, rank: rank(entry.id) }))
+    .sort((a, b) => a.rank - b.rank || (a.entry.id < b.entry.id ? -1 : 1))
+    .map(({ entry }) => entry);
+}
+
+/** `count` distinct entries picked at random from `entries`. */
+export function pickRandom(entries, count) {
+  const pool = [...entries];
+  const take = Math.min(count, pool.length);
+  for (let index = 0; index < take; index += 1) {
+    const other = index + Math.floor(Math.random() * (pool.length - index));
+    [pool[index], pool[other]] = [pool[other], pool[index]];
+  }
+  return pool.slice(0, take);
 }

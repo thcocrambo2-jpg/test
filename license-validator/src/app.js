@@ -88,7 +88,14 @@ import {
   presignGet,
   r2Configured,
 } from "./r2.js";
-import { entryWire, loadLibrary, tokenFor, URL_TTL_SECONDS } from "./promptLibrary.js";
+import {
+  entryWire,
+  loadLibrary,
+  pickRandom,
+  shuffled,
+  tokenFor,
+  URL_TTL_SECONDS,
+} from "./promptLibrary.js";
 import {
   DEFAULT_FEATURES as DEFAULT_PRIVATE_FEATURES,
   PrivateLoraError,
@@ -998,6 +1005,9 @@ app.get(
 // category counts under the chosen tab and tags, the tag counts under the
 // chosen tab, category and other tags. Only categories and tags with
 // something behind them are listed.
+//
+// `shuffle` (a whole number) orders the page by that seed instead of the
+// curated order; the same seed is the same order, so paging stays stable.
 const PROMPT_PAGE_MAX = 48;
 
 app.post(
@@ -1064,7 +1074,11 @@ app.post(
       }))
       .filter((row) => row.count > 0 || tags.includes(row.key));
 
-    const wanted = forCategories.filter((entry) => !wantCategory || entry.category === wantCategory);
+    let wanted = forCategories.filter((entry) => !wantCategory || entry.category === wantCategory);
+    // `shuffle`: any whole number, and the page is that seed's order
+    // instead of the curated one — see promptLibrary.shuffled.
+    const shuffle = Number.isSafeInteger(req.body.shuffle) ? req.body.shuffle : null;
+    if (shuffle !== null) wanted = shuffled(wanted, shuffle);
 
     const skip = Math.max(0, Number.parseInt(req.body.skip, 10) || 0);
     const limit = Math.min(
@@ -1073,7 +1087,8 @@ app.post(
     );
     console.log(
       `prompts  key=${license_key} instance=${instance_id || "-"} ` +
-        `tab=${tab || "*"} category=${wantCategory || "*"} tags=${tags.join("+") || "-"} skip=${skip}`,
+        `tab=${tab || "*"} category=${wantCategory || "*"} tags=${tags.join("+") || "-"} skip=${skip}` +
+        (shuffle !== null ? ` shuffle=${shuffle}` : ""),
     );
     res.json({
       ok: true,
@@ -1088,6 +1103,79 @@ app.post(
       limit,
       url_expires_in: URL_TTL_SECONDS,
     });
+  }),
+);
+
+// Random generate: `count` distinct switched-on entries for one tab, picked
+// at random from everything the filters match, with their tokens. The
+// filters are the page's — `category` and `tags` — so a pick follows the
+// chips the customer has on. The licence must have the Prompt Library and
+// the tab, as for one token. Fewer than `count` match: all of them, and
+// `available` says how many there were.
+const PROMPT_RANDOM_MAX = 50;
+
+app.post(
+  "/v1/prompt-library/random",
+  wrap(async (req, res) => {
+    const { license_key, instance_id, tab, category } = req.body || {};
+    const tags = Array.isArray(req.body?.tags)
+      ? req.body.tags.filter((key) => typeof key === "string" && key)
+      : [];
+    const count = Number.parseInt(req.body?.count, 10);
+    if (!license_key || typeof tab !== "string" || !tab) {
+      return badRequest(res, "license_key and a tab are required.");
+    }
+    if (!Number.isInteger(count) || count < 1 || count > PROMPT_RANDOM_MAX) {
+      return badRequest(res, `count must be between 1 and ${PROMPT_RANDOM_MAX}.`);
+    }
+    const { licenses } = await collections();
+    const license = await licenses.findOne({ key: license_key });
+    const problem = licenseProblem(license);
+    if (problem) return res.status(403).json({ ok: false, ...problem });
+
+    const { features } = await resolveEntitlement(license);
+    const granted = Array.isArray(features) ? features : [];
+    if (!granted.includes("community_prompts") || !granted.includes(tab)) {
+      return res.status(403).json({
+        ok: false,
+        error: "not_granted",
+        message: "The Prompt Library or that tab is not part of this licence.",
+      });
+    }
+
+    const wantCategory = typeof category === "string" && category ? category : null;
+    let picked;
+    let available;
+    try {
+      const matching = (await loadLibrary()).entries.filter(
+        (entry) =>
+          entry.enabled === true &&
+          entry.tab === tab &&
+          (!wantCategory || entry.category === wantCategory) &&
+          tags.every((key) => Array.isArray(entry.tags) && entry.tags.includes(key)),
+      );
+      available = matching.length;
+      picked = await Promise.all(
+        pickRandom(matching, count).map(async (entry) => ({
+          id: entry.id,
+          title: typeof entry.title === "string" && entry.title ? entry.title : null,
+          token: await tokenFor(entry.id),
+        })),
+      );
+    } catch (error) {
+      console.error(`prompts  could not pick at random: ${error.message}`);
+      return res.status(503).json({
+        ok: false,
+        error: "server_error",
+        message: "The prompt library is not available. Try again later.",
+      });
+    }
+    console.log(
+      `prompts  random key=${license_key} instance=${instance_id || "-"} tab=${tab} ` +
+        `category=${wantCategory || "*"} tags=${tags.join("+") || "-"} ` +
+        `count=${count} picked=${picked.length}/${available}`,
+    );
+    res.json({ ok: true, entries: picked, available });
   }),
 );
 
