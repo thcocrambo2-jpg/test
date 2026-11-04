@@ -116,6 +116,50 @@ def stub_comfy() -> None:
     comfy.ensure_alive = ensure_alive
 
 
+def hold_jobs(seconds: float) -> None:
+    """Keep every job running for `seconds` before its handler starts.
+
+    A dry run's jobs fail in milliseconds (no weights, no ComfyUI), so the
+    queue is never more than one deep and its ordering — Run next,
+    Generate next, drag to reorder — cannot be tried by hand. Wrapped at
+    jobqueue.submit, which the routes call through the module, so every
+    tab is held the same way whatever its handler checks first. The wait
+    counts down in the job's status line and Cancel ends it.
+    """
+    import time
+    from ember.generation import queue as jobqueue
+
+    submit = jobqueue.submit
+
+    def held_submit(*, fn, **kwargs):
+        keys = tuple(kwargs.get("result_keys", ("images", "status")))
+
+        def line(text):
+            # A yield is positional against the tab's result keys.
+            return tuple(text if key == "status" else
+                         [] if key in ("images", "videos") else None
+                         for key in keys)
+
+        def held(*args):
+            job = jobqueue._CURRENT.job
+            end = time.time() + seconds
+            while time.time() < end:
+                left = int(end - time.time()) + 1
+                yield line(f"🧪 Dry run — holding, {left}s left")
+                if job is not None and job._stop.is_set():
+                    return
+                time.sleep(1)
+            outcome = fn(*args)
+            if hasattr(outcome, "__next__"):
+                yield from outcome
+            else:
+                yield outcome
+        return submit(fn=held, **kwargs)
+
+    jobqueue.submit = held_submit
+    log.warning("Dry run: every job is held for %gs before it runs", seconds)
+
+
 def main() -> None:
     parser = argparse.ArgumentParser(
         description="Run the app locally with no GPU, ComfyUI or weights.",
@@ -126,6 +170,11 @@ def main() -> None:
              'or "all". Without it, the tabs come from your license key.',
     )
     parser.add_argument("--port", type=int, default=7860)
+    parser.add_argument(
+        "--hold", type=float, default=0.0, metavar="SECONDS",
+        help="keep each job running this long before it fails, so later "
+             "clicks wait in the queue (default: fail at once).",
+    )
     parser.add_argument(
         "--tunnel", action="store_true",
         help="open a Cloudflare quick tunnel for a public URL (default: "
@@ -166,6 +215,8 @@ def main() -> None:
     log.info("Features — %s", features.summary())
 
     stub_comfy()
+    if args.hold > 0:
+        hold_jobs(args.hold)
 
     # Nothing to set: the auth gate is open unless EMBER_UI_REQUIRE_TOKEN
     # says otherwise. It is still why this script refuses to bind anything
