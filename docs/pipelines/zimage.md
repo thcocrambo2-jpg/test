@@ -220,8 +220,10 @@ Eight blank rows, all off, like 🎨 Krea2's, chained as
 where the template's four bypassed placeholders sit. The upscale pass
 samples with the same patched model. Each row offers the catalogue's
 list for `zimage_t2i`, which holds Z-Image LoRAs only: Krea LoRAs do not
-load on Z-Image, so none are shared. The tab does not insert a LoRA's
-trigger words, so type them into the prompt.
+load on Z-Image, so none are shared. A LoRA's trigger words go into the
+prompt only for a record with `auto_trigger` set (see
+[catalogue.md](catalogue.md#lora-trigger-words)). For any other LoRA,
+type them in yourself.
 
 ## Presets
 

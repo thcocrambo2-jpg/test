@@ -129,6 +129,11 @@ export interface LoraSpec {
    *  many LoRAs the feature lists, and the tab's Default preset is what
    *  switches the usual ones on. */
   slots: Record<string, unknown>[]
+  /** `{lora id: trigger}` for the LoRAs whose record sets `auto_trigger`:
+   *  switching one on writes its trigger at the start of the prompt, off
+   *  takes it out, and typing it switches the LoRA on. Every other LoRA is
+   *  left alone. */
+  triggers?: Record<string, string>
 }
 
 export type TabCategory = 'generate' | 'edit' | 'video' | 'library'

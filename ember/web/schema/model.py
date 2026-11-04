@@ -70,6 +70,9 @@ class Repeat:
     slots: Callable[[], tuple]
     key: str = "lora"
     title: str = "LoRA stack"
+    # {lora id: trigger} for the LoRAs that keep the prompt in step, or a
+    # callable answering it (loras.lora_triggers); None for none.
+    triggers: Callable[[], dict] | None = None
 
     def rows(self) -> tuple:
         """Per-slot default dicts, part name -> value, guarded for choices."""
@@ -910,6 +913,8 @@ def _tail_json(tail: Repeat | None):
         # row.
         "slots": [dict(row) for row in tail.rows()],
     }
+    # The LoRAs whose trigger and on/off follow each other in the browser.
+    spec["triggers"] = dict(_resolve(tail.triggers) or {})
     # The LoRA dropdown's values are ids; these are what it shows.
     labels = slot.choice_labels()
     if labels is not None:

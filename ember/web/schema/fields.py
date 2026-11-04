@@ -133,6 +133,7 @@ def _triple_tail(feature, slots, title):
         ),
         slots=slots,
         title=title,
+        triggers=lambda: loras.lora_triggers(feature),
     )
 
 

@@ -97,6 +97,11 @@ class Lora:
     mirror: dict | None
     default_strength: float
     trigger: str = ""
+    # Whether the prompt and this LoRA keep each other in step: switching
+    # it on writes `trigger` at the start of the prompt, typing `trigger`
+    # switches it on. Off unless the record says true, so a trigger that
+    # is an everyday word ("tits") never flips a LoRA by surprise.
+    auto_trigger: bool = False
 
 
 @dataclass(frozen=True)
@@ -349,6 +354,7 @@ def parse(document: dict, origin: str) -> Catalogue:
             mirror=_mirror(raw.get("mirror")),
             default_strength=_number(raw.get("default_strength"), float, 1.0),
             trigger=str(raw.get("trigger") or ""),
+            auto_trigger=raw.get("auto_trigger") is True,
         )
     models = {}
     for raw in document.get("models") or []:

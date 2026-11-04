@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useState, type ReactNode } from 'react'
-import type { ModelRow, SizeFromImage, TabSchema } from '@/api/types'
+import type { LoraSpec, ModelRow, SizeFromImage, TabSchema } from '@/api/types'
 import { useNavigate } from 'react-router-dom'
 import { useAppCatalog, useModels, useSchemas } from '@/api/queries'
 import { useImageSize } from '@/components/fields'
@@ -310,6 +310,27 @@ export function GenerateTab({ schema }: { schema: TabSchema }) {
    * One functional update, so the prompt it rewrites is the live one. */
   const setField = useCallback(
     (name: string, value: unknown) => {
+      /* A LoRA marked auto_trigger and its trigger word follow each other —
+       * see `syncTriggers`. Here, in the change handler, for the reason the
+       * model's defaults are: only a hand on the prompt or the stack does
+       * it. A preset, recipe or token loads exactly what it holds, so a
+       * recipe with the word in its prompt and the LoRA off stays that way. */
+      const spec = schema.lora
+      const promptField = schema.fields.some((field) => field.name === schema.promptField)
+        ? schema.promptField
+        : null
+      if (
+        spec?.triggers &&
+        Object.keys(spec.triggers).length > 0 &&
+        promptField &&
+        (name === promptField || name.startsWith(`${spec.key}.`))
+      ) {
+        setValues((previous) => {
+          if (Object.is(previous[name], value)) return previous
+          return syncTriggers(spec, promptField, previous, { ...previous, [name]: value }, name === promptField)
+        })
+        return
+      }
       if (name !== 'model') {
         set(name, value)
         return
@@ -567,6 +588,92 @@ function sizeHint(
       , the shape of reference 1. Drag another image to the front to change it.
     </>
   )
+}
+
+/** A trigger as a whole word or phrase, any case: "hm1girl" but not
+ *  "hm1girls". Letters, digits and _ count as word characters, so a trigger
+ *  with punctuation in it (`<sks>`, `yuke's body`) still matches. Also
+ *  takes the comma and spaces after it when `withSeparator`, which is how
+ *  `removeTrigger` takes out what `syncTriggers` wrote. */
+function triggerPattern(trigger: string, withSeparator = false): RegExp {
+  const escaped = trigger.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
+  const tail = withSeparator ? '\\s*,?\\s*' : ''
+  return new RegExp(`(?<![\\p{L}\\p{N}_])${escaped}(?![\\p{L}\\p{N}_])${tail}`, 'iu')
+}
+
+function hasTrigger(text: string, trigger: string): boolean {
+  return triggerPattern(trigger).test(text)
+}
+
+function removeTrigger(text: string, trigger: string): string {
+  return text
+    .replace(triggerPattern(trigger, true), '')
+    .replace(/,\s*,/g, ',')
+    .replace(/^[\s,]+|[\s,]+$/g, '')
+}
+
+/** The ids of the auto-trigger LoRAs switched on in a value bag. */
+function triggerLorasOn(spec: LoraSpec, values: Record<string, unknown>): Set<string> {
+  const on = new Set<string>()
+  for (let index = 0; index < spec.count; index++) {
+    const id = String(values[`${spec.key}.${index}.name`] ?? '')
+    if (values[`${spec.key}.${index}.enabled`] && spec.triggers?.[id]) on.add(id)
+  }
+  return on
+}
+
+/** Keeps the auto-trigger LoRAs and their trigger words in step.
+ *
+ *  `next` is `previous` with the one change made by hand. A change to the
+ *  stack (a tick, a dropdown, Reset all slots) writes the trigger of each
+ *  LoRA it switched on at the start of the prompt, unless it is already in
+ *  there, and takes out the trigger of each it switched off. A change to
+ *  the prompt switches on each LoRA whose trigger it has just gained: its
+ *  own row on V2, else the first empty slot. Only on gaining it, so a LoRA
+ *  switched off by hand stays off while you go on typing, and deleting the
+ *  word never switches anything off — a LoRA may run without its trigger.
+ *
+ *  Only the LoRAs in `spec.triggers` (records with `auto_trigger` set) take
+ *  part. Everything else is exactly what it was. */
+function syncTriggers(
+  spec: LoraSpec,
+  promptField: string,
+  previous: Record<string, unknown>,
+  next: Record<string, unknown>,
+  typed: boolean,
+): Record<string, unknown> {
+  const triggers = spec.triggers ?? {}
+  const none = spec.choices[0] ?? 'None'
+  const on = triggerLorasOn(spec, next)
+
+  if (typed) {
+    const before = String(previous[promptField] ?? '')
+    const after = String(next[promptField] ?? '')
+    let out = next
+    for (const [id, trigger] of Object.entries(triggers)) {
+      if (on.has(id) || !hasTrigger(after, trigger) || hasTrigger(before, trigger)) continue
+      const slots = Array.from({ length: spec.count }, (_, index) => index)
+      const slot =
+        slots.find((index) => out[`${spec.key}.${index}.name`] === id) ??
+        slots.find((index) => String(out[`${spec.key}.${index}.name`] ?? none) === none)
+      if (slot === undefined) continue
+      out = { ...out, [`${spec.key}.${slot}.name`]: id, [`${spec.key}.${slot}.enabled`]: true }
+      on.add(id)
+    }
+    return out
+  }
+
+  const was = triggerLorasOn(spec, previous)
+  const still = new Set([...on].map((id) => triggers[id].toLowerCase()))
+  let prompt = String(next[promptField] ?? '')
+  for (const id of was) {
+    if (!on.has(id) && !still.has(triggers[id].toLowerCase())) prompt = removeTrigger(prompt, triggers[id])
+  }
+  for (const id of on) {
+    if (was.has(id) || hasTrigger(prompt, triggers[id])) continue
+    prompt = prompt ? `${triggers[id]}, ${prompt}` : triggers[id]
+  }
+  return prompt === String(next[promptField] ?? '') ? next : { ...next, [promptField]: prompt }
 }
 
 /** The selected model's trigger words, swapped into the prompt.

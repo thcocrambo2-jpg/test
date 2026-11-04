@@ -45,6 +45,18 @@ def lora_labels(feature) -> dict:
     return labels
 
 
+def lora_triggers(feature) -> dict:
+    """{lora id: trigger} for the feature's LoRAs marked `auto_trigger`.
+
+    What the browser keeps in step with the prompt (GenerateTab's
+    `syncTriggers`). A LoRA with an empty trigger, or not marked, is left
+    out: its trigger is still shown nowhere and written nowhere.
+    """
+    return {lora.id: lora.trigger.strip()
+            for lora in catalog.feature_loras(feature)
+            if lora.auto_trigger and lora.trigger.strip()}
+
+
 def stored_lora(value):
     """A LoRA slot's form value as the settings blob stores it.
 

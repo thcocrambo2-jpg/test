@@ -18,7 +18,8 @@ validation rules — is documented in
   `steps`, `cfg`, an optional `turbo_lora` (the LoRA id and strength its
   recipe switches on) and optional `trigger` words.
 - **`loras`** — one record per LoRA (`realism-engine-v3-1`): name, file,
-  source, mirror, `default_strength`, `trigger` and a `sort_order`.
+  source, mirror, `default_strength`, `trigger`, an optional
+  `auto_trigger` and a `sort_order`.
 - **`feature_assets`** — per feature, the ordered model ids and LoRA ids
   that tab offers. The first model is the tab's default. An id may appear
   in any number of features.
@@ -137,6 +138,29 @@ others.
 Because steps and CFG belong to the model record, they are deliberately
 not duplicated in any pipeline's `constants.py`: the record is the one
 source of truth for them.
+
+## LoRA trigger words
+
+A LoRA whose record sets `auto_trigger: true` keeps its trigger and the
+prompt in step, on every tab with a LoRA stack:
+
+- Switching it on, by its tick or by picking it in a slot, writes its
+  trigger at the start of the prompt (`hm1girl, …`) unless the prompt
+  already has it. Switching it off takes the trigger out again.
+- Typing its trigger into the prompt as a whole word, in any case,
+  switches it on. On V2 that ticks its own row; on the tabs with blank
+  slots it takes the first empty one. "hm1girls" does not count.
+- Deleting the trigger leaves the LoRA on, because a LoRA may run without
+  its word. A LoRA switched off by hand stays off while you go on typing.
+- Only a hand on the prompt or the stack does any of this. A preset,
+  recipe, settings token, Gallery picture or prompt-library entry loads
+  exactly what it holds.
+
+`auto_trigger` is off unless a record sets it, and is set by hand in
+Atlas. Some triggers are everyday words, such as `tits`, and a LoRA with
+one should not switch on whenever the word is typed. The browser does all
+of it (GenerateTab's `syncTriggers`, from the stack's `triggers` in the
+tab schema). Nothing is added to a prompt at generation time.
 
 ## The two shapes of LoRA stack
 
