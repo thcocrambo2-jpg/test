@@ -135,7 +135,7 @@ def _rows(raw) -> tuple[dict, ...]:
     )
 
 
-def _fetch(tab, category, tags, skip, limit) -> Library:
+def _fetch(tab, category, tags, skip, limit, shuffle=None) -> Library:
     """One trip to /v1/prompt-library, every failure turned into `error`."""
     if not LICENSE_API_URL or not LICENSE_KEY:
         return Library(
@@ -156,6 +156,8 @@ def _fetch(tab, category, tags, skip, limit) -> Library:
         payload["category"] = category
     if tags:
         payload["tags"] = list(tags)
+    if shuffle is not None:
+        payload["shuffle"] = shuffle
 
     try:
         status, body = server.post("/v1/prompt-library", payload, FETCH_TIMEOUT)
@@ -191,8 +193,13 @@ def _fetch(tab, category, tags, skip, limit) -> Library:
 
 def library(tab: str | None = None, category: str | None = None,
             tags: tuple[str, ...] = (), skip: int = 0, limit: int = 24,
-            force: bool = False) -> Library:
+            force: bool = False, shuffle: int | None = None) -> Library:
     """One page of the library, from cache when it is fresh enough.
+
+    `shuffle` is a seed for the page's order — the tab picks a new one
+    each visit, so the library does not always open on the same cards.
+    None is the curated order. A server too old to know it answers in the
+    curated order, which is the right fallback.
 
     `force=True` is the tab's Refresh button: it skips the TTL so an entry
     switched on a minute ago can be seen without waiting it out.
@@ -209,7 +216,7 @@ def library(tab: str | None = None, category: str | None = None,
                         just switched on look missing for five minutes.
     """
     tags = tuple(sorted(set(tags)))
-    key = (tab, category, tags, skip, limit)
+    key = (tab, category, tags, skip, limit, shuffle)
 
     with _cache_lock:
         hit = _cache.get(key)
@@ -219,7 +226,7 @@ def library(tab: str | None = None, category: str | None = None,
     # Fetched outside the lock: this is a network call, and holding the
     # lock across it would make a slow server serialise every other
     # filter change behind it.
-    result = _fetch(tab, category, tags, skip, limit)
+    result = _fetch(tab, category, tags, skip, limit, shuffle)
 
     if result.error is None and result.prompts:
         with _cache_lock:
@@ -254,3 +261,56 @@ def token(entry_id: str) -> tuple[str | None, str | None]:
         return value, None
     return None, (body.get("message")
                   or f"The server answered HTTP {status} for that card.")
+
+
+@dataclass(frozen=True)
+class Picked:
+    """One entry Random generate picked: its id, title and token."""
+
+    id: str
+    title: str | None
+    token: str
+
+
+def pick_random(tab: str, count: int, category: str | None = None,
+           tags: tuple[str, ...] = ()) -> tuple[list[Picked], int, str | None]:
+    """`count` distinct entries for `tab`, at random, with their tokens.
+
+    Picked by the licence server from every switched-on entry the filters
+    match — the whole library, not a page of it — through
+    POST /v1/prompt-library/random. Answers (picked, how many matched,
+    None), or ([], 0, a short human reason). Never cached: a second press
+    is meant to pick again.
+    """
+    if not LICENSE_API_URL or not LICENSE_KEY:
+        return [], 0, "This build has no licence server to read the library from."
+    payload = {"license_key": LICENSE_KEY, "instance_id": server.instance_id(),
+               "tab": tab, "count": count}
+    if category:
+        payload["category"] = category
+    if tags:
+        payload["tags"] = list(tags)
+    try:
+        status, body = server.post("/v1/prompt-library/random", payload,
+                                   FETCH_TIMEOUT * 2)
+    except Exception as exc:                # transport: DNS, refused, TLS
+        log.warning("Could not pick from the prompt library (%s)", exc)
+        return [], 0, f"Could not reach the server ({exc})."
+    if status == 404:
+        # A licence server from before Random generate.
+        return [], 0, "The licence server does not offer Random generate yet."
+    if status != 200 or not body.get("ok"):
+        return [], 0, (body.get("message")
+                       or f"The server answered HTTP {status} for Random generate.")
+    picked = []
+    for raw in body.get("entries") or []:
+        if not isinstance(raw, dict):
+            continue
+        entry_id = str(raw.get("id") or "")
+        value = raw.get("token")
+        if entry_id and isinstance(value, str) and value:
+            picked.append(Picked(entry_id,
+                                 str(raw.get("title") or "").strip() or None,
+                                 value))
+    available = body.get("available")
+    return picked, available if isinstance(available, int) else len(picked), None

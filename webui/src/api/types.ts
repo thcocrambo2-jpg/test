@@ -582,6 +582,37 @@ export interface PromptQuery {
   tags?: string
   skip?: number
   limit?: number
+  /** The page's order seed: the same number is the same order, so paging
+   *  stays put. Absent is the curated order. */
+  shuffle?: number
+}
+
+/** A tab Random generate can queue for, and its Batch count's ceiling. */
+export interface RandomTab {
+  key: string
+  label: string
+  icon: string
+  batchMax: number
+}
+
+export interface RandomRequest {
+  tab: string
+  /** How many library entries to pick, each queued as one job. */
+  count: number
+  /** Batch count on every one of them. */
+  batch: number
+  /** The page's filters, so the pick follows the chips that are on. */
+  category?: string
+  tags?: string[]
+}
+
+export interface RandomResult {
+  jobIds: string[]
+  skipped: number
+  notes: number
+  /** How many entries matched the filters. */
+  available: number
+  message: string
 }
 
 // --------------------------------------------------------------- gallery
@@ -687,6 +718,11 @@ export interface ApiClient {
   getPrompts(query: PromptQuery): Promise<PromptPage>
   /** One library card's settings token, fetched when Use or Copy is pressed. */
   getPromptToken(id: string): Promise<string>
+  /** The tabs Random generate is offered for, and its Prompts ceiling. */
+  getRandomTabs(): Promise<{ tabs: RandomTab[]; max: number }>
+  /** 🎲 Random generate: picks entries from the whole library (under the
+   *  filters) on the server and queues each as a job. */
+  randomGenerate(request: RandomRequest): Promise<RandomResult>
   getRecipe(pathId: string): Promise<{ recipe: StoredRecipe | null; canLoad?: boolean }>
   getAutoPromptConfig(tabKey: string): Promise<AutoPromptConfig>
   /** Begin writing a prompt for this tab. Answers at once; the writing

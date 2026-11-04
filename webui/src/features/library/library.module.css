@@ -188,3 +188,24 @@
   gap: var(--s-2);
   flex: none;
 }
+
+/* Shuffle and Random generate, above the filters. */
+.toolbar {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  gap: var(--s-2);
+  margin-bottom: var(--s-3);
+}
+
+.randomForm {
+  display: flex;
+  flex-direction: column;
+  gap: var(--s-4);
+}
+
+.randomScope {
+  margin: 0;
+  color: var(--c-text-muted);
+  font-size: var(--t-sm);
+}

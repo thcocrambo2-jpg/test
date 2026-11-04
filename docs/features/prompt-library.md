@@ -19,6 +19,39 @@ A card for a tab this licence does not grant still shows its picture, with
 `🔒 Needs <tab>` instead of the buttons. What a tab you have not bought can
 make is exactly what is worth seeing.
 
+The cards come in a **random order**, a new one every time the page is
+opened; **🔀 Shuffle** deals again. The order is a seed sent with the request
+(`shuffle`), which the licence server sorts by — a SHA-256 of the seed and
+each entry's id — so Previous and Next page through one order and a filter
+change keeps it. The admin page and the showcase keep the curated order.
+
+### 🎲 Random generate
+
+Beside Shuffle. It picks entries at random from the **whole library** — not
+the cards on screen — and queues each one as a job, exactly as Use and then
+Generate would. The dialog asks:
+
+- **Tab** — the tab to generate on. Krea2 V2 only for now: a token carries
+  no pictures, so an edit or video tab would have nothing to start from.
+  The list is `RANDOM_TABS` in `ember/web/routes/licence.py`.
+- **Prompts** — how many entries to pick (1–50), each one job.
+- **Images per prompt** — Batch count on every job (1 to that tab's limit).
+
+The pick follows the **category and tags chosen on the page**; with none
+chosen it is the whole library. Every job runs on its token's settings with
+**Random seed on**, whatever the token said — otherwise a token with a fixed
+seed would only render its own picture again. A LoRA this pod lacks is left
+out the way Use leaves it out, and the toast counts those notes. When fewer
+entries match than were asked for, all of them are queued and the toast says
+how many there were.
+
+It all happens on the server in one request (`POST /api/v1/prompts/random`
+on the pod, which asks `POST /v1/prompt-library/random` on the licence
+server for the entries and their tokens), so closing the page halfway does
+not leave half of them queued. The pod reads each token itself
+(`ember/licensing/tokens.py`, the same port the admin page uses) and queues
+it through the same function as a Generate click (`tabs.queue_click`).
+
 ## Where it lives
 
 Nowhere but R2. There is no database row behind an entry and no copy on
@@ -196,6 +229,17 @@ What a client can get from it:
 
 It holds the R2 **read** key only, and sends `noindex`, `no-referrer` and
 `DENY` framing headers.
+
+## Trying it in a dry run
+
+```bash
+python scripts/dryrun.py --features all --port 7870 --hold 20 --library <folder>
+```
+
+`--library` serves a folder of picture + `.txt` token pairs (what Gallery's
+zip download writes) as the library in place of the licence server, with
+the same seeded shuffle and random pick, so the tab and Random generate can
+be tried without a deployed server. It has no categories or tags.
 
 ## Related
 

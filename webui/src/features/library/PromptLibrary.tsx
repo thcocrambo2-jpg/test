@@ -3,8 +3,9 @@ import { useNavigate } from 'react-router-dom'
 import { keepPreviousData, useQuery } from '@tanstack/react-query'
 import { api } from '@/api/client'
 import { useCatalogue, useSchemas } from '@/api/queries'
-import type { PromptCard, PromptFacet, TabSchema } from '@/api/types'
-import { Alert, Button, EmptyState, Pill, Segmented, Skeleton, useToast } from '@/components/ui'
+import type { PromptCard, PromptFacet, RandomTab, TabSchema } from '@/api/types'
+import { Alert, Button, EmptyState, Modal, Pill, Segmented, Skeleton, useToast } from '@/components/ui'
+import { SelectField, SliderField } from '@/components/fields'
 import { restoreTab, snapshotTab, useTokenLoader } from '@/components/SettingsToken'
 import { useTabState } from '@/store/tabState'
 import { copyText } from '@/lib/util'
@@ -32,6 +33,9 @@ import s from './library.module.css'
 
 const PAGE = 24
 
+/** A fresh order seed for the page. */
+const newShuffle = () => Math.floor(Math.random() * 2 ** 31)
+
 export function PromptLibrary() {
   /* In `tabState`, because these are things you chose and this page unmounts
    * as soon as you leave it. They are also the whole query key below, so
@@ -41,12 +45,26 @@ export function PromptLibrary() {
   const [tab, setTab] = useTabState('prompts.tab', '')
   const [category, setCategory] = useTabState('prompts.category', '')
   const [tags, setTags] = useTabState('prompts.tags', '')
-  const [skip, setSkip] = useTabState('prompts.skip', 0)
+  /* The order is a seed picked fresh every time the page opens, so the
+   * library does not always open on the same cards; 🔀 Shuffle picks another.
+   * One seed is one order on the server, so Previous and Next page through
+   * the same shuffle, and changing a filter keeps it. The page number lives
+   * here rather than in `tabState` with the filters: page 3 of an order you
+   * can no longer see means nothing. */
+  const [shuffle, setShuffle] = useState(newShuffle)
+  const [skip, setSkip] = useState(0)
+  const [randomOpen, setRandomOpen] = useState(false)
   const label = useTabLabel()
 
+  const { data: random } = useQuery({
+    queryKey: ['prompts', 'random-tabs'],
+    queryFn: () => api.getRandomTabs(),
+    staleTime: 5 * 60_000,
+  })
+
   const { data, isLoading, isFetching, isPlaceholderData, error } = useQuery({
-    queryKey: ['prompts', tab, category, tags, skip],
-    queryFn: () => api.getPrompts({ tab, category, tags, skip, limit: PAGE }),
+    queryKey: ['prompts', tab, category, tags, skip, shuffle],
+    queryFn: () => api.getPrompts({ tab, category, tags, skip, limit: PAGE, shuffle }),
     staleTime: 60_000,
     // The filters stay on screen while the next page loads, rather than
     // vanishing for a moment every time one is clicked.
@@ -75,6 +93,43 @@ export function PromptLibrary() {
 
   return (
     <>
+      <div className={s.toolbar}>
+        <Button
+          variant="ghost"
+          size="sm"
+          onClick={() => {
+            setSkip(0)
+            setShuffle(newShuffle())
+          }}
+          title="Show the library in a new random order"
+        >
+          🔀 Shuffle
+        </Button>
+        {random && random.tabs.length > 0 && (
+          <Button
+            size="sm"
+            variant="primary"
+            onClick={() => setRandomOpen(true)}
+            title="Queue prompts picked at random from the whole library, under the filters that are on"
+          >
+            🎲 Random generate
+          </Button>
+        )}
+      </div>
+
+      {random && random.tabs.length > 0 && (
+        <RandomDialog
+          open={randomOpen}
+          onClose={() => setRandomOpen(false)}
+          tabs={random.tabs}
+          max={random.max}
+          category={category}
+          categoryLabel={categoryLabel(category || null)}
+          tags={chosenTags}
+          tagLabels={chosenTags.map((key) => data?.tags.find((row) => row.key === key)?.label ?? key)}
+        />
+      )}
+
       {tabs.length > 1 && (
         <div className={s.filters}>
           <Segmented
@@ -149,6 +204,92 @@ export function PromptLibrary() {
         </div>
       )}
     </>
+  )
+}
+
+/** 🎲 Random generate: how many prompts, how many pictures each, which tab.
+ *
+ *  The pick is the server's, from the whole library — every switched-on
+ *  entry for the tab that the category and tags chosen on the page match,
+ *  not just the cards on screen. Each one is queued as its own job with its
+ *  token's settings, Batch count set here and Random seed on. */
+function RandomDialog({
+  open,
+  onClose,
+  tabs,
+  max,
+  category,
+  categoryLabel,
+  tags,
+  tagLabels,
+}: {
+  open: boolean
+  onClose: () => void
+  tabs: RandomTab[]
+  max: number
+  category: string
+  categoryLabel: string | null
+  tags: string[]
+  tagLabels: string[]
+}) {
+  const toast = useToast()
+  const [tabKey, setTabKey] = useTabState('prompts.random.tab', tabs[0].key)
+  const [count, setCount] = useTabState('prompts.random.count', 10)
+  const [batch, setBatch] = useTabState('prompts.random.batch', 2)
+  const [busy, setBusy] = useState(false)
+
+  const target = tabs.find((row) => row.key === tabKey) ?? tabs[0]
+  const prompts = Math.min(max, Math.max(1, Math.round(count)))
+  const images = Math.min(target.batchMax, Math.max(1, Math.round(batch)))
+  const scope = [categoryLabel, ...tagLabels].filter(Boolean).join(' + ')
+
+  async function run() {
+    setBusy(true)
+    try {
+      const result = await api.randomGenerate({
+        tab: target.key,
+        count: prompts,
+        batch: images,
+        category: category || undefined,
+        tags: tags.length ? tags : undefined,
+      })
+      toast(result.message)
+      onClose()
+    } catch (error) {
+      toast(error instanceof Error ? error.message : String(error))
+    } finally {
+      setBusy(false)
+    }
+  }
+
+  return (
+    <Modal open={open} onClose={onClose} title="🎲 Random generate" width={440}>
+      <div className={s.randomForm}>
+        <SelectField
+          label="Tab"
+          value={target.key}
+          onChange={setTabKey}
+          choices={tabs.map((row) => row.key)}
+          labels={Object.fromEntries(tabs.map((row) => [row.key, row.label]))}
+        />
+        <SliderField label="Prompts" value={prompts} onChange={setCount} min={1} max={max} step={1} />
+        <SliderField
+          label="Images per prompt"
+          value={images}
+          onChange={setBatch}
+          min={1}
+          max={target.batchMax}
+          step={1}
+        />
+        <p className={s.randomScope}>
+          Picked at random from {scope ? <b>{scope}</b> : <b>the whole library</b>}, each with the
+          settings that made it and a random seed.
+        </p>
+        <Button variant="primary" block loading={busy} onClick={() => void run()}>
+          Queue {prompts} job{prompts === 1 ? '' : 's'} · {prompts * images} image{prompts * images === 1 ? '' : 's'}
+        </Button>
+      </div>
+    </Modal>
   )
 }
 

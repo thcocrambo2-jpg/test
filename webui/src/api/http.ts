@@ -12,6 +12,9 @@ import type {
   PresetList,
   PromptPage,
   PromptQuery,
+  RandomRequest,
+  RandomResult,
+  RandomTab,
   QueueSnapshot,
   RecentUploads,
   Session,
@@ -272,6 +275,14 @@ export const httpClient: ApiClient = {
 
   async getPromptToken(id: string) {
     return (await get<{ token: string }>(`/prompts/${encodeURIComponent(id)}/token`)).token
+  },
+
+  getRandomTabs() {
+    return get<{ tabs: RandomTab[]; max: number }>('/prompts/random')
+  },
+
+  randomGenerate(request: RandomRequest) {
+    return send<RandomResult>('/prompts/random', request)
   },
 
   getPrompts(query: PromptQuery) {

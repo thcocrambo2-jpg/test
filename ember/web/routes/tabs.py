@@ -207,9 +207,7 @@ def _mount_tab(api: APIRouter, schema) -> None:
         preset = preset if isinstance(preset, str) else ""
         front = body.get("next") is True
         try:
-            resolved = _resolve_uploads(schema, raw)
-            args, values = schema.submit(resolved)
-            kept = _keep_sources(schema, raw)
+            view = queue_click(schema, raw, preset, front)
         except tabschema.Invalid as exc:
             # str(exc) is "steps: must be at most 60" — the field name is
             # half the message, and a form that cannot say which control
@@ -217,13 +215,6 @@ def _mount_tab(api: APIRouter, schema) -> None:
             raise HTTPException(422, str(exc))
         except PermissionError as exc:
             raise HTTPException(403, str(exc))
-
-        view = jobqueue.submit(
-            lane=schema.lane, tab=key, tab_label=schema.title(),
-            title=_job_title(schema, values),
-            fn=_recording(schema, values, kept, preset), args=args,
-            result_keys=schema.result_keys, front=front,
-        )
         ahead = max(0, view.place - 1)
         return {
             "jobId": view.id,
@@ -234,6 +225,31 @@ def _mount_tab(api: APIRouter, schema) -> None:
                         "🕑 Queued — %d job(s) ahead of it." % ahead),
             "queue": _queue_json(),
         }
+
+
+def queue_click(schema, raw: dict, preset: str = "", front: bool = False):
+    """One set of form values -> a queued job. Returns the job's view.
+
+    What a Generate click does, as a function, so the Prompt Library's
+    Random generate queues its jobs down exactly the same path: the same
+    checks, the same job title, the same recipe filed beside the output.
+    Raises tabschema.Invalid for a bad value and PermissionError for a tab
+    this licence does not have.
+    """
+    resolved = _resolve_uploads(schema, raw)
+    args, values = schema.submit(resolved)
+    kept = _keep_sources(schema, raw)
+    return jobqueue.submit(
+        lane=schema.lane, tab=str(schema.key), tab_label=schema.title(),
+        title=_job_title(schema, values),
+        fn=_recording(schema, values, kept, preset), args=args,
+        result_keys=schema.result_keys, front=front,
+    )
+
+
+def preset_offered(tab, name) -> bool:
+    """Whether `name` is a preset this pod offers on presets tab `tab`."""
+    return _preset_settings(tab, name) is not None
 
 
 def _preset_settings(tab, name):
