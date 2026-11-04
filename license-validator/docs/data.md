@@ -158,9 +158,18 @@ flag) in the same operation — `defaultScope` in `src/assets.js`.
   source: { kind: "civitai", version: 3109006 },        // or { kind: "hf", repo, path }
   mirror: { repo: "owner/name", path: "loras/..." } | null,
   default_strength: 0.6, trigger: "",
+  auto_trigger: false,                                   // optional, see below
   enabled: true, sort_order: 50,
   created_at: ISODate, updated_at: ISODate }
 ```
+
+`auto_trigger: true` makes the app keep the prompt and the LoRA in step,
+on every tab with a LoRA stack. Switching the LoRA on writes its
+`trigger` at the start of the prompt, and switching it off takes it out
+again. Typing the trigger as a whole word switches the LoRA on. Absent
+counts as false, and so does a record with an empty `trigger`. It is off
+by default because some triggers are everyday words, such as `tits`,
+which nobody wants flipping a LoRA by surprise. Set it by hand in Atlas.
 
 A **private** LoRA has `source: { kind: "r2", key: "loras/private/<file>" }`
 — an object in the private builds bucket — and `mirror: null` (a mirror is

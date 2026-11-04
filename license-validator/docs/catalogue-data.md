@@ -170,7 +170,7 @@ taken and before it downloads anything. It answers in exactly the shape of
 
 ```js
 { ok: true,
-  loras:  [{ id, name, file, source, mirror, default_strength, trigger }],
+  loras:  [{ id, name, file, source, mirror, default_strength, trigger, auto_trigger }],
   models: [{ id, name, file, source, mirror, variant, steps, cfg, turbo_lora, trigger }],
   features: { krea_t2i: { models: ["krea2-turbo-mxfp8"], loras: ["krea2-turbo", ...] }, ... } }
 ```

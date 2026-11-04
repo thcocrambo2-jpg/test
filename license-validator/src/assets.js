@@ -195,6 +195,11 @@ const LORA_RULES = {
     isNumber(value) ? null : `default_strength ${show(value)} must be a number`,
   sort_order: (value) =>
     isNumber(value) ? null : `sort_order ${show(value)} must be a number`,
+  // Whether the app keeps the prompt and this LoRA in step: switching it
+  // on writes its trigger at the start of the prompt, typing the trigger
+  // switches it on. Absent counts as false, so it is off until set.
+  auto_trigger: (value) =>
+    typeof value === "boolean" ? null : "auto_trigger must be true or false",
   // A Face LoRA a licence published itself (src/faceLoras.js): the key
   // that published it (a record, no rights), the tabs it goes on for the
   // licences granted it (instead of the shared feature lists, which
@@ -525,6 +530,7 @@ export function loraWire(row) {
     mirror: row.mirror ?? null,
     default_strength: row.default_strength ?? 1.0,
     trigger: row.trigger || "",
+    auto_trigger: row.auto_trigger === true,
   };
 }
 
