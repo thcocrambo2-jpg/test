@@ -30,7 +30,9 @@ from pathlib import Path
 from urllib.parse import parse_qs, urlencode, urlparse
 
 HERE = Path(__file__).resolve().parent
-TOKENS_CSS = HERE.parent / "webui" / "src" / "theme" / "tokens.css"
+# A copy of webui/src/theme/tokens.css, kept in this folder so the sniper
+# works on its own (e.g. unzipped on another machine).
+TOKENS_CSS = HERE / "tokens.css"
 ENV_FILE = HERE / ".env"
 GPUS_FILE = HERE / "gpus.json"
 PRESETS_FILE = HERE / "presets.json"
@@ -220,8 +222,13 @@ class Account:
         return code, self.scrub(text)
 
 
+# The placeholders .env.example ships with. A .env copied from it and not
+# filled in must read as "no key", not as a key Runpod will answer 401 to.
+PLACEHOLDER_RE = re.compile(r"^(rpa_x+|EMBER-X{4}-X{4})$", re.I)
+
+
 def _env_values() -> dict:
-    """Every NAME=value in .env."""
+    """Every NAME=value in .env, placeholders left out."""
     values = {}
     try:
         lines = ENV_FILE.read_text(encoding="utf-8").splitlines()
@@ -235,7 +242,7 @@ def _env_values() -> dict:
         name, value = name.strip(), value.strip().strip('"').strip("'")
         if name.startswith("export "):
             name = name[7:].strip()
-        if value:
+        if value and not PLACEHOLDER_RE.match(value):
             values[name] = value
     return values
 
@@ -773,7 +780,10 @@ class Handler(BaseHTTPRequestHandler):
                 return self.send(200, (HERE / "index.html").read_bytes(),
                                  "text/html; charset=utf-8")
             if path == "/tokens.css":
-                css = TOKENS_CSS.read_bytes() if TOKENS_CSS.is_file() else b""
+                if not TOKENS_CSS.is_file():
+                    return self.error("tokens.css is missing from %s — the page "
+                                      "has no theme without it." % HERE, 404)
+                css = TOKENS_CSS.read_bytes()
                 return self.send(200, css, "text/css; charset=utf-8")
             if path == "/api/config":
                 _load_accounts()

@@ -4,13 +4,23 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Runpod GPU sniper</title>
-<!-- The app's own palette (webui/src/theme/tokens.css), served by server.py. -->
+<!-- The app's palette: tokens.css in this folder (a copy of
+     webui/src/theme/tokens.css), served by server.py. -->
 <link rel="stylesheet" href="/tokens.css">
 <style>
   * { box-sizing:border-box; }
   body { margin:0; background:var(--c-bg, #1a1a1a); color:var(--c-text, #eff1f6);
          font:var(--t-md, 14px)/var(--lh-normal, 1.5) var(--font-sans, system-ui, sans-serif); }
   main { max-width:1180px; margin:0 auto; padding:20px; display:grid; gap:16px; }
+  nav.tabs { display:flex; gap:4px; border-bottom:1px solid var(--c-border); }
+  nav.tabs a { padding:8px 14px; color:var(--c-text-muted); text-decoration:none; font-weight:var(--fw-medium);
+               border-bottom:2px solid transparent; margin-bottom:-1px; border-radius:var(--r-sm) var(--r-sm) 0 0; }
+  nav.tabs a:hover { color:var(--c-text); background:var(--c-panel-hover); }
+  nav.tabs a.on { color:var(--c-text); border-bottom-color:var(--c-accent); }
+  .page { display:grid; gap:16px; }
+  .page[hidden] { display:none; }
+  .empty { text-align:center; padding:40px 16px; color:var(--c-text-muted); }
+  .empty b { display:block; color:var(--c-text); font-size:var(--t-lg); margin-bottom:6px; }
   h1 { font-size:var(--t-xl); margin:0; } h2 { font-size:15px; margin:0 0 12px; }
   h2 .muted { font-weight:var(--fw-normal); }
   .card { background:var(--c-panel); border:1px solid var(--c-border); border-radius:var(--r-lg); padding:16px; }
@@ -111,15 +121,20 @@
 <body>
 <main>
   <div class="row" style="margin:0; justify-content:space-between">
-    <h1>🎯 Runpod GPU sniper <span class="muted">create-until-it-wins</span></h1>
+    <h1>🎯 Runpod GPU sniper</h1>
     <div class="row" style="margin:0">
       <span id="dry"></span>
       <label class="check">Account <select id="account"></select></label>
       <span class="budget" id="budget"></span>
     </div>
   </div>
+  <nav class="tabs" id="nav">
+    <a href="#sniper" data-page="sniper">🎯 Sniper</a>
+    <a href="#downloads" data-page="downloads">⬇ Auto download</a>
+  </nav>
   <div class="error" id="topError"></div>
 
+  <div class="page" id="page-sniper">
   <section class="card">
     <h2>1 · GPUs <span class="muted" id="priceNote"></span></h2>
     <table>
@@ -133,7 +148,7 @@
     <div class="error" id="stockError"></div>
   </section>
 
-  <section class="card">
+  <section class="card" id="presetCard">
     <h2>2 · Preset</h2>
     <div class="chips" id="presetChips"></div>
     <div class="two">
@@ -212,6 +227,14 @@
       <tbody id="podRows"><tr><td colspan="8" class="muted">—</td></tr></tbody>
     </table>
   </section>
+  </div>
+
+  <div class="page" id="page-downloads" hidden>
+  <section class="card">
+    <h2>Auto download</h2>
+    <div class="empty"><b>Coming next</b>Saves everything the running pods generate into a local folder, with progress.</div>
+  </section>
+  </div>
 </main>
 
 <script>
@@ -448,7 +471,7 @@ function showPrice(p) {
   $("snipePrice").textContent = rows.length ? `${priceSummary(p)}/hr · max ${money(p.max_price)}/hr` : "";
   return {offered: offered.length, fits: fits.length};
 }
-document.querySelector("section:nth-of-type(2)").addEventListener("input", planHint);
+$("presetCard").addEventListener("input", planHint);
 
 $("savePreset").onclick = async () => {
   $("presetError").textContent = ""; $("presetStatus").textContent = "";
@@ -674,6 +697,18 @@ $("account").onchange = () => {
   if (lastStatus) { showWatchers(lastStatus); showBudget(lastStatus); }
   refreshPods();
 };
+
+// ── navbar: one page shown at a time, chosen by the URL hash so a refresh
+// stays on the same page ────────────────────────────────────────────
+const PAGES = ["sniper", "downloads"];
+function showPage() {
+  const want = location.hash.slice(1);
+  const page = PAGES.includes(want) ? want : "sniper";
+  for (const p of PAGES) $("page-" + p).hidden = p !== page;
+  $("nav").querySelectorAll("a").forEach(a => a.classList.toggle("on", a.dataset.page === page));
+}
+window.addEventListener("hashchange", showPage);
+showPage();
 
 async function init() {
   cfg = await api("/api/config");

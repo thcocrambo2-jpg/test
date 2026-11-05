@@ -42,6 +42,9 @@ starts with the key from `.env`, or shows the placeholder `LICENSE_KEY` when
 pod's `EMBER_LICENSE_KEY`; "Save to .env" keeps it for next time. Snipe
 stays off while the box is empty. Each watcher shows the key it runs with.
 
+Until a placeholder from `.env.example` (`rpa_xxxx…`, `EMBER-XXXX-XXXX`) is
+replaced, it counts as no key.
+
 `.env` is git-ignored. The server never sends a Runpod API key to the page,
 writes it to the log, or puts it in an error message. The server re-reads `.env` when
 the page loads, so after editing it, just reload the page.
@@ -50,6 +53,13 @@ the page loads, so after editing it, just reload the page.
 
 Needs Python 3.10 or newer and no packages: everything is in the standard
 library (see `requirements.txt`).
+
+**Windows:** double-click `start.bat`. It checks for Python 3.10+, creates
+`.env` from `.env.example` the first time (and opens it in Notepad for your
+key), then starts the server and shows the link. Arguments are passed on,
+e.g. `start.bat --dry-run`.
+
+**Any system:**
 
 ```
 python runpod_sniper/server.py                # real Runpod, http://127.0.0.1:7895
@@ -178,9 +188,11 @@ codes and messages as the real API:
 | File | What it is |
 |---|---|
 | `server.py` | HTTP server, watcher, Runpod calls |
-| `index.html` | The page (vanilla JS, no build step). It uses the app's palette from `webui/src/theme/tokens.css`, which the server serves as `/tokens.css`. |
+| `index.html` | The page (vanilla JS, no build step). It uses the app's palette from `tokens.css`, which the server serves as `/tokens.css`. |
+| `tokens.css` | The theme: a copy of the app's `webui/src/theme/tokens.css`, kept here so the folder works on its own. Copy it again if the app's palette changes. |
 | `gpus.json` | The GPU table, with list prices read 2026-11-03 |
 | `presets.json` | Presets; "Save as preset" writes here |
 | `fake.py` | The fake Runpod for `--dry-run` |
+| `start.bat` | Windows launcher: checks Python, creates `.env` the first time, starts the server |
 | `requirements.txt` | Lists no packages: the sniper uses only the standard library |
 | `.env.example` | Template for `.env` |
