@@ -1,2 +1,6 @@
 # The API keys. .env.example is the committed template.
 .env
+
+# Running downloads (folders, maybe an app access key), resumed on restart.
+downloads.json
+downloads.json.part

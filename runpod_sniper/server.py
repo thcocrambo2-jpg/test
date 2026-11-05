@@ -29,6 +29,9 @@ from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
 from urllib.parse import parse_qs, urlencode, urlparse
 
+sys.path.insert(0, str(Path(__file__).resolve().parent))
+import downloader  # noqa: E402  (this folder's own module)
+
 HERE = Path(__file__).resolve().parent
 # A copy of webui/src/theme/tokens.css, kept in this folder so the sniper
 # works on its own (e.g. unzipped on another machine).
@@ -84,6 +87,85 @@ PORT = 7895
 _lock = threading.Lock()
 _accounts: dict = {}           # name -> Account
 _watchers: dict = {}           # account name -> Watcher (latest one)
+_downloads: dict = {}          # pod id -> downloader.Download
+DOWNLOADS_FILE = HERE / "downloads.json"   # running downloads, resumed on restart
+_pick_lock = threading.Lock()
+
+
+# ── auto download ───────────────────────────────────────────────────
+
+
+def _save_downloads() -> None:
+    """Keep the running downloads, so a restarted server resumes them.
+    Not in a dry run: its pods are gone when it stops."""
+    if DRY_RUN:
+        return
+    with _lock:
+        active = [d.config() for d in _downloads.values() if d.status != "stopped"]
+    tmp = DOWNLOADS_FILE.with_suffix(".json.part")
+    tmp.write_text(json.dumps(active, indent=1), encoding="utf-8")
+    tmp.replace(DOWNLOADS_FILE)
+
+
+def _resume_downloads() -> None:
+    if DRY_RUN:
+        return
+    try:
+        saved = json.loads(DOWNLOADS_FILE.read_text(encoding="utf-8"))
+    except (OSError, ValueError):
+        return
+    for cfg in saved:
+        try:
+            d = downloader.Download(**cfg)
+            d.start()
+            d.event("Resumed after a server restart.")
+        except (OSError, TypeError) as exc:
+            print("Could not resume the download for %s: %s" % (cfg.get("pod_id"), exc))
+            continue
+        _downloads[d.pod_id] = d
+    if _downloads:
+        print("Resumed %d download(s)." % len(_downloads))
+
+
+def _clean_folder(raw) -> Path:
+    folder = Path(str(raw or "").strip().strip('"')).expanduser()
+    if not str(raw or "").strip():
+        raise ValueError("Choose a folder for this pod first.")
+    if not folder.is_absolute():
+        raise ValueError("Give the full path of the folder, e.g. C:\\Users\\you\\Downloads\\pod.")
+    if folder.exists() and not folder.is_dir():
+        raise ValueError("%s is a file, not a folder." % folder)
+    return folder
+
+
+def _pick_folder(initial: str):
+    """The system's folder dialog, on this PC (the server runs here).
+    None if cancelled; raises if there is no tkinter."""
+    import tkinter as tk
+    from tkinter import filedialog
+    with _pick_lock:                          # one dialog at a time
+        root = tk.Tk()
+        root.withdraw()
+        root.attributes("-topmost", True)
+        try:
+            start = initial if initial and Path(initial).is_dir() else str(Path.home())
+            chosen = filedialog.askdirectory(parent=root, initialdir=start,
+                                             title="Folder for this pod's downloads",
+                                             mustexist=False)
+        finally:
+            root.destroy()
+    return str(Path(chosen)) if chosen else None
+
+
+def _open_folder(folder: Path) -> None:
+    import os
+    import subprocess
+    if sys.platform == "win32":
+        os.startfile(str(folder))             # noqa: S606 (local, user's own folder)
+    elif sys.platform == "darwin":
+        subprocess.Popen(["open", str(folder)])
+    else:
+        subprocess.Popen(["xdg-open", str(folder)])
 
 
 def _read_json(path: Path, default):
@@ -801,9 +883,11 @@ class Handler(BaseHTTPRequestHandler):
                 with _lock:
                     watchers = list(_watchers.values())
                     accounts = list(_accounts.values())
+                    downloads = list(_downloads.values())
                 return self.json({
                     "watchers": [w.view() for w in watchers],
                     "budget": {a.name: a.budget() for a in accounts},
+                    "downloads": [d.view() for d in downloads],
                     "now": time.time(), "dry_run": DRY_RUN})
             if path == "/api/stock":
                 acct = _account(query.get("account", [""])[0])
@@ -897,6 +981,64 @@ class Handler(BaseHTTPRequestHandler):
                 _write_presets(presets)
                 return self.json({"ok": True, "presets": presets})
 
+            if url.path == "/api/downloads/start":
+                pid = str(body.get("pod_id") or "")
+                if not POD_ID_RE.match(pid):
+                    return self.error("Bad pod id.")
+                folder = _clean_folder(body.get("folder"))
+                app_url = str(body.get("app_url") or "").strip()
+                if app_url and not re.match(r"^https?://[^\s]+$", app_url):
+                    return self.error("The app URL must start with http:// or https://.")
+                with _lock:
+                    old = _downloads.get(pid)
+                    if old and old.status not in ("stopped", "error"):
+                        return self.error("This pod is already downloading — stop it first.")
+                d = downloader.Download(
+                    pid, str(body.get("pod_name") or pid)[:80], str(folder), app_url=app_url,
+                    access_key=str(body.get("access_key") or "").strip(),
+                    account=str(body.get("account") or ""))
+                try:
+                    d.start()
+                except OSError as exc:
+                    return self.error("Cannot use %s: %s" % (folder, exc))
+                with _lock:
+                    _downloads[pid] = d
+                _save_downloads()
+                return self.json({"ok": True})
+
+            if url.path == "/api/downloads/stop":
+                with _lock:
+                    d = _downloads.get(str(body.get("pod_id") or ""))
+                if d:
+                    d.stop()
+                    _save_downloads()
+                return self.json({"ok": True})
+
+            if url.path == "/api/downloads/dismiss":
+                with _lock:
+                    d = _downloads.get(str(body.get("pod_id") or ""))
+                    if d and d.status == "stopped":
+                        del _downloads[d.pod_id]
+                return self.json({"ok": True})
+
+            if url.path == "/api/pick-folder":
+                try:
+                    chosen = _pick_folder(str(body.get("initial") or ""))
+                except ImportError:
+                    return self.error("No folder dialog here (Python without tkinter) — "
+                                      "type the folder path instead.")
+                except Exception as exc:
+                    return self.error("The folder dialog failed (%s) — type the path." % exc)
+                return self.json({"folder": chosen})
+
+            if url.path == "/api/open-folder":
+                folder = _clean_folder(body.get("folder"))
+                if not folder.is_dir():
+                    return self.error("%s does not exist yet — it is made when the "
+                                      "download starts." % folder)
+                _open_folder(folder)
+                return self.json({"ok": True})
+
             if url.path == "/api/pods/action":
                 acct = _account(body.get("account"))
                 pid, action = str(body.get("id") or ""), str(body.get("action") or "")
@@ -933,7 +1075,9 @@ def main() -> None:
         sys.path.insert(0, str(HERE))
         import fake
         FAKE = fake.FakeRunpod(_gpus(), fails=args.dry_fails)
+        downloader.FAKE_APP = fake.FakeApp(FAKE)
     _load_accounts()
+    _resume_downloads()
     with _lock:
         names = sorted(_accounts)
     if not names:

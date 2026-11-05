@@ -17,8 +17,21 @@
                border-bottom:2px solid transparent; margin-bottom:-1px; border-radius:var(--r-sm) var(--r-sm) 0 0; }
   nav.tabs a:hover { color:var(--c-text); background:var(--c-panel-hover); }
   nav.tabs a.on { color:var(--c-text); border-bottom-color:var(--c-accent); }
+  nav.tabs a:focus { outline:none; }
+  nav.tabs a:focus-visible { outline:2px solid var(--c-focus); outline-offset:-2px; }
   .page { display:grid; gap:16px; }
   .page[hidden] { display:none; }
+  .dlpod { border:1px solid var(--c-border); border-radius:var(--r-md); padding:12px; margin-top:12px; background:var(--c-bg-sunken); }
+  .dlpod header { display:flex; gap:10px; align-items:center; flex-wrap:wrap; }
+  .dlpod header .grow { flex:1; }
+  .dlpod .pick { display:flex; gap:8px; align-items:center; flex-wrap:wrap; margin-top:10px; }
+  .dlpod .pick input.folder { flex:1; min-width:260px; font-family:var(--font-mono); font-size:var(--t-xs); }
+  .dlpod details { margin-top:8px; }
+  .dlpod details summary { cursor:pointer; color:var(--c-text-muted); font-size:var(--t-xs); }
+  .dlpod details .grid { margin-top:8px; }
+  .dljob { margin-top:10px; }
+  .b-unreachable, .b-needs-key { color:var(--c-warning); border-color:var(--c-warning-line); background:var(--c-warning-soft); }
+  .b-starting { color:var(--c-accent); border-color:var(--c-accent-line); background:var(--c-accent-soft); }
   .empty { text-align:center; padding:40px 16px; color:var(--c-text-muted); }
   .empty b { display:block; color:var(--c-text); font-size:var(--t-lg); margin-bottom:6px; }
   h1 { font-size:var(--t-xl); margin:0; } h2 { font-size:15px; margin:0 0 12px; }
@@ -231,8 +244,18 @@
 
   <div class="page" id="page-downloads" hidden>
   <section class="card">
-    <h2>Auto download</h2>
-    <div class="empty"><b>Coming next</b>Saves everything the running pods generate into a local folder, with progress.</div>
+    <h2>Running pods <span class="muted" id="dlAccount"></span></h2>
+    <div class="row" style="margin-top:0">
+      <button class="ghost" id="dlRefresh">↻ Refresh</button>
+      <span class="muted">Every pod on this account, sniped here or not. Each new picture or video is saved as soon as it
+        appears, with its settings token beside it as a .txt. Downloads keep running if you close this page.</span>
+    </div>
+    <div class="error" id="dlError"></div>
+    <div id="dlPods"></div>
+  </section>
+  <section class="card" id="dlOtherCard" hidden>
+    <h2>Other downloads <span class="muted">pods not on this account's list (another account, or gone)</span></h2>
+    <div id="dlOther"></div>
   </section>
   </div>
 </main>
@@ -687,7 +710,9 @@ async function poll() {
     const s = lastStatus = await api("/api/status");
     $("topError").textContent = "";
     showWatchers(s); showBudget(s);
-    running = s.watchers.some(w => w.status === "running");
+    if (!$("page-downloads").hidden) drawDlJobs();
+    running = s.watchers.some(w => w.status === "running")
+      || (s.downloads || []).some(d => !["stopped", "error"].includes(d.status));
   } catch (e) { $("topError").textContent = "Server not answering: " + e.message; }
   timer = setTimeout(poll, running ? 1000 : 3000);
 }
@@ -696,7 +721,126 @@ $("account").onchange = () => {
   localStorage.setItem("sniper.account", account());
   if (lastStatus) { showWatchers(lastStatus); showBudget(lastStatus); }
   refreshPods();
+  dlShown = ""; if (!$("page-downloads").hidden) refreshDl();
 };
+
+// ── auto download ───────────────────────────────────────────────────
+// The pod rows (with the folder boxes) are drawn only when the pod list
+// changes, so typing in a folder box is never undone by a refresh; the
+// progress inside each row is redrawn on every poll.
+let dlPods = [], dlTimer = null, dlShown = "";
+const MB = n => n == null ? "—" : n >= 1e9 ? (n / 1e9).toFixed(2) + " GB" : (n / 1e6).toFixed(1) + " MB";
+const ago = t => t ? clock(Date.now() / 1000 - t) + " ago" : "—";
+const dlJobs = () => (lastStatus && lastStatus.downloads) || [];
+const folderFor = id => localStorage.getItem("dl.folder." + id) || localStorage.getItem("dl.lastFolder") || "";
+
+async function refreshDl() {
+  $("dlError").textContent = "";
+  $("dlAccount").textContent = account() ? "— " + account() : "";
+  if (!account()) return;
+  try { dlPods = (await api("/api/pods?account=" + encodeURIComponent(account()))).pods; }
+  catch (e) { $("dlError").textContent = e.message; return; }
+  drawDlPods();
+}
+
+function drawDlPods() {
+  const live = dlPods.filter(p => p.status !== "TERMINATED");
+  const shape = JSON.stringify(live.map(p => [p.id, p.status]));
+  if (shape !== dlShown) {
+    dlShown = shape;
+    $("dlPods").innerHTML = live.map(p => `<div class="dlpod" data-pod="${esc(p.id)}">
+      <header><span class="badge b-${esc(p.status)}">${esc(p.status)}</span>
+        <b>${esc(p.name)}</b> <code>${esc(p.id)}</code>
+        <span class="grow muted">${esc(gpuName(p.gpu))}${p.gpu_count > 1 ? " ×" + p.gpu_count : ""} · ${esc(p.cloud || "")} · ${money(p.cost)}/hr</span>
+        <a href="${esc(p.app_url)}" target="_blank" rel="noopener" class="muted">app :7860</a></header>
+      <div class="pick" data-pick>
+        <input class="folder" data-folder placeholder="C:\\Users\\you\\Downloads\\${esc(p.name)}" value="${esc(folderFor(p.id))}" spellcheck="false">
+        <button class="ghost small" data-browse>Browse…</button>
+        <button class="small" data-start ${p.status === "RUNNING" ? "" : "disabled title='Only a running pod can be downloaded from'"}>⬇ Start</button>
+      </div>
+      <details><summary>Advanced</summary><div class="grid">
+        <label>App URL (blank = ${esc(p.app_url)}) <input data-appurl placeholder="${esc(p.app_url)}"></label>
+        <label>App access key (only if the pod asks for one) <input data-key autocomplete="off"></label>
+      </div></details>
+      <div class="dljob" data-job></div>
+      <div class="error" data-err></div>
+    </div>`).join("") || '<div class="empty"><b>No pods on this account</b>Snipe one on the Sniper page, or start one in the Runpod console.</div>';
+    $("dlPods").querySelectorAll(".dlpod").forEach(wireDlPod);
+  }
+  drawDlJobs();
+}
+
+function wireDlPod(row) {
+  const id = row.dataset.pod, pod = dlPods.find(p => p.id === id);
+  const input = row.querySelector("[data-folder]"), err = row.querySelector("[data-err]");
+  input.addEventListener("input", () => localStorage.setItem("dl.folder." + id, input.value.trim()));
+  row.querySelector("[data-browse]").onclick = async e => {
+    err.textContent = ""; e.target.disabled = true;
+    try {
+      const r = await api("/api/pick-folder", {initial: input.value.trim() || localStorage.getItem("dl.lastFolder") || ""});
+      if (r.folder) { input.value = r.folder; localStorage.setItem("dl.folder." + id, r.folder); }
+    } catch (x) { err.textContent = x.message; }
+    e.target.disabled = false;
+  };
+  row.querySelector("[data-start]").onclick = async () => {
+    err.textContent = "";
+    const folder = input.value.trim();
+    try {
+      await api("/api/downloads/start", {account: account(), pod_id: id, pod_name: pod.name, folder,
+        app_url: row.querySelector("[data-appurl]").value.trim(), access_key: row.querySelector("[data-key]").value.trim()});
+      localStorage.setItem("dl.folder." + id, folder); localStorage.setItem("dl.lastFolder", folder);
+      poll();
+    } catch (x) { err.textContent = x.message; }
+  };
+}
+
+function jobHtml(j) {
+  const c = j.current, pct = c && c.total ? Math.min(100, 100 * c.done / c.total) : 0;
+  const running = !["stopped", "error"].includes(j.status);
+  const events = j.events.map(([t, e]) => new Date(t * 1000).toLocaleTimeString() + "  " + e).join("\n");
+  return `<div class="row" style="margin-top:0"><span class="badge b-${esc(j.status)}">${esc(j.status)}</span>
+      <span class="muted mono" style="flex:1">→ ${esc(j.folder)}</span>
+      <button class="ghost small" data-open="${esc(j.folder)}">Open folder</button>
+      ${running ? `<button class="ghost small" data-dlstop="${esc(j.pod_id)}">■ Stop</button>`
+                : `<button class="ghost small" data-dldismiss="${esc(j.pod_id)}">Dismiss</button>`}</div>
+    <div class="stats">${stat(j.total_on_pod, "on the pod")}${stat(j.have, "in the folder")}${stat(j.saved, "saved now")}${stat(j.waiting, "still being written")}${stat(j.tokens, "tokens")}${stat(MB(j.bytes), "downloaded")}${j.failed ? stat(j.failed, "failed") : ""}</div>
+    ${c ? `<div class="muted" style="margin-top:8px">${esc(c.name)} — ${MB(c.done)}${c.total ? " of " + MB(c.total) : ""}${c.speed ? " · " + MB(c.speed) + "/s" : ""}</div><div class="bar"><div style="width:${pct}%"></div></div>` : ""}
+    <div class="muted" style="margin-top:8px">Last saved: ${j.last_saved ? esc(j.last_saved.name) + " (" + MB(j.last_saved.bytes) + (j.last_saved.seed != null ? ", seed " + esc(j.last_saved.seed) : "") + ") " + ago(j.last_saved.at) : "—"} · checked ${ago(j.last_poll)}</div>
+    ${j.error ? `<div class="error" style="margin-top:6px">${esc(j.error)}</div>` : ""}
+    <pre>${esc(events)}</pre>`;
+}
+
+function wireJob(root) {
+  root.querySelectorAll("[data-open]").forEach(b => b.onclick = () => api("/api/open-folder", {folder: b.dataset.open}).catch(e => alert(e.message)));
+  root.querySelectorAll("[data-dlstop]").forEach(b => b.onclick = () => api("/api/downloads/stop", {pod_id: b.dataset.dlstop}).then(poll));
+  root.querySelectorAll("[data-dldismiss]").forEach(b => b.onclick = () => api("/api/downloads/dismiss", {pod_id: b.dataset.dldismiss}).then(poll));
+}
+
+function setHtml(el, html) {
+  if (el.innerHTML === html) return;
+  const pre = el.querySelector("pre"), keep = pre ? pre.scrollTop : null;
+  el.innerHTML = html;
+  const now = el.querySelector("pre");
+  if (now) now.scrollTop = keep ?? now.scrollHeight;
+  wireJob(el);
+}
+
+function drawDlJobs() {
+  const jobs = dlJobs(), byPod = Object.fromEntries(jobs.map(j => [j.pod_id, j]));
+  $("dlPods").querySelectorAll(".dlpod").forEach(row => {
+    const j = byPod[row.dataset.pod];
+    const active = j && !["stopped", "error"].includes(j.status);
+    row.querySelector("[data-pick]").hidden = !!active;
+    row.querySelector("details").hidden = !!active;
+    setHtml(row.querySelector("[data-job]"), j ? jobHtml(j) : "");
+  });
+  const listed = new Set(dlPods.map(p => p.id));
+  const other = jobs.filter(j => !listed.has(j.pod_id));
+  $("dlOtherCard").hidden = !other.length;
+  setHtml($("dlOther"), other.map(j => `<div class="dlpod"><header><b>${esc(j.pod_name)}</b> <code>${esc(j.pod_id)}</code>
+    <span class="grow muted">${esc(j.account || "")}</span></header><div class="dljob">${jobHtml(j)}</div></div>`).join(""));
+}
+$("dlRefresh").onclick = refreshDl;
 
 // ── navbar: one page shown at a time, chosen by the URL hash so a refresh
 // stays on the same page ────────────────────────────────────────────
@@ -706,6 +850,8 @@ function showPage() {
   const page = PAGES.includes(want) ? want : "sniper";
   for (const p of PAGES) $("page-" + p).hidden = p !== page;
   $("nav").querySelectorAll("a").forEach(a => a.classList.toggle("on", a.dataset.page === page));
+  clearInterval(dlTimer);
+  if (page === "downloads" && cfg) { refreshDl(); dlTimer = setInterval(refreshDl, 20000); }
 }
 window.addEventListener("hashchange", showPage);
 showPage();
@@ -724,7 +870,7 @@ async function init() {
   cudaVersions = [...cfg.cuda_versions]; showLicence();
   showGpus(); showDcs();
   if (cfg.presets.length) presetToForm(cfg.presets[0]); else { showGpuList(); showChips(); }
-  poll(); refreshPods();
+  poll(); refreshPods(); showPage();
 }
 init().catch(e => $("topError").textContent = e.message);
 </script>

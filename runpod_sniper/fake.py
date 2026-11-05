@@ -227,3 +227,123 @@ class FakeRunpod:
                         "availability": random.choice(
                             ["NONE", "NONE", "LOW", "MEDIUM", "HIGH"])})
         return {"gpus": out}
+
+
+# ── the Ember app on a fake pod, for the auto downloader ────────────
+#
+# Answers the four app routes the downloader uses, through the same
+# response shape urllib gives it: a Gallery that gains a file every few
+# seconds while the pod runs (every fifth a video that stays "still
+# encoding" — Cache-Control: no-store — for a while), the media, the tab
+# schemas and the recipe apply. A stopped or terminated pod does not answer.
+
+import io
+import urllib.error
+
+APP_EVERY = 6            # seconds between new files
+APP_SEED_FILES = 3       # already there when the pod comes up
+APP_ENCODE = 14          # a video is "still encoding" this long
+APP_SPEED = 6e6          # bytes/s the fake proxy serves at (slow enough to watch)
+APP_SCHEMA = {
+    "key": "krea_v2_t2i", "tabId": "k2v2", "label": "Krea2 V2",
+    "fields": [
+        {"name": "prompt", "type": "text", "default": ""},
+        {"name": "seed", "type": "number", "default": 0},
+        {"name": "randomize", "type": "checkbox", "default": True},
+        {"name": "steps", "type": "number", "default": 20},
+        {"name": "init_image", "type": "image", "default": None},
+    ],
+    "lora": {"key": "lora", "count": 2, "parts": ["name", "enabled", "weight"],
+             "slots": [{"name": "None", "enabled": False, "weight": 1.0}] * 2,
+             "weightDefault": 1.0},
+}
+
+
+class _Resp(io.BytesIO):
+    def __init__(self, data: bytes, headers: dict, throttle=False):
+        super().__init__(data)
+        self.status, self.headers, self.throttle = 200, headers, throttle
+
+    def read(self, n=-1):
+        chunk = super().read(n)
+        if self.throttle and chunk:
+            time.sleep(len(chunk) / APP_SPEED)
+        return chunk
+
+
+class FakeApp:
+    def __init__(self, runpod: "FakeRunpod"):
+        self.runpod = runpod
+
+    def _pod(self, pod_id):
+        with self.runpod.lock:
+            for acct in self.runpod.keys.values():
+                pod = acct["pods"].get(pod_id)
+                if pod:
+                    self.runpod._v2(pod)                 # moves it to RUNNING
+                    return pod
+        return None
+
+    def _items(self, pod):
+        up = pod["since"] + 8
+        now = time.time()
+        n = min(300, APP_SEED_FILES + max(0, int((now - up) / APP_EVERY)))
+        items = []
+        for i in range(n):
+            video = i % 5 == 4
+            created = up + (i - APP_SEED_FILES + 1) * APP_EVERY
+            items.append({
+                "id": "%s_%05d_.%s" % ("Video" if video else "Krea2V2_dry", i + 1,
+                                       "mp4" if video else "png"),
+                "kind": "video" if video else "image", "i": i,
+                "settled": not video or now - created > APP_ENCODE,
+                "size": (6_000_000 + i * 1000) if video else (300_000 + (i * 7919) % 1_200_000),
+                "tab": APP_SCHEMA["key"], "seed": 1000 + i,
+            })
+        return items[::-1]                              # newest first
+
+    def __call__(self, pod_id, method, path, body):
+        time.sleep(random.uniform(0.05, 0.25))
+        url = "https://%s-7860.proxy.runpod.net%s" % (pod_id, path)
+        pod = self._pod(pod_id)
+        if not pod or pod["status"] != "RUNNING":
+            raise urllib.error.URLError("pod %s is not running" % pod_id)
+        u = urlparse(path)
+        route = u.path[len("/api/v1"):]
+        if route == "/gallery":
+            q = parse_qs(u.query)
+            start = int((q.get("cursor") or ["0"])[0] or 0)
+            limit = int((q.get("limit") or ["50"])[0])
+            items = self._items(pod)
+            page = [{k: v for k, v in it.items() if k not in ("i", "settled", "size")}
+                    for it in items[start:start + limit]]
+            nxt = start + limit
+            return self._json({"items": page, "total": len(items),
+                               "nextCursor": str(nxt) if nxt < len(items) else None})
+        if route == "/schemas":
+            return self._json([APP_SCHEMA])
+        if route.startswith("/schema/") and route.endswith("/apply"):
+            key = (body or {}).get("recipe", "")
+            m = re.search(r"_(\d{5})_", key)
+            i = int(m.group(1)) if m else 0
+            return self._json({"values": {"prompt": "dry run picture %d" % i, "seed": 1000 + i,
+                                          "randomize": False, "steps": 20 + i % 3,
+                                          "lora.0.name": "dry-lora", "lora.0.enabled": True,
+                                          "lora.0.weight": 0.8},
+                               "preset": "Default", "presetValues": {"steps": 20}})
+        if route.startswith("/media/"):
+            from urllib.parse import unquote
+            key = unquote(route[len("/media/"):])
+            item = next((it for it in self._items(pod) if it["id"] == key), None)
+            if not item:
+                raise urllib.error.HTTPError(url, 404, "No such file.", {}, None)
+            data = random.Random(pod_id + item["id"]).randbytes(item["size"])
+            return _Resp(data, {"Content-Length": str(len(data)),
+                                "Cache-Control": "private, max-age=86400" if item["settled"]
+                                else "no-store"}, throttle=True)
+        raise urllib.error.HTTPError(url, 404, "Not found", {}, None)
+
+    @staticmethod
+    def _json(obj):
+        data = json.dumps(obj).encode()
+        return _Resp(data, {"Content-Length": str(len(data)), "Content-Type": "application/json"})

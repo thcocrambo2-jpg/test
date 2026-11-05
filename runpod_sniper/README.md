@@ -107,6 +107,37 @@ header, so other websites can't start a snipe through it.
    fails with "not enough free GPUs", the page offers "Snipe a new one like
    it", which loads that pod's GPU, cloud and name into the form.
 
+## Auto download
+
+The **⬇ Auto download** page (navbar at the top) lists every pod on the
+selected account, whether it was sniped here or started elsewhere. For a
+running pod, choose a folder (type it, or **Browse…** for the normal folder
+dialog), then press **Start**. Each pod can have its own folder, or several
+can share one.
+
+- Every picture and video on the pod is saved, including what was generated
+  before you pressed Start, each with its settings token beside it as
+  `<name>.txt`. The token is built in Python (`ember_token.py`), with no
+  Node; it decodes to the same settings as the Gallery's own token.
+- The pod is checked every 8 s; a new file is saved as soon as it appears.
+  A video still being encoded is left until it is finished.
+- Files are written under a temporary name and renamed when complete.
+- Nothing is downloaded twice: each pod keeps a record in its folder,
+  `.ember-downloads-<pod id>.json`. A file already in the folder with the
+  same name and size counts as saved; a different file with the same name
+  (two pods, one folder) gets the pod id added to its name.
+- The card shows files on the pod, in the folder, saved now, still being
+  written, tokens, MB downloaded, the current file with its speed, and the
+  last file saved.
+- Downloads keep running if the page is closed, and resume when the server
+  restarts (`downloads.json`, git-ignored, keeps the list). A pod that stops
+  answering is retried every 30 s.
+- The app is reached at `https://<pod id>-7860.proxy.runpod.net`. Under
+  **Advanced** you can give another app URL, or the app's access key for a
+  pod started with `EMBER_UI_REQUIRE_TOKEN=1`.
+- In a dry run every fake pod runs a fake Ember app that adds a file every
+  6 s; every fifth is a video that stays "still encoding" for 14 s.
+
 ## Runpod API facts this relies on
 
 - **Only the create call wins a GPU.** Community stock disappears within
@@ -192,7 +223,9 @@ codes and messages as the real API:
 | `tokens.css` | The theme: a copy of the app's `webui/src/theme/tokens.css`, kept here so the folder works on its own. Copy it again if the app's palette changes. |
 | `gpus.json` | The GPU table, with list prices read 2026-11-03 |
 | `presets.json` | Presets; "Save as preset" writes here |
-| `fake.py` | The fake Runpod for `--dry-run` |
+| `downloader.py` | The auto downloader: one thread per pod |
+| `ember_token.py` | Ember settings tokens in Python (a port of the web UI's) |
+| `fake.py` | The fake Runpod, and a fake Ember app on each fake pod, for `--dry-run` |
 | `start.bat` | Windows launcher: checks Python, creates `.env` the first time, starts the server |
 | `requirements.txt` | Lists no packages: the sniper uses only the standard library |
 | `.env.example` | Template for `.env` |
