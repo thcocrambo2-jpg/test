@@ -1,0 +1,697 @@
+<!doctype html>
+<html lang="en" data-theme="dark">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Runpod GPU sniper</title>
+<!-- The app's own palette (webui/src/theme/tokens.css), served by server.py. -->
+<link rel="stylesheet" href="/tokens.css">
+<style>
+  * { box-sizing:border-box; }
+  body { margin:0; background:var(--c-bg, #1a1a1a); color:var(--c-text, #eff1f6);
+         font:var(--t-md, 14px)/var(--lh-normal, 1.5) var(--font-sans, system-ui, sans-serif); }
+  main { max-width:1180px; margin:0 auto; padding:20px; display:grid; gap:16px; }
+  h1 { font-size:var(--t-xl); margin:0; } h2 { font-size:15px; margin:0 0 12px; }
+  h2 .muted { font-weight:var(--fw-normal); }
+  .card { background:var(--c-panel); border:1px solid var(--c-border); border-radius:var(--r-lg); padding:16px; }
+  .grid { display:grid; grid-template-columns:repeat(auto-fill,minmax(170px,1fr)); gap:10px; }
+  label { display:flex; flex-direction:column; gap:4px; color:var(--c-text-muted); font-size:var(--t-xs); }
+  label.check { flex-direction:row; align-items:center; gap:6px; color:var(--c-text); font-size:var(--t-sm); }
+  input, select, textarea { background:var(--c-input); color:var(--c-text); border:1px solid var(--c-border);
+         border-radius:var(--r-sm); padding:7px 9px; font:inherit; }
+  input[type=checkbox] { padding:0; accent-color:var(--c-accent); }
+  input:focus, select:focus, textarea:focus { outline:none; border-color:var(--c-focus); box-shadow:var(--sh-focus); }
+  textarea { resize:vertical; min-height:62px; font-family:var(--font-mono); font-size:var(--t-xs); }
+  button { background:var(--c-accent); color:var(--c-text-on-accent); border:0; border-radius:var(--r-sm);
+           padding:8px 16px; font:inherit; font-weight:var(--fw-semibold); cursor:pointer; }
+  button:hover { background:var(--c-accent-hover); }
+  button.ghost { background:transparent; color:var(--c-text); border:1px solid var(--c-border); }
+  button.ghost:hover { background:var(--c-panel-hover); }
+  button.danger { background:transparent; color:var(--c-error); border:1px solid var(--c-error-line); }
+  button.danger:hover { background:var(--c-error-soft); }
+  button.small { padding:3px 9px; font-size:var(--t-xs); font-weight:var(--fw-medium); }
+  button:disabled { opacity:.45; cursor:default; }
+  .row { display:flex; gap:10px; align-items:center; flex-wrap:wrap; margin-top:12px; }
+  .muted { color:var(--c-text-muted); font-size:var(--t-xs); }
+  .faint { color:var(--c-text-faint); }
+  .error { color:var(--c-error); white-space:pre-wrap; }
+  .error:empty { display:none; }
+  .note { color:var(--c-warning); font-size:var(--t-xs); }
+  table { width:100%; border-collapse:collapse; font-size:var(--t-sm); }
+  th { text-align:left; color:var(--c-text-muted); font-weight:var(--fw-medium); font-size:var(--t-xs);
+       border-bottom:1px solid var(--c-border); padding:6px 8px; }
+  td { border-bottom:1px solid var(--c-border); padding:6px 8px; vertical-align:middle; }
+  tr:last-child td { border-bottom:0; }
+  td.num { font-variant-numeric:tabular-nums; white-space:nowrap; }
+  code, .mono { font-family:var(--font-mono); font-size:var(--t-xs); }
+  .badge { display:inline-block; padding:1px 7px; border-radius:var(--r-full); font-size:var(--t-2xs);
+           font-weight:var(--fw-semibold); border:1px solid var(--c-border); color:var(--c-text-muted); }
+  .b-NONE { color:var(--c-error); border-color:var(--c-error-line); background:var(--c-error-soft); }
+  .b-LOW { color:var(--c-warning); border-color:var(--c-warning-line); background:var(--c-warning-soft); }
+  .b-MEDIUM { color:var(--c-info); border-color:var(--c-info-line); background:var(--c-info-soft); }
+  .b-HIGH { color:var(--c-success); border-color:var(--c-success-line); background:var(--c-success-soft); }
+  .b-RUNNING, .b-won { color:var(--c-success); border-color:var(--c-success-line); background:var(--c-success-soft); }
+  .b-EXITED, .b-stopped, .b-timeout { color:var(--c-text-muted); }
+  .b-PROVISIONING, .b-STARTING, .b-running { color:var(--c-accent); border-color:var(--c-accent-line); background:var(--c-accent-soft); }
+  .b-ERROR, .b-error { color:var(--c-error); border-color:var(--c-error-line); background:var(--c-error-soft); }
+  .chips { display:flex; gap:8px; flex-wrap:wrap; }
+  .chip { padding:6px 12px; border-radius:var(--r-full); border:1px solid var(--c-border); background:var(--c-input);
+          color:var(--c-text); cursor:pointer; font-size:var(--t-sm); font-weight:var(--fw-medium); }
+  .chip:hover { background:var(--c-input-hover); }
+  .chip.on { border-color:var(--c-accent); background:var(--c-accent-soft); color:var(--c-accent); }
+  .gpulist { display:flex; flex-direction:column; gap:4px; }
+  .gpulist div { display:flex; gap:6px; align-items:center; background:var(--c-input); border:1px solid var(--c-border);
+                 border-radius:var(--r-sm); padding:4px 4px 4px 9px; font-size:var(--t-sm); }
+  .gpulist span.i { color:var(--c-text-faint); width:1.2em; }
+  .gpulist span.n { flex:1; }
+  .dcs { display:grid; grid-template-columns:repeat(auto-fill,minmax(250px,1fr)); gap:10px; }
+  .dcs fieldset { border:1px solid var(--c-border); border-radius:var(--r-md); margin:0; padding:8px 10px; }
+  .dcs legend { font-size:var(--t-xs); color:var(--c-text-muted); padding:0 4px; }
+  .dcs .opts { display:flex; flex-wrap:wrap; gap:4px 12px; }
+  details.multi { position:relative; }
+  details.multi summary { list-style:none; cursor:pointer; background:var(--c-input); color:var(--c-text);
+         border:1px solid var(--c-border); border-radius:var(--r-sm); padding:7px 28px 7px 9px; font-size:var(--t-md);
+         background-image:var(--icon-caret); background-repeat:no-repeat; background-position:right 9px center;
+         white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+  details.multi summary::-webkit-details-marker { display:none; }
+  details.multi[open] summary { border-color:var(--c-focus); }
+  details.multi .menu { position:absolute; z-index:var(--z-panel); top:calc(100% + 4px); left:0; min-width:100%;
+         background:var(--c-elevated); border:1px solid var(--c-border); border-radius:var(--r-md); box-shadow:var(--sh-lg);
+         padding:6px; display:grid; grid-template-columns:repeat(3, auto); gap:2px 14px; max-height:260px; overflow:auto; }
+  details.multi .menu .all { grid-column:1 / -1; border-bottom:1px solid var(--c-border); padding-bottom:4px; margin-bottom:2px; }
+  .tag { font-size:var(--t-2xs); color:var(--c-warning); }
+  .two { display:grid; grid-template-columns:1fr 1fr; gap:10px; margin-top:10px; }
+  @media (max-width:760px) { .two { grid-template-columns:1fr; } }
+  .stats { display:flex; gap:22px; flex-wrap:wrap; margin-top:10px; }
+  .stats b { display:block; font-size:18px; font-variant-numeric:tabular-nums; }
+  .stats span { color:var(--c-text-muted); font-size:var(--t-xs); }
+  .watch { border:1px solid var(--c-border); border-radius:var(--r-md); padding:12px; margin-top:12px; background:var(--c-bg-sunken); }
+  .watch.won { border-color:var(--c-success-line); }
+  .watch.error { border-color:var(--c-error-line); }
+  .watch header { display:flex; gap:10px; align-items:center; flex-wrap:wrap; }
+  .watch header .grow { flex:1; }
+  pre { background:var(--c-bg-sunken); border:1px solid var(--c-border); border-radius:var(--r-sm); padding:8px 10px;
+        max-height:170px; overflow:auto; font-size:var(--t-xs); color:var(--c-text-muted); white-space:pre-wrap; margin:10px 0 0; }
+  .podcard { margin-top:12px; padding:12px; border-radius:var(--r-md); background:var(--c-success-soft);
+             border:1px solid var(--c-success-line); display:grid; gap:6px; }
+  .podcard .kv { display:grid; grid-template-columns:repeat(auto-fill,minmax(130px,1fr)); gap:8px; }
+  .podcard .kv b { display:block; font-size:var(--t-md); }
+  .podcard .kv span { color:var(--c-text-muted); font-size:var(--t-2xs); }
+  a { color:var(--c-info); }
+  .bar { height:6px; background:var(--c-input); border-radius:var(--r-full); overflow:hidden; margin-top:10px; }
+  .bar > div { height:100%; background:var(--c-accent); transition:width .5s; }
+  .budget { font-size:var(--t-xs); color:var(--c-text-muted); font-variant-numeric:tabular-nums; }
+  .budget b { color:var(--c-text); }
+  .dry { color:var(--c-warning); border:1px solid var(--c-warning-line); background:var(--c-warning-soft);
+         border-radius:var(--r-full); padding:2px 10px; font-size:var(--t-xs); font-weight:var(--fw-semibold); }
+  .copy { cursor:pointer; }
+  .copy:hover { text-decoration:underline; }
+</style>
+</head>
+<body>
+<main>
+  <div class="row" style="margin:0; justify-content:space-between">
+    <h1>🎯 Runpod GPU sniper <span class="muted">create-until-it-wins</span></h1>
+    <div class="row" style="margin:0">
+      <span id="dry"></span>
+      <label class="check">Account <select id="account"></select></label>
+      <span class="budget" id="budget"></span>
+    </div>
+  </div>
+  <div class="error" id="topError"></div>
+
+  <section class="card">
+    <h2>1 · GPUs <span class="muted" id="priceNote"></span></h2>
+    <table>
+      <thead><tr><th>GPU</th><th>Runpod id</th><th>VRAM</th><th>Community $/hr</th><th>Secure $/hr</th><th>Note</th><th></th></tr></thead>
+      <tbody id="gpuRows"></tbody>
+    </table>
+    <div class="row">
+      <button class="ghost" id="refreshStock">↻ Refresh live prices + stock</button>
+      <span class="muted">Stock is only a hint: Community GPUs go in milliseconds, so only a create call can win one.</span>
+    </div>
+    <div class="error" id="stockError"></div>
+  </section>
+
+  <section class="card">
+    <h2>2 · Preset</h2>
+    <div class="chips" id="presetChips"></div>
+    <div class="two">
+      <div>
+        <label>GPUs, in priority order</label>
+        <div class="gpulist" id="gpuList" style="margin-top:4px"></div>
+        <div class="row" style="margin-top:6px">
+          <select id="gpuAdd" style="flex:1"></select>
+          <button class="ghost small" id="gpuAddBtn">+ Add</button>
+        </div>
+      </div>
+      <div class="grid" style="grid-template-columns:1fr 1fr">
+        <label>Cloud <select id="cloud"><option>COMMUNITY</option><option>SECURE</option></select></label>
+        <label>GPU count <input id="gpu_count" type="number" min="1" max="8"></label>
+        <label>Max $/hr (whole pod) <input id="max_price" type="number" min="0.01" step="0.01"></label>
+        <label>Snipe for (minutes, 1–600) <input id="minutes" type="number" min="1" max="600" title="The watcher gives up after this long"></label>
+        <label>Pod name <input id="pod_name"></label>
+        <label>API <select id="api"><option value="auto">auto</option><option value="v1">v1 (rest.runpod.io)</option><option value="v2">v2 (api.runpod.io)</option></select></label>
+      </div>
+    </div>
+    <div class="grid" style="margin-top:10px">
+      <label>Template id <input id="template_id"></label>
+      <label>Container disk GB <input id="container_disk_gb" type="number" min="5"></label>
+      <label>Volume GB (0 = none) <input id="volume_gb" type="number" min="0"></label>
+      <label>Min download Mbps (0 = any) <input id="min_download_mbps" type="number" min="0" step="100"></label>
+      <label>Min vCPU per GPU <input id="min_vcpu_per_gpu" type="number" min="0"></label>
+      <label>Min RAM per GPU (GB) <input id="min_ram_per_gpu" type="number" min="0"></label>
+      <label>Allowed CUDA
+        <details class="multi" id="cudaPick"><summary id="cudaSummary">Any</summary><div class="menu" id="cudaList"></div></details></label>
+      <label class="check" style="margin-top:18px"><input type="checkbox" id="public_ip"> Public IP</label>
+    </div>
+    <div style="margin-top:10px">
+      <label>Data centers (none = anywhere)</label>
+      <div class="dcs" id="dcs" style="margin-top:4px"></div>
+    </div>
+    <div class="row">
+      <span class="muted" id="planHint"></span>
+    </div>
+    <div style="margin-top:8px" id="priceLine"></div>
+    <div class="row">
+      <input id="presetName" placeholder="preset name" style="min-width:280px">
+      <button class="ghost" id="savePreset">💾 Save as preset</button>
+      <button class="danger small" id="deletePreset">Delete preset</button>
+      <span class="muted" id="presetStatus"></span>
+    </div>
+    <div class="error" id="presetError"></div>
+  </section>
+
+  <section class="card">
+    <h2>3 · Snipe <span class="muted" id="snipeAccount"></span></h2>
+    <div class="row" style="margin-top:0">
+      <label class="check">Licence key
+        <input id="licInput" autocomplete="off" spellcheck="false" placeholder="LICENSE_KEY" style="width:260px; font-family:var(--font-mono)"></label>
+      <button class="ghost small" id="licSave">Save to .env</button>
+      <span class="muted" id="licStatus"></span>
+    </div>
+    <div class="row">
+      <button id="snipe">🎯 Snipe</button>
+      <button class="ghost" id="stop">■ Stop</button>
+      <b id="snipePrice"></b>
+      <span class="muted">Sends creates back to back, ~0.7 s apart on this key, from 3 workers. One watcher per account.</span>
+    </div>
+    <div class="error" id="snipeError"></div>
+    <div id="watchers"></div>
+  </section>
+
+  <section class="card">
+    <h2>4 · My pods <span class="muted" id="podsAccount"></span></h2>
+    <div class="row" style="margin-top:0">
+      <button class="ghost" id="refreshPods">↻ Refresh</button>
+      <span class="muted">⚠ Stopping a pod wipes its container disk — only a volume survives. A stopped Community pod often can't start again (its GPU is taken).</span>
+    </div>
+    <div class="error" id="podsError"></div>
+    <table style="margin-top:10px">
+      <thead><tr><th>Pod</th><th>Status</th><th>GPU</th><th>$/hr</th><th>RAM / vCPU</th><th>Where</th><th>Links</th><th></th></tr></thead>
+      <tbody id="podRows"><tr><td colspan="8" class="muted">—</td></tr></tbody>
+    </table>
+  </section>
+</main>
+
+<script>
+const $ = id => document.getElementById(id);
+const esc = s => String(s ?? "").replace(/[&<>"']/g, c => ({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]));
+let cfg = null, stock = null, gpus = [], currentPreset = null, lastStatus = null;
+
+async function api(path, body) {
+  const opts = body === undefined ? {} : {method: "POST", body: JSON.stringify(body),
+    headers: {"content-type": "application/json", "x-sniper": "1"}};
+  const res = await fetch(path, opts);
+  const data = await res.json().catch(() => ({error: res.statusText}));
+  if (!res.ok) { const e = new Error(data.error || res.statusText); e.data = data; throw e; }
+  return data;
+}
+
+function clock(s) {
+  if (s == null) return "—";
+  s = Math.max(0, Math.round(s));
+  const h = Math.floor(s / 3600), m = Math.floor(s % 3600 / 60), sec = s % 60;
+  return (h ? h + ":" + String(m).padStart(2, "0") : m) + ":" + String(sec).padStart(2, "0");
+}
+const gpuName = id => (gpus.find(g => g.id === id) || {}).name || id;
+const money = v => v == null || v === "" ? "—" : "$" + Number(v).toFixed(2);
+const account = () => $("account").value;
+
+// ── 1 · GPU table ──────────────────────────────────────────────────
+function priceCell(g, cloud) {
+  const live = stock && stock[cloud] && stock[cloud][g.id];
+  const listed = g[cloud.toLowerCase()];
+  const price = live && live.price ? live.price : listed;
+  if (price == null && !live) return '<span class="faint">n/a</span>';
+  const badge = live && live.availability ? ` <span class="badge b-${esc(live.availability)}">${esc(live.availability)}</span>` : "";
+  const changed = live && live.price && listed != null && Math.abs(live.price - listed) > 0.001
+    ? ` <span class="faint" title="gpus.json says ${money(listed)}">(was ${money(listed)})</span>` : "";
+  return `${money(price)}${changed}${badge}`;
+}
+
+function showGpus() {
+  $("gpuRows").innerHTML = gpus.map((g, i) => `<tr>
+    <td><b>${esc(g.name)}</b></td><td><code>${esc(g.id)}</code></td><td class="num">${esc(g.vram)} GB</td>
+    <td class="num">${priceCell(g, "COMMUNITY")}</td><td class="num">${priceCell(g, "SECURE")}</td>
+    <td class="muted">${esc(g.note)}</td>
+    <td><button class="ghost small" data-add="${i}" title="Add to the preset's GPU list">+ preset</button></td></tr>`).join("");
+  $("gpuRows").querySelectorAll("[data-add]").forEach(b => b.onclick = () => addGpu(gpus[b.dataset.add].id));
+  $("gpuAdd").innerHTML = gpus.map(g => `<option value="${esc(g.id)}">${esc(g.name)} — ${esc(g.vram)} GB</option>`).join("");
+}
+
+$("refreshStock").onclick = async () => {
+  $("stockError").textContent = "";
+  $("refreshStock").disabled = true;
+  try {
+    stock = await api("/api/stock?account=" + encodeURIComponent(account()));
+    $("priceNote").textContent = "live at " + new Date().toLocaleTimeString() + " (" + account() + ")";
+    for (const v of stock.cuda || []) if (!cudaVersions.includes(v)) cudaVersions.push(v);
+    showCuda(formToPreset().cuda_versions);
+    showGpus(); planHint();
+  } catch (e) { $("stockError").textContent = e.message; }
+  $("refreshStock").disabled = false;
+};
+
+// ── 2 · preset form ────────────────────────────────────────────────
+let gpuOrder = [];
+function showGpuList() {
+  $("gpuList").innerHTML = gpuOrder.map((id, i) => `<div><span class="i">${i + 1}</span>
+    <span class="n">${esc(gpuName(id))} <span class="faint mono">${esc(id)}</span></span>
+    <button class="ghost small" data-up="${i}" ${i ? "" : "disabled"} title="Higher priority">↑</button>
+    <button class="ghost small" data-rm="${i}" title="Remove">✕</button></div>`).join("")
+    || '<span class="muted">No GPU yet — add one.</span>';
+  $("gpuList").querySelectorAll("[data-up]").forEach(b => b.onclick = () => {
+    const i = +b.dataset.up; [gpuOrder[i - 1], gpuOrder[i]] = [gpuOrder[i], gpuOrder[i - 1]]; showGpuList(); planHint();
+  });
+  $("gpuList").querySelectorAll("[data-rm]").forEach(b => b.onclick = () => {
+    gpuOrder.splice(+b.dataset.rm, 1); showGpuList(); planHint();
+  });
+}
+function addGpu(id) { if (!gpuOrder.includes(id)) gpuOrder.push(id); showGpuList(); planHint(); }
+$("gpuAddBtn").onclick = () => addGpu($("gpuAdd").value);
+
+function showDcs() {
+  const rejects = new Set(cfg.v1_rejects);
+  $("dcs").innerHTML = Object.entries(cfg.data_centers).map(([region, ids]) => `<fieldset>
+    <legend><label class="check"><input type="checkbox" data-region="${esc(region)}"> ${esc(region)}</label></legend>
+    <div class="opts">${ids.map(d => `<label class="check"><input type="checkbox" data-dc="${esc(d)}" data-in="${esc(region)}"> ${esc(d)}${rejects.has(d) ? ' <span class="tag" title="v1 rejects this id">v2 only</span>' : ""}</label>`).join("")}</div>
+  </fieldset>`).join("");
+  $("dcs").querySelectorAll("[data-region]").forEach(box => box.onchange = () => {
+    $("dcs").querySelectorAll(`[data-in="${box.dataset.region}"]`).forEach(c => c.checked = box.checked);
+    planHint();
+  });
+  $("dcs").querySelectorAll("[data-dc]").forEach(c => c.onchange = () => { syncRegions(); planHint(); });
+}
+function syncRegions() {
+  $("dcs").querySelectorAll("[data-region]").forEach(box => {
+    const all = [...$("dcs").querySelectorAll(`[data-in="${box.dataset.region}"]`)];
+    const on = all.filter(c => c.checked).length;
+    box.checked = on === all.length; box.indeterminate = on > 0 && on < all.length;
+  });
+}
+
+const NUMS = ["gpu_count","max_price","minutes","container_disk_gb","volume_gb","min_download_mbps","min_vcpu_per_gpu","min_ram_per_gpu"];
+function formToPreset() {
+  const p = {name: $("presetName").value.trim(), gpus: [...gpuOrder], cloud: $("cloud").value,
+    template_id: $("template_id").value.trim(), pod_name: $("pod_name").value.trim(),
+    api: $("api").value, public_ip: $("public_ip").checked,
+    cuda_versions: [...$("cudaList").querySelectorAll("[data-cuda]:checked")].map(c => c.dataset.cuda),
+    data_centers: [...$("dcs").querySelectorAll("[data-dc]:checked")].map(c => c.dataset.dc)};
+  for (const k of NUMS) p[k] = Number($(k).value || 0);
+  return p;
+}
+// ── CUDA: a checkbox dropdown, like Runpod's own filter. None ticked =
+// the template's own range (13.0–13.4 for yjkhkejrf7); ticking any
+// replaces that range entirely.
+let cudaVersions = [];
+const cudaCmp = (a, b) => { const x = a.split(".").map(Number), y = b.split(".").map(Number); return x[0] - y[0] || x[1] - y[1]; };
+function showCuda(selected) {
+  const on = new Set(selected);
+  for (const v of on) if (!cudaVersions.includes(v)) cudaVersions.push(v);
+  cudaVersions.sort(cudaCmp);
+  $("cudaList").innerHTML = `<label class="check all"><input type="checkbox" data-cuda-any ${on.size ? "" : "checked"}> Any (template's range)</label>`
+    + cudaVersions.map(v => `<label class="check"><input type="checkbox" data-cuda="${esc(v)}" ${on.has(v) ? "checked" : ""}> ${esc(v)}</label>`).join("");
+  $("cudaList").querySelector("[data-cuda-any]").onchange = e => {
+    if (e.target.checked) $("cudaList").querySelectorAll("[data-cuda]").forEach(c => c.checked = false);
+    cudaSummary(); planHint();
+  };
+  $("cudaList").querySelectorAll("[data-cuda]").forEach(c => c.onchange = () => { cudaSummary(); planHint(); });
+  cudaSummary();
+}
+function cudaSummary() {
+  const on = [...$("cudaList").querySelectorAll("[data-cuda]:checked")].map(c => c.dataset.cuda);
+  $("cudaList").querySelector("[data-cuda-any]").checked = !on.length;
+  $("cudaSummary").textContent = on.length ? on.join(", ") : "Any";
+}
+document.addEventListener("click", e => { if (!$("cudaPick").contains(e.target)) $("cudaPick").open = false; });
+
+// The preset the form was loaded from, to tell when the form has drifted.
+let loaded = null;
+const norm = p => JSON.stringify(Object.keys(p).filter(k => k !== "name").sort()
+  .map(k => [k, Array.isArray(p[k]) && k !== "gpus" ? [...p[k]].sort() : p[k]]));
+function edited() {
+  if (!loaded) return false;
+  try { return norm(formToPreset()) !== norm(loaded); } catch (e) { return true; }
+}
+
+function presetToForm(p) {
+  currentPreset = p.name || null;
+  loaded = cfg.presets.find(x => x.name === p.name) || null;
+  gpuOrder = [...(p.gpus || [])]; showGpuList();
+  $("cloud").value = p.cloud || "COMMUNITY";
+  $("template_id").value = p.template_id || "";
+  $("pod_name").value = p.pod_name || "";
+  $("api").value = p.api || "auto";
+  $("public_ip").checked = !!p.public_ip;
+  showCuda(p.cuda_versions || []);
+  for (const k of NUMS) $(k).value = p[k] ?? 0;
+  const dcs = new Set(p.data_centers || []);
+  $("dcs").querySelectorAll("[data-dc]").forEach(c => c.checked = dcs.has(c.dataset.dc));
+  syncRegions();
+  $("presetName").value = p.name || "";
+  showChips(); planHint();
+}
+function showChips() {
+  const changed = edited();
+  const html = cfg.presets.map((p, i) => {
+    const on = p.name === currentPreset;
+    return `<button class="chip ${on ? "on" : ""}" data-i="${i}" ${on && changed ? 'title="The form differs from the saved preset"' : ""}>${esc(p.name)}${on && changed ? ' <span class="note">· edited</span>' : ""}</button>`;
+  }).join("");
+  if ($("presetChips").innerHTML === html) return;
+  $("presetChips").innerHTML = html;
+  $("presetChips").querySelectorAll(".chip").forEach(b => b.onclick = () => presetToForm(cfg.presets[b.dataset.i]));
+}
+
+// Mirrors server.py _plan(), so the choice is visible before pressing Snipe.
+function planHint() {
+  let p; try { p = formToPreset(); } catch (e) { $("planHint").textContent = e.message; return; }
+  const rejects = new Set(cfg.v1_rejects);
+  const dcs = p.data_centers, bad = dcs.filter(d => rejects.has(d));
+  let use = p.api, why = "forced";
+  if (use === "auto") {
+    if (p.min_download_mbps || p.public_ip) { use = "v1"; why = p.min_download_mbps ? "bandwidth filter" : "public-IP filter"; }
+    else if (dcs.length && !bad.length) { use = "v1"; why = "every data center is one v1 takes"; }
+    else { use = "v2"; why = dcs.length ? "a data center v1 rejects is chosen" : "no bandwidth filter"; }
+  }
+  let text = `Will use ${use} (${why}).`;
+  if (use === "v1" && bad.length) text += ` v1 leaves out ${bad.join(", ")}.`;
+  if (use === "v1" && p.gpus.length > 1) text += " One request carries the whole GPU list.";
+  if (use === "v2" && p.gpus.length > 1) text += ` Alternates ${p.gpus.length} GPUs, one per request.`;
+  if (use === "v2" && p.public_ip) text += " v2 has no public-IP filter.";
+  if (use === "v2") text += " SSH key via startSsh.";
+  $("planHint").textContent = text;
+  showPrice(p); showChips();
+}
+
+// Whole-pod $/hr of each GPU in the list on the preset's cloud: the live
+// price once "Refresh live prices" has run, else gpus.json's.
+function listPrices(p) {
+  return p.gpus.map(id => {
+    const g = gpus.find(x => x.id === id) || {};
+    const live = stock && stock[p.cloud] && stock[p.cloud][id];
+    const one = live && live.price ? live.price : g[p.cloud.toLowerCase()];
+    return {id, price: one == null ? null : one * (p.gpu_count || 1)};
+  });
+}
+function priceSummary(p) {
+  const v = listPrices(p).map(r => r.price).filter(x => x != null);
+  if (!v.length) return "not offered";
+  const lo = Math.min(...v), hi = Math.max(...v);
+  return lo === hi ? money(lo) : money(lo) + "–" + money(hi);
+}
+
+// The price line under the form, and its warnings. Switching a preset's
+// cloud (e.g. a Community 5090 at max $0.80 to Secure at $1.19) keeps the
+// max, so this is where that shows up.
+function showPrice(p) {
+  const rows = listPrices(p);
+  const offered = rows.filter(r => r.price != null);
+  const fits = offered.filter(r => r.price <= p.max_price);
+  const cloud = p.cloud.toLowerCase();
+  const parts = rows.map(r => `${esc(gpuName(r.id))} <b>${r.price == null ? "—" : money(r.price)}</b>`
+    + (r.price == null ? ` <span class="note">not on ${cloud}</span>`
+       : r.price > p.max_price ? ' <span class="note">over max</span>' : ""));
+  let html = `<span class="muted">Price/hr on ${cloud} (${stock ? "live" : "list"}${p.gpu_count > 1 ? ", ×" + p.gpu_count : ""}):</span> `
+    + parts.join(" · ") + ` <span class="muted">— max</span> <b>${money(p.max_price)}</b>`;
+  let fix = null;
+  if (!rows.length) html = "";
+  else if (!offered.length)
+    html += `<div class="error">None of these GPUs is offered on ${cloud} — this snipe can't win.</div>`;
+  else if (!fits.length) {
+    fix = Math.max(...offered.map(r => r.price));
+    html += `<div class="error">⚠ The max is below the price: every win would be terminated by the price guard, and the snipe would run until it times out. <button class="small" id="fixMax">Set max to ${money(fix)}</button></div>`;
+  } else if (fits.length < offered.length)
+    html += `<div class="note">GPUs marked "over max" would be won and thrown back.</div>`;
+  $("priceLine").innerHTML = html;
+  if (fix != null) $("fixMax").onclick = () => { $("max_price").value = (Math.ceil(fix * 100) / 100).toFixed(2); planHint(); };
+  $("snipePrice").textContent = rows.length ? `${priceSummary(p)}/hr · max ${money(p.max_price)}/hr` : "";
+  return {offered: offered.length, fits: fits.length};
+}
+document.querySelector("section:nth-of-type(2)").addEventListener("input", planHint);
+
+$("savePreset").onclick = async () => {
+  $("presetError").textContent = ""; $("presetStatus").textContent = "";
+  try {
+    const p = formToPreset();
+    const r = await api("/api/presets", {name: p.name, preset: p});
+    cfg.presets = r.presets; currentPreset = p.name;
+    loaded = cfg.presets.find(x => x.name === p.name) || null; planHint();
+    $("presetStatus").textContent = "Saved to presets.json.";
+  } catch (e) { $("presetError").textContent = e.message; }
+};
+$("deletePreset").onclick = async () => {
+  const name = $("presetName").value.trim();
+  if (!cfg.presets.some(p => p.name === name)) { $("presetError").textContent = "No preset called " + name; return; }
+  if (!confirm(`Delete the preset "${name}" from presets.json?`)) return;
+  const r = await api("/api/presets/delete", {name});
+  cfg.presets = r.presets; currentPreset = null; loaded = null; showChips();
+  $("presetStatus").textContent = "Deleted.";
+};
+
+// ── 3 · snipe ──────────────────────────────────────────────────────
+// The licence key, as runpod_sniper/.env has it (EMBER_LICENSE_KEY). It is
+// never part of a preset: whatever is in this box goes with the next snipe,
+// so one preset can run with different keys. Save to .env to keep it.
+let savedLicence = null;
+const licence = () => $("licInput").value.trim();
+function showLicence() {
+  const key = licence();
+  $("licStatus").innerHTML = !key
+    ? '<span class="error">No licence key' + (savedLicence ? "" : " in .env") + ' — Snipe stays off until there is one.</span>'
+    : key === savedLicence ? (cfg.dry_run ? "dry run key (in memory)" : "from .env")
+    : '<span class="note">not saved — used for the next snipe only, unless you save it</span>';
+  $("licSave").disabled = !key || key === savedLicence;
+  if (lastStatus) showWatchers(lastStatus);
+}
+$("licInput").addEventListener("input", showLicence);
+$("licSave").onclick = async () => {
+  try {
+    const r = await api("/api/licence", {key: licence()});
+    savedLicence = r.licence; showLicence();
+  } catch (e) { $("licStatus").innerHTML = `<span class="error">${esc(e.message)}</span>`; }
+};
+$("snipe").onclick = async () => {
+  $("snipeError").textContent = "";
+  unlockAudio();
+  try {
+    const p = formToPreset();
+    const price = showPrice(p);
+    if (!price.offered && !confirm(`None of these GPUs is listed on ${p.cloud}. Snipe anyway?`)) return;
+    if (price.offered && !price.fits && !confirm(`The max (${money(p.max_price)}/hr) is below the price (${priceSummary(p)}/hr), so every win would be terminated. Snipe anyway?`)) return;
+    if (!licence()) throw new Error("Fill in the licence key first.");
+    if (edited()) p.name = currentPreset + " (edited)";
+    await api("/api/snipe", {account: account(), preset: p, licence: licence()});
+    poll();
+  } catch (e) { $("snipeError").textContent = e.message; }
+};
+$("stop").onclick = () => api("/api/stop", {account: account()}).then(poll);
+
+function stat(v, label) { return `<div><b>${v}</b><span>${label}</span></div>`; }
+
+function podCard(pod) {
+  if (!pod) return "";
+  const ssh = pod.ssh ? `<code class="copy" data-copy="${esc(pod.ssh)}" title="click to copy">${esc(pod.ssh)}</code>`
+                      : '<span class="muted">appears once the pod is running…</span>';
+  return `<div class="podcard">
+    <div><b>✅ ${esc(pod.id)}</b> <span class="muted">${esc(pod.name || "")}</span>
+      ${pod.status ? `<span class="badge b-${esc(pod.status)}">${esc(pod.status)}</span>` : ""}</div>
+    <div class="kv">
+      <div><b>${esc(gpuName(pod.gpu) || "…")}${pod.gpu_count > 1 ? " ×" + pod.gpu_count : ""}</b><span>GPU</span></div>
+      <div><b>${money(pod.cost)}</b><span>per hour</span></div>
+      <div><b>${pod.ram ?? "…"} GB / ${pod.vcpu ?? "…"}</b><span>RAM / vCPU</span></div>
+      <div><b>${esc(pod.cuda || "…")}</b><span>CUDA</span></div>
+      <div><b>${esc(pod.dc || "…")}</b><span>data center</span></div>
+    </div>
+    <div>App: <a href="${esc(pod.app_url)}" target="_blank" rel="noopener">${esc(pod.app_url)}</a></div>
+    <div>SSH: ${ssh}</div>
+  </div>`;
+}
+
+function showWatchers(s) {
+  const mine = s.watchers.find(w => w.account === account());
+  $("snipe").disabled = !!(mine && mine.status === "running") || !account() || !licence();
+  $("stop").disabled = !(mine && mine.status === "running");
+  $("snipeAccount").textContent = account() ? "— " + account() : "— no account in .env";
+  const html = s.watchers.sort((a, b) => b.started - a.started).map(w => {
+    const left = w.status === "running" ? clock(w.deadline - s.now) : "—";
+    const pct = Math.min(100, 100 * w.elapsed / (w.deadline - w.started));
+    const last = w.last ? `${w.last.code} · ${esc(w.last.text)}${w.last.gpu ? ` <span class="faint">(${esc(gpuName(w.last.gpu))})</span>` : ""}` : "—";
+    const codes = Object.entries(w.codes).map(([c, n]) => `${c}×${n}`).join("  ");
+    const events = w.events.map(([t, e]) => new Date(t * 1000).toLocaleTimeString() + "  " + e).join("\n");
+    return `<div class="watch ${esc(w.status)}">
+      <header><span class="badge b-${esc(w.status)}">${esc(w.status)}</span>
+        <b>${esc(w.account)}</b><span class="grow muted">${esc(w.preset.name || "unsaved preset")} · ${esc(w.preset.cloud)} · ${esc(w.preset.gpus.map(gpuName).join(" → "))} · ${esc(w.api)} · ${priceSummary(w.preset)}/hr · max ${money(w.preset.max_price)}/hr · key <code>${esc(w.licence || "—")}</code>${w.pod && w.pod.cost != null ? ` · <b style="color:var(--c-success)">paying ${money(w.pod.cost)}/hr</b>` : ""}</span>
+        ${w.status === "running" ? `<button class="ghost small" data-stop="${esc(w.account)}">■ Stop</button>`
+                                 : `<button class="ghost small" data-dismiss="${esc(w.account)}">Dismiss</button>`}</header>
+      <div class="stats">${stat(w.tries, "tries")}${stat(w.rate.toFixed(0) + "/min", "rate")}${stat(clock(w.elapsed), "elapsed")}${stat(left, "left")}</div>
+      ${w.status === "running" ? `<div class="bar"><div style="width:${pct}%"></div></div>` : ""}
+      <div class="muted" style="margin-top:8px">Last reply: ${last}</div>
+      <div class="muted">Replies: ${esc(codes) || "—"}</div>
+      ${w.error ? `<div class="error" style="margin-top:6px">${esc(w.error)}</div>` : ""}
+      ${podCard(w.pod)}
+      <pre>${esc(events)}</pre>
+    </div>`;
+  }).join("");
+  if ($("watchers").innerHTML !== html) {
+    const pres = [...$("watchers").querySelectorAll("pre")].map(p => p.scrollTop);
+    $("watchers").innerHTML = html;
+    $("watchers").querySelectorAll("pre").forEach((p, i) => p.scrollTop = pres[i] ?? p.scrollHeight);
+    $("watchers").querySelectorAll("[data-stop]").forEach(b => b.onclick = () => api("/api/stop", {account: b.dataset.stop}).then(poll));
+    $("watchers").querySelectorAll("[data-dismiss]").forEach(b => b.onclick = () => api("/api/dismiss", {account: b.dataset.dismiss}).then(poll));
+    wireCopy($("watchers"));
+  }
+  // An alarm once per win, even across a page refresh.
+  for (const w of s.watchers) {
+    if (w.status !== "won" || !w.pod) continue;
+    const key = "alarmed." + w.pod.id;
+    if (!localStorage.getItem(key)) { localStorage.setItem(key, "1"); alarm(); refreshPods(); }
+  }
+}
+
+function showBudget(s) {
+  const b = s.budget[account()];
+  if (!b) { $("budget").textContent = ""; return; }
+  const h = b.header || {};
+  const hourLeft = h.hour ? h.hour.remaining : b.hour_limit - b.hour_used;
+  const minLeft = h.minute ? h.minute.remaining : b.minute_limit - b.minute_used;
+  const src = h.hour || h.minute ? "from Runpod's headers" : "counted here";
+  $("budget").innerHTML = `budget left: <b>${minLeft}</b>/${b.minute_limit} this min · <b>${hourLeft}</b>/${b.hour_limit} this hour <span class="faint">(${src})</span>`
+    + (b.paused_for ? ` · <span class="note">429 pause ${b.paused_for}s</span>` : "");
+}
+
+// ── alarm: a loud-ish two-tone siren for ~4 s ──────────────────────
+let audio = null;
+function unlockAudio() { try { audio = audio || new AudioContext(); audio.resume(); } catch (e) {} }
+function alarm() {
+  unlockAudio(); if (!audio) return;
+  const t0 = audio.currentTime;
+  for (let i = 0; i < 8; i++) {
+    const o = audio.createOscillator(), g = audio.createGain();
+    o.type = "square"; o.frequency.value = i % 2 ? 660 : 990;
+    g.gain.setValueAtTime(0.18, t0 + i * 0.5); g.gain.setValueAtTime(0, t0 + i * 0.5 + 0.42);
+    o.connect(g).connect(audio.destination); o.start(t0 + i * 0.5); o.stop(t0 + i * 0.5 + 0.45);
+  }
+  let n = 0; const title = document.title;
+  const flash = setInterval(() => { document.title = n++ % 2 ? title : "🎯 GPU WON!"; if (n > 20) { clearInterval(flash); document.title = title; } }, 600);
+}
+
+// ── 4 · my pods ────────────────────────────────────────────────────
+let pods = [];
+async function refreshPods() {
+  $("podsError").textContent = "";
+  $("podsAccount").textContent = account() ? "— " + account() : "";
+  if (!account()) return;
+  try { pods = (await api("/api/pods?account=" + encodeURIComponent(account()))).pods; }
+  catch (e) { $("podsError").textContent = e.message; return; }
+  $("podRows").innerHTML = pods.map((p, i) => {
+    const btn = (a, label, cls = "ghost") => p.actions.includes(a)
+      ? `<button class="${cls} small" data-act="${a}" data-i="${i}">${label}</button>` : "";
+    return `<tr>
+      <td><b>${esc(p.name)}</b><br><code>${esc(p.id)}</code></td>
+      <td><span class="badge b-${esc(p.status)}">${esc(p.status)}</span></td>
+      <td>${esc(gpuName(p.gpu))}${p.gpu_count > 1 ? " ×" + p.gpu_count : ""}<br><span class="muted">${esc(p.cloud || "")}</span></td>
+      <td class="num">${money(p.cost)}</td>
+      <td class="num">${p.ram ?? "—"} GB / ${p.vcpu ?? "—"}</td>
+      <td>${esc(p.dc || "—")}<br><span class="muted">CUDA ${esc(p.cuda || "—")}</span></td>
+      <td><a href="${esc(p.app_url)}" target="_blank" rel="noopener">app :7860</a>${p.ssh ? `<br><span class="copy muted" data-copy="${esc(p.ssh)}" title="${esc(p.ssh)}">copy SSH</span>` : ""}</td>
+      <td style="white-space:nowrap">${btn("start", "▶ Start")} ${btn("stop", "■ Stop")} ${btn("restart", "↻")} ${btn("terminate", "Terminate", "danger")}</td>
+    </tr>`;
+  }).join("") || '<tr><td colspan="8" class="muted">No pods on this account.</td></tr>';
+  $("podRows").querySelectorAll("[data-act]").forEach(b => b.onclick = () => podAction(pods[b.dataset.i], b.dataset.act));
+  wireCopy($("podRows"));
+}
+$("refreshPods").onclick = refreshPods;
+
+async function podAction(p, action) {
+  $("podsError").innerHTML = "";
+  if (action === "terminate" && !confirm(`Terminate ${p.name} (${p.id})?\n\nIts disk and volume are deleted for good.`)) return;
+  if (action === "stop" && !confirm(`Stop ${p.name} (${p.id})?\n\nThe container disk is wiped; only a volume survives.`)) return;
+  try { await api("/api/pods/action", {account: account(), id: p.id, action}); }
+  catch (e) {
+    $("podsError").textContent = e.message;
+    if (action === "start" && e.data && e.data.no_gpu) {
+      const b = document.createElement("button");
+      b.className = "small"; b.style.marginLeft = "10px"; b.textContent = "🎯 Snipe a new one like it";
+      b.onclick = () => snipeLike(p);
+      $("podsError").appendChild(b);
+    }
+  }
+  setTimeout(refreshPods, 800);
+}
+
+// Load the form with a stopped pod's GPU, cloud and name, ready to Snipe.
+function snipeLike(p) {
+  const base = cfg.presets.find(x => x.name === currentPreset) || cfg.presets[0] || {};
+  presetToForm({...base, name: "", gpus: [p.gpu], cloud: p.cloud || base.cloud, gpu_count: p.gpu_count || 1, pod_name: p.name});
+  currentPreset = null; loaded = null; planHint();
+  $("snipe").scrollIntoView({behavior: "smooth", block: "center"});
+}
+
+function wireCopy(root) {
+  root.querySelectorAll("[data-copy]").forEach(el => el.onclick = async () => {
+    await navigator.clipboard.writeText(el.dataset.copy);
+    const was = el.textContent; el.textContent = "copied ✓"; setTimeout(() => el.textContent = was, 1200);
+  });
+}
+
+// ── polling ────────────────────────────────────────────────────────
+let timer = null;
+async function poll() {
+  clearTimeout(timer);
+  let running = false;
+  try {
+    const s = lastStatus = await api("/api/status");
+    $("topError").textContent = "";
+    showWatchers(s); showBudget(s);
+    running = s.watchers.some(w => w.status === "running");
+  } catch (e) { $("topError").textContent = "Server not answering: " + e.message; }
+  timer = setTimeout(poll, running ? 1000 : 3000);
+}
+
+$("account").onchange = () => {
+  localStorage.setItem("sniper.account", account());
+  if (lastStatus) { showWatchers(lastStatus); showBudget(lastStatus); }
+  refreshPods();
+};
+
+async function init() {
+  cfg = await api("/api/config");
+  gpus = cfg.gpus;
+  $("dry").innerHTML = cfg.dry_run ? '<span class="dry">DRY RUN — fake Runpod, nothing is created</span>' : "";
+  $("priceNote").textContent = cfg.prices_read ? "list prices read " + cfg.prices_read : "";
+  $("account").innerHTML = cfg.accounts.map(a => `<option>${esc(a)}</option>`).join("");
+  const saved = localStorage.getItem("sniper.account");
+  if (saved && cfg.accounts.includes(saved)) $("account").value = saved;
+  if (!cfg.accounts.length)
+    $("topError").textContent = "No API key found. Copy runpod_sniper/.env.example to runpod_sniper/.env, add RUNPOD_API_KEY=…, and reload.";
+  savedLicence = cfg.licence; $("licInput").value = cfg.licence || "";
+  cudaVersions = [...cfg.cuda_versions]; showLicence();
+  showGpus(); showDcs();
+  if (cfg.presets.length) presetToForm(cfg.presets[0]); else { showGpuList(); showChips(); }
+  poll(); refreshPods();
+}
+init().catch(e => $("topError").textContent = e.message);
+</script>
+</body>
+</html>

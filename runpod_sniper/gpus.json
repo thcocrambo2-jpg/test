@@ -1,0 +1,29 @@
+{
+  "prices_read": "2026-11-03",
+  "gpus": [
+    {"name": "RTX 5090", "id": "NVIDIA GeForce RTX 5090", "vram": 32,
+     "community": 0.69, "secure": 1.19,
+     "note": "Krea train default; Community stock goes in milliseconds"},
+    {"name": "RTX 4090", "id": "NVIDIA GeForce RTX 4090", "vram": 24,
+     "community": 0.34, "secure": 0.89,
+     "note": "Cheapest that trains; 24 GB is tight"},
+    {"name": "RTX PRO 4500", "id": "NVIDIA RTX PRO 4500 Blackwell", "vram": 32,
+     "community": null, "secure": 0.72,
+     "note": "Secure only; 5090-class VRAM for less"},
+    {"name": "L40S", "id": "NVIDIA L40S", "vram": 48,
+     "community": 0.79, "secure": 1.09,
+     "note": "48 GB, slower than a 5090"},
+    {"name": "RTX 6000 Ada", "id": "NVIDIA RTX 6000 Ada Generation", "vram": 48,
+     "community": 0.74, "secure": 0.99,
+     "note": "48 GB Ada"},
+    {"name": "RTX PRO 6000 WK", "id": "NVIDIA RTX PRO 6000 Blackwell Workstation Edition", "vram": 96,
+     "community": 1.69, "secure": 2.59,
+     "note": "96 GB workstation card"},
+    {"name": "RTX PRO 6000 Server", "id": "NVIDIA RTX PRO 6000 Blackwell Server Edition", "vram": 96,
+     "community": 1.69, "secure": 2.49,
+     "note": "96 GB server card"},
+    {"name": "A100 PCIe 80GB", "id": "NVIDIA A100 80GB PCIe", "vram": 80,
+     "community": 1.19, "secure": 1.79,
+     "note": "80 GB; older and slower than Blackwell"}
+  ]
+}

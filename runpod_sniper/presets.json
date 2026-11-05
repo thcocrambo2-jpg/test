@@ -1,0 +1,78 @@
+[
+  {
+    "name": "5090 · Community · 1000 Mbps",
+    "gpus": [
+      "NVIDIA GeForce RTX 5090"
+    ],
+    "gpu_count": 1,
+    "cloud": "COMMUNITY",
+    "template_id": "yjkhkejrf7",
+    "container_disk_gb": 120,
+    "volume_gb": 0,
+    "min_download_mbps": 1000,
+    "min_vcpu_per_gpu": 0,
+    "min_ram_per_gpu": 0,
+    "data_centers": [],
+    "cuda_versions": [],
+    "public_ip": false,
+    "max_price": 0.8,
+    "minutes": 15,
+    "pod_name": "ember-train-5090",
+    "api": "auto"
+  },
+  {
+    "name": "5090 · Secure · Europe",
+    "gpus": [
+      "NVIDIA GeForce RTX 5090"
+    ],
+    "gpu_count": 1,
+    "cloud": "SECURE",
+    "template_id": "yjkhkejrf7",
+    "container_disk_gb": 120,
+    "volume_gb": 0,
+    "min_download_mbps": 0,
+    "min_vcpu_per_gpu": 0,
+    "min_ram_per_gpu": 0,
+    "data_centers": [
+      "EU-CZ-1",
+      "EU-FR-1",
+      "EU-NL-1",
+      "EU-RO-1",
+      "EU-SE-1",
+      "EUR-IS-1",
+      "EUR-IS-2",
+      "EUR-IS-3",
+      "EUR-IS-4",
+      "EUR-IS-5",
+      "EUR-NO-1",
+      "EUR-NO-2"
+    ],
+    "cuda_versions": [],
+    "public_ip": false,
+    "max_price": 1.25,
+    "minutes": 15,
+    "pod_name": "ember-train-5090-eu",
+    "api": "auto"
+  },
+  {
+    "name": "PRO 4500 · Secure",
+    "gpus": [
+      "NVIDIA RTX PRO 4500 Blackwell"
+    ],
+    "gpu_count": 1,
+    "cloud": "SECURE",
+    "template_id": "yjkhkejrf7",
+    "container_disk_gb": 120,
+    "volume_gb": 0,
+    "min_download_mbps": 0,
+    "min_vcpu_per_gpu": 0,
+    "min_ram_per_gpu": 0,
+    "data_centers": [],
+    "cuda_versions": [],
+    "public_ip": false,
+    "max_price": 0.8,
+    "minutes": 15,
+    "pod_name": "ember-train-pro4500",
+    "api": "auto"
+  }
+]
