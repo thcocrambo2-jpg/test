@@ -48,6 +48,9 @@ the page loads, so after editing it, just reload the page.
 
 ## Run
 
+Needs Python 3.10 or newer and no packages: everything is in the standard
+library (see `requirements.txt`).
+
 ```
 python runpod_sniper/server.py                # real Runpod, http://127.0.0.1:7895
 python runpod_sniper/server.py --dry-run      # fake Runpod, nothing is created
@@ -179,4 +182,5 @@ codes and messages as the real API:
 | `gpus.json` | The GPU table, with list prices read 2026-11-03 |
 | `presets.json` | Presets; "Save as preset" writes here |
 | `fake.py` | The fake Runpod for `--dry-run` |
+| `requirements.txt` | Lists no packages: the sniper uses only the standard library |
 | `.env.example` | Template for `.env` |

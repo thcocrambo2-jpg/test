@@ -1,0 +1,4 @@
+# runpod_sniper needs Python 3.10 or newer and nothing else: server.py and
+# fake.py use only the standard library (winsound, for the alarm, is built
+# into Python on Windows). `pip install -r runpod_sniper/requirements.txt`
+# therefore installs nothing; this file is here so that stays explicit.
