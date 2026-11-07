@@ -2,3 +2,4 @@
 runs/
 # The backend's licence key and tokens.
 .env
+prompts.json
