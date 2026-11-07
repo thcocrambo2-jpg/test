@@ -129,6 +129,36 @@
          border-radius:var(--r-full); padding:2px 10px; font-size:var(--t-xs); font-weight:var(--fw-semibold); }
   .copy { cursor:pointer; }
   .copy:hover { text-decoration:underline; }
+  /* Pod health: chips on the pod card, a status line, the warning banner. */
+  .health { display:grid; gap:6px; padding-top:6px; border-top:1px solid var(--c-border); }
+  .hchips { display:flex; flex-wrap:wrap; gap:6px; }
+  .hchip { padding:2px 9px; border-radius:var(--r-full); border:1px solid var(--c-border); font-size:var(--t-xs);
+           background:var(--c-bg-sunken); color:var(--c-text); white-space:nowrap; }
+  .hchip i { font-style:normal; color:var(--c-text-muted); margin-right:4px; }
+  .hchip.ok { border-color:var(--c-success-line); }
+  .hchip.warn { border-color:var(--c-warning-line); background:var(--c-warning-soft); color:var(--c-warning); }
+  .hchip.bad { border-color:var(--c-error-line); background:var(--c-error-soft); color:var(--c-error); }
+  .hchip.wait { color:var(--c-text-faint); }
+  .hfind { margin:0; padding-left:18px; font-size:var(--t-xs); }
+  .hfind li.warn { color:var(--c-warning); } .hfind li.bad { color:var(--c-error); } .hfind li.info { color:var(--c-text-muted); }
+  .hfind li.acked { opacity:.6; }
+  .hfind pre { max-height:120px; margin-top:4px; }
+  .b-checking { color:var(--c-accent); border-color:var(--c-accent-line); background:var(--c-accent-soft); }
+  .b-good { color:var(--c-success); border-color:var(--c-success-line); background:var(--c-success-soft); }
+  .b-warning { color:var(--c-warning); border-color:var(--c-warning-line); background:var(--c-warning-soft); }
+  .b-bad { color:var(--c-error); border-color:var(--c-error-line); background:var(--c-error-soft); }
+  .b-ended, .b-unknown { color:var(--c-text-muted); }
+  .hbanner { position:sticky; top:0; z-index:var(--z-panel, 20); display:grid; gap:8px; }
+  .hbanner:empty { display:none; }
+  .hwarn { border:1px solid var(--c-warning-line); background:var(--c-warning-soft); border-radius:var(--r-md);
+           padding:10px 12px; display:grid; gap:6px; box-shadow:var(--sh-lg); }
+  .hwarn.bad { border-color:var(--c-error-line); background:var(--c-error-soft); }
+  .hwarn header { display:flex; gap:10px; align-items:center; flex-wrap:wrap; }
+  .hwarn header b { flex:1; }
+  .hwarn ul { margin:0; padding-left:18px; font-size:var(--t-sm); }
+  tr.hrow td { background:var(--c-bg-sunken); }
+  .split { display:grid; grid-template-columns:1fr 1fr; gap:16px; }
+  @media (max-width:860px) { .split { grid-template-columns:1fr; } }
 </style>
 </head>
 <body>
@@ -144,8 +174,10 @@
   <nav class="tabs" id="nav">
     <a href="#sniper" data-page="sniper">🎯 Sniper</a>
     <a href="#downloads" data-page="downloads">⬇ Auto download</a>
+    <a href="#history" data-page="history">📊 Pods</a>
   </nav>
   <div class="error" id="topError"></div>
+  <div class="hbanner" id="healthBanner"></div>
 
   <div class="page" id="page-sniper">
   <section class="card">
@@ -194,9 +226,16 @@
       <label class="check" style="margin-top:18px"><input type="checkbox" id="public_ip"> Public IP</label>
     </div>
     <div style="margin-top:10px">
-      <label>Data centers (none = anywhere)</label>
+      <label>Data centers — Secure only (none = anywhere). Community hosts have no data center and ignore this: use Countries below.</label>
       <div class="dcs" id="dcs" style="margin-top:4px"></div>
     </div>
+    <div class="grid" style="margin-top:10px; grid-template-columns:2fr 1fr 1fr">
+      <label>Countries (two-letter codes, e.g. FR, US — empty = anywhere)
+        <input id="countries" placeholder="e.g. FR" spellcheck="false" style="font-family:var(--font-mono)"></label>
+      <label>Country list is <select id="country_mode"><option value="block">blocked</option><option value="allow">the only ones allowed</option></select></label>
+      <label>Wrong country or blocked host <select id="country_action"><option value="terminate">terminate, keep sniping</option><option value="warn">keep it, warn me</option></select></label>
+    </div>
+    <div class="muted" style="margin-top:4px">The country comes from the won pod's machine, read right after the win. Hosts you block from a pod's health check (📊 Pods) are thrown back the same way.</div>
     <div class="row">
       <span class="muted" id="planHint"></span>
     </div>
@@ -257,6 +296,41 @@
     <h2>Other downloads <span class="muted">pods not on this account's list (another account, or gone)</span></h2>
     <div id="dlOther"></div>
   </section>
+  </div>
+
+  <div class="page" id="page-history" hidden>
+  <section class="card">
+    <h2>Checked pods <span class="muted">every pod the sniper won or you checked, newest first (pods-history.jsonl, kept on this PC)</span></h2>
+    <div class="row" style="margin-top:0">
+      <button class="ghost" id="histRefresh">↻ Refresh</button>
+      <span class="muted">Net = Ember's speed test (or the download speed from the log); GPU = TFLOPS as a share of the normal for that card, learned from your good pods.</span>
+    </div>
+    <div class="error" id="histError"></div>
+    <div style="overflow-x:auto"><table style="margin-top:10px">
+      <thead><tr><th>Won</th><th>Pod</th><th>GPU</th><th>Where</th><th>$/hr</th><th>Net MB/s</th><th>GPU</th><th>PCIe</th><th>RAM</th><th>Verdict</th><th>Flags</th><th></th></tr></thead>
+      <tbody id="histRows"><tr><td colspan="12" class="muted">—</td></tr></tbody>
+    </table></div>
+  </section>
+  <div class="split">
+    <section class="card">
+      <h2>By country</h2>
+      <table><thead><tr><th>Country</th><th>Pods</th><th>Net MB/s</th><th>GPU</th><th>Warned</th><th>Bad</th></tr></thead><tbody id="histCountries"></tbody></table>
+    </section>
+    <section class="card">
+      <h2>Normal per GPU <span class="muted">medians of the last 10 clean pods</span></h2>
+      <table><thead><tr><th>GPU</th><th>TFLOPS</th><th>H2D GB/s</th><th>Pods</th></tr></thead><tbody id="histBaselines"></tbody></table>
+    </section>
+  </div>
+  <div class="split">
+    <section class="card">
+      <h2>Hosts seen twice or more</h2>
+      <table><thead><tr><th>Machine</th><th>Pods</th><th>Net MB/s</th><th>GPU</th><th>Warned</th><th></th></tr></thead><tbody id="histMachines"></tbody></table>
+    </section>
+    <section class="card">
+      <h2>Blocked hosts <span class="muted">thrown back by the location guard</span></h2>
+      <table><thead><tr><th>Machine</th><th>Why</th><th>Since</th><th></th></tr></thead><tbody id="histBlocked"></tbody></table>
+    </section>
+  </div>
   </div>
 </main>
 
@@ -363,10 +437,14 @@ function formToPreset() {
     template_id: $("template_id").value.trim(), pod_name: $("pod_name").value.trim(),
     api: $("api").value, public_ip: $("public_ip").checked,
     cuda_versions: [...$("cudaList").querySelectorAll("[data-cuda]:checked")].map(c => c.dataset.cuda),
-    data_centers: [...$("dcs").querySelectorAll("[data-dc]:checked")].map(c => c.dataset.dc)};
+    data_centers: [...$("dcs").querySelectorAll("[data-dc]:checked")].map(c => c.dataset.dc),
+    countries: [...new Set($("countries").value.toUpperCase().split(/[\s,;]+/).filter(Boolean))].sort(),
+    country_mode: $("country_mode").value, country_action: $("country_action").value};
   for (const k of NUMS) p[k] = Number($(k).value || 0);
   return p;
 }
+// Presets saved before the location guard have no country fields.
+const GUARD_DEFAULTS = {countries: [], country_mode: "block", country_action: "terminate"};
 // ── CUDA: a checkbox dropdown, like Runpod's own filter. None ticked =
 // the template's own range (13.0–13.4 for yjkhkejrf7); ticking any
 // replaces that range entirely.
@@ -394,8 +472,8 @@ document.addEventListener("click", e => { if (!$("cudaPick").contains(e.target))
 
 // The preset the form was loaded from, to tell when the form has drifted.
 let loaded = null;
-const norm = p => JSON.stringify(Object.keys(p).filter(k => k !== "name").sort()
-  .map(k => [k, Array.isArray(p[k]) && k !== "gpus" ? [...p[k]].sort() : p[k]]));
+const norm = q => { const p = {...GUARD_DEFAULTS, ...q}; return JSON.stringify(Object.keys(p).filter(k => k !== "name").sort()
+  .map(k => [k, Array.isArray(p[k]) && k !== "gpus" ? [...p[k]].sort() : p[k]])); };
 function edited() {
   if (!loaded) return false;
   try { return norm(formToPreset()) !== norm(loaded); } catch (e) { return true; }
@@ -415,6 +493,9 @@ function presetToForm(p) {
   const dcs = new Set(p.data_centers || []);
   $("dcs").querySelectorAll("[data-dc]").forEach(c => c.checked = dcs.has(c.dataset.dc));
   syncRegions();
+  $("countries").value = (p.countries || []).join(", ");
+  $("country_mode").value = p.country_mode || "block";
+  $("country_action").value = p.country_action || "terminate";
   $("presetName").value = p.name || "";
   showChips(); planHint();
 }
@@ -571,6 +652,48 @@ function podCard(pod) {
     </div>
     <div>App: <a href="${esc(pod.app_url)}" target="_blank" rel="noopener">${esc(pod.app_url)}</a></div>
     <div>SSH: ${ssh}</div>
+    ${healthHtml(pod.health)}
+  </div>`;
+}
+
+// ── pod health: what the server's health watch found ───────────────
+const fmt = (v, d = 0) => v == null || v === "" ? "—" : Number(v).toFixed(d);
+const etaMin = mbs => Math.round(90000 / Math.max(mbs, 0.1) / 60);
+const CHIP_CODES = {
+  where: ["location"], net: ["net_slow", "dl_slow", "rx_slow", "net_error"],
+  gpu: ["gpu_slow", "gpu_throttle", "gpu_drop", "power_capped", "gpu_hot", "gpu_error"],
+  pcie: ["pcie_slow"], ram: ["ram_low"], disk: ["host_disk_slow", "disk_slow"], image: ["image_slow", "image_stuck"]};
+function chipLevel(h, codes) {
+  const f = h.findings.filter(x => codes.includes(x.code) && !x.acked);
+  return f.some(x => x.level === "bad") ? "bad" : f.some(x => x.level === "warn") ? "warn" : "ok";
+}
+function healthChips(h) {
+  const m = h.metrics || {}, g = m.gpu, img = m.image || {}, dl = m.download || {};
+  const chip = (label, val, codes, title) => `<span class="hchip ${val == null ? "wait" : chipLevel(h, codes)}" title="${esc(title || "")}"><i>${label}</i>${val == null ? "…" : esc(val)}</span>`;
+  const where = m.country ? m.country + (m.machine ? " · " + m.machine.slice(0, 8) : "") : null;
+  const net = m.net_mbs != null ? `${fmt(m.net_mbs)} MB/s (≈ ${etaMin(m.net_mbs)} min / 90 GB)`
+    : dl.mbs != null ? `${fmt(dl.mbs)} MB/s${dl.source === "log gaps" ? " (from the log)" : ""}` : null;
+  const gpu = g ? `${fmt(g.tflops)} TFLOPS · ${g.score != null ? Math.round(g.score * 100) + "%" : "learning " + g.learning}`
+    : m.old_build ? "not measured (old build)" : null;
+  const pcie = g && (g.pcie || g.h2d_gbs != null) ? `${g.pcie || "?"} · ${fmt(g.h2d_gbs, 1)} GB/s` : null;
+  const image = img.method === "cached" ? "cached" : img.mbs != null ? fmt(img.mbs) + " MB/s" : null;
+  return chip("🌍", where, CHIP_CODES.where, "host country · machine id")
+    + chip("Net", net, CHIP_CODES.net, "Ember's speed test of the model mirror, or the download speed worked out from the log")
+    + chip("GPU", gpu, CHIP_CODES.gpu, "bf16 matmul TFLOPS, as a share of the normal for this card")
+    + chip("PCIe", pcie, CHIP_CODES.pcie, "link under load · host→GPU copy speed")
+    + chip("RAM", m.ram_gb != null ? fmt(m.ram_gb) + " GB" : null, CHIP_CODES.ram)
+    + chip("Disk", m.host_disk_mbs != null ? (m.host_disk_mbs / 1000).toFixed(1) + " GB/s" : null, CHIP_CODES.disk, "Runpod's figure for the host disk")
+    + chip("Image", image, CHIP_CODES.image, "the Docker image pull (a rough hint only)");
+}
+function healthHtml(h) {
+  if (!h) return "";
+  const finds = h.findings.map(f => `<li class="${esc(f.level)}${f.acked ? " acked" : ""}">${esc(f.text)}${f.acked ? " <span class='faint'>(kept)</span>" : ""}`
+    + (f.excerpt && f.excerpt.length ? `<details><summary class="faint">log lines</summary><pre>${esc(f.excerpt.join("\n"))}</pre></details>` : "") + "</li>").join("");
+  return `<div class="health">
+    <div class="row" style="margin:0"><span class="badge b-${esc(h.status)}" title="pod health">🩺 ${esc(h.status)}</span>
+      <span class="muted">${esc(h.phase || "")}${h.decision ? " · " + esc(h.decision) : ""}</span></div>
+    <div class="hchips">${healthChips(h)}</div>
+    ${finds ? `<ul class="hfind">${finds}</ul>` : ""}
   </div>`;
 }
 
@@ -641,6 +764,65 @@ function alarm() {
   let n = 0; const title = document.title;
   const flash = setInterval(() => { document.title = n++ % 2 ? title : "🎯 GPU WON!"; if (n > 20) { clearInterval(flash); document.title = title; } }, 600);
 }
+// A pod check warning: two soft sine notes, once — nothing like the siren.
+function softBeep() {
+  unlockAudio(); if (!audio) return;
+  const t0 = audio.currentTime;
+  [[660, 0], [440, 0.3]].forEach(([f, d]) => {
+    const o = audio.createOscillator(), g = audio.createGain();
+    o.type = "sine"; o.frequency.value = f;
+    g.gain.setValueAtTime(0.0001, t0 + d);
+    g.gain.exponentialRampToValueAtTime(0.12, t0 + d + 0.02);
+    g.gain.exponentialRampToValueAtTime(0.0001, t0 + d + 0.25);
+    o.connect(g).connect(audio.destination); o.start(t0 + d); o.stop(t0 + d + 0.27);
+  });
+  let n = 0; const title = document.title;
+  const flash = setInterval(() => { document.title = n++ % 2 ? title : "⚠ pod check"; if (n > 6) { clearInterval(flash); document.title = title; } }, 700);
+}
+// Browsers only play sound after a click on the page.
+document.addEventListener("click", unlockAudio, {once: true});
+
+// The warning banner: every watched pod with a warning nobody has kept yet.
+function drawBanner(list) {
+  const warn = (list || []).filter(h => (h.status === "warning" || h.status === "bad") && !h.ended);
+  const html = warn.map(h => {
+    const m = h.metrics || {}, pv = h.pod_view || {};
+    const fs = h.findings.filter(f => !f.acked && (f.level === "warn" || f.level === "bad"));
+    return `<div class="hwarn ${h.status === "bad" ? "bad" : ""}"><header><span>⚠</span>
+      <b>Pod <code>${esc(h.pod)}</code> ${h.status === "bad" ? "has a problem" : "looks wrong"}
+        <span class="muted">${esc(gpuName(pv.gpu) || "")}${m.country ? " · " + esc(m.country) : ""} · ${money(pv.cost)}/hr · ${esc(h.account || "")}</span></b>
+      <button class="danger small" data-hterm="${esc(h.pod)}" data-acct="${esc(h.account || "")}">Terminate</button>
+      <button class="ghost small" data-hkeep="${esc(h.pod)}">Keep</button>
+      ${m.machine ? `<button class="ghost small" data-hblock="${esc(h.pod)}">Block this host</button>` : ""}</header>
+      <ul>${fs.map(f => `<li>${esc(f.text)}</li>`).join("")}</ul></div>`;
+  }).join("");
+  if ($("healthBanner").innerHTML !== html) {
+    $("healthBanner").innerHTML = html;
+    $("healthBanner").querySelectorAll("[data-hterm]").forEach(b => b.onclick = () => healthTerminate(b.dataset.hterm, b.dataset.acct));
+    $("healthBanner").querySelectorAll("[data-hkeep]").forEach(b => b.onclick = () => api("/api/health/keep", {id: b.dataset.hkeep}).then(poll).catch(e => alert(e.message)));
+    $("healthBanner").querySelectorAll("[data-hblock]").forEach(b => b.onclick = () => blockHost(warn.find(h => h.pod === b.dataset.hblock)));
+  }
+  // One soft beep per new warning, even across a page refresh.
+  for (const h of warn) {
+    const key = "warned." + h.pod + "." + h.warn_seq;
+    if (h.warn_seq && !localStorage.getItem(key)) { localStorage.setItem(key, "1"); softBeep(); }
+  }
+}
+async function healthTerminate(id, acct) {
+  if (!confirm(`Terminate ${id}?\n\nIts disk and volume are deleted for good.`)) return;
+  try { await api("/api/pods/action", {account: acct || account(), id, action: "terminate"}); }
+  catch (e) { alert(e.message); }
+  poll(); setTimeout(refreshPods, 800);
+}
+async function blockHost(h) {
+  if (!h) return;
+  const m = h.metrics || {}, first = h.findings.find(f => f.level !== "info");
+  if (!confirm(`Block host ${m.machine}${m.country ? " (" + m.country + ")" : ""}?\n\nFuture wins on this machine are thrown back, like a blocked country (when the preset's action is "terminate").`)) return;
+  try {
+    await api("/api/hosts/block", {machine: m.machine, pod: h.pod, gpu: (h.pod_view || {}).gpu, country: m.country, why: first ? first.text : ""});
+    if (!h.ended) await healthTerminate(h.pod, h.account);
+  } catch (e) { alert(e.message); }
+}
 
 // ── 4 · my pods ────────────────────────────────────────────────────
 let pods = [];
@@ -661,11 +843,32 @@ async function refreshPods() {
       <td class="num">${p.ram ?? "—"} GB / ${p.vcpu ?? "—"}</td>
       <td>${esc(p.dc || "—")}<br><span class="muted">CUDA ${esc(p.cuda || "—")}</span></td>
       <td><a href="${esc(p.app_url)}" target="_blank" rel="noopener">app :7860</a>${p.ssh ? `<br><span class="copy muted" data-copy="${esc(p.ssh)}" title="${esc(p.ssh)}">copy SSH</span>` : ""}</td>
-      <td style="white-space:nowrap">${btn("start", "▶ Start")} ${btn("stop", "■ Stop")} ${btn("restart", "↻")} ${btn("terminate", "Terminate", "danger")}</td>
-    </tr>`;
+      <td style="white-space:nowrap">${p.status === "RUNNING" ? `<button class="ghost small" data-check="${i}" title="Check this pod's internet, GPU and errors">🩺 Check</button> ` : ""}${btn("start", "▶ Start")} ${btn("stop", "■ Stop")} ${btn("restart", "↻")} ${btn("terminate", "Terminate", "danger")}</td>
+    </tr><tr class="hrow" data-hpod="${esc(p.id)}" hidden><td colspan="8"></td></tr>`;
   }).join("") || '<tr><td colspan="8" class="muted">No pods on this account.</td></tr>';
   $("podRows").querySelectorAll("[data-act]").forEach(b => b.onclick = () => podAction(pods[b.dataset.i], b.dataset.act));
+  $("podRows").querySelectorAll("[data-check]").forEach(b => b.onclick = async () => {
+    try { await api("/api/health/check", {account: account(), id: pods[b.dataset.check].id}); poll(); }
+    catch (e) { $("podsError").textContent = e.message; }
+  });
   wireCopy($("podRows"));
+  drawPodHealth();
+}
+
+// The health watch of each pod in the list, under its row.
+function drawPodHealth() {
+  const byPod = Object.fromEntries(((lastStatus && lastStatus.health) || []).map(h => [h.pod, h]));
+  $("podRows").querySelectorAll("tr.hrow").forEach(row => {
+    const h = byPod[row.dataset.hpod];
+    row.hidden = !h;
+    const html = h ? healthHtml(h) + `<div class="row" style="margin-top:6px"><button class="ghost small" data-forget="${esc(h.pod)}">Stop watching</button>
+      <span class="faint">${h.lines} log lines · ${h.stream_requests} log request(s)</span></div>` : "";
+    const td = row.firstElementChild;
+    if (td.innerHTML !== html) {
+      td.innerHTML = html;
+      td.querySelectorAll("[data-forget]").forEach(b => b.onclick = () => api("/api/health/forget", {id: b.dataset.forget}).then(poll));
+    }
+  });
 }
 $("refreshPods").onclick = refreshPods;
 
@@ -709,10 +912,11 @@ async function poll() {
   try {
     const s = lastStatus = await api("/api/status");
     $("topError").textContent = "";
-    showWatchers(s); showBudget(s);
+    showWatchers(s); showBudget(s); drawBanner(s.health); drawPodHealth();
     if (!$("page-downloads").hidden) drawDlJobs();
     running = s.watchers.some(w => w.status === "running")
-      || (s.downloads || []).some(d => !["stopped", "error"].includes(d.status));
+      || (s.downloads || []).some(d => !["stopped", "error"].includes(d.status))
+      || (s.health || []).some(h => h.status === "checking" && !h.ended);
   } catch (e) { $("topError").textContent = "Server not answering: " + e.message; }
   timer = setTimeout(poll, running ? 1000 : 3000);
 }
@@ -842,9 +1046,56 @@ function drawDlJobs() {
 }
 $("dlRefresh").onclick = refreshDl;
 
+// ── 📊 Pods: the health history ─────────────────────────────────────
+async function refreshHist() {
+  $("histError").textContent = "";
+  let r;
+  try { r = await api("/api/history"); } catch (e) { $("histError").textContent = e.message; return; }
+  const blocked = r.blocked || {};
+  const pct = v => v == null ? "" : " · " + Math.round(v * 100) + "%";
+  $("histRows").innerHTML = r.pods.map(p => `<tr>
+    <td class="num">${p.won_at ? esc(new Date(p.won_at).toLocaleString()) : "—"}</td>
+    <td><code>${esc(p.pod)}</code><br><span class="muted">${esc(p.source || "")} · ${esc(p.account || "")}</span></td>
+    <td>${esc(gpuName(p.gpu) || "—")}<br><span class="muted">${esc(p.cloud || "")}</span></td>
+    <td>${esc(p.country || p.dc || "—")}${p.machine ? `<br><span class="muted mono">${esc(p.machine)}</span>` : ""}</td>
+    <td class="num">${money(p.cost)}</td>
+    <td class="num">${fmt(p.net_mbs ?? p.dl_mbs)}${p.net_mbs == null && p.dl_mbs != null ? ' <span class="faint">(log)</span>' : ""}</td>
+    <td class="num">${p.gpu_tflops != null ? fmt(p.gpu_tflops) + pct(p.gpu_score) : (p.old_build ? '<span class="faint">old build</span>' : "—")}</td>
+    <td>${esc(p.pcie || "—")}${p.h2d_gbs != null ? " · " + fmt(p.h2d_gbs, 1) + " GB/s" : ""}</td>
+    <td class="num">${fmt(p.ram_gb)}</td>
+    <td><span class="badge b-${esc(p.verdict)}">${esc(p.verdict || "—")}</span>${p.decision ? `<br><span class="muted">${esc(p.decision)}</span>` : ""}</td>
+    <td class="muted">${esc((p.flags || []).join(", "))}</td>
+    <td>${p.machine && !blocked[p.machine] ? `<button class="ghost small" data-blockm="${esc(p.machine)}" data-pod="${esc(p.pod)}" data-gpu="${esc(p.gpu || "")}" data-country="${esc(p.country || "")}">Block host</button>` : ""}</td>
+  </tr>`).join("") || '<tr><td colspan="12" class="muted">No pods checked yet. A snipe that wins, or 🩺 Check in My pods, adds one.</td></tr>';
+  const byPods = o => Object.entries(o || {}).sort((a, b) => b[1].pods - a[1].pods);
+  $("histCountries").innerHTML = byPods(r.summary.by_country).map(([c, g]) => `<tr><td><b>${esc(c)}</b></td><td class="num">${g.pods}</td>
+    <td class="num">${fmt(g.net_mbs)}</td><td class="num">${g.gpu_score != null ? Math.round(g.gpu_score * 100) + "%" : "—"}</td>
+    <td class="num">${g.warned}</td><td class="num">${g.bad}</td></tr>`).join("") || '<tr><td colspan="6" class="muted">—</td></tr>';
+  $("histMachines").innerHTML = byPods(r.summary.by_machine).filter(([, g]) => g.pods >= 2).map(([mid, g]) => `<tr><td class="mono">${esc(mid)}</td>
+    <td class="num">${g.pods}</td><td class="num">${fmt(g.net_mbs)}</td><td class="num">${g.gpu_score != null ? Math.round(g.gpu_score * 100) + "%" : "—"}</td>
+    <td class="num">${g.warned}</td><td>${blocked[mid] ? '<span class="faint">blocked</span>' : `<button class="ghost small" data-blockm="${esc(mid)}">Block</button>`}</td></tr>`).join("")
+    || '<tr><td colspan="6" class="muted">No host seen twice yet.</td></tr>';
+  $("histBaselines").innerHTML = Object.entries(r.baselines || {}).map(([gpu, b]) => `<tr><td>${esc(gpuName(gpu))}</td>
+    <td class="num">${fmt(b.tflops)}</td><td class="num">${fmt(b.h2d_gbs, 1)}</td>
+    <td class="num">${b.n}${b.from === "seed" ? ' <span class="faint">(gpus.json)</span>' : b.n < r.thresholds.baseline_min ? ` <span class="faint">(learning — used from ${r.thresholds.baseline_min})</span>` : ""}</td></tr>`).join("")
+    || '<tr><td colspan="4" class="muted">Learned from the first good pods of each card.</td></tr>';
+  $("histBlocked").innerHTML = Object.entries(blocked).map(([mid, b]) => `<tr><td class="mono">${esc(mid)}<br><span class="muted">${esc(gpuName(b.gpu) || "")} ${esc(b.country || "")}</span></td>
+    <td class="muted">${esc(b.why || "")}</td><td class="num">${b.at ? esc(new Date(b.at).toLocaleDateString()) : ""}</td>
+    <td><button class="ghost small" data-unblock="${esc(mid)}">Unblock</button></td></tr>`).join("") || '<tr><td colspan="4" class="muted">None.</td></tr>';
+  document.querySelectorAll("#page-history [data-blockm]").forEach(b => b.onclick = async () => {
+    if (!confirm(`Block host ${b.dataset.blockm}? Future wins on it are thrown back.`)) return;
+    await api("/api/hosts/block", {machine: b.dataset.blockm, pod: b.dataset.pod || "", gpu: b.dataset.gpu || "",
+      country: b.dataset.country || "", why: "blocked from the history"}).catch(e => alert(e.message));
+    refreshHist();
+  });
+  document.querySelectorAll("#page-history [data-unblock]").forEach(b => b.onclick = () =>
+    api("/api/hosts/unblock", {machine: b.dataset.unblock}).then(refreshHist).catch(e => alert(e.message)));
+}
+$("histRefresh").onclick = refreshHist;
+
 // ── navbar: one page shown at a time, chosen by the URL hash so a refresh
 // stays on the same page ────────────────────────────────────────────
-const PAGES = ["sniper", "downloads"];
+const PAGES = ["sniper", "downloads", "history"];
 function showPage() {
   const want = location.hash.slice(1);
   const page = PAGES.includes(want) ? want : "sniper";
@@ -852,6 +1103,7 @@ function showPage() {
   $("nav").querySelectorAll("a").forEach(a => a.classList.toggle("on", a.dataset.page === page));
   clearInterval(dlTimer);
   if (page === "downloads" && cfg) { refreshDl(); dlTimer = setInterval(refreshDl, 20000); }
+  if (page === "history" && cfg) refreshHist();
 }
 window.addEventListener("hashchange", showPage);
 showPage();

@@ -4,3 +4,12 @@
 # Running downloads (folders, maybe an app access key), resumed on restart.
 downloads.json
 downloads.json.part
+
+# Pod health: every checked pod's results, the image's layer sizes, and
+# hosts you blocked. Local, like the downloads (".dry" ones from dry runs).
+pods-history*.jsonl
+pods-history*.part
+image-layers*.json
+image-layers*.part
+hosts*.json
+hosts*.part

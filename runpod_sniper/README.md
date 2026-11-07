@@ -71,7 +71,9 @@ python runpod_sniper/server.py --dry-run      # fake Runpod, nothing is created
 | `--port 7895` | Port to listen on. 7860/7870/7880/7890/7891/8888 are taken. |
 | `--dry-run` | Uses `fake.py` instead of Runpod and ignores `.env`. Gives two fake accounts, `dry-main` and `dry-alt`, and the licence key `EMBER-DRY-RUN`; saving a key from the page keeps it in memory and leaves `.env` alone. |
 | `--dry-fails 20` | In a dry run, how many "no capacity" replies come before a win. |
-| `--no-sound` | Don't play `Alarm01.wav` on the server when a pod is won. |
+| `--dry-health random` | In a dry run, what won pods look like: `fast`, `slownet`, `throttled`, `x4`, `cached`, `hosterr`, `oldbuild`, `lowram`, `slowdisk`, `restartloop`, or `random` (half fast). |
+| `--dry-country FR` | In a dry run, put every fake pod in this country (to try the location guard). |
+| `--no-sound` | Don't play `Alarm01.wav` (win) or the pod-check warning sound on the server. |
 
 The server listens on 127.0.0.1 only. It refuses requests whose Host header
 isn't `127.0.0.1` or `localhost`, and POSTs without the page's `x-sniper`
@@ -106,6 +108,56 @@ header, so other websites can't start a snipe through it.
    restart / terminate. Terminate and stop ask before acting. If a start
    fails with "not enough free GPUs", the page offers "Snipe a new one like
    it", which loads that pod's GPU, cloud and name into the form.
+   **🩺 Check** runs the pod health check (below) on any running pod.
+
+## Pod health checks
+
+Every won pod is checked from the moment it is created, and the pod card
+shows what was found: country and machine, internet speed, GPU speed,
+PCIe link, RAM, disk, the image pull. When something is wrong, a banner
+appears at the top of the page with **Terminate**, **Keep** and **Block
+this host**, the server plays `Windows Notify System Generic.wav` once
+and the page two soft notes (the win alarm stays the siren). **Nothing is
+ever terminated without you** — except by the location guard, if you set
+one (below).
+
+Where the numbers come from:
+
+| Signal | From | Warns when |
+|---|---|---|
+| Country, machine id, host disk | v1 `GET /v1/pods/{id}?includeMachine=true` | blocked country or host; Runpod's disk figure < 2000 MB/s |
+| RAM / vCPU | the pod | RAM < 60 GB |
+| Image pull speed | the pod's system log (byte counts, or the image's layer sizes from Docker Hub) | < 30 MB/s — a rough hint only; a cached image has nothing to measure |
+| Stuck / restarting / exited | system log and the pod's status | image still fetching after 10 min, container restarts nobody asked for, the pod stopping on its own |
+| Errors | the logs | Docker Hub rate limit, disk full, NVIDIA runtime, CUDA, crashes, models that could not be downloaded … |
+| The app | its page on port 7860, once it says it is ready | not answering 3 min after "OPEN THE UI HERE" |
+| Internet speed | Ember's `EMBER_PODCHECK net` line (4 streams from the model mirror's CDN), or — on older builds — the gaps between its "✓ file" lines | < 50 MB/s (< 25 bad) |
+| GPU | Ember's `gpu` line: bf16 TFLOPS against the normal for that card, throttle reasons, power cap, temperature | < 85 % of normal; throttling, power capped, ≥ 87 °C |
+| PCIe | Ember's `gpu` line: host→GPU copy speed, link read under load | < 10 GB/s |
+| Render speed | Ember's `render` line per picture | s/step 1.2× slower than other pods with the same card and model |
+
+The Ember numbers need a build with `ember/podcheck.py` (the pod
+downloads the current build at every start; no new Docker image needed).
+On an older build the card says so and judges from the logs only.
+
+"Normal" for a GPU is learned: the median of the last 10 clean pods of
+that card (no GPU warning). Until 3 are recorded the card says
+"learning"; a `"baseline": {"tflops": …, "h2d_gbs": …}` added by hand to a
+GPU in `gpus.json` is used meanwhile.
+
+Everything goes into `pods-history.jsonl` (git-ignored, one line per
+update, newest wins), which the **📊 Pods** page summarises: every pod,
+by country, by host, the learned normals, and the blocked hosts.
+
+**Location guard.** Community pods have no data center — the data-center
+picker only works for Secure — so the preset has **Countries** instead
+(block list or allow list). Right after a win the server reads the pod's
+machine (creates pause meanwhile); a pod in the wrong country, or on a
+host you blocked, is terminated and sniping goes on, like the price
+guard — or, with "keep it, warn me", it is kept and flagged.
+
+Cost: about 40 requests in a pod's first 20 minutes (the logs stream is
+one request however long it stays open), all counted in the budget.
 
 ## Auto download
 
@@ -213,12 +265,22 @@ codes and messages as the real API:
 - Pods go from PROVISIONING to RUNNING after 8 s. Starting a stopped
   Community pod fails half the time.
 - Replies carry `RateLimit` headers counted over a real 60 s / 1 h window.
+- Each pod plays a health scenario (`--dry-health`): its logs stream (10×
+  fast: a startup takes about a minute), its machine and the app's pod
+  check lines follow it, and Docker Hub and the mirror's file list are
+  faked, so nothing leaves the PC. A dry run keeps its own
+  `pods-history.dry.jsonl`.
+- `python runpod_sniper/test_health.py` runs the health checks' tests,
+  including a real pod's system log.
 
 ## Files
 
 | File | What it is |
 |---|---|
 | `server.py` | HTTP server, watcher, Runpod calls |
+| `health.py` | Pod health checks: log parser, rules, per-pod watch, history, blocked hosts |
+| `test_health.py` | Tests for `health.py` and the location guard (standard library) |
+| `pods-history.jsonl`, `hosts.json`, `image-layers.json` | Made by the health checks, git-ignored |
 | `index.html` | The page (vanilla JS, no build step). It uses the app's palette from `tokens.css`, which the server serves as `/tokens.css`. |
 | `tokens.css` | The theme: a copy of the app's `webui/src/theme/tokens.css`, kept here so the folder works on its own. Copy it again if the app's palette changes. |
 | `gpus.json` | The GPU table, with list prices read 2026-11-03 |

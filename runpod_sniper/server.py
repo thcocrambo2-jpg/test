@@ -30,7 +30,8 @@ from pathlib import Path
 from urllib.parse import parse_qs, urlencode, urlparse
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
-import downloader  # noqa: E402  (this folder's own module)
+import downloader  # noqa: E402  (this folder's own modules)
+import health  # noqa: E402
 
 HERE = Path(__file__).resolve().parent
 # A copy of webui/src/theme/tokens.css, kept in this folder so the sniper
@@ -78,6 +79,8 @@ LICENCE_RE = re.compile(r"^[A-Za-z0-9][A-Za-z0-9_.-]{2,127}$")
 LICENCE_ENV = "EMBER_LICENSE_KEY"
 POD_ID_RE = re.compile(r"^[a-z0-9]{6,32}$")
 TEMPLATE_RE = re.compile(r"^[A-Za-z0-9_-]{1,40}$")
+COUNTRY_RE = re.compile(r"^[A-Z]{2}$")
+MACHINE_RE = re.compile(r"^[a-z0-9]{6,40}$")
 
 DRY_RUN = False
 SOUND = True
@@ -303,6 +306,41 @@ class Account:
             self.pause(PAUSE_429)
         return code, self.scrub(text)
 
+    def stream(self, url: str, headers: dict = None, idle: float = 300):
+        """A long-lived GET (the logs SSE stream), line by line. One request
+        against the budget however long it stays open. Raises on an HTTP
+        error or when the stream goes quiet for `idle` seconds."""
+        with self.lock:
+            self.calls.append(time.time())
+        secrets = [s for s in (self.key, _licence_key()) if s]
+        if FAKE is not None:
+            lines = FAKE.stream(self.key, url, headers or {})
+        else:
+            lines = self._real_stream(url, headers or {}, idle)
+        for line in lines:
+            for s in secrets:
+                line = line.replace(s, "***")
+            yield line
+
+    def _real_stream(self, url, headers, idle):
+        req = urllib.request.Request(url, headers={
+            "Authorization": "Bearer " + self.key, "User-Agent": USER_AGENT, **headers})
+        try:
+            res = urllib.request.urlopen(req, timeout=20)   # a short connect timeout
+        except urllib.error.HTTPError as exc:
+            self._note_headers(dict(exc.headers or {}))
+            if exc.code == 429:
+                self.pause(PAUSE_429)
+            raise ValueError("logs answered HTTP %s" % exc.code)
+        with res:
+            self._note_headers(dict(res.headers))
+            try:                                  # then a long one between lines
+                res.fp.raw._sock.settimeout(idle)
+            except AttributeError:
+                pass
+            for raw in res:
+                yield raw.decode("utf-8", "replace")
+
 
 # The placeholders .env.example ships with. A .env copied from it and not
 # filled in must read as "no key", not as a key Runpod will answer 401 to.
@@ -461,6 +499,20 @@ def _clean_preset(p: dict) -> dict:
     api = str(p.get("api") or "auto")
     if api not in ("auto", "v1", "v2"):
         raise ValueError("API must be auto, v1 or v2.")
+    # The location guard: Community hosts have no data center, so the
+    # host's country (from its machine) is what can be filtered on.
+    countries = p.get("countries") or []
+    if isinstance(countries, str):
+        countries = re.split(r"[\s,;]+", countries)
+    countries = sorted({str(c).strip().upper() for c in countries if str(c).strip()})
+    if any(not COUNTRY_RE.match(c) for c in countries) or len(countries) > 60:
+        raise ValueError("Countries are two-letter codes, e.g. FR, US, SE.")
+    country_mode = str(p.get("country_mode") or "block")
+    if country_mode not in ("block", "allow"):
+        raise ValueError("Country mode must be block or allow.")
+    country_action = str(p.get("country_action") or "terminate")
+    if country_action not in ("terminate", "warn"):
+        raise ValueError("Country action must be terminate or warn.")
     return {
         "name": str(p.get("name") or "").strip(),
         "gpus": gpus,
@@ -479,6 +531,9 @@ def _clean_preset(p: dict) -> dict:
         "minutes": _whole(num("minutes", 1, 600, cast=float, default=15)),
         "pod_name": pod_name,
         "api": api,
+        "countries": countries,
+        "country_mode": country_mode,
+        "country_action": country_action,
     }
 
 
@@ -597,14 +652,85 @@ def _pod_view(pod: dict) -> dict:
     }
 
 
-def _get_pod(acct: Account, pid: str):
+def _health_pod(acct: Account, pid: str):
+    """The pod for the health watcher: a view, {"gone": True} once it is
+    terminated (404), or None when Runpod did not answer."""
     code, text = acct.request("GET", "%s/pods/%s" % (V2, pid))
+    if code == 404:
+        return {"gone": True}
     if code == 200:
         try:
             return _pod_view(json.loads(text))
         except ValueError:
             pass
     return None
+
+
+def _get_machine(acct: Account, pid: str):
+    """The pod's host, from v1 with includeMachine (v2 has none of it):
+    country, machine id, Runpod's own disk/network figures, and the last
+    status change ("Exited by user: ..."). None when unavailable."""
+    code, text = acct.request("GET", "%s/%s?includeMachine=true" % (V1_PODS, pid))
+    if code != 200:
+        return None
+    try:
+        pod = json.loads(text)
+    except ValueError:
+        return None
+    m = pod.get("machine") or {}
+    return {"country": m.get("location") or None, "machine": pod.get("machineId") or None,
+            "host_dl_mbps": m.get("maxDownloadSpeedMbps"),
+            "host_disk_mbs": m.get("diskThroughputMBps"),
+            "dc": m.get("dataCenterId"), "secure": m.get("secureCloud"),
+            "last_status": pod.get("lastStatusChange")}
+
+
+def _warn_sound() -> None:
+    """The soft "look at this pod" sound: once, and not the win alarm."""
+    if not SOUND:
+        return
+    try:
+        import winsound
+    except ImportError:
+        sys.stdout.write("\a")
+        return
+    wav = r"C:\Windows\Media\Windows Notify System Generic.wav"
+    try:
+        winsound.PlaySound(wav, winsound.SND_FILENAME | winsound.SND_NODEFAULT)
+    except RuntimeError:
+        winsound.MessageBeep()
+
+
+def _app_up(pid: str) -> bool:
+    """Does the pod's app answer on port 7860 (through Runpod's proxy)? A
+    401 counts: the app is up, it only wants its access key."""
+    path = downloader.API + "/gallery?limit=1"
+    try:
+        if downloader.FAKE_APP is not None:
+            downloader.FAKE_APP(pid, "GET", path, None).read()
+            return True
+        req = urllib.request.Request(downloader.proxy_url(pid) + path,
+                                     headers={"User-Agent": downloader.USER_AGENT})
+        with urllib.request.urlopen(req, timeout=20) as res:
+            return res.status == 200
+    except urllib.error.HTTPError as exc:
+        return exc.code == 401
+    except (urllib.error.URLError, OSError, ValueError):
+        return False
+
+
+def _ext_get(url: str, headers: dict) -> tuple:
+    """GET outside Runpod (Docker Hub manifest, HF tree): (code, headers, text)."""
+    if FAKE is not None:
+        return FAKE.external(url, headers)
+    req = urllib.request.Request(url, headers=headers)
+    try:
+        with urllib.request.urlopen(req, timeout=20) as res:
+            return res.status, dict(res.headers), res.read().decode("utf-8", "replace")
+    except urllib.error.HTTPError as exc:
+        return exc.code, dict(exc.headers or {}), exc.read().decode("utf-8", "replace")
+    except (urllib.error.URLError, OSError) as exc:
+        return 0, {}, str(getattr(exc, "reason", exc))
 
 
 def _pod_action(acct: Account, pid: str, action: str) -> tuple:
@@ -650,6 +776,11 @@ class Watcher:
         self.pod = None
         self.events = deque(maxlen=40)
         self.threads = []
+        # The location guard reads the won pod's machine before keeping it.
+        # Meanwhile no worker creates (checking), and a second win waits for
+        # the first one's verdict (guard_lock) instead of racing it.
+        self.checking = False
+        self.guard_lock = threading.Lock()
         for n in plan["notes"]:
             self.event(n)
 
@@ -696,6 +827,8 @@ class Watcher:
         while not self.stop_event.is_set():
             if not self.acct.take_slot(self.stop_event):
                 return
+            while self.checking and not self.stop_event.is_set():
+                self.stop_event.wait(0.2)
             if self.stop_event.is_set() or time.time() > self.deadline:
                 return
             with self.lock:
@@ -751,36 +884,69 @@ class Watcher:
             self._terminate(pid, "Price guard: $%.3f/hr > $%.2f —"
                             % (float(cost), self.preset["max_price"]))
             return
-        with self.lock:
-            if self.status != "running" or self.pod is not None:
-                extra = True
-            else:
+        with self.guard_lock:
+            with self.lock:
+                extra = self.status != "running" or self.pod is not None
+            if extra:
+                self._terminate(pid, "Race guard: extra")
+                return
+            machine = self._location_guard(pid, pod)
+            if machine is False:
+                return                       # thrown back; keep sniping
+            with self.lock:
                 self.pod = {"id": pid, "name": pod.get("name"), "cost": cost,
                             "app_url": "https://%s-7860.proxy.runpod.net" % pid}
                 self.status = "won"
                 self.finished = time.time()
-        if extra:
-            self._terminate(pid, "Race guard: extra")
-            return
         self.stop_event.set()
-        self.event("WON pod %s at $%s/hr after %d tries." % (pid, cost, self.tries))
+        where = (" in %s" % machine["country"]) if machine and machine.get("country") else ""
+        self.event("WON pod %s%s at $%s/hr after %d tries." % (pid, where, cost, self.tries))
         threading.Thread(target=_alarm, daemon=True).start()
-        threading.Thread(target=self._fill_in, args=(pid,), daemon=True).start()
+        # The health watch reads the pod back from here on (status, CUDA,
+        # host), and judges it: machine, logs, the app.
+        health.watch(self.acct, pid, source="snipe", won_at=self.finished,
+                     preset=self.preset, machine=machine or None)
 
-    def _fill_in(self, pid: str) -> None:
-        """Read the pod back (v2) until its host details are known."""
-        for _ in range(24):
-            view = _get_pod(self.acct, pid)
-            if view:
-                with self.lock:
-                    self.pod = {**self.pod, **{k: v for k, v in view.items()
-                                               if v is not None}}
-                if view.get("status") == "RUNNING" and view.get("cuda"):
-                    return
-            time.sleep(10)
+    def _location_guard(self, pid: str, created: dict):
+        """Read the won pod's machine and apply the location guard (the
+        preset's countries, and the blocked-hosts list) when it is set to
+        terminate. Returns the machine dict, None when there was nothing to
+        check, or False when the pod was thrown back."""
+        rules = {k: self.preset.get(k) for k in ("countries", "country_mode")}
+        blocked = health.blocked_hosts()
+        if self.preset.get("country_action") != "terminate" or not (rules["countries"] or blocked):
+            return None
+        self.checking = True
+        try:
+            machine = None
+            for i in range(3):              # the machine may not be attached yet
+                machine = _get_machine(self.acct, pid)
+                if machine and machine.get("machine") and (machine.get("country")
+                                                           or not rules["countries"]):
+                    break
+                time.sleep(1.0)
+            verdict, why = health.guard_check(machine, rules, blocked)
+        finally:
+            self.checking = False
+        if verdict == "block":
+            self._terminate(pid, "Location guard: %s —" % why)
+            return False
+        if verdict == "unknown":
+            self.event("Location guard: %s for %s — kept it." % (why, pid))
+        return machine or {}
 
     def view(self) -> dict:
         now = time.time()
+        pod = None
+        with self.lock:
+            if self.pod:
+                pod = dict(self.pod)
+        if pod:
+            h = health.get(pod["id"])
+            if h:
+                hv = h.view()
+                pod.update({k: v for k, v in hv["pod_view"].items() if v is not None})
+                pod["health"] = hv
         with self.lock:
             return {
                 "account": self.acct.name, "preset": self.preset,
@@ -790,7 +956,7 @@ class Watcher:
                 "deadline": self.deadline, "finished": self.finished,
                 "elapsed": (self.finished or now) - self.started,
                 "tries": self.tries, "codes": dict(self.codes),
-                "last": self.last, "pod": dict(self.pod) if self.pod else None,
+                "last": self.last, "pod": pod,
                 "events": list(self.events),
                 "rate": self.tries / max(1.0, (self.finished or now) - self.started)
                         * 60,
@@ -888,7 +1054,14 @@ class Handler(BaseHTTPRequestHandler):
                     "watchers": [w.view() for w in watchers],
                     "budget": {a.name: a.budget() for a in accounts},
                     "downloads": [d.view() for d in downloads],
+                    "health": health.views(),
                     "now": time.time(), "dry_run": DRY_RUN})
+            if path == "/api/history":
+                recs = health.history_load()
+                return self.json({
+                    "pods": recs[:300], "summary": health.history_summary(recs),
+                    "baselines": health.baselines(recs, health.seed_baselines()),
+                    "blocked": health.blocked_hosts(), "thresholds": health.T})
             if path == "/api/stock":
                 acct = _account(query.get("account", [""])[0])
                 return self.json(_stock(acct))
@@ -1046,6 +1219,7 @@ class Handler(BaseHTTPRequestHandler):
                     return self.error("Bad pod id.")
                 if action not in ("start", "stop", "restart", "terminate"):
                     return self.error("Bad action.")
+                health.note_action(pid, action)
                 code, text = _pod_action(acct, pid, action)
                 if code not in (200, 202, 204):
                     detail = _detail(text)
@@ -1054,10 +1228,61 @@ class Handler(BaseHTTPRequestHandler):
                                       "no_gpu": "free gpu" in detail.lower()
                                                 or "not enough" in detail.lower()},
                                      502)
+                h = health.get(pid)
+                if h and action == "terminate":
+                    h.set_decision("terminated")
                 return self.json({"ok": True})
+
+            if url.path == "/api/health/check":
+                # The page's Check button: watch any running pod, sniped here
+                # or not. Starts over if it was already being watched.
+                acct = _account(body.get("account"))
+                pid = str(body.get("id") or "")
+                if not POD_ID_RE.match(pid):
+                    return self.error("Bad pod id.")
+                health.watch(acct, pid, source="check", restart=True)
+                return self.json({"ok": True})
+
+            if url.path == "/api/health/keep":
+                h = health.get(str(body.get("id") or ""))
+                if not h:
+                    return self.error("That pod is not being watched.")
+                h.keep()
+                return self.json({"ok": True})
+
+            if url.path == "/api/health/forget":
+                health.forget(str(body.get("id") or ""))
+                return self.json({"ok": True})
+
+            if url.path == "/api/hosts/block":
+                mid = str(body.get("machine") or "")
+                if not MACHINE_RE.match(mid):
+                    return self.error("Bad machine id.")
+                info = {k: str(body.get(k) or "")[:80] for k in ("pod", "gpu", "country", "why")}
+                return self.json({"ok": True, "blocked": health.block_host(mid, info)})
+
+            if url.path == "/api/hosts/unblock":
+                return self.json({"ok": True, "blocked":
+                                  health.unblock_host(str(body.get("machine") or ""))})
         except (ValueError, TypeError, KeyError) as exc:
             return self.error(str(exc))
         self.error("Not found.", 404)
+
+
+def _setup_health() -> None:
+    health.HOOKS.update(pod=_health_pod, machine=_get_machine,
+                        stream=lambda acct, url, headers, idle: acct.stream(url, headers, idle),
+                        ext_get=_ext_get, app_up=_app_up, sound=_warn_sound)
+    if DRY_RUN:
+        # A dry run's pods are fake: keep their history, layer cache and
+        # blocked hosts apart from the real ones.
+        health.HISTORY_FILE = HERE / "pods-history.dry.jsonl"
+        health.LAYERS_FILE = HERE / "image-layers.dry.json"
+        health.HOSTS_FILE = HERE / "hosts.dry.json"
+    try:
+        health.history_compact()
+    except OSError as exc:
+        print("Could not compact %s: %s" % (health.HISTORY_FILE.name, exc))
 
 
 def main() -> None:
@@ -1068,14 +1293,22 @@ def main() -> None:
                         help="talk to fake.py instead of Runpod")
     parser.add_argument("--dry-fails", type=int, default=20,
                         help="dry run: no-capacity answers before a win")
+    parser.add_argument("--dry-health", default="random",
+                        help="dry run: what the won pods look like — " + "|".join(
+                            ["random", "fast", "slownet", "throttled", "x4", "cached",
+                             "hosterr", "oldbuild", "lowram", "slowdisk", "restartloop"]))
+    parser.add_argument("--dry-country", default="",
+                        help="dry run: put every fake pod in this country (e.g. FR)")
     parser.add_argument("--no-sound", action="store_true")
     args = parser.parse_args()
     DRY_RUN, SOUND, PORT = args.dry_run, not args.no_sound, args.port
     if DRY_RUN:
         sys.path.insert(0, str(HERE))
         import fake
-        FAKE = fake.FakeRunpod(_gpus(), fails=args.dry_fails)
+        FAKE = fake.FakeRunpod(_gpus(), fails=args.dry_fails, health=args.dry_health,
+                               country=args.dry_country)
         downloader.FAKE_APP = fake.FakeApp(FAKE)
+    _setup_health()
     _load_accounts()
     _resume_downloads()
     with _lock:
