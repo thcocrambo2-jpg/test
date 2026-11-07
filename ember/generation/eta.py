@@ -46,6 +46,7 @@ import statistics
 import threading
 import time
 
+from ember import podcheck
 from ember.generation import queue as jobqueue
 from ember.logs import log
 from ember.settings import WORKING_DIR
@@ -419,6 +420,13 @@ class Tracker:
             _record(self.key, sample)
             if self.coarse_key:
                 _record(self.coarse_key, sample)
+            # The pod check's ongoing half: seconds per sampler step for
+            # this exact graph shape, so a card that is slower than the same
+            # card elsewhere shows up in the Runpod sniper over time.
+            sampled = sum(m for m, _d in self.segs)
+            if sampled:
+                podcheck.render(self.key, self.steps, self.area / 1e6,
+                                sum(d for _m, d in self.segs) / sampled, pre, self.cold)
         self.key = None                     # this picture is accounted for
         self.seg_frames = []
         self.finish_at = None

@@ -6,7 +6,8 @@ Startup flow:
   2. Take a license seat, or stop; resolve which tabs the key grants
      (features.py) from the entitlements it returned; load the model and
      LoRA catalogue (catalog.py) — what each Krea tab offers — from the
-     licence server.
+     licence server. On a pod, start the pod check (podcheck.py): the
+     internet probe here, host and GPU in the background until step 6.
   3. Clone ComfyUI if it is missing.
   4. Install Python requirements (ComfyUI's + this app's, one resolver pass).
   5. Download the Hugging Face and CivitAI models the enabled features
@@ -26,7 +27,7 @@ import sys
 
 from ember.comfy import setup as bootstrap
 from ember.licensing import catalog
-from ember import features
+from ember import features, podcheck
 from ember.licensing import seat as licensing
 from ember import logs, settings
 from ember.logs import log
@@ -119,6 +120,13 @@ def main() -> None:
             "access to %s.", mirror.MIRROR_USER,
         )
 
+    # The pod check (podcheck.py): is this machine any good? The net probe
+    # runs here, before the downloads it is meant to predict and with the
+    # link to itself (≤ 8 s); host and GPU run in the background meanwhile
+    # and are joined before ComfyUI takes the card. Each result is one
+    # EMBER_PODCHECK log line, for the Runpod sniper. Off a pod it is off.
+    check = podcheck.start()
+
     # 3-4 · Clone ComfyUI (idempotent) and install all requirements.
     # PyTorch first, and before install_comfyui specifically: ComfyUI's own
     # requirements.txt lists `torch` unpinned, so on a machine without one
@@ -141,11 +149,14 @@ def main() -> None:
     # 5 · Model + LoRA downloads (idempotent — only fetches what is missing).
     from ember.weights import downloads
 
-    downloads.download_everything()
+    with podcheck.rx_meter():
+        downloads.download_everything()
     log.info(
         "Downloads complete — %.1f GB free on %s",
         shutil.disk_usage(TEMP_DIR).free / 1e9, TEMP_DIR,
     )
+    podcheck.emit_download_summary()
+    check.join(timeout=30)
 
     # 6 · GPU detection runs when comfy is imported; then start the server.
     # With EMBER_WAN_PARALLEL=1 a second ComfyUI instance serves video jobs

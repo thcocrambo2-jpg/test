@@ -26,6 +26,7 @@ Every environment variable the app reads, in one place:
     EMBER_SHOWCASE_URL          public bucket holding the pricing page's images
     EMBER_UI_REQUIRE_TOKEN      1 demands the UI token in the URL fragment
     EMBER_SKIP_LAUNCH           start everything, then stop before serving
+    EMBER_PODCHECK              0 skips the startup pod check, 1 forces it
     EMBER_MIRROR_USER           the Hugging Face account the mirrors live under
     EMBER_NO_MIRROR             1 downloads from upstream, never the mirror
     EMBER_CATALOG_FILE          read the catalogue from this file, not the server
@@ -35,7 +36,8 @@ Every environment variable the app reads, in one place:
     OPENROUTER_API_KEY          the key MiniMax's Auto prompt writes with
 
 Each EMBER_ variable above also answers to its KREA2_ spelling, and
-EMBER_ wins when both are set. Pods and RunPod templates in the field
+EMBER_ wins when both are set — except EMBER_PODCHECK, which is newer
+than the rename and has only the one name. Pods and RunPod templates in the field
 carry the KREA2_ names in their environment panels, and a rename that
 needed every one of them edited by hand would take a working pod down;
 reading both means nobody has to touch anything to keep running.
@@ -331,6 +333,12 @@ UI_REQUIRE_TOKEN = bool(_env("UI_REQUIRE_TOKEN"))
 # downloads, ComfyUI — and then stop instead of serving. What a pod that is
 # only meant to warm its volume runs.
 SKIP_LAUNCH = bool(_env("SKIP_LAUNCH"))
+
+# The startup pod check (podcheck.py): internet, GPU, PCIe, RAM and disk
+# measured once and logged as EMBER_PODCHECK lines. "0" (or false/no/off)
+# turns it off, any other value turns it on; unset, it runs on RunPod pods
+# only. One spelling: it is newer than the KREA2_ names.
+PODCHECK = (os.environ.get("EMBER_PODCHECK") or "").strip().lower()
 
 # The Hugging Face account the weight mirrors live under, and the escape
 # hatch that ignores them. EMBER_NO_MIRROR=1 goes straight to upstream —

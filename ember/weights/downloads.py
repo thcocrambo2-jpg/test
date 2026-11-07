@@ -25,7 +25,7 @@ import requests
 from huggingface_hub import hf_hub_download, snapshot_download
 
 from ember.licensing import catalog
-from ember import features
+from ember import features, podcheck
 from ember.weights import mirror
 from ember.logs import log
 from ember.settings import CIVITAI_TOKEN, HF_TOKEN, MODELS_DIR
@@ -82,6 +82,25 @@ DOWNLOAD_CHUNK = 8 * 1024 * 1024
 DOWNLOAD_RETRIES = 3
 
 
+def _took(dest: Path, t0: float) -> str:
+    """What a finished download cost, as the tail of its ✓ line:
+    " — 23.81 GB in 158 s, 150.7 MB/s". Also counted for the pod check's
+    download summary. Neither huggingface_hub nor hf_xet prints progress
+    into a container's log (no terminal), so this is the only place a pod
+    log shows how fast its models came in. The format is read by the
+    Runpod sniper (runpod_sniper/health.py SUFFIX_RE): keep it."""
+    try:
+        size = dest.stat().st_size
+    except OSError:
+        return ""
+    secs = max(time.time() - t0, 1e-3)
+    podcheck.note_download(size, secs)
+    shown = ("%.2f GB" % (size / 1e9) if size >= 1e9 else "%.1f MB" % (size / 1e6)
+             if size >= 1e6 else "%.1f kB" % (size / 1e3))
+    return " — %s in %s s, %.1f MB/s" % (shown, "%.1f" % secs if secs < 10 else "%.0f" % secs,
+                                          size / 1e6 / secs)
+
+
 def _with_retries(fn, desc: str):
     """Call fn() with exponential-backoff retries."""
     for attempt in range(1, DOWNLOAD_RETRIES + 1):
@@ -115,6 +134,7 @@ def from_mirror(dest: Path, relpath: str) -> bool:
     if not loc:
         return False
     repo, path_in_repo = loc
+    t0 = time.time()
     try:
         got = _with_retries(
             lambda: hf_hub_download(
@@ -129,7 +149,7 @@ def from_mirror(dest: Path, relpath: str) -> bool:
             # looks, so the file is moved into place (same filesystem).
             dest.parent.mkdir(parents=True, exist_ok=True)
             src.replace(dest)
-        log.info("✓ %s (mirror: %s)", relpath, repo)
+        log.info("✓ %s (mirror: %s)%s", relpath, repo, _took(dest, t0))
         return True
     except Exception as exc:
         log.warning("Mirror %s could not serve %s (%s) — falling back to "
@@ -146,6 +166,7 @@ def fetch_hf_file(relpath: str) -> None:
     if from_mirror(dest, relpath):
         return
     log.info("↓ %s ...", relpath)
+    t0 = time.time()
     _with_retries(
         lambda: hf_hub_download(
             repo_id=HF_MODEL_REPO,
@@ -156,6 +177,7 @@ def fetch_hf_file(relpath: str) -> None:
         ),
         desc=relpath,
     )
+    log.info("✓ %s (from %s)%s", relpath, HF_MODEL_REPO, _took(dest, t0))
 
 
 def fetch_hf_repo_file(repo: str, relpath: str) -> None:
@@ -175,6 +197,7 @@ def fetch_hf_repo_file(repo: str, relpath: str) -> None:
     if from_mirror(dest, relpath):
         return
     log.info("↓ %s (from %s) ...", relpath, repo)
+    t0 = time.time()
     _with_retries(
         lambda: hf_hub_download(
             repo_id=repo,
@@ -185,6 +208,7 @@ def fetch_hf_repo_file(repo: str, relpath: str) -> None:
         ),
         desc=relpath,
     )
+    log.info("✓ %s (from %s)%s", relpath, repo, _took(dest, t0))
 
 
 def fetch_abliterated_encoder() -> None:
@@ -200,6 +224,7 @@ def fetch_abliterated_encoder() -> None:
     if from_mirror(dest, relpath):
         return
     log.info("↓ %s (from %s) ...", ABLITERATED_ENCODER_FILE, ABLITERATED_ENCODER_REPO)
+    t0 = time.time()
     snap = _with_retries(
         lambda: snapshot_download(
             repo_id=ABLITERATED_ENCODER_REPO, token=HF_TOKEN,
@@ -220,6 +245,7 @@ def fetch_abliterated_encoder() -> None:
     dest.parent.mkdir(parents=True, exist_ok=True)
     save_file(state_dict, str(dest))
     log.info("Merged abliterated encoder → %s", dest)
+    log.info("✓ %s (from %s)%s", relpath, ABLITERATED_ENCODER_REPO, _took(dest, t0))
 
 
 def fetch_edit_lora() -> None:
@@ -232,6 +258,7 @@ def fetch_edit_lora() -> None:
     if from_mirror(dest, relpath):
         return
     log.info("↓ %s (from %s) ...", EDIT_LORA_FILE, EDIT_LORA_REPO)
+    t0 = time.time()
     _with_retries(
         lambda: hf_hub_download(
             repo_id=EDIT_LORA_REPO,
@@ -242,6 +269,7 @@ def fetch_edit_lora() -> None:
         ),
         desc=EDIT_LORA_FILE,
     )
+    log.info("✓ %s (from %s)%s", relpath, EDIT_LORA_REPO, _took(dest, t0))
 
 
 def fetch_edit_lora_v2(filename: str) -> None:
@@ -256,6 +284,7 @@ def fetch_edit_lora_v2(filename: str) -> None:
         log.info("✓ %s (cached)", filename)
         return
     log.info("↓ %s (from %s) ...", filename, EDIT_V2_LORA_REPO)
+    t0 = time.time()
     _with_retries(
         lambda: hf_hub_download(
             repo_id=EDIT_V2_LORA_REPO,
@@ -266,6 +295,7 @@ def fetch_edit_lora_v2(filename: str) -> None:
         ),
         desc=filename,
     )
+    log.info("✓ loras/%s (from %s)%s", filename, EDIT_V2_LORA_REPO, _took(dest, t0))
 
 
 def fetch_repackaged_file(repo: str, relpath: str) -> None:
@@ -294,7 +324,9 @@ def fetch_repackaged_file(repo: str, relpath: str) -> None:
         dest.parent.mkdir(parents=True, exist_ok=True)
         Path(path).rename(dest)
 
+    t0 = time.time()
     _with_retries(_download, desc=relpath)
+    log.info("✓ %s (from %s)%s", relpath, repo, _took(dest, t0))
 
 
 def fetch_civitai_file(version_id: int, filename: str,
@@ -349,7 +381,9 @@ def fetch_civitai_file(version_id: int, filename: str,
         part.rename(dest)
 
     log.info("↓ %s (CivitAI version %d) ...", filename, version_id)
+    t0 = time.time()
     _with_retries(_download, desc=filename)
+    log.info("✓ %s/%s (CivitAI version %d)%s", subdir, filename, version_id, _took(dest, t0))
 
 
 def fetch_hf_file_to(repo: str, relpath: str, dest: Path) -> None:
@@ -373,7 +407,10 @@ def fetch_hf_file_to(repo: str, relpath: str, dest: Path) -> None:
         dest.parent.mkdir(parents=True, exist_ok=True)
         Path(path).rename(dest)
 
+    t0 = time.time()
     _with_retries(_download, desc=relpath)
+    log.info("✓ %s (from %s)%s", dest.relative_to(MODELS_DIR).as_posix(), repo,
+             _took(dest, t0))
 
 
 def _from_record_mirror(dest: Path, record) -> bool:
@@ -392,6 +429,7 @@ def _from_record_mirror(dest: Path, record) -> bool:
     if not record.mirror or not mirror.MIRROR_ENABLED:
         return False
     repo, path_in_repo = record.mirror["repo"], record.mirror["path"]
+    t0 = time.time()
     try:
         got = _with_retries(
             lambda: hf_hub_download(
@@ -407,8 +445,8 @@ def _from_record_mirror(dest: Path, record) -> bool:
             # path, and is moved into place (same filesystem, no copy).
             dest.parent.mkdir(parents=True, exist_ok=True)
             src.replace(dest)
-        log.info("✓ %s (mirror: %s)", dest.relative_to(MODELS_DIR).as_posix(),
-                 repo)
+        log.info("✓ %s (mirror: %s)%s", dest.relative_to(MODELS_DIR).as_posix(),
+                 repo, _took(dest, t0))
         return True
     except Exception as exc:
         log.warning("Mirror %s could not serve %s (%s) — falling back.",
@@ -433,11 +471,12 @@ def fetch_private_file(url: str, dest: Path) -> None:
             shutil.copyfileobj(response, out, 8 << 20)
         part.replace(dest)
 
+    t0 = time.time()
     try:
         _with_retries(get, desc=f"{dest.name} (private)")
     finally:
         part.unlink(missing_ok=True)
-    log.info("✓ %s (private)", dest.relative_to(MODELS_DIR).as_posix())
+    log.info("✓ %s (private)%s", dest.relative_to(MODELS_DIR).as_posix(), _took(dest, t0))
 
 
 def fetch_catalog_file(record, subdir: str) -> None:
