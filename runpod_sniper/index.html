@@ -20,6 +20,16 @@
   nav.tabs a:focus { outline:none; }
   nav.tabs a:focus-visible { outline:2px solid var(--c-focus); outline-offset:-2px; }
   .page { display:grid; gap:16px; }
+  /* A card whose body folds away under its heading (closed by default). */
+  details.fold > summary { list-style:none; cursor:pointer; user-select:none; }
+  details.fold > summary::-webkit-details-marker { display:none; }
+  details.fold > summary h2 { display:flex; align-items:center; gap:8px; margin:0; }
+  details.fold > summary h2::before { content:"▸"; color:var(--c-text-muted); font-size:12px; transition:transform var(--d-fast, 110ms); }
+  details.fold[open] > summary h2::before { transform:rotate(90deg); }
+  details.fold[open] > summary { margin-bottom:12px; }
+  details.fold > summary:hover h2 { color:var(--c-accent); }
+  details.fold > summary:focus { outline:none; }
+  details.fold > summary:focus-visible { outline:2px solid var(--c-focus); outline-offset:4px; border-radius:var(--r-xs); }
   .page[hidden] { display:none; }
   .dlpod { border:1px solid var(--c-border); border-radius:var(--r-md); padding:12px; margin-top:12px; background:var(--c-bg-sunken); }
   .dlpod header { display:flex; gap:10px; align-items:center; flex-wrap:wrap; }
@@ -181,7 +191,8 @@
 
   <div class="page" id="page-sniper">
   <section class="card">
-    <h2>1 · GPUs <span class="muted" id="priceNote"></span></h2>
+    <details class="fold" id="gpuFold">
+    <summary><h2>1 · GPUs <span class="muted" id="priceNote"></span></h2></summary>
     <table>
       <thead><tr><th>GPU</th><th>Runpod id</th><th>VRAM</th><th>Community $/hr</th><th>Secure $/hr</th><th>Note</th><th></th></tr></thead>
       <tbody id="gpuRows"></tbody>
@@ -191,6 +202,7 @@
       <span class="muted">Stock is only a hint: Community GPUs go in milliseconds, so only a create call can win one.</span>
     </div>
     <div class="error" id="stockError"></div>
+    </details>
   </section>
 
   <section class="card" id="presetCard">
