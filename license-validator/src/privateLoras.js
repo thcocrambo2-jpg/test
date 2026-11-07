@@ -79,7 +79,13 @@ export async function upsertPrivateLora({
     { _id },
     {
       $set: { ...content, updated_at: now },
-      $setOnInsert: { created_at: now, sort_order: (Number(last?.sort_order) || 0) + 10 },
+      // A private LoRA starts with auto_trigger on when it has a trigger.
+      // Only on insert, so one switched off by hand stays off on a re-run.
+      $setOnInsert: {
+        created_at: now,
+        sort_order: (Number(last?.sort_order) || 0) + 10,
+        auto_trigger: record.trigger.trim() !== "",
+      },
     },
     { upsert: true },
   );

@@ -157,7 +157,10 @@ prompt in step, on every tab with a LoRA stack:
   exactly what it holds.
 
 `auto_trigger` is off unless a record sets it, and is set by hand in
-Atlas. Some triggers are everyday words, such as `tits`, and a LoRA with
+Atlas. Private LoRAs are the exception: one that has a trigger starts
+with it on, whether it comes from `npm run private-lora` or the admin
+route (`upsertPrivateLora`, on first insert only) or from Face LoRA
+self-publish (`faceRegister`). Some triggers are everyday words, such as `tits`, and a LoRA with
 one should not switch on whenever the word is typed. The browser does all
 of it (GenerateTab's `syncTriggers`, from the stack's `triggers` in the
 tab schema). Nothing is added to a prompt at generation time.

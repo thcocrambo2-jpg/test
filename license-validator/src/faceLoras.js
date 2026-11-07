@@ -161,6 +161,8 @@ export async function faceRegister(licence, { name, trigger = "", size, md5, con
     mirror: null,
     trigger: typeof trigger === "string" ? trigger.trim().slice(0, 200) : "",
     default_strength: 1.0,
+    // Private LoRAs start with auto_trigger on whenever they have a trigger.
+    auto_trigger: typeof trigger === "string" && trigger.trim() !== "",
     enabled: true,
     published_by: licence.key,
     tabs: DEFAULT_FEATURES,
