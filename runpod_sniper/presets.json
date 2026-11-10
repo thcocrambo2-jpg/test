@@ -7,7 +7,7 @@
     "gpu_count": 1,
     "cloud": "COMMUNITY",
     "template_id": "yjkhkejrf7",
-    "container_disk_gb": 120,
+    "container_disk_gb": 180,
     "volume_gb": 0,
     "min_download_mbps": 1000,
     "min_vcpu_per_gpu": 0,
