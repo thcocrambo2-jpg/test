@@ -804,7 +804,17 @@ function drawBanner(list) {
     const key = "warned." + h.pod + "." + h.warn_seq;
     if (h.warn_seq && !localStorage.getItem(key)) { localStorage.setItem(key, "1"); alarm("⚠ POD PROBLEM"); }
   }
+  // The siren once when a pod's app first answers on port 7860 (not for
+  // pods that were ready long before this page opened).
+  for (const h of list || []) {
+    if (!h.ready_at || h.ended || Date.now() / 1000 - h.ready_at > 120) continue;
+    const key = "ready." + h.pod + "." + Math.round(h.ready_at);
+    let seen = readyRung.has(key);
+    try { seen = seen || !!localStorage.getItem(key); localStorage.setItem(key, "1"); } catch (e) {}
+    if (!seen) { readyRung.add(key); alarm("✅ POD READY"); }
+  }
 }
+const readyRung = new Set();
 async function healthTerminate(id, acct) {
   if (!confirm(`Terminate ${id}?\n\nIts disk and volume are deleted for good.`)) return;
   try { await api("/api/pods/action", {account: acct || account(), id, action: "terminate"}); }

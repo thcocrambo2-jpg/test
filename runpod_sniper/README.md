@@ -121,6 +121,11 @@ this host**, and the same alarm as a won pod sounds: the server plays
 ever terminated without you** — except by the location guard, if you set
 one (below).
 
+When a pod's app first answers on port 7860 (models downloaded, UI up),
+the same alarm sounds once, and the page's title flashes "✅ POD READY".
+It is checked every 10 s from the moment the app's log says the UI is
+ready.
+
 Where the numbers come from:
 
 | Signal | From | Warns when |

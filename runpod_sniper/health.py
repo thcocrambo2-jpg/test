@@ -1100,7 +1100,7 @@ class Health:
         if not ui or self.pod.get("status") != "RUNNING":
             return
         now = time.time()
-        every = 300 if self.app["up"] else 30
+        every = 300 if self.app["up"] else 10     # not up yet: look often, to say "ready" soon
         if now - self.app["checked"] < every:
             return
         self.app["checked"] = now
@@ -1109,9 +1109,13 @@ class Health:
         except Exception:                         # noqa: BLE001
             up = False
         if up:
+            first = self.app["since"] is None
             if not self.app["up"]:
-                self.event("The app answers on port 7860.")
+                self.event("✅ Ready: the app answers on port 7860." if first
+                           else "The app answers on port 7860 again.")
             self.app.update(up=True, since=self.app["since"] or now, down_since=None)
+            if first and HOOKS["sound"] and not self.ended:   # the long alarm, once per pod
+                threading.Thread(target=HOOKS["sound"], daemon=True).start()
         else:
             self.app.update(up=False, down_since=self.app["down_since"] or now)
 
@@ -1172,6 +1176,7 @@ class Health:
                 "metrics": res.get("metrics"), "milestones": res.get("milestones"),
                 "findings": [{**f, "acked": f["code"] in self.acked} for f in res.get("findings", [])],
                 "warn_seq": self.warn_seq, "decision": self.decision,
+                "ready_at": self.app["since"],      # first answer on port 7860
                 "started": self.started, "won_at": self.won_at, "updated": self.updated,
                 "ended": self.ended, "lines": self.parser.lines,
                 "stream_requests": self.stream_requests, "events": list(self.events),
