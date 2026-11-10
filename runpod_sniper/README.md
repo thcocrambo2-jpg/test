@@ -73,7 +73,7 @@ python runpod_sniper/server.py --dry-run      # fake Runpod, nothing is created
 | `--dry-fails 20` | In a dry run, how many "no capacity" replies come before a win. |
 | `--dry-health random` | In a dry run, what won pods look like: `fast`, `slownet`, `throttled`, `x4`, `cached`, `hosterr`, `oldbuild`, `lowram`, `slowdisk`, `restartloop`, or `random` (half fast). |
 | `--dry-country FR` | In a dry run, put every fake pod in this country (to try the location guard). |
-| `--no-sound` | Don't play `Alarm01.wav` (win) or the pod-check warning sound on the server. |
+| `--no-sound` | Don't play the server's alarm (a won pod, a pod-check warning). |
 
 The server listens on 127.0.0.1 only. It refuses requests whose Host header
 isn't `127.0.0.1` or `localhost`, and POSTs without the page's `x-sniper`
@@ -103,7 +103,7 @@ header, so other websites can't start a snipe through it.
    the SSH command to copy it. The server re-reads the pod every 10 s until
    it is RUNNING and its CUDA version is known. The page plays a siren and
    flashes its title, and the server plays `C:\Windows\Media\Alarm01.wav`
-   twice.
+   twice (on a Mac: the Sosumi system sound, repeated for about 10 s).
 5. **My pods.** Shows the selected account's pods with start / stop /
    restart / terminate. Terminate and stop ask before acting. If a start
    fails with "not enough free GPUs", the page offers "Snipe a new one like
@@ -117,7 +117,7 @@ shows what was found: country and machine, internet speed, GPU speed,
 PCIe link, RAM, disk, the image pull. When something is wrong, a banner
 appears at the top of the page with **Terminate**, **Keep** and **Block
 this host**, and the same alarm as a won pod sounds: the server plays
-`Alarm01.wav` twice and the page its siren. **Nothing is
+`Alarm01.wav` twice (Sosumi for ~10 s on a Mac) and the page its siren. **Nothing is
 ever terminated without you** — except by the location guard, if you set
 one (below).
 

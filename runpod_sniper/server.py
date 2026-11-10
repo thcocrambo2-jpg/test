@@ -725,18 +725,36 @@ def _pod_action(acct: Account, pid: str, action: str) -> tuple:
     return code, text
 
 
+MAC_SOUNDS = ["/System/Library/Sounds/Sosumi.aiff", "/System/Library/Sounds/Funk.aiff",
+              "/System/Library/Sounds/Glass.aiff"]
+ALARM_SECONDS = 10       # how long the Mac alarm repeats (Windows: Alarm01 twice, ~11 s)
+
+
 def _alarm() -> None:
-    """Alarm01 twice: a won pod, and a pod check warning (errors, restarts)."""
+    """The long alarm: a won pod, and a pod check warning (errors, restarts).
+    Windows: Alarm01.wav twice. Mac: a system sound repeated for ~10 s."""
     if not SOUND:
         return
-    try:
+    if sys.platform == "win32":
         import winsound
-    except ImportError:
-        sys.stdout.write("\a\a")
+        wav = r"C:\Windows\Media\Alarm01.wav"
+        for _ in range(2):
+            winsound.PlaySound(wav, winsound.SND_FILENAME)
         return
-    wav = r"C:\Windows\Media\Alarm01.wav"
-    for _ in range(2):
-        winsound.PlaySound(wav, winsound.SND_FILENAME)
+    if sys.platform == "darwin":
+        import subprocess
+        sound = next((f for f in MAC_SOUNDS if Path(f).exists()), None)
+        if sound:
+            end = time.time() + ALARM_SECONDS
+            try:
+                while time.time() < end:
+                    subprocess.run(["afplay", sound], timeout=10,
+                                   stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+                return
+            except (OSError, subprocess.SubprocessError):
+                pass                               # no afplay: the terminal bell below
+    sys.stdout.write("\a\a")
+    sys.stdout.flush()
 
 
 # ── the watcher ─────────────────────────────────────────────────────
