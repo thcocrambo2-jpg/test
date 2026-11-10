@@ -685,22 +685,6 @@ def _get_machine(acct: Account, pid: str):
             "last_status": pod.get("lastStatusChange")}
 
 
-def _warn_sound() -> None:
-    """The soft "look at this pod" sound: once, and not the win alarm."""
-    if not SOUND:
-        return
-    try:
-        import winsound
-    except ImportError:
-        sys.stdout.write("\a")
-        return
-    wav = r"C:\Windows\Media\Windows Notify System Generic.wav"
-    try:
-        winsound.PlaySound(wav, winsound.SND_FILENAME | winsound.SND_NODEFAULT)
-    except RuntimeError:
-        winsound.MessageBeep()
-
-
 def _app_up(pid: str) -> bool:
     """Does the pod's app answer on port 7860 (through Runpod's proxy)? A
     401 counts: the app is up, it only wants its access key."""
@@ -742,6 +726,7 @@ def _pod_action(acct: Account, pid: str, action: str) -> tuple:
 
 
 def _alarm() -> None:
+    """Alarm01 twice: a won pod, and a pod check warning (errors, restarts)."""
     if not SOUND:
         return
     try:
@@ -1272,7 +1257,7 @@ class Handler(BaseHTTPRequestHandler):
 def _setup_health() -> None:
     health.HOOKS.update(pod=_health_pod, machine=_get_machine,
                         stream=lambda acct, url, headers, idle: acct.stream(url, headers, idle),
-                        ext_get=_ext_get, app_up=_app_up, sound=_warn_sound)
+                        ext_get=_ext_get, app_up=_app_up, sound=_alarm)
     if DRY_RUN:
         # A dry run's pods are fake: keep their history, layer cache and
         # blocked hosts apart from the real ones.

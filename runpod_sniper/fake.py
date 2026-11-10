@@ -544,6 +544,7 @@ import urllib.error
 APP_EVERY = 6            # seconds between new files
 APP_SEED_FILES = 3       # already there when the pod comes up
 APP_ENCODE = 14          # a video is "still encoding" this long
+APP_DELETE_AFTER = 8     # every 7th new file is deleted this long after it appears
 APP_SPEED = 6e6          # bytes/s the fake proxy serves at (slow enough to watch)
 APP_SCHEMA = {
     "key": "krea_v2_t2i", "tabId": "k2v2", "label": "Krea2 V2",
@@ -593,6 +594,8 @@ class FakeApp:
         for i in range(n):
             video = i % 5 == 4
             created = up + (i - APP_SEED_FILES + 1) * APP_EVERY
+            if i >= APP_SEED_FILES and i % 7 == 2 and now - created > APP_DELETE_AFTER:
+                continue                                # "deleted in the Gallery"
             items.append({
                 "id": "%s_%05d_.%s" % ("Video" if video else "Krea2V2_dry", i + 1,
                                        "mp4" if video else "png"),

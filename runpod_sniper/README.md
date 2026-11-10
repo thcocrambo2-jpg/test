@@ -116,8 +116,8 @@ Every won pod is checked from the moment it is created, and the pod card
 shows what was found: country and machine, internet speed, GPU speed,
 PCIe link, RAM, disk, the image pull. When something is wrong, a banner
 appears at the top of the page with **Terminate**, **Keep** and **Block
-this host**, the server plays `Windows Notify System Generic.wav` once
-and the page two soft notes (the win alarm stays the siren). **Nothing is
+this host**, and the same alarm as a won pod sounds: the server plays
+`Alarm01.wav` twice and the page its siren. **Nothing is
 ever terminated without you** — except by the location guard, if you set
 one (below).
 
@@ -171,8 +171,10 @@ can share one.
   before you pressed Start, each with its settings token beside it as
   `<name>.txt`. The token is built in Python (`ember_token.py`), with no
   Node; it decodes to the same settings as the Gallery's own token.
-- The pod is checked every 8 s; a new file is saved as soon as it appears.
-  A video still being encoded is left until it is finished.
+- The pod is checked every 8 s. A new file waits 15 s after it first
+  appears before it is saved, so a generation you delete in the Gallery
+  within that time is never downloaded. A video still being encoded is
+  left until it is finished.
 - Files are written under a temporary name and renamed when complete.
 - Nothing is downloaded twice: each pod keeps a record in its folder,
   `.ember-downloads-<pod id>.json`. A file already in the folder with the

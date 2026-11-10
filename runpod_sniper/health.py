@@ -84,7 +84,7 @@ HOOKS = {
     "stream": None,    # (acct, url, headers, timeout) -> iterator of text lines
     "ext_get": None,   # (url, headers) -> (code, headers dict, text); outside Runpod
     "app_up": None,    # (pid) -> True / False
-    "sound": None,     # () -> None, the soft warning sound
+    "sound": None,     # () -> None, the warning sound (the win alarm)
 }
 
 

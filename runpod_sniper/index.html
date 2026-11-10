@@ -764,7 +764,7 @@ function showBudget(s) {
 // ── alarm: a loud-ish two-tone siren for ~4 s ──────────────────────
 let audio = null;
 function unlockAudio() { try { audio = audio || new AudioContext(); audio.resume(); } catch (e) {} }
-function alarm() {
+function alarm(label = "🎯 GPU WON!") {
   unlockAudio(); if (!audio) return;
   const t0 = audio.currentTime;
   for (let i = 0; i < 8; i++) {
@@ -774,22 +774,7 @@ function alarm() {
     o.connect(g).connect(audio.destination); o.start(t0 + i * 0.5); o.stop(t0 + i * 0.5 + 0.45);
   }
   let n = 0; const title = document.title;
-  const flash = setInterval(() => { document.title = n++ % 2 ? title : "🎯 GPU WON!"; if (n > 20) { clearInterval(flash); document.title = title; } }, 600);
-}
-// A pod check warning: two soft sine notes, once — nothing like the siren.
-function softBeep() {
-  unlockAudio(); if (!audio) return;
-  const t0 = audio.currentTime;
-  [[660, 0], [440, 0.3]].forEach(([f, d]) => {
-    const o = audio.createOscillator(), g = audio.createGain();
-    o.type = "sine"; o.frequency.value = f;
-    g.gain.setValueAtTime(0.0001, t0 + d);
-    g.gain.exponentialRampToValueAtTime(0.12, t0 + d + 0.02);
-    g.gain.exponentialRampToValueAtTime(0.0001, t0 + d + 0.25);
-    o.connect(g).connect(audio.destination); o.start(t0 + d); o.stop(t0 + d + 0.27);
-  });
-  let n = 0; const title = document.title;
-  const flash = setInterval(() => { document.title = n++ % 2 ? title : "⚠ pod check"; if (n > 6) { clearInterval(flash); document.title = title; } }, 700);
+  const flash = setInterval(() => { document.title = n++ % 2 ? title : label; if (n > 20) { clearInterval(flash); document.title = title; } }, 600);
 }
 // Browsers only play sound after a click on the page.
 document.addEventListener("click", unlockAudio, {once: true});
@@ -814,10 +799,10 @@ function drawBanner(list) {
     $("healthBanner").querySelectorAll("[data-hkeep]").forEach(b => b.onclick = () => api("/api/health/keep", {id: b.dataset.hkeep}).then(poll).catch(e => alert(e.message)));
     $("healthBanner").querySelectorAll("[data-hblock]").forEach(b => b.onclick = () => blockHost(warn.find(h => h.pod === b.dataset.hblock)));
   }
-  // One soft beep per new warning, even across a page refresh.
+  // The siren once per new warning, even across a page refresh.
   for (const h of warn) {
     const key = "warned." + h.pod + "." + h.warn_seq;
-    if (h.warn_seq && !localStorage.getItem(key)) { localStorage.setItem(key, "1"); softBeep(); }
+    if (h.warn_seq && !localStorage.getItem(key)) { localStorage.setItem(key, "1"); alarm("⚠ POD PROBLEM"); }
   }
 }
 async function healthTerminate(id, acct) {
@@ -1019,7 +1004,7 @@ function jobHtml(j) {
       <button class="ghost small" data-open="${esc(j.folder)}">Open folder</button>
       ${running ? `<button class="ghost small" data-dlstop="${esc(j.pod_id)}">■ Stop</button>`
                 : `<button class="ghost small" data-dldismiss="${esc(j.pod_id)}">Dismiss</button>`}</div>
-    <div class="stats">${stat(j.total_on_pod, "on the pod")}${stat(j.have, "in the folder")}${stat(j.saved, "saved now")}${stat(j.waiting, "still being written")}${stat(j.tokens, "tokens")}${stat(MB(j.bytes), "downloaded")}${j.failed ? stat(j.failed, "failed") : ""}</div>
+    <div class="stats">${stat(j.total_on_pod, "on the pod")}${stat(j.have, "in the folder")}${stat(j.saved, "saved now")}${stat(j.waiting, "still being written")}${stat(j.held, "held " + j.hold + " s" + (j.next_due ? " · next in " + Math.max(0, Math.ceil(j.next_due - Date.now() / 1000)) + " s" : ""))}${stat(j.tokens, "tokens")}${stat(MB(j.bytes), "downloaded")}${j.failed ? stat(j.failed, "failed") : ""}</div>
     ${c ? `<div class="muted" style="margin-top:8px">${esc(c.name)} — ${MB(c.done)}${c.total ? " of " + MB(c.total) : ""}${c.speed ? " · " + MB(c.speed) + "/s" : ""}</div><div class="bar"><div style="width:${pct}%"></div></div>` : ""}
     <div class="muted" style="margin-top:8px">Last saved: ${j.last_saved ? esc(j.last_saved.name) + " (" + MB(j.last_saved.bytes) + (j.last_saved.seed != null ? ", seed " + esc(j.last_saved.seed) : "") + ") " + ago(j.last_saved.at) : "—"} · checked ${ago(j.last_poll)}</div>
     ${j.error ? `<div class="error" style="margin-top:6px">${esc(j.error)}</div>` : ""}

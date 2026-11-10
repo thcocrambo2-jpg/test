@@ -8,6 +8,9 @@ gives. Pictures and videos both; a file the pod is still writing (a video
 mid-encode) is left for the next round, which /api/v1/media says by
 answering it Cache-Control: no-store.
 
+Each new file is held for HOLD seconds after it first shows up, so a
+generation deleted in the Gallery within that time is never downloaded.
+
 Nothing is downloaded twice: each pod keeps a record in its folder,
 .ember-downloads-<pod id>.json, written after every file. A file already in
 the folder under the same name and size counts as saved. Two pods can share
@@ -36,6 +39,7 @@ USER_AGENT = ("Mozilla/5.0 (Windows NT 10.0; Win64; x64) "
               "EmberAutoDownload/1.0")   # the Runpod proxy refuses urllib's own
 CHUNK = 256 * 1024
 MAX_TRIES = 5            # a file that fails this often is skipped
+HOLD = 15                # seconds a new file waits, so it can be deleted first
 API = "/api/v1"
 NAME_OK = re.compile(r"[^A-Za-z0-9 ._()\-]+")
 
@@ -75,6 +79,9 @@ class Download:
         self.saved = 0               # saved by this run
         self.already = 0             # in the folder before
         self.waiting = 0             # on the pod, still being written
+        self.held = 0                # new, inside the HOLD window
+        self.first_seen = {}         # item id -> when this run first saw it
+        self.next_due = None         # when the next held file is due
         self.failed = 0
         self.tokens = 0
         self.bytes = 0
@@ -116,6 +123,8 @@ class Download:
                 "last_poll": self.last_poll, "total_on_pod": self.total_on_pod,
                 "have": len(self.record["files"]), "saved": self.saved,
                 "already": self.already, "waiting": self.waiting,
+                "held": self.held, "hold": HOLD,
+                "next_due": self.next_due,
                 "failed": self.failed, "tokens": self.tokens,
                 "bytes": self.bytes,
                 "current": dict(self.current) if self.current else None,
@@ -205,6 +214,10 @@ class Download:
                 self.event("Error: %s" % self.error)
             with self.lock:
                 self.last_poll = time.time()
+            with self.lock:
+                due = self.next_due
+            if due is not None and wait == POLL:         # wake when a held file is due
+                wait = max(0.5, min(POLL, due - time.time() + 0.2))
             self.stop_event.wait(wait)
 
     def _gallery(self) -> list:
@@ -231,10 +244,21 @@ class Download:
         items = self._gallery()
         have = self.record["files"]
         todo = [i for i in items if i.get("id") and i["id"] not in have]
-        waiting = 0
+        now = time.time()
+        # files no longer listed (deleted on the pod) are forgotten
+        listed = {i["id"] for i in todo}
+        self.first_seen = {k: t for k, t in self.first_seen.items() if k in listed}
+        waiting = held = 0
+        next_due = None
         for item in reversed(todo):                      # oldest first
             if self.stop_event.is_set():
                 return
+            seen = self.first_seen.setdefault(item["id"], now)
+            if now - seen < HOLD:                        # still deletable
+                held += 1
+                due = seen + HOLD
+                next_due = due if next_due is None else min(next_due, due)
+                continue
             tries = self.item_fails.get(item["id"], 0)
             if tries >= MAX_TRIES:
                 continue                                 # given up on; said so once
@@ -260,6 +284,7 @@ class Download:
                     self._save_record()
         with self.lock:
             self.waiting = waiting
+            self.held, self.next_due = held, next_due
 
     # ── one file ────────────────────────────────────────────────────
 
