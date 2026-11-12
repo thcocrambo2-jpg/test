@@ -3,21 +3,22 @@
 It answers the same URLs with the same status codes and messages the real
 API uses, so the watcher's handling of each case gets exercised:
 
-- create: "no capacity" for the first FAILS attempts of each snipe (v1:
-  500, v2: 400), with an occasional 429 thrown in, then a pod. The win
+- create: "no capacity" (400) for the first FAILS attempts of each
+  snipe, with an occasional 429 thrown in, then a pod. The win
   stays open for a moment so a request already in flight also wins — the
   race guard has to terminate that one. Now and then the pod lands on a
   pricier host, which the price guard should throw back.
-- v1 rejects EUR-IS-4 / EUR-IS-5 / EUR-NO-2 with a 400 schema error, like
-  the real one; v2 rejects an unknown GPU id with a plain 400 — the
-  "real error" the watcher must stop on.
-- pods go PROVISIONING → RUNNING after a few seconds; starting a stopped
+- an unknown GPU id gets a plain 400 — the "real error" the watcher
+  must stop on.
+- pods go PROVISIONING → RUNNING after a few seconds, and then show
+  their host's public IP (ssh.direct); a Secure pod has a data center,
+  a Community one none. ipinfo.io answers the IP's country; starting a stopped
   Community pod fails half the time with "not enough free GPUs".
 - every reply carries RateLimit headers counted from a real sliding
   window, and an exhausted window really answers 429.
 - every pod has a health *scenario* (--dry-health): its logs stream
-  (system + container lines, played 10x fast), its machine (country,
-  host disk) and the app's EMBER_PODCHECK lines follow it — a fast pod,
+  (system + container lines, played 10x fast), its host (country, IP)
+  and the app's EMBER_PODCHECK lines follow it — a fast pod,
   slow internet, a throttled or x4 GPU, a cached image, a host error, an
   old build that prints no pod checks, low RAM, a slow disk, a restart
   loop. Docker Hub's manifest and the mirror's file list are faked too,
@@ -33,8 +34,6 @@ import time
 from collections import deque
 from urllib.parse import parse_qs, urlparse
 
-V1_REJECTS = {"EUR-IS-4", "EUR-IS-5", "EUR-NO-2"}
-V1_NO_CAPACITY = ("create pod: There are no instances currently available")
 V2_NO_CAPACITY = ("There are no longer any instances available with the "
                   "requested specifications. Please refresh and try again.")
 
@@ -48,6 +47,7 @@ class FakeRunpod:
         self.expensive = expensive
         self.health = health
         self.country = (country or "").upper()
+        self.ips = {}           # fake host IP -> country, for the ipinfo lookup
         self.lock = threading.Lock()
         self.keys = {}          # key -> per-account state
 
@@ -94,21 +94,17 @@ class FakeRunpod:
 
     def _route(self, acct, method, url, body) -> tuple:
         path = url.path
-        if method == "POST" and path == "/v1/pods":
-            return self._create(acct, "v1", body or {})
         if method == "POST" and path == "/v2/pods":
-            return self._create(acct, "v2", body or {})
+            return self._create(acct, body or {})
         if method == "GET" and path == "/v2/pods":
             return 200, {"pods": [self._v2(p) for p in acct["pods"].values()],
                          "pagination": {"nextCursor": None,
                                         "hasNextPage": False}}
-        m = re.fullmatch(r"/v[12]/pods/([a-z0-9]+)(/action)?", path)
+        m = re.fullmatch(r"/v2/pods/([a-z0-9]+)(/action)?", path)
         if m:
             pod = acct["pods"].get(m.group(1))
             if not pod:
                 return 404, {"title": "Not Found", "detail": "pod not found"}
-            if method == "GET" and path.startswith("/v1/"):
-                return 200, self._v1(pod, "includeMachine=true" in url.query)
             if method == "GET":
                 return 200, self._v2(pod)
             if method == "DELETE":
@@ -123,20 +119,10 @@ class FakeRunpod:
 
     # ── create ──────────────────────────────────────────────────────
 
-    def _create(self, acct, api, body) -> tuple:
-        if api == "v1":
-            bad = [d for d in body.get("dataCenterIds") or [] if d in V1_REJECTS]
-            if bad:
-                return 400, {"error": "request body has an error: doesn't match "
-                             "schema: Error at \"/dataCenterIds/0\": value is "
-                             "not one of the allowed values"}
-            gpu = (body.get("gpuTypeIds") or [None])[0]
-            cloud = body.get("cloudType", "SECURE")
-            count = body.get("gpuCount", 1)
-        else:
-            gpu = (body.get("gpu") or {}).get("id")
-            cloud = body.get("cloud", "SECURE")
-            count = (body.get("gpu") or {}).get("count", 1)
+    def _create(self, acct, body) -> tuple:
+        gpu = (body.get("gpu") or {}).get("id")
+        cloud = body.get("cloud", "SECURE")
+        count = (body.get("gpu") or {}).get("count", 1)
         if gpu not in self.gpus:
             return 400, {"title": "Bad Request",
                          "detail": "gpu type %r does not exist" % gpu}
@@ -146,14 +132,12 @@ class FakeRunpod:
         if now > acct["open_until"]:
             if acct["misses"] < self.fails:
                 acct["misses"] += 1
-                if api == "v1":
-                    return 500, {"error": V1_NO_CAPACITY, "status": 500}
                 return 400, {"title": "Bad Request", "detail": V2_NO_CAPACITY}
             acct["open_until"] = now + 2.5      # a GPU just freed up
             acct["misses"] = 0
-        return 201, self._new_pod(acct, api, body, gpu, cloud, count)
+        return 201, self._new_pod(acct, body, gpu, cloud, count)
 
-    def _new_pod(self, acct, api, body, gpu, cloud, count) -> dict:
+    def _new_pod(self, acct, body, gpu, cloud, count) -> dict:
         info = self.gpus[gpu]
         price = info.get(cloud.lower()) or info.get("secure") or 1.0
         if random.random() < self.expensive:
@@ -167,19 +151,14 @@ class FakeRunpod:
             "cost": round(price * count, 3),
             "memory": random.choice([62, 93, 107, 125]) * count,
             "vcpu": random.choice([12, 16, 21, 32, 48, 54]) * count,
-            "dc": random.choice(dcs),
+            "dc": random.choice(dcs) if cloud == "SECURE" else None,
             "cuda": random.choice(["13.0", "13.1", "13.2"]),
-            "disk": body.get("containerDiskInGb") or body.get("disk") or 50,
+            "disk": body.get("disk") or 50,
             "status": "PROVISIONING", "since": time.time(),
-            "ssh_key": api == "v1" or bool(body.get("startSsh")),
+            "ssh_key": bool(body.get("startSsh")),
         }
         self._health_setup(pod)
         acct["pods"][pid] = pod
-        if api == "v1":
-            return {"id": pid, "name": pod["name"], "costPerHr": pod["cost"],
-                    "adjustedCostPerHr": pod["cost"], "desiredStatus": "RUNNING",
-                    "machineId": "m" + pid[:6], "gpuCount": count,
-                    "memoryInGb": pod["memory"], "vcpuCount": pod["vcpu"]}
         return self._v2(pod)
 
     def _v2(self, pod) -> dict:
@@ -188,14 +167,16 @@ class FakeRunpod:
         if (pod["status"] == "RUNNING" and pod.get("exit_at") is not None
                 and _virtual(pod) > pod["exit_at"]):
             pod["status"] = "EXITED"                    # the host error took it down
-            pod["last_change"] = "Exited: container exited with code 1"
         running = pod["status"] == "RUNNING"
-        ssh = None
+        ssh = direct = None
         if running and pod["ssh_key"]:
             ssh = {"host": "ssh.runpod.io", "port": 22,
                    "username": pod["id"] + "-64410a1f",
                    "command": "ssh %s-64410a1f@ssh.runpod.io -i ~/.ssh/id_ed25519"
                               % pod["id"]}
+            direct = {"host": pod["ip"], "port": pod["ssh_port"], "username": "root",
+                      "command": "ssh root@%s -p %d -i ~/.ssh/id_ed25519"
+                                 % (pod["ip"], pod["ssh_port"])}
         actions = {"PROVISIONING": ["stop", "terminate"],
                    "RUNNING": ["stop", "restart", "terminate"],
                    "EXITED": ["start", "terminate"]}[pod["status"]]
@@ -207,7 +188,7 @@ class FakeRunpod:
             "cost": pod["cost"], "dataCenterId": pod["dc"],
             "cudaVersion": pod["cuda"] if running else None,
             "disk": pod["disk"], "ports": ["7860/http", "8888/http", "22/tcp"],
-            "ssh": {"proxy": ssh, "direct": None},
+            "ssh": {"proxy": ssh, "direct": direct},
             "createdAt": time.strftime("%Y-%m-%dT%H:%M:%SZ",
                                        time.gmtime(pod["since"])),
         }
@@ -218,7 +199,6 @@ class FakeRunpod:
             return 200, {}
         if action == "stop":
             pod["status"] = "EXITED"
-            pod["last_change"] = "Exited by user: " + time.strftime("%a %b %d %Y %H:%M:%S GMT")
         elif action == "start":
             if pod["cloud"] == "COMMUNITY" and random.random() < 0.5:
                 return 400, {"title": "Bad Request",
@@ -245,40 +225,28 @@ class FakeRunpod:
                             ["NONE", "NONE", "LOW", "MEDIUM", "HIGH"])})
         return {"gpus": out}
 
-    # ── health: machine, logs, outside lookups ──────────────────────
+    # ── health: host, logs, outside lookups ──────────────────────
 
     def _health_setup(self, pod) -> None:
         sc = self.health
         if sc not in SCENARIOS:
             sc = "fast" if random.random() < 0.5 else random.choice(SCENARIOS[1:])
         pod["scenario"] = sc
-        pod["country"] = self.country or random.choice(COUNTRIES)
-        pod["machine"] = "m" + "".join(random.choices(string.ascii_lowercase + string.digits, k=11))
-        pod["host_disk"] = 1123 if sc == "slowdisk" else random.choice([6725, 7096, 7178, 7244])
+        # A Secure pod is where its data center is; --dry-country places
+        # the Community ones.
+        dc = (pod["dc"] or "").split("-")
+        pod["country"] = ((dc[0] if dc[0] in ("US", "CA") else dc[1]) if len(dc) > 1
+                          else self.country or random.choice(COUNTRIES))
+        pod["ip"] = "%d.%d.%d.%d" % (random.choice([45, 82, 94, 185, 213]),
+                                     random.randint(1, 254), random.randint(1, 254),
+                                     random.randint(1, 254))
+        pod["ssh_port"] = random.randint(10000, 60000)
+        self.ips[pod["ip"]] = pod["country"]
         if sc == "lowram":
             pod["memory"] = 41 * pod["count"]
         if sc == "hosterr":
             pod["err"] = random.choice(["pull", "start"])
         pod["timeline"] = _timeline(pod)
-
-    def _v1(self, pod, include_machine: bool) -> dict:
-        self._v2(pod)                                   # moves the status on
-        last = pod.get("last_change") or "Rented by User: " + time.strftime(
-            "%a %b %d %Y %H:%M:%S GMT", time.gmtime(pod["since"]))
-        machine = {}
-        # Right after the create the machine is not attached yet, as far as
-        # anyone knows; the guard has to retry.
-        if include_machine and time.time() - pod["since"] > 1.0:
-            machine = {"location": pod["country"], "gpuTypeId": pod["gpu"],
-                       "diskThroughputMBps": pod["host_disk"],
-                       "maxDownloadSpeedMbps": 220 if pod["scenario"] == "slownet" else 3441,
-                       "maxUploadSpeedMbps": 3912, "secureCloud": pod["cloud"] == "SECURE",
-                       "dataCenterId": pod["dc"] if pod["cloud"] == "SECURE" else None,
-                       "supportPublicIp": True}
-        return {"id": pod["id"], "name": pod["name"], "machineId": pod["machine"],
-                "desiredStatus": pod["status"], "lastStatusChange": last,
-                "costPerHr": pod["cost"], "gpuCount": pod["count"],
-                "memoryInGb": pod["memory"], "vcpuCount": pod["vcpu"], "machine": machine}
 
     def stream(self, key: str, url: str, headers: dict):
         """GET /v2/pods/{id}/logs as SSE lines, like the real stream: the
@@ -325,8 +293,13 @@ class FakeRunpod:
             time.sleep(0.3)
 
     def external(self, url: str, headers: dict) -> tuple:
-        """Docker Hub and the HF tree API, for a dry run."""
+        """Docker Hub, the HF tree API and ipinfo.io, for a dry run."""
         u = urlparse(url)
+        if u.netloc == "ipinfo.io":
+            ip = u.path.strip("/").split("/")[0]
+            if ip in self.ips:
+                return 200, {}, self.ips[ip] + "\n"
+            return 404, {}, "not found"
         if u.netloc == "auth.docker.io":
             return 200, {}, json.dumps({"token": "dry-run-token"})
         if u.netloc == "registry-1.docker.io":

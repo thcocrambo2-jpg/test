@@ -21,6 +21,12 @@ Put your key in `runpod_sniper/.env`:
 RUNPOD_API_KEY=rpa_...
 ```
 
+The key needs only two permissions. In Runpod's console, under Settings →
+API Keys → Create, tick **Pods: Read + Write** and **Catalog: Read** in the
+REST API section; leave everything else off, GraphQL on None and
+Serverless endpoints unticked. The sniper uses only the v2 API
+(`api.runpod.io/v2`).
+
 You can also add several named accounts. Each one shows in the account
 dropdown under its lowercased suffix:
 
@@ -72,7 +78,7 @@ python runpod_sniper/server.py --dry-run      # fake Runpod, nothing is created
 | `--dry-run` | Uses `fake.py` instead of Runpod and ignores `.env`. Gives two fake accounts, `dry-main` and `dry-alt`, and the licence key `EMBER-DRY-RUN`; saving a key from the page keeps it in memory and leaves `.env` alone. |
 | `--dry-fails 20` | In a dry run, how many "no capacity" replies come before a win. |
 | `--dry-health random` | In a dry run, what won pods look like: `fast`, `slownet`, `throttled`, `x4`, `cached`, `hosterr`, `oldbuild`, `lowram`, `slowdisk`, `restartloop`, or `random` (half fast). |
-| `--dry-country FR` | In a dry run, put every fake pod in this country (to try the location guard). |
+| `--dry-country FR` | In a dry run, put every fake Community pod in this country (to try the location guard). A Secure pod is in its data center's country. |
 | `--no-sound` | Don't play the server's alarm (a won pod, a pod-check warning). |
 
 The server listens on 127.0.0.1 only. It refuses requests whose Host header
@@ -113,7 +119,7 @@ header, so other websites can't start a snipe through it.
 ## Pod health checks
 
 Every won pod is checked from the moment it is created, and the pod card
-shows what was found: country and machine, internet speed, GPU speed,
+shows what was found: country and host IP, internet speed, GPU speed,
 PCIe link, RAM, disk, the image pull. When something is wrong, a banner
 appears at the top of the page with **Terminate**, **Keep** and **Block
 this host**, and the same alarm as a won pod sounds: the server plays
@@ -130,10 +136,10 @@ Where the numbers come from:
 
 | Signal | From | Warns when |
 |---|---|---|
-| Country, machine id, host disk | v1 `GET /v1/pods/{id}?includeMachine=true` | blocked country or host; Runpod's disk figure < 2000 MB/s |
+| Country, host IP | v2 `GET /v2/pods/{id}`: the country from `dataCenterId` (`EU-RO-1` → RO), or, for a Community host with no data center, from its public IP (`ssh.direct`) looked up at `ipinfo.io` | blocked country or host |
 | RAM / vCPU | the pod | RAM < 60 GB |
 | Image pull speed | the pod's system log (byte counts, or the image's layer sizes from Docker Hub) | < 30 MB/s — a rough hint only; a cached image has nothing to measure |
-| Stuck / restarting / exited | system log and the pod's status | image still fetching after 10 min, container restarts nobody asked for, the pod stopping on its own |
+| Stuck / restarting | system log and the pod's status | image still fetching after 10 min, container restarts nobody asked for |
 | Errors | the logs | Docker Hub rate limit, disk full, NVIDIA runtime, CUDA, crashes, models that could not be downloaded … |
 | The app | its page on port 7860, once it says it is ready | not answering 3 min after "OPEN THE UI HERE" |
 | Internet speed | Ember's `EMBER_PODCHECK net` line (4 streams from the model mirror's CDN), or — on older builds — the gaps between its "✓ file" lines | < 50 MB/s (< 25 bad) |
@@ -156,10 +162,15 @@ by country, by host, the learned normals, and the blocked hosts.
 
 **Location guard.** Community pods have no data center — the data-center
 picker only works for Secure — so the preset has **Countries** instead
-(block list or allow list). Right after a win the server reads the pod's
-machine (creates pause meanwhile); a pod in the wrong country, or on a
-host you blocked, is terminated and sniping goes on, like the price
-guard — or, with "keep it, warn me", it is kept and flagged.
+(block list or allow list). Right after a win the server reads the pod
+(creates pause meanwhile). A Secure pod's country is its data center's,
+known at once. A Community host's comes from its public IP, which Runpod
+only shows once the pod is placed, so the server waits up to a minute for
+it; if it still isn't known, the pod is kept and the event log says so,
+and the health check flags it later if it turns out to be wrong. A pod in
+the wrong country, or on a host you blocked (by its IP), is terminated and
+sniping goes on, like the price guard — or, with "keep it, warn me", it is
+kept and flagged.
 
 Cost: about 40 requests in a pod's first 20 minutes (the logs stream is
 one request however long it stays open), all counted in the budget.
@@ -208,37 +219,23 @@ can share one.
   count against the same budget.
 - **Send a `User-Agent` header.** Python's default urllib User-Agent gets a
   403 from Cloudflare, so the server sends `curl/8.5.0`.
-- **There are two create APIs, and the server uses both:**
-  - **v1**: `POST https://rest.runpod.io/v1/pods`
-    - The only API with the bandwidth (`minDownloadMbps`), vCPU, RAM and
-      public-IP filters.
-    - `gpuTypeIds` takes the whole GPU list in one request.
-    - No capacity is **HTTP 500** "There are no instances currently
-      available".
-    - Its `dataCenterIds` field rejects EUR-IS-4, EUR-IS-5 and EUR-NO-2 with
-      a 400 schema error.
-    - It adds the account's SSH key (`PUBLIC_KEY`) to the pod automatically.
-    - The reply's cost field is `costPerHr`.
-  - **v2**: `POST https://api.runpod.io/v2/pods`
-    - Accepts every data center, but has **no bandwidth filter**. It does
-      filter on RAM and vCPU through `gpu.minRamPerGpu` and
-      `gpu.minVcpuCountPerGpu`.
-    - Takes one GPU id per request, so the watcher cycles through the
-      preset's GPU list.
-    - No capacity is **HTTP 400** "no longer any instances available".
-    - Without `startSsh: true` the pod gets no SSH key, so the server always
-      sends it.
-    - The reply's cost field is `cost`.
-  - **How "auto" picks:** v1 if a bandwidth or public-IP filter is set, or
-    if every chosen data center is one v1 accepts. Otherwise v2: when no data
-    center is chosen, or when one of them is a data center v1 rejects. If v1
-    is chosen anyway, the server drops the data centers v1 rejects and says
-    so in the event log. The form's API field can force v1 or v2.
+- **Creating a pod: `POST https://api.runpod.io/v2/pods`.**
+  - Accepts every data center. It filters on RAM and vCPU through
+    `gpu.minRamPerGpu` and `gpu.minVcpuCountPerGpu`, and on CUDA, but has
+    no bandwidth or public-IP filter: a slow host shows up in the health
+    check's internet speed instead.
+  - Takes one GPU id per request, so the watcher cycles through the
+    preset's GPU list.
+  - No capacity is **HTTP 400** "no longer any instances available".
+  - Without `startSsh: true` the pod gets no SSH key, so the server always
+    sends it.
+  - The reply's cost field is `cost`.
+  - A pod read has no machine id or host details: only `dataCenterId`
+    (empty for most Community hosts) and the SSH/port addresses.
 - **Telling "no capacity" from a real error.** With v2, a bad request is
   also a 400. Any reply that isn't the no-capacity message stops the watcher
   and shows the error, so it doesn't retry a bad request for 15 minutes.
-  5xx replies and network errors other than v1's no-capacity message are
-  treated as temporary and retried.
+  5xx replies and network errors are treated as temporary and retried.
 - **Env with a template merges per key, and your values win.** The server
   sets only `EMBER_LICENSE_KEY`, from the licence key box. The template's
   `HF_TOKEN` and `CIVITAI_TOKEN` stay.
@@ -261,21 +258,21 @@ can share one.
 `--dry-run` replaces Runpod with `fake.py`, which returns the same status
 codes and messages as the real API:
 
-- Each snipe gets `--dry-fails` no-capacity replies first (500 on v1, 400 on
-  v2), with an occasional 429, and then a pod.
+- Each snipe gets `--dry-fails` no-capacity replies (400) first, with an
+  occasional 429, and then a pod.
 - The win stays open for 2.5 s, so a request already in flight also wins
   and the race guard has to terminate it.
 - About 1 win in 7 lands on a host at 1.5× the price, which the price guard
   throws back.
-- v1 rejects EUR-IS-4, EUR-IS-5 and EUR-NO-2. v2 rejects an unknown GPU id
-  with a plain 400, which the watcher should stop on.
-- Pods go from PROVISIONING to RUNNING after 8 s. Starting a stopped
-  Community pod fails half the time.
+- An unknown GPU id gets a plain 400, which the watcher should stop on.
+- Pods go from PROVISIONING to RUNNING after 8 s, and then show their
+  host's public IP. A Secure pod has a data center, a Community one none.
+  Starting a stopped Community pod fails half the time.
 - Replies carry `RateLimit` headers counted over a real 60 s / 1 h window.
 - Each pod plays a health scenario (`--dry-health`): its logs stream (10×
-  fast: a startup takes about a minute), its machine and the app's pod
-  check lines follow it, and Docker Hub and the mirror's file list are
-  faked, so nothing leaves the PC. A dry run keeps its own
+  fast: a startup takes about a minute), its host and the app's pod
+  check lines follow it, and Docker Hub, the mirror's file list and the
+  IP-country lookup are faked, so nothing leaves the PC. A dry run keeps its own
   `pods-history.dry.jsonl`.
 - `python runpod_sniper/test_health.py` runs the health checks' tests,
   including a real pod's system log.

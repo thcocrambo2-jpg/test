@@ -356,11 +356,6 @@ class Thresholds(unittest.TestCase):
         self.assertIn("Gen4 x4", [f for f in slow["findings"] if f["code"] == "pcie_slow"][0]["text"])
         self.assertNotIn("pcie_slow", codes(self.judge(pc("gpu", tflops=150, h2d_gbs=10.1))))
 
-    def test_host_disk(self):
-        p = LogParser()
-        self.assertIn("host_disk_slow", codes(evaluate(p, now=1, machine={"host_disk_mbs": 1123})))
-        self.assertNotIn("host_disk_slow", codes(evaluate(p, now=1, machine={"host_disk_mbs": 7096})))
-
     def test_render_slow(self):
         p = LogParser()
         for i in range(3):
@@ -387,13 +382,8 @@ class Stuck(unittest.TestCase):
 
     def test_pod_exit(self):
         p = LogParser()
-        host = evaluate(p, now=1, pod={"status": "EXITED"},
-                        machine={"last_status": "Exited: container exited with code 1"})
-        self.assertIn("pod_exited", codes(host, "bad"))
-        user = evaluate(p, now=1, pod={"status": "EXITED"},
-                        machine={"last_status": "Exited by user: Fri Nov 06 2026 12:54:17 GMT"})
-        self.assertNotIn("pod_exited", codes(user))
-        self.assertEqual(user["ended"], "stopped by you")
+        self.assertEqual(evaluate(p, now=1, pod={"status": "EXITED"})["ended"], "stopped")
+        self.assertEqual(evaluate(p, now=1, pod={"gone": True})["ended"], "terminated")
 
     def test_done(self):
         p = LogParser()
@@ -431,6 +421,23 @@ class Guard(unittest.TestCase):
         self.assertEqual(health.guard_check({}, {"countries": ["FR"]}, {})[0], "unknown")
         self.assertEqual(health.guard_check(fr, {}, {"qaof1yb11sza": {}})[0], "block")
         self.assertEqual(health.guard_check(fr, {}, {})[0], "ok")
+        ip = {"country": "FR", "machine": "185.62.10.7"}
+        self.assertEqual(health.guard_check(ip, {}, {"185.62.10.7": {}})[0], "block")
+
+    def test_country_from_v2(self):
+        import server
+        self.assertEqual([server._dc_country(d) for d in
+                          ("EU-RO-1", "EUR-IS-2", "OC-AU-1", "AP-JP-1", "US-CA-2", "CA-MTL-3", None, "X")],
+                         ["RO", "IS", "AU", "JP", "US", "CA", None, None])
+        self.assertEqual(server._public_ip({"ssh": {"direct": {
+            "command": "ssh root@185.62.10.7 -p 40112 -i ~/.ssh/id_ed25519"}}}), "185.62.10.7")
+        self.assertEqual(server._public_ip({"runtime": {"ports": [
+            {"ip": "10.0.0.4", "isIpPublic": False}, {"ip": "94.130.1.2", "isIpPublic": True}]}}),
+            "94.130.1.2")
+        self.assertIsNone(server._public_ip({"ssh": {"direct": None, "proxy": {
+            "command": "ssh abc@ssh.runpod.io"}}, "runtime": None}))
+        self.assertTrue(server.MACHINE_RE.match("185.62.10.7"))
+        self.assertFalse(server.MACHINE_RE.match("185.62.10.7; rm"))
 
     def test_watcher_throws_back_a_blocked_country(self):
         import server
@@ -439,7 +446,7 @@ class Guard(unittest.TestCase):
         self.assertEqual(preset["countries"], ["DE", "FR"])
         with self.assertRaises(ValueError):
             server._clean_preset({"gpus": ["G"], "cloud": "COMMUNITY", "countries": ["France"]})
-        w = server.Watcher(type("A", (), {"name": "t"})(), preset, {"notes": [], "api": "v2"})
+        w = server.Watcher(type("A", (), {"name": "t"})(), preset, {"notes": []})
         killed = []
         w._terminate = lambda pid, why: killed.append((pid, why))
         old_machine, old_blocked = server._get_machine, health.blocked_hosts
@@ -468,7 +475,7 @@ class Watch(unittest.TestCase):
         self.sounds = []
         health.HOOKS.update(
             pod=lambda acct, pid: {"status": "RUNNING", "cuda": "13.0", "ram": 41, "gpu": "G"},
-            machine=lambda acct, pid: {"country": "SE", "machine": "m1", "host_disk_mbs": 7000},
+            machine=lambda acct, pid: {"country": "SE", "machine": "m1"},
             stream=lambda acct, url, headers, idle: iter(()), ext_get=None,
             app_up=lambda pid: False, sound=lambda: self.sounds.append(1))
 

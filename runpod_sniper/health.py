@@ -7,8 +7,8 @@ Everything is read, nothing is changed:
   *container* part is what the pod prints: the start script, Ember's own
   log, and — from Ember builds that have ember/podcheck.py — one
   `EMBER_PODCHECK {json}` line per measurement (net, gpu, host, ...);
-- the pod (v2) and its machine (v1 with includeMachine): status, RAM,
-  vCPU, the host's country, machine id and disk speed;
+- the pod (v2): status, RAM, vCPU, CUDA, and its host — the country
+  (from the data center, or from the host's public IP) and that IP;
 - the app itself, through the pod's proxy URL, once Ember says the UI is
   ready.
 
@@ -54,7 +54,6 @@ T = {
     "dl_warn": 50,                          # real download speed (Ember, or log gaps)
     "rx_warn": 30,                          # two live samples in a row below this
     "image_warn": 30,                       # image pull: a rough hint only
-    "host_disk_warn": 2000,                 # Runpod's figure for the host disk
     "disk_read_warn": 1000,                 # Ember's own read test
     "ram_warn": 60,                         # GB; a 35 GB model swaps on a 41 GB host
     "h2d_warn": 10,                         # GB/s pinned host->GPU copy (Gen4 x8 ≈ 12)
@@ -528,18 +527,12 @@ def evaluate(p: LogParser, *, now: float, won_at: float = None, pod: dict = None
     # -- host, from Runpod
     m["country"] = machine.get("country")
     m["machine"] = machine.get("machine")
-    m["host_dl_mbps"] = machine.get("host_dl_mbps")
-    m["host_disk_mbs"] = machine.get("host_disk_mbs")
     host = p.pc.get("host") or {}
     ram = _num(host.get("ram_gb")) or _num(pod.get("ram"))
     m["ram_gb"], m["vcpu"] = ram, _num(host.get("cpus")) or _num(pod.get("vcpu"))
     if ram is not None and ram < T["ram_warn"]:
         findings.append(_finding("ram_low", "warn", "Only %d GB of RAM: a model over ~35 GB "
                                  "will swap while it loads" % ram))
-    hd = _num(machine.get("host_disk_mbs"))
-    if hd is not None and hd < T["host_disk_warn"]:
-        findings.append(_finding("host_disk_slow", "warn", "Slow host disk: Runpod lists %d MB/s "
-                                 "(most hosts ~7000), so model loads take longer" % hd))
 
     # -- image pull and lifecycle
     img = p.image(layer_sizes)
@@ -688,17 +681,11 @@ def evaluate(p: LogParser, *, now: float, won_at: float = None, pod: dict = None
 
     # -- the pod itself
     status = pod.get("status")
-    last = machine.get("last_status") or ""
     ended = None
     if pod.get("gone") or status == "TERMINATED":
         ended = "terminated"
     elif status == "EXITED":
-        if last and not last.lower().startswith("exited by user"):
-            findings.append(_finding("pod_exited", "bad", "The pod stopped on its own: %s"
-                                     % redact(last)))
-            ended = "exited (host)"
-        else:
-            ended = "stopped by you"
+        ended = "stopped"
 
     # -- where it is up to
     dl_files = dl["done"] + dl["cached"]
@@ -974,8 +961,8 @@ class Health:
         return self.stop_event.wait(seconds)
 
     def _read_machine(self, tries: int) -> None:
-        """The host's country and machine id. Right after a create the
-        machine can still be blank, so try a few times."""
+        """The host's country and public IP. Right after a create they
+        can still be blank, so try a few times."""
         for i in range(tries):
             m = HOOKS["machine"](self.acct, self.pid)
             if m:
@@ -1000,7 +987,6 @@ class Health:
                     self._end("terminated")
                     return
                 if status == "EXITED":
-                    self._read_machine(1)          # lastStatusChange says who stopped it
                     self._end("stopped")
                     return
                 if (status == "RUNNING" and not (self.machine or {}).get("country")
@@ -1199,8 +1185,7 @@ class Health:
                 "gpu_count": pod.get("gpu_count"), "cloud": pod.get("cloud"),
                 "dc": pod.get("dc"), "country": m.get("country"), "machine": m.get("machine"),
                 "cost": pod.get("cost"), "ram_gb": m.get("ram_gb"), "vcpu": m.get("vcpu"),
-                "cuda": pod.get("cuda"), "host_dl_mbps": m.get("host_dl_mbps"),
-                "host_disk_mbs": m.get("host_disk_mbs"),
+                "cuda": pod.get("cuda"),
                 "image": {k: img.get(k) for k in ("cached", "fetched", "method", "mbs", "secs")},
                 "net_mbs": m.get("net_mbs"), "dl_mbs": dl.get("mbs"), "dl_source": dl.get("source"),
                 "gpu_tflops": g.get("tflops"), "gpu_score": g.get("score"),

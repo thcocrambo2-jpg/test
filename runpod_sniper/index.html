@@ -223,19 +223,16 @@
         <label>Max $/hr (whole pod) <input id="max_price" type="number" min="0.01" step="0.01"></label>
         <label>Snipe for (minutes, 1–600) <input id="minutes" type="number" min="1" max="600" title="The watcher gives up after this long"></label>
         <label>Pod name <input id="pod_name"></label>
-        <label>API <select id="api"><option value="auto">auto</option><option value="v1">v1 (rest.runpod.io)</option><option value="v2">v2 (api.runpod.io)</option></select></label>
       </div>
     </div>
     <div class="grid" style="margin-top:10px">
       <label>Template id <input id="template_id"></label>
       <label>Container disk GB <input id="container_disk_gb" type="number" min="5"></label>
       <label>Volume GB (0 = none) <input id="volume_gb" type="number" min="0"></label>
-      <label>Min download Mbps (0 = any) <input id="min_download_mbps" type="number" min="0" step="100"></label>
       <label>Min vCPU per GPU <input id="min_vcpu_per_gpu" type="number" min="0"></label>
       <label>Min RAM per GPU (GB) <input id="min_ram_per_gpu" type="number" min="0"></label>
       <label>Allowed CUDA
         <details class="multi" id="cudaPick"><summary id="cudaSummary">Any</summary><div class="menu" id="cudaList"></div></details></label>
-      <label class="check" style="margin-top:18px"><input type="checkbox" id="public_ip"> Public IP</label>
     </div>
     <div style="margin-top:10px">
       <label>Data centers — Secure only (none = anywhere). Community hosts have no data center and ignore this: use Countries below.</label>
@@ -247,7 +244,7 @@
       <label>Country list is <select id="country_mode"><option value="block">blocked</option><option value="allow">the only ones allowed</option></select></label>
       <label>Wrong country or blocked host <select id="country_action"><option value="terminate">terminate, keep sniping</option><option value="warn">keep it, warn me</option></select></label>
     </div>
-    <div class="muted" style="margin-top:4px">The country comes from the won pod's machine, read right after the win. Hosts you block from a pod's health check (📊 Pods) are thrown back the same way.</div>
+    <div class="muted" style="margin-top:4px">The country comes from the won pod's data center, or, on Community, from its host's public IP, read right after the win (up to a minute while Runpod places it). Hosts you block from a pod's health check (📊 Pods) are thrown back the same way.</div>
     <div class="row">
       <span class="muted" id="planHint"></span>
     </div>
@@ -340,7 +337,7 @@
     </section>
     <section class="card">
       <h2>Blocked hosts <span class="muted">thrown back by the location guard</span></h2>
-      <table><thead><tr><th>Machine</th><th>Why</th><th>Since</th><th></th></tr></thead><tbody id="histBlocked"></tbody></table>
+      <table><thead><tr><th>Host</th><th>Why</th><th>Since</th><th></th></tr></thead><tbody id="histBlocked"></tbody></table>
     </section>
   </div>
   </div>
@@ -424,10 +421,9 @@ function addGpu(id) { if (!gpuOrder.includes(id)) gpuOrder.push(id); showGpuList
 $("gpuAddBtn").onclick = () => addGpu($("gpuAdd").value);
 
 function showDcs() {
-  const rejects = new Set(cfg.v1_rejects);
   $("dcs").innerHTML = Object.entries(cfg.data_centers).map(([region, ids]) => `<fieldset>
     <legend><label class="check"><input type="checkbox" data-region="${esc(region)}"> ${esc(region)}</label></legend>
-    <div class="opts">${ids.map(d => `<label class="check"><input type="checkbox" data-dc="${esc(d)}" data-in="${esc(region)}"> ${esc(d)}${rejects.has(d) ? ' <span class="tag" title="v1 rejects this id">v2 only</span>' : ""}</label>`).join("")}</div>
+    <div class="opts">${ids.map(d => `<label class="check"><input type="checkbox" data-dc="${esc(d)}" data-in="${esc(region)}"> ${esc(d)}</label>`).join("")}</div>
   </fieldset>`).join("");
   $("dcs").querySelectorAll("[data-region]").forEach(box => box.onchange = () => {
     $("dcs").querySelectorAll(`[data-in="${box.dataset.region}"]`).forEach(c => c.checked = box.checked);
@@ -443,11 +439,10 @@ function syncRegions() {
   });
 }
 
-const NUMS = ["gpu_count","max_price","minutes","container_disk_gb","volume_gb","min_download_mbps","min_vcpu_per_gpu","min_ram_per_gpu"];
+const NUMS = ["gpu_count","max_price","minutes","container_disk_gb","volume_gb","min_vcpu_per_gpu","min_ram_per_gpu"];
 function formToPreset() {
   const p = {name: $("presetName").value.trim(), gpus: [...gpuOrder], cloud: $("cloud").value,
     template_id: $("template_id").value.trim(), pod_name: $("pod_name").value.trim(),
-    api: $("api").value, public_ip: $("public_ip").checked,
     cuda_versions: [...$("cudaList").querySelectorAll("[data-cuda]:checked")].map(c => c.dataset.cuda),
     data_centers: [...$("dcs").querySelectorAll("[data-dc]:checked")].map(c => c.dataset.dc),
     countries: [...new Set($("countries").value.toUpperCase().split(/[\s,;]+/).filter(Boolean))].sort(),
@@ -498,8 +493,6 @@ function presetToForm(p) {
   $("cloud").value = p.cloud || "COMMUNITY";
   $("template_id").value = p.template_id || "";
   $("pod_name").value = p.pod_name || "";
-  $("api").value = p.api || "auto";
-  $("public_ip").checked = !!p.public_ip;
   showCuda(p.cuda_versions || []);
   for (const k of NUMS) $(k).value = p[k] ?? 0;
   const dcs = new Set(p.data_centers || []);
@@ -522,24 +515,12 @@ function showChips() {
   $("presetChips").querySelectorAll(".chip").forEach(b => b.onclick = () => presetToForm(cfg.presets[b.dataset.i]));
 }
 
-// Mirrors server.py _plan(), so the choice is visible before pressing Snipe.
+// Mirrors server.py _plan(), so what gets sent is visible before pressing Snipe.
 function planHint() {
   let p; try { p = formToPreset(); } catch (e) { $("planHint").textContent = e.message; return; }
-  const rejects = new Set(cfg.v1_rejects);
-  const dcs = p.data_centers, bad = dcs.filter(d => rejects.has(d));
-  let use = p.api, why = "forced";
-  if (use === "auto") {
-    if (p.min_download_mbps || p.public_ip) { use = "v1"; why = p.min_download_mbps ? "bandwidth filter" : "public-IP filter"; }
-    else if (dcs.length && !bad.length) { use = "v1"; why = "every data center is one v1 takes"; }
-    else { use = "v2"; why = dcs.length ? "a data center v1 rejects is chosen" : "no bandwidth filter"; }
-  }
-  let text = `Will use ${use} (${why}).`;
-  if (use === "v1" && bad.length) text += ` v1 leaves out ${bad.join(", ")}.`;
-  if (use === "v1" && p.gpus.length > 1) text += " One request carries the whole GPU list.";
-  if (use === "v2" && p.gpus.length > 1) text += ` Alternates ${p.gpus.length} GPUs, one per request.`;
-  if (use === "v2" && p.public_ip) text += " v2 has no public-IP filter.";
-  if (use === "v2") text += " SSH key via startSsh.";
-  $("planHint").textContent = text;
+  let text = p.gpus.length > 1 ? `Alternates ${p.gpus.length} GPUs, one per request.` : "";
+  text += " SSH key via startSsh.";
+  $("planHint").textContent = text.trim();
   showPrice(p); showChips();
 }
 
@@ -674,7 +655,7 @@ const etaMin = mbs => Math.round(90000 / Math.max(mbs, 0.1) / 60);
 const CHIP_CODES = {
   where: ["location"], net: ["net_slow", "dl_slow", "rx_slow", "net_error"],
   gpu: ["gpu_slow", "gpu_throttle", "gpu_drop", "power_capped", "gpu_hot", "gpu_error"],
-  pcie: ["pcie_slow"], ram: ["ram_low"], disk: ["host_disk_slow", "disk_slow"], image: ["image_slow", "image_stuck"]};
+  pcie: ["pcie_slow"], ram: ["ram_low"], disk: ["disk_slow"], image: ["image_slow", "image_stuck"]};
 function chipLevel(h, codes) {
   const f = h.findings.filter(x => codes.includes(x.code) && !x.acked);
   return f.some(x => x.level === "bad") ? "bad" : f.some(x => x.level === "warn") ? "warn" : "ok";
@@ -682,19 +663,19 @@ function chipLevel(h, codes) {
 function healthChips(h) {
   const m = h.metrics || {}, g = m.gpu, img = m.image || {}, dl = m.download || {};
   const chip = (label, val, codes, title) => `<span class="hchip ${val == null ? "wait" : chipLevel(h, codes)}" title="${esc(title || "")}"><i>${label}</i>${val == null ? "…" : esc(val)}</span>`;
-  const where = m.country ? m.country + (m.machine ? " · " + m.machine.slice(0, 8) : "") : null;
+  const where = m.country ? m.country + (m.machine ? " · " + m.machine : "") : null;
   const net = m.net_mbs != null ? `${fmt(m.net_mbs)} MB/s (≈ ${etaMin(m.net_mbs)} min / 90 GB)`
     : dl.mbs != null ? `${fmt(dl.mbs)} MB/s${dl.source === "log gaps" ? " (from the log)" : ""}` : null;
   const gpu = g ? `${fmt(g.tflops)} TFLOPS · ${g.score != null ? Math.round(g.score * 100) + "%" : "learning " + g.learning}`
     : m.old_build ? "not measured (old build)" : null;
   const pcie = g && (g.pcie || g.h2d_gbs != null) ? `${g.pcie || "?"} · ${fmt(g.h2d_gbs, 1)} GB/s` : null;
   const image = img.method === "cached" ? "cached" : img.mbs != null ? fmt(img.mbs) + " MB/s" : null;
-  return chip("🌍", where, CHIP_CODES.where, "host country · machine id")
+  return chip("🌍", where, CHIP_CODES.where, "host country · host IP")
     + chip("Net", net, CHIP_CODES.net, "Ember's speed test of the model mirror, or the download speed worked out from the log")
     + chip("GPU", gpu, CHIP_CODES.gpu, "bf16 matmul TFLOPS, as a share of the normal for this card")
     + chip("PCIe", pcie, CHIP_CODES.pcie, "link under load · host→GPU copy speed")
     + chip("RAM", m.ram_gb != null ? fmt(m.ram_gb) + " GB" : null, CHIP_CODES.ram)
-    + chip("Disk", m.host_disk_mbs != null ? (m.host_disk_mbs / 1000).toFixed(1) + " GB/s" : null, CHIP_CODES.disk, "Runpod's figure for the host disk")
+    + chip("Disk", m.disk_read_mbs != null ? (m.disk_read_mbs / 1000).toFixed(1) + " GB/s" : null, CHIP_CODES.disk, "Ember's own disk read test")
     + chip("Image", image, CHIP_CODES.image, "the Docker image pull (a rough hint only)");
 }
 function healthHtml(h) {
@@ -722,7 +703,7 @@ function showWatchers(s) {
     const events = w.events.map(([t, e]) => new Date(t * 1000).toLocaleTimeString() + "  " + e).join("\n");
     return `<div class="watch ${esc(w.status)}">
       <header><span class="badge b-${esc(w.status)}">${esc(w.status)}</span>
-        <b>${esc(w.account)}</b><span class="grow muted">${esc(w.preset.name || "unsaved preset")} · ${esc(w.preset.cloud)} · ${esc(w.preset.gpus.map(gpuName).join(" → "))} · ${esc(w.api)} · ${priceSummary(w.preset)}/hr · max ${money(w.preset.max_price)}/hr · key <code>${esc(w.licence || "—")}</code>${w.pod && w.pod.cost != null ? ` · <b style="color:var(--c-success)">paying ${money(w.pod.cost)}/hr</b>` : ""}</span>
+        <b>${esc(w.account)}</b><span class="grow muted">${esc(w.preset.name || "unsaved preset")} · ${esc(w.preset.cloud)} · ${esc(w.preset.gpus.map(gpuName).join(" → "))} · ${priceSummary(w.preset)}/hr · max ${money(w.preset.max_price)}/hr · key <code>${esc(w.licence || "—")}</code>${w.pod && w.pod.cost != null ? ` · <b style="color:var(--c-success)">paying ${money(w.pod.cost)}/hr</b>` : ""}</span>
         ${w.status === "running" ? `<button class="ghost small" data-stop="${esc(w.account)}">■ Stop</button>`
                                  : `<button class="ghost small" data-dismiss="${esc(w.account)}">Dismiss</button>`}</header>
       <div class="stats">${stat(w.tries, "tries")}${stat(w.rate.toFixed(0) + "/min", "rate")}${stat(clock(w.elapsed), "elapsed")}${stat(left, "left")}</div>

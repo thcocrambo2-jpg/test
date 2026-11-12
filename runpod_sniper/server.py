@@ -16,6 +16,7 @@ ever created or billed.
 """
 
 import argparse
+import ipaddress
 import json
 import random
 import re
@@ -41,7 +42,6 @@ ENV_FILE = HERE / ".env"
 GPUS_FILE = HERE / "gpus.json"
 PRESETS_FILE = HERE / "presets.json"
 
-V1_PODS = "https://rest.runpod.io/v1/pods"
 V2 = "https://api.runpod.io/v2"
 USER_AGENT = "curl/8.5.0"      # urllib's own User-Agent gets a Cloudflare 403
 
@@ -66,10 +66,6 @@ ALL_DCS = {d for dcs in DATA_CENTERS.values() for d in dcs}
 # A stock refresh adds any new one the catalog reports.
 CUDA_VERSIONS = ["12.2", "12.4", "12.5", "12.6", "12.7", "12.8", "12.9",
                  "13.0", "13.1", "13.2", "13.3", "13.4"]
-# v1's dataCenterIds enum lags behind: these answer a 400 schema error.
-V1_REJECTS = {"EUR-IS-4", "EUR-IS-5", "EUR-NO-2"}
-
-V1_NO_CAPACITY = "no instances currently available"
 V2_NO_CAPACITY = "no longer any instances available"
 
 NAME_RE = re.compile(r"^[A-Za-z0-9][A-Za-z0-9 ._:/()+,·-]{0,99}$")
@@ -80,7 +76,13 @@ LICENCE_ENV = "EMBER_LICENSE_KEY"
 POD_ID_RE = re.compile(r"^[a-z0-9]{6,32}$")
 TEMPLATE_RE = re.compile(r"^[A-Za-z0-9_-]{1,40}$")
 COUNTRY_RE = re.compile(r"^[A-Z]{2}$")
-MACHINE_RE = re.compile(r"^[a-z0-9]{6,40}$")
+# A blocked host: its public IP, the one thing v2 shows that tells hosts apart.
+MACHINE_RE = re.compile(r"^\d{1,3}(\.\d{1,3}){3}$")
+IP_RE = re.compile(r"\b(\d{1,3}(?:\.\d{1,3}){3})\b")
+# The country of a public IP, for Community hosts (no data center). No key
+# needed; answers the two-letter code as plain text.
+GEO_URL = "https://ipinfo.io/%s/country"
+GUARD_WAIT = 60          # seconds the location guard waits for a won pod's country
 
 DRY_RUN = False
 SOUND = True
@@ -254,7 +256,7 @@ class Account:
 
         v2 sends the IETF draft form, e.g.
             RateLimit: "minute";r=71;t=38, "hour";r=1622;t=2410
-        v1 has used x-ratelimit-* in the past; take whichever comes.
+        Older replies used x-ratelimit-*; take whichever comes.
         """
         found = {}
         for name, value in headers.items():
@@ -496,11 +498,8 @@ def _clean_preset(p: dict) -> dict:
     pod_name = str(p.get("pod_name") or "sniped").strip()
     if not POD_NAME_RE.match(pod_name):
         raise ValueError("Pod name: letters, digits, . _ - (max 60).")
-    api = str(p.get("api") or "auto")
-    if api not in ("auto", "v1", "v2"):
-        raise ValueError("API must be auto, v1 or v2.")
     # The location guard: Community hosts have no data center, so the
-    # host's country (from its machine) is what can be filtered on.
+    # host's country (from its public IP) is what can be filtered on.
     countries = p.get("countries") or []
     if isinstance(countries, str):
         countries = re.split(r"[\s,;]+", countries)
@@ -521,16 +520,13 @@ def _clean_preset(p: dict) -> dict:
         "template_id": template,
         "container_disk_gb": num("container_disk_gb", 5, 2000, default=50),
         "volume_gb": num("volume_gb", 0, 4000),
-        "min_download_mbps": num("min_download_mbps", 0, 100000),
         "min_vcpu_per_gpu": num("min_vcpu_per_gpu", 0, 256),
         "min_ram_per_gpu": num("min_ram_per_gpu", 0, 2048),
         "data_centers": sorted(set(dcs), key=dcs.index),
         "cuda_versions": cudas,
-        "public_ip": bool(p.get("public_ip")),
         "max_price": num("max_price", 0.01, 100, cast=float, default=1.0),
         "minutes": _whole(num("minutes", 1, 600, cast=float, default=15)),
         "pod_name": pod_name,
-        "api": api,
         "countries": countries,
         "country_mode": country_mode,
         "country_action": country_action,
@@ -538,66 +534,13 @@ def _clean_preset(p: dict) -> dict:
 
 
 def _plan(p: dict, licence: str = "") -> dict:
-    """Which create API to use for a preset, and the request body/bodies.
-
-    v1 is the only one with a bandwidth filter (and a public-IP filter),
-    so those force it. Otherwise v1 is used when every chosen data
-    center is one v1 accepts, and v2 — which takes every data center
-    but filters on bandwidth not at all — for the rest.
-    """
+    """The v2 create request body/bodies for a preset (v2 takes one GPU id
+    per request, so several GPUs make several bodies to alternate)."""
     notes = []
     # The only env override: the licence key, never from the preset. The
     # template's own env (HF_TOKEN, CIVITAI_TOKEN) is merged in by Runpod.
     env = {LICENCE_ENV: licence} if licence else {}
     dcs = p["data_centers"]
-    api = p["api"]
-    if api == "auto":
-        if p["min_download_mbps"] or p["public_ip"]:
-            api = "v1"
-        elif dcs and not (set(dcs) & V1_REJECTS):
-            api = "v1"
-        else:
-            api = "v2"
-    if api == "v1":
-        dropped = [d for d in dcs if d in V1_REJECTS]
-        if dropped:
-            dcs = [d for d in dcs if d not in V1_REJECTS]
-            notes.append("v1 does not take %s — left out." % ", ".join(dropped))
-            if not dcs:
-                raise ValueError("Every chosen data center is one v1 rejects, "
-                                 "and the bandwidth / public-IP filter needs v1. "
-                                 "Drop the filter (v2) or pick other data centers.")
-        body = {
-            "name": p["pod_name"],
-            "cloudType": p["cloud"],
-            "computeType": "GPU",
-            "gpuTypeIds": p["gpus"],
-            "gpuCount": p["gpu_count"],
-            "containerDiskInGb": p["container_disk_gb"],
-            "volumeInGb": p["volume_gb"],
-        }
-        if p["template_id"]:
-            body["templateId"] = p["template_id"]
-        if env:
-            body["env"] = env
-        if p["min_download_mbps"]:
-            body["minDownloadMbps"] = p["min_download_mbps"]
-        if p["min_vcpu_per_gpu"]:
-            body["minVCPUPerGPU"] = p["min_vcpu_per_gpu"]
-        if p["min_ram_per_gpu"]:
-            body["minRAMPerGPU"] = p["min_ram_per_gpu"]
-        if dcs:
-            body["dataCenterIds"] = dcs
-        if p["cuda_versions"]:
-            body["allowedCudaVersions"] = p["cuda_versions"]
-        if p["public_ip"]:
-            body["supportPublicIp"] = True
-        if len(p["gpus"]) > 1:
-            notes.append("v1 takes the whole GPU list in one request.")
-        return {"api": "v1", "url": V1_PODS, "bodies": [body], "notes": notes}
-
-    if p["public_ip"]:
-        notes.append("v2 has no public-IP filter — ignored.")
     bodies = []
     for gpu in p["gpus"]:        # v2 takes one GPU id: alternate through them
         g = {"id": gpu, "count": p["gpu_count"]}
@@ -622,7 +565,7 @@ def _plan(p: dict, licence: str = "") -> dict:
     if len(bodies) > 1:
         notes.append("v2 takes one GPU per request — alternating %d GPUs."
                      % len(bodies))
-    return {"api": "v2", "url": V2 + "/pods", "bodies": bodies, "notes": notes}
+    return {"url": V2 + "/pods", "bodies": bodies, "notes": notes}
 
 
 # ── pods ────────────────────────────────────────────────────────────
@@ -666,23 +609,66 @@ def _health_pod(acct: Account, pid: str):
     return None
 
 
+def _dc_country(dc) -> str:
+    """The country in a data center id: EU-RO-1 -> RO, EUR-IS-2 -> IS,
+    OC-AU-1 -> AU, US-TX-3 -> US, CA-MTL-3 -> CA. None when unknown."""
+    parts = str(dc or "").upper().split("-")
+    if len(parts) < 2:
+        return None
+    if parts[0] in ("US", "CA"):
+        return parts[0]
+    return parts[1] if COUNTRY_RE.match(parts[1]) else None
+
+
+def _public_ip(pod: dict) -> str:
+    """The host's public IP from a v2 pod: its direct SSH address, or a
+    public port mapping. None until Runpod has one (or the host has none)."""
+    direct = (pod.get("ssh") or {}).get("direct") or {}
+    found = [direct.get(k) for k in ("ip", "host", "command")]
+    found += [port.get("ip") for port in (pod.get("runtime") or {}).get("ports") or []
+              if isinstance(port, dict) and port.get("isIpPublic") is not False]
+    for value in found:
+        m = IP_RE.search(str(value or ""))
+        if m:
+            try:
+                if ipaddress.ip_address(m.group(1)).is_global:
+                    return m.group(1)
+            except ValueError:
+                pass
+    return None
+
+
+_geo = {}
+
+
+def _ip_country(ip: str) -> str:
+    """The two-letter country of a public IP (GEO_URL), cached. None when
+    the lookup fails."""
+    if ip in _geo:
+        return _geo[ip]
+    code, _h, text = _ext_get(GEO_URL % ip, {"User-Agent": USER_AGENT})
+    country = text.strip().upper() if code == 200 else ""
+    if COUNTRY_RE.match(country):
+        _geo[ip] = country
+        return country
+    return None
+
+
 def _get_machine(acct: Account, pid: str):
-    """The pod's host, from v1 with includeMachine (v2 has none of it):
-    country, machine id, Runpod's own disk/network figures, and the last
-    status change ("Exited by user: ..."). None when unavailable."""
-    code, text = acct.request("GET", "%s/%s?includeMachine=true" % (V1_PODS, pid))
+    """The pod's host, from v2: the country (from the data center, or from
+    the host's public IP when a Community host has none) and the public IP,
+    which stands in for a machine id. None when Runpod did not answer."""
+    code, text = acct.request("GET", "%s/pods/%s" % (V2, pid))
     if code != 200:
         return None
     try:
         pod = json.loads(text)
     except ValueError:
         return None
-    m = pod.get("machine") or {}
-    return {"country": m.get("location") or None, "machine": pod.get("machineId") or None,
-            "host_dl_mbps": m.get("maxDownloadSpeedMbps"),
-            "host_disk_mbs": m.get("diskThroughputMBps"),
-            "dc": m.get("dataCenterId"), "secure": m.get("secureCloud"),
-            "last_status": pod.get("lastStatusChange")}
+    dc = pod.get("dataCenterId")
+    ip = _public_ip(pod)
+    return {"country": _dc_country(dc) or (_ip_country(ip) if ip else None),
+            "machine": ip, "dc": dc, "secure": pod.get("cloud") == "SECURE"}
 
 
 def _app_up(pid: str) -> bool:
@@ -792,10 +778,10 @@ class Watcher:
             self.events.append([time.time(), text])
 
     def start(self) -> None:
-        self.event("Sniping %s %s on %s with %s, up to %g min, max $%.2f/hr."
+        self.event("Sniping %s %s on %s, up to %g min, max $%.2f/hr."
                    % (self.preset["cloud"].title(),
                       " / ".join(self.preset["gpus"]), self.acct.name,
-                      self.plan["api"], self.preset["minutes"],
+                      self.preset["minutes"],
                       self.preset["max_price"]))
         for i in range(WORKERS):
             t = threading.Thread(target=self._work, args=(i,), daemon=True)
@@ -843,15 +829,14 @@ class Watcher:
                 self.codes[str(code)] = self.codes.get(str(code), 0) + 1
                 self.last = {"at": time.time(), "code": code,
                              "text": _detail(text)[:200],
-                             "gpu": (body.get("gpu") or {}).get("id")
-                                    or ", ".join(body.get("gpuTypeIds", []))}
+                             "gpu": (body.get("gpu") or {}).get("id")}
             if code in (200, 201):
                 self._won(text)
                 continue
             if code == 429:
                 self.event("429 rate limited — pausing %d s." % PAUSE_429)
                 continue
-            if self._no_capacity(code, text):
+            if code == 400 and V2_NO_CAPACITY in text.lower():
                 continue
             if code == 0 or code >= 500 or code == 403 and "cloudflare" in text.lower():
                 self.event("Transient %s: %s" % (code or "network", _detail(text)))
@@ -859,12 +844,6 @@ class Watcher:
             self.event("Stopped on a real error %s: %s" % (code, _detail(text)))
             self.stop("error", "%s %s" % (code, _detail(text)))
             return
-
-    def _no_capacity(self, code: int, text: str) -> bool:
-        low = text.lower()
-        if self.plan["api"] == "v1":
-            return code == 500 and V1_NO_CAPACITY in low
-        return code == 400 and V2_NO_CAPACITY in low
 
     def _won(self, text: str) -> None:
         try:
@@ -875,9 +854,7 @@ class Watcher:
         if not POD_ID_RE.match(pid):
             self.event("Create answered without a pod id: %s" % text[:200])
             return
-        cost = pod.get("costPerHr") if self.plan["api"] == "v1" else pod.get("cost")
-        if cost is None:
-            cost = pod.get("adjustedCostPerHr") or pod.get("cost")
+        cost = pod.get("cost")
         with self.lock:
             extra = self.status != "running" or self.pod is not None
         if extra:
@@ -911,10 +888,14 @@ class Watcher:
                      preset=self.preset, machine=machine or None)
 
     def _location_guard(self, pid: str, created: dict):
-        """Read the won pod's machine and apply the location guard (the
+        """Read the won pod's host and apply the location guard (the
         preset's countries, and the blocked-hosts list) when it is set to
         terminate. Returns the machine dict, None when there was nothing to
-        check, or False when the pod was thrown back."""
+        check, or False when the pod was thrown back.
+
+        A Secure pod's country comes from its data center at once; a
+        Community host's needs its public IP, which Runpod may only show
+        once the pod is placed, so this waits up to GUARD_WAIT seconds."""
         rules = {k: self.preset.get(k) for k in ("countries", "country_mode")}
         blocked = health.blocked_hosts()
         if self.preset.get("country_action") != "terminate" or not (rules["countries"] or blocked):
@@ -922,12 +903,15 @@ class Watcher:
         self.checking = True
         try:
             machine = None
-            for i in range(3):              # the machine may not be attached yet
+            give_up = time.time() + GUARD_WAIT
+            while True:
                 machine = _get_machine(self.acct, pid)
-                if machine and machine.get("machine") and (machine.get("country")
-                                                           or not rules["countries"]):
+                m = machine or {}
+                if ((m.get("country") or not rules["countries"])
+                        and (m.get("machine") or not blocked)):
                     break
-                time.sleep(1.0)
+                if time.time() > give_up or self.stop_event.wait(3.0):
+                    break
             verdict, why = health.guard_check(machine, rules, blocked)
         finally:
             self.checking = False
@@ -954,7 +938,7 @@ class Watcher:
             return {
                 "account": self.acct.name, "preset": self.preset,
                 "licence": self.licence,
-                "api": self.plan["api"], "status": self.status,
+                "status": self.status,
                 "error": self.error, "started": self.started,
                 "deadline": self.deadline, "finished": self.finished,
                 "elapsed": (self.finished or now) - self.started,
@@ -1044,7 +1028,7 @@ class Handler(BaseHTTPRequestHandler):
                     "accounts": names, "gpus": _gpus(),
                     "prices_read": _read_json(GPUS_FILE, {}).get("prices_read"),
                     "presets": _presets(), "data_centers": DATA_CENTERS,
-                    "v1_rejects": sorted(V1_REJECTS), "dry_run": DRY_RUN,
+                    "dry_run": DRY_RUN,
                     "env_found": DRY_RUN or ENV_FILE.is_file(),
                     "licence": _licence_key() or None,
                     "cuda_versions": CUDA_VERSIONS})
@@ -1110,8 +1094,7 @@ class Handler(BaseHTTPRequestHandler):
                     w = Watcher(acct, preset, plan, licence)
                     _watchers[acct.name] = w
                 w.start()
-                return self.json({"ok": True, "api": plan["api"],
-                                  "notes": plan["notes"]})
+                return self.json({"ok": True, "notes": plan["notes"]})
 
             if url.path == "/api/licence":
                 key = str(body.get("key") or "").strip()
@@ -1260,7 +1243,7 @@ class Handler(BaseHTTPRequestHandler):
             if url.path == "/api/hosts/block":
                 mid = str(body.get("machine") or "")
                 if not MACHINE_RE.match(mid):
-                    return self.error("Bad machine id.")
+                    return self.error("Bad host IP.")
                 info = {k: str(body.get(k) or "")[:80] for k in ("pod", "gpu", "country", "why")}
                 return self.json({"ok": True, "blocked": health.block_host(mid, info)})
 
