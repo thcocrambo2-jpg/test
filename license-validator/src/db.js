@@ -122,6 +122,10 @@ export async function collections() {
     // pricing page sells, and this one what a tab's dropdowns hold; they
     // change for different reasons and at different times.
     feature_assets: db.collection("feature_assets"),
+    // `face_checkpoints`: one row per checkpoint a pod backed up while
+    // training a Face LoRA (src/faceLoras.js). `_id` is its object key in
+    // the face bucket. Never part of a catalogue.
+    face_checkpoints: db.collection("face_checkpoints"),
   };
 }
 
@@ -133,8 +137,13 @@ export async function collections() {
  */
 export async function ensureIndexes() {
   const {
-    licenses, sessions, presets, builds, downloads, orders, loras,
+    licenses, sessions, presets, builds, downloads, orders, loras, face_checkpoints,
   } = await collections();
+  // The 🎭 page lists a licence's checkpoint backups on every visit.
+  await face_checkpoints.createIndex(
+    { licence_key: 1, uploaded_at: -1 },
+    { name: "licence_uploaded" },
+  );
   await licenses.createIndex({ key: 1 }, { unique: true, name: "key_unique" });
   await sessions.createIndex(
     { license_key: 1, instance_id: 1 },

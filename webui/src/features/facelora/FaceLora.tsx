@@ -71,6 +71,7 @@ function TrainCard({ state }: { state: FaceLoraState }) {
     setOptions({ ...opts, [key]: value })
   const [uploading, setUploading] = useState<string | null>(null)
   const [over, setOver] = useState(false)
+  const [consent, setConsent] = useState(false)
   const files = useRef<HTMLInputElement>(null)
   const folder = useRef<HTMLInputElement>(null)
   const validName = /^[a-z0-9][a-z0-9_-]{0,40}$/.test(name)
@@ -106,8 +107,9 @@ function TrainCard({ state }: { state: FaceLoraState }) {
 
   async function train() {
     try {
-      const answer = await api.trainFaceLora(name, opts)
+      const answer = await api.trainFaceLora(name, opts, consent)
       toast(answer.place > 1 ? `Queued — ${answer.place - 1} job(s) ahead of it.` : 'Training started.')
+      setConsent(false)
       client.invalidateQueries({ queryKey: ['face-lora'] })
     } catch (err) {
       toast((err as Error).message)
@@ -219,6 +221,17 @@ function TrainCard({ state }: { state: FaceLoraState }) {
         </div>
       )}
 
+      <BoolField
+        label={state.consentText}
+        value={consent}
+        onChange={setConsent}
+        wide
+        hint={
+          consent
+            ? 'Each checkpoint is backed up to this licence as it is saved, and the finished LoRA publishes itself (final — it cannot be unpublished). If the pod dies, Recover it under 4.'
+            : 'Tick to back up checkpoints and publish automatically. Unticked, everything stays on this pod until you publish it.'
+        }
+      />
       <div className={s.actions}>
         <Button variant="primary" onClick={train} disabled={!validName || count === 0 || state.busy || short}>
           Train
@@ -315,8 +328,34 @@ function ProgressCard({ state }: { state: FaceLoraState }) {
         <Stat label="photos" value={run.images != null ? String(run.images) : '—'} />
       </div>
       {run.error && <Alert tone="error">{run.error}</Alert>}
+      <Backups run={run} />
       {run.log_tail.length > 0 && <pre className={s.log}>{run.log_tail.slice(-12).join('\n')}</pre>}
     </Card>
+  )
+}
+
+const BACKUP_TONE = { queued: 'default', sending: 'accent', retrying: 'accent', done: 'success', failed: 'danger' } as const
+
+/** Each checkpoint's backup to the licence, for a run trained with the tick. */
+function Backups({ run }: { run: FaceLoraRun }) {
+  if (!run.auto_publish) return null
+  const entries = Object.entries(run.backups ?? {})
+  return (
+    <div className={s.phases}>
+      <span className={s.muted}>Checkpoint backups:</span>
+      {entries.length === 0 ? (
+        <span className={s.muted}>none saved yet (every {run.options.save_every} steps)</span>
+      ) : (
+        entries.map(([file, b]) => (
+          <span key={file} title={b.note ?? undefined}>
+            <Pill tone={BACKUP_TONE[b.status]}>
+              {file.replace(`${run.name}-`, '').replace('.safetensors', '').replace(/step0*/, 'step ')}
+              {b.status === 'sending' && b.total > 0 ? ` ${Math.round((100 * b.sent) / b.total)}%` : ` · ${b.status}`}
+            </Pill>
+          </span>
+        ))
+      )}
+    </div>
   )
 }
 
@@ -403,7 +442,7 @@ function PublishCard({ state }: { state: FaceLoraState }) {
       subtitle="Stores it privately and puts it on the 🔶 Krea2 V2 and 🎨 Krea2 tabs of every pod using this licence key — nobody else is sent it. Publishing is final: it cannot be unpublished from here. Safe to press again: the same file is not uploaded twice."
     >
       {state.loras.length === 0 ? (
-        <p className={s.muted}>Train one first.</p>
+        <p className={s.muted}>Train one first — or recover one from its backed-up checkpoints below.</p>
       ) : (
         <>
           <div className={s.grid}>
@@ -429,28 +468,12 @@ function PublishCard({ state }: { state: FaceLoraState }) {
             >
               Publish
             </Button>
-            {p.status === 'done' && <span className={s.muted}>✅ Published {p.lora}</span>}
           </div>
-          {running && (p.step === 'uploading' || p.step === 'checking the file') && p.total > 0 ? (
-            <ProgressBar
-              step={Math.round(p.sent / 1e6)}
-              total={Math.round(p.total / 1e6)}
-              label={p.step === 'uploading' ? 'Uploading (MB)' : 'Checking the file (MB)'}
-            />
-          ) : running ? (
-            <ProgressBar label={`${p.step ?? 'starting'}…`} />
-          ) : null}
-          {p.error && <Alert tone="error">{p.error}</Alert>}
-          {p.done.length > 0 && (
-            <ul className={s.doneList}>
-              {p.done.map((line) => (
-                <li key={line}>✓ {line}</li>
-              ))}
-            </ul>
-          )}
         </>
       )}
+      <PublishProgress state={state} />
 
+      <RecoverSection state={state} />
       <h4 className={s.subhead}>Face LoRAs on this licence</h4>
       {mine.error ? (
         <Alert tone="error">{mine.error}</Alert>
@@ -472,5 +495,104 @@ function PublishCard({ state }: { state: FaceLoraState }) {
         </ul>
       )}
     </Card>
+  )
+}
+
+/** The one publish slot's progress — a Publish, an automatic publish after
+ *  training, or a Recover. */
+function PublishProgress({ state }: { state: FaceLoraState }) {
+  const p = state.publish
+  const running = p.status === 'running'
+  const bytes = p.step === 'uploading' || p.step === 'checking the file' || p.step === 'downloading'
+  const label = p.step === 'uploading' ? 'Uploading (MB)' : p.step === 'downloading' ? 'Downloading (MB)' : 'Checking the file (MB)'
+  return (
+    <>
+      {running && bytes && p.total > 0 ? (
+        <ProgressBar step={Math.round(p.sent / 1e6)} total={Math.round(p.total / 1e6)} label={label} />
+      ) : running ? (
+        <ProgressBar label={`${p.lora ? `${p.lora}: ` : ''}${p.step ?? 'starting'}…`} />
+      ) : null}
+      {p.status === 'done' && <span className={s.muted}>✅ Published {p.lora}</span>}
+      {p.error && <Alert tone="error">{p.error}</Alert>}
+      {p.done.length > 0 && (
+        <ul className={s.doneList}>
+          {p.done.map((line, index) => (
+            <li key={index}>✓ {line}</li>
+          ))}
+        </ul>
+      )}
+    </>
+  )
+}
+
+/** Runs backed up on the licence that have no published LoRA — a pod that
+ *  died mid-run. Recover fetches a checkpoint and publishes it as the LoRA. */
+function RecoverSection({ state }: { state: FaceLoraState }) {
+  const toast = useToast()
+  const backed = state.backedUp
+  const training = state.busy ? state.active?.name : undefined
+  const runs = backed.runs.filter((run) => !run.published && run.name !== training)
+  const [picked, setPicked] = useState('')
+  const [checkpoint, setCheckpoint] = useState('')
+  const [consent, setConsent] = useState(false)
+  const run = runs.find((r) => r.name === picked) ?? runs[0]
+  const last = run?.checkpoints[run.checkpoints.length - 1]
+  const file = run?.checkpoints.some((c) => c.file === checkpoint) ? checkpoint : last?.file ?? ''
+  const running = state.publish.status === 'running'
+
+  async function recover() {
+    if (!run || !file) return
+    try {
+      await api.recoverFaceLora({ name: run.name, checkpoint: file, trigger: run.trigger, consent })
+      setConsent(false)
+    } catch (err) {
+      toast((err as Error).message)
+    }
+  }
+
+  return (
+    <>
+      <h4 className={s.subhead}>Recover from backed-up checkpoints</h4>
+      {backed.error ? (
+        <Alert tone="error">{backed.error}</Alert>
+      ) : !backed.loaded ? (
+        <p className={s.muted}>Asking the licence server…</p>
+      ) : !run ? (
+        <p className={s.muted}>
+          Nothing to recover — every backed-up run has its LoRA published. Runs trained with the tick back up each checkpoint here.
+        </p>
+      ) : (
+        <>
+          <p className={s.muted}>
+            These runs never finished (the pod stopped or died). Recover fetches a checkpoint, puts it on this pod's Krea tabs and publishes
+            it as the run's LoRA.
+          </p>
+          <div className={s.grid}>
+            <SelectField
+              label="Run"
+              value={run.name}
+              onChange={(name) => {
+                setPicked(name)
+                setCheckpoint('')
+              }}
+              choices={runs.map((r) => r.name)}
+            />
+            <SelectField
+              label="Checkpoint"
+              value={file}
+              onChange={setCheckpoint}
+              choices={run.checkpoints.map((c) => c.file)}
+              labels={Object.fromEntries(run.checkpoints.map((c) => [c.file, `step ${c.step} · ${(c.size / 1e6).toFixed(0)} MB`]))}
+            />
+          </div>
+          <BoolField label={state.consentText} value={consent} onChange={setConsent} wide />
+          <div className={s.actions}>
+            <Button onClick={recover} disabled={running || !file || !consent}>
+              Recover and publish
+            </Button>
+          </div>
+        </>
+      )}
+    </>
   )
 }

@@ -220,3 +220,133 @@ export async function faceMine(licence) {
     })),
   };
 }
+
+// ── Checkpoint backups ─────────────────────────────────────────────────
+//
+// While a run trains, the pod sends each checkpoint musubi saves
+// (<name>-step00000200.safetensors, …) here, so a pod that dies mid-run
+// loses nothing it had saved. A backup is NOT a LoRA: it is never in
+// `loras`, never in a catalogue, never offered on a tab. It sits in the
+// face bucket at loras/private/<tag>/checkpoints/<name>/<file>, with one
+// row in `face_checkpoints`, and only the licence that sent it can list it
+// or fetch it back (the 🎭 page's Recover, which then publishes it as an
+// ordinary Face LoRA through faceUpload/faceRegister above).
+//
+// Same two steps as a LoRA: checkpointUpload signs the PUT, and
+// checkpointRegister checks what landed and saves the row. Unlike a LoRA,
+// a backup may be replaced — a new run under an old name trains new
+// checkpoints, and no pod fetches a backup by name.
+
+const STEP_RE = /^-step(\d{1,10})\.safetensors$/;
+
+/** Where checkpoint `file` of this licence's run `name` lives, and its step. */
+export function checkpointNames(licenceKey, name, file) {
+  const { id } = faceNames(licenceKey, name);
+  const match = typeof file === "string" && file.startsWith(name)
+    ? STEP_RE.exec(file.slice(name.length))
+    : null;
+  if (!match) fail(`${file} is not a checkpoint of ${name} (${name}-step<n>.safetensors).`);
+  const tag = ownerTag(licenceKey);
+  return {
+    lora_id: id,
+    file,
+    step: Number(match[1]),
+    key: `${PRIVATE_LORA_PREFIX}${tag}/checkpoints/${name}/${file}`,
+  };
+}
+
+/** Step 1 for a checkpoint: a PUT link, or `already` when this file is backed up. */
+export async function checkpointUpload(licence, { name, file, size, md5, consent }) {
+  checkUpload({ size, md5, consent });
+  const names = checkpointNames(licence.key, name, file);
+  const { face_checkpoints } = await collections();
+  const row = await face_checkpoints.findOne({ _id: names.key });
+  if (row && row.md5 === md5 && row.size === size) return { ...names, already: true };
+  return {
+    ...names,
+    already: false,
+    url: presignFace("PUT", names.key, UPLOAD_TTL_SECONDS),
+    expires_in: UPLOAD_TTL_SECONDS,
+  };
+}
+
+/** Step 2 for a checkpoint: check what landed and save its row. Safe to repeat. */
+export async function checkpointRegister(licence, { name, file, trigger = "", size, md5, consent }) {
+  checkUpload({ size, md5, consent });
+  const names = checkpointNames(licence.key, name, file);
+  const found = await head(names.key);
+  if (!found) fail("The checkpoint is not in storage — upload it first.", 409);
+  if (found.size !== size || found.etag !== md5) {
+    await deleteObject(names.key);
+    fail("What reached storage is not the checkpoint described (size or MD5 differ) — " +
+      "it will be sent again.", 409);
+  }
+  const { face_checkpoints } = await collections();
+  const now = new Date();
+  await face_checkpoints.updateOne(
+    { _id: names.key },
+    {
+      $set: {
+        licence_key: licence.key,
+        name,
+        file,
+        step: names.step,
+        trigger: typeof trigger === "string" ? trigger.trim().slice(0, 200) : "",
+        size,
+        md5,
+        consent: { at: now, text: CONSENT_TEXT },
+        uploaded_at: now,
+      },
+    },
+    { upsert: true },
+  );
+  return { id: names.key, file, step: names.step };
+}
+
+/** This licence's backed-up runs, newest first, each with its checkpoints by step. */
+export async function checkpointList(licence) {
+  const { face_checkpoints, loras } = await collections();
+  const rows = await face_checkpoints
+    .find({ licence_key: licence.key })
+    .sort({ uploaded_at: -1 })
+    .toArray();
+  const runs = new Map();
+  for (const row of rows) {
+    if (!runs.has(row.name)) {
+      runs.set(row.name, { name: row.name, trigger: row.trigger || "", checkpoints: [] });
+    }
+    runs.get(row.name).checkpoints.push({
+      file: row.file,
+      step: row.step,
+      size: row.size,
+      uploaded_at: row.uploaded_at,
+    });
+  }
+  const list = [...runs.values()];
+  const ids = list.map((run) => faceNames(licence.key, run.name).id);
+  const published = new Set(
+    (await loras.find({ _id: { $in: ids } }, { projection: { _id: 1 } }).toArray())
+      .map((row) => row._id),
+  );
+  for (const [index, run] of list.entries()) {
+    run.checkpoints.sort((a, b) => a.step - b.step);
+    run.published = published.has(ids[index]);
+  }
+  return { runs: list };
+}
+
+/** A GET link for one of this licence's own checkpoints. */
+export async function checkpointDownload(licence, { name, file }) {
+  const names = checkpointNames(licence.key, name, file);
+  const { face_checkpoints } = await collections();
+  const row = await face_checkpoints.findOne({ _id: names.key, licence_key: licence.key });
+  if (!row) fail("That checkpoint is not backed up for this licence.", 404);
+  return {
+    file,
+    step: row.step,
+    size: row.size,
+    md5: row.md5,
+    trigger: row.trigger || "",
+    url: presignFace("GET", names.key, 60 * 60),
+  };
+}
