@@ -503,10 +503,12 @@ class Run:
             out = self.dir / "output"
             out.mkdir(parents=True, exist_ok=True)
             every = int(o["save_every"])
+            # A whole safetensors file with no tensors: header length, "{}".
+            empty = (2).to_bytes(8, "little") + b"{}"
             for step in range(every, steps, every):
                 (out / ("%s-step%08d.safetensors" % (self.name, step))
-                 ).write_bytes(b"fake")
-            (out / (self.name + ".safetensors")).write_bytes(b"fake")
+                 ).write_bytes(empty)
+            (out / (self.name + ".safetensors")).write_bytes(empty)
             self._checkpoints()
             return
         try:

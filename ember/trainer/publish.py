@@ -137,3 +137,61 @@ def publish(path: Path, name: str, trigger: str, consent: bool, step, done) -> d
 def mine() -> dict:
     """The Face LoRAs this licence has now, its own and any shared with it."""
     return _server("/v1/face-lora/mine", {})
+
+
+# ── Checkpoint backups ──────────────────────────────────────────────
+#
+# Each checkpoint a run saves goes to the licence server's face bucket as
+# it appears (ember.trainer.backup), so a pod that is terminated mid-run
+# keeps what it had saved. A backup is not a LoRA — it is in no catalogue
+# and on no tab — until Recover fetches one back and publishes it the
+# usual way. Same ask / upload / register as publish(), on the
+# /v1/face-lora/checkpoint/* routes (license-validator/src/faceLoras.js).
+
+
+def backup_checkpoint(path: Path, name: str, trigger: str, step) -> str:
+    """Send one checkpoint of run `name`; what happened, in words."""
+    size = path.stat().st_size
+    md5 = _md5(path, step)
+    body = {"name": name, "file": path.name, "trigger": trigger,
+            "size": size, "md5": md5, "consent": True}
+    ticket = _server("/v1/face-lora/checkpoint/upload", body)
+    if ticket.get("already"):
+        return "already backed up"
+    _put(ticket["url"], path, size, step)
+    _server("/v1/face-lora/checkpoint/register", body)
+    return "backed up %.1f MB" % (size / 1e6)
+
+
+def checkpoints() -> dict:
+    """This licence's backed-up runs: {runs: [{name, trigger, published,
+    checkpoints: [{file, step, size, uploaded_at}]}]}."""
+    return _server("/v1/face-lora/checkpoints", {})
+
+
+def download_checkpoint(name: str, file: str, target: Path, step) -> dict:
+    """Fetch one backed-up checkpoint to `target`, checked against its MD5.
+    Returns the server's {file, step, size, md5, trigger}."""
+    ticket = _server("/v1/face-lora/checkpoint/download", {"name": name, "file": file})
+    size = int(ticket.get("size") or 0)
+    target.parent.mkdir(parents=True, exist_ok=True)
+    part = target.with_name(target.name + ".part")
+    digest, got = hashlib.md5(), 0
+    try:
+        with urllib.request.urlopen(ticket["url"], timeout=3600) as response,                 part.open("wb") as out:
+            for block in iter(lambda: response.read(8 << 20), b""):
+                out.write(block)
+                digest.update(block)
+                got += len(block)
+                step("downloading", got, size)
+    except urllib.error.HTTPError as exc:
+        part.unlink(missing_ok=True)
+        raise PublishError("Storage refused the download (HTTP %d)." % exc.code)
+    except urllib.error.URLError as exc:
+        part.unlink(missing_ok=True)
+        raise PublishError("The download failed (%s) — try again." % exc.reason)
+    if got != size or digest.hexdigest() != ticket.get("md5"):
+        part.unlink(missing_ok=True)
+        raise PublishError("The checkpoint arrived damaged (size or MD5 differ) — try again.")
+    part.replace(target)
+    return ticket

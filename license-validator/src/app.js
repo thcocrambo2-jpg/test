@@ -104,7 +104,15 @@ import {
   revokePrivateLora,
   upsertPrivateLora,
 } from "./privateLoras.js";
-import { faceMine, faceRegister, faceUpload } from "./faceLoras.js";
+import {
+  checkpointDownload,
+  checkpointList,
+  checkpointRegister,
+  checkpointUpload,
+  faceMine,
+  faceRegister,
+  faceUpload,
+} from "./faceLoras.js";
 import telegramRouter from "./telegram/router.js";
 import { createHash, timingSafeEqual } from "node:crypto";
 import { CRON_SECRET } from "./config.js";
@@ -1933,6 +1941,11 @@ const faceLoraRoute = (fn) =>
 app.post("/v1/face-lora/upload", faceLoraRoute(faceUpload));
 app.post("/v1/face-lora/register", faceLoraRoute(faceRegister));
 app.post("/v1/face-lora/mine", faceLoraRoute(faceMine));
+// Checkpoint backups while a run trains, and Recover for a pod that died.
+app.post("/v1/face-lora/checkpoint/upload", faceLoraRoute(checkpointUpload));
+app.post("/v1/face-lora/checkpoint/register", faceLoraRoute(checkpointRegister));
+app.post("/v1/face-lora/checkpoint/download", faceLoraRoute(checkpointDownload));
+app.post("/v1/face-lora/checkpoints", faceLoraRoute(checkpointList));
 
 /** One catalogue row as the clients read it — `key`, never Mongo's `_id`. */
 function featureWire(row) {

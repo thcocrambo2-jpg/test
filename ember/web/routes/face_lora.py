@@ -20,6 +20,12 @@ Publish sends a trained LoRA to this pod's own licence, in a background
 thread: the licence server signs a one-object upload link and grants the
 LoRA to this licence alone — see ember.trainer.publish. No R2 key is ever
 on the pod. Publishing needs the consent tick; the server stores it.
+
+Ticked when Train is pressed, the same consent makes the run look after
+itself: each checkpoint is backed up to the licence as musubi saves it
+(ember.trainer.backup), and the finished LoRA publishes itself. If the pod
+dies mid-run, Recover — on this pod or any other on the licence — fetches
+a backed-up checkpoint, installs it as the run's LoRA and publishes it.
 """
 
 import json
@@ -35,6 +41,7 @@ from ember import features
 from ember.generation import queue as jobqueue
 from ember.logs import log
 from ember.settings import BASE_DIR, LICENSE_KEY, MODELS_DIR
+from ember.trainer import backup as backups
 from ember.trainer import loras, publish
 from ember.trainer import run as trainer
 from ember.web.routes.common import require_auth, require_feature
@@ -62,6 +69,11 @@ _publish = {"status": "idle", "step": None, "sent": 0, "total": 0,
             "done": [], "error": None, "lora": None}
 # This licence's published Face LoRAs, as the licence server last said.
 _published = {"loras": [], "error": None, "loaded": False}
+# This licence's checkpoint backups, by run, as the licence server last said.
+_backed_up = {"runs": [], "error": None, "loaded": False}
+# How often an automatic publish is tried, and the wait between tries.
+AUTO_ATTEMPTS = 3
+AUTO_RETRY_WAIT = 30
 
 
 def _gate():
@@ -102,17 +114,24 @@ def _busy() -> bool:
         status is None and run.state["phase"] != "setup")
 
 
-def _refresh_published() -> None:
-    """Ask the licence server which Face LoRAs this licence has. Blocking."""
+def _ask(fn, key: str) -> dict:
+    """fn()'s answer[key] for the page, or the error, worded."""
     try:
-        answer = publish.mine()
-        update = {"loras": answer.get("loras") or [], "error": None, "loaded": True}
+        return {key: fn().get(key) or [], "error": None, "loaded": True}
     except publish.PublishError as exc:
-        update = {"error": str(exc), "loaded": True}
+        return {"error": str(exc), "loaded": True}
     except Exception as exc:
-        update = {"error": "%s: %s" % (type(exc).__name__, exc), "loaded": True}
+        return {"error": "%s: %s" % (type(exc).__name__, exc), "loaded": True}
+
+
+def _refresh_published() -> None:
+    """Ask the licence server which Face LoRAs and checkpoint backups this
+    licence has. Blocking."""
+    published = _ask(publish.mine, "loras")
+    backed_up = _ask(publish.checkpoints, "runs")
     with _lock:
-        _published.update(update)
+        _published.update(published)
+        _backed_up.update(backed_up)
 
 
 def _in_background(fn, *args) -> None:
@@ -147,10 +166,16 @@ def _status_line(run) -> str:
 
 def _train_job(run):
     """The queue job: start the run, report on it every second, stop it if
-    the job is stopped. A generator, like every handler the queue drives."""
+    the job is stopped. A generator, like every handler the queue drives.
+    With the consent tick, it backs up each checkpoint as it is saved and
+    publishes the finished LoRA."""
+    auto = run.state.get("auto_publish") is True
+    backup = backups.Backup(run) if auto else None
     run.start()
     try:
         while run.state["status"] == "running":
+            if backup:
+                backup.scan()
             progress = run.state.get("progress")
             jobqueue.report_eta(
                 time.time() + progress["eta"]
@@ -161,29 +186,62 @@ def _train_job(run):
         if run.state["status"] != "done":
             raise RuntimeError(run.state.get("error") or "the run stopped")
         loras.offer(run.state["lora_file"], run.options.get("trigger", ""))
-        yield ("✅ %s trained — it is on the 🔶 Krea2 V2 tab's LoRA rows now"
-               % run.name,)
+        if auto:
+            _start_publish({"file": run.state["lora_file"],
+                            "name": loras.run_name(run.state["lora_file"]),
+                            "trigger": str(run.options.get("trigger") or ""),
+                            "consent": True}, attempts=AUTO_ATTEMPTS)
+        yield ("✅ %s trained — it is on the 🔶 Krea2 V2 tab's LoRA rows now%s"
+               % (run.name, ", and publishing to this licence" if auto else ""),)
     finally:
         # Stopped from the queue: close() lands here at the last yield.
         if run.state["status"] == "running":
             run.stop()
+        if backup:
+            # Whatever it saved before it ended, however it ended.
+            if run.proc is not None:
+                try:
+                    run.proc.wait(timeout=30)
+                except Exception:
+                    pass
+            backup.scan(final=True)
+            backup.close()
 
 
-def _publish_job(job: dict) -> None:
-    def step(name, sent=0, total=0):
-        with _lock:
-            _publish.update(step=name, sent=sent, total=total)
+def _step(name, sent=0, total=0):
+    with _lock:
+        _publish.update(step=name, sent=sent, total=total)
 
-    def done(line):
-        with _lock:
-            _publish["done"].append(line)
 
+def _done(line):
+    with _lock:
+        _publish["done"].append(line)
+
+
+def _publish_job(job: dict, attempts: int = 1) -> None:
+    """Publish one installed file, in the slot _start_publish took.
+    With job["recover"] (a backed-up checkpoint's file name) it fetches
+    that first and installs it as job["file"]."""
     try:
-        answer = publish.publish(MODELS_DIR / "loras" / job["file"], job["name"],
-                                 job["trigger"], job["consent"], step, done)
+        for attempt in range(1, attempts + 1):
+            try:
+                if job.get("recover") and not job.get("recovered"):
+                    _recover(job)
+                    job["recovered"] = True
+                answer = publish.publish(MODELS_DIR / "loras" / job["file"], job["name"],
+                                         job["trigger"], job["consent"], _step, _done)
+                break
+            except Exception as exc:
+                if attempt == attempts:
+                    raise
+                wait = AUTO_RETRY_WAIT * attempt
+                _done("%s — trying again in %d s (%d/%d)" % (
+                    exc if isinstance(exc, publish.PublishError) else type(exc).__name__,
+                    wait, attempt + 1, attempts))
+                time.sleep(wait)
         if answer.get("file") and answer["file"] != job["file"]:
             loras.rename(job["file"], answer["file"], job["trigger"])
-            done("renamed %s → %s to match" % (job["file"], answer["file"]))
+            _done("renamed %s → %s to match" % (job["file"], answer["file"]))
         with _lock:
             _publish.update(status="done", step=None)
     except publish.PublishError as exc:
@@ -196,6 +254,49 @@ def _publish_job(job: dict) -> None:
                             error="%s: %s" % (type(exc).__name__, exc))
     finally:
         _refresh_published()
+
+
+def _recover(job: dict) -> None:
+    """Fetch backed-up checkpoint job["recover"] of run job["name"] and
+    install it as job["file"], offered on the Krea tabs."""
+    target = MODELS_DIR / "loras" / job["file"]
+    if not target.exists():
+        part = RUNS / job["name"] / "output" / job["recover"]
+        if not (part.exists() and backups.complete(part)):
+            _step("asking for the checkpoint")
+            publish.download_checkpoint(job["name"], job["recover"], part, _step)
+            _done("downloaded %s" % job["recover"])
+        target.parent.mkdir(parents=True, exist_ok=True)
+        shutil.copyfile(part, target)
+    loras.offer(job["file"], job["trigger"])
+    _done("installed as %s — on this pod's Krea tabs" % job["file"])
+
+
+def _start_publish(job: dict, attempts: int = 1, wait: bool = True) -> bool:
+    """Take the one publish slot and run `job` in it, in the background.
+    `wait`: if another publish has the slot, queue behind it (in its own
+    thread) instead of refusing. False when refused."""
+    def take() -> bool:
+        with _lock:
+            if _publish["status"] == "running":
+                return False
+            _publish.update(status="running", step="starting", sent=0, total=0,
+                            done=[], error=None, lora=job["file"])
+            return True
+
+    if take():
+        _in_background(_publish_job, job, attempts)
+        return True
+    if not wait:
+        return False
+
+    def later():
+        while not take():
+            time.sleep(2)
+        _publish_job(job, attempts)
+
+    _in_background(later)
+    return True
 
 
 def register(api: APIRouter) -> None:
@@ -212,6 +313,7 @@ def register(api: APIRouter) -> None:
         with _lock:
             publishing = dict(_publish, done=list(_publish["done"]))
             published = dict(_published, loras=list(_published["loras"]))
+            backed_up = dict(_backed_up, runs=list(_backed_up["runs"]))
         return {
             "active": run.state if run is not None else None,
             "busy": _busy(),
@@ -220,6 +322,7 @@ def register(api: APIRouter) -> None:
             "loras": [{"file": f, "name": loras.run_name(f)} for f in _face_loras()],
             "publish": publishing,
             "published": published,
+            "backedUp": backed_up,
             "consentText": CONSENT_TEXT,
             "space": _space(),
             "defaults": trainer.DEFAULTS,
@@ -279,6 +382,9 @@ def register(api: APIRouter) -> None:
             raise HTTPException(
                 507, "Training needs %.0f GB free on the volume; it has %.0f GB."
                 % (space["need"] / GB, space["free"] / GB))
+        # The consent tick at Train: back up each checkpoint and publish
+        # the finished LoRA to this licence, unattended.
+        auto = body.get("consent") is True and bool(LICENSE_KEY)
         with _lock:
             if _busy():
                 raise HTTPException(409, "%s is already queued or training."
@@ -286,6 +392,7 @@ def register(api: APIRouter) -> None:
             options = {k: (body.get("options") or {})[k] for k in trainer.DEFAULTS
                        if k in (body.get("options") or {})}
             run = trainer.Run(ROOT, MODELS_DIR, name, options)
+            run.state["auto_publish"] = auto
             view = jobqueue.submit(
                 lane="comfy", tab=TAB, tab_label=LABEL,
                 title="Train %s (%s steps)" % (name, run.options["steps"]),
@@ -313,8 +420,34 @@ def register(api: APIRouter) -> None:
                                      "publish." % lora)
         job = {"file": lora, "name": name, "consent": True,
                "trigger": str(body.get("trigger") or "").strip()[:200]}
-        with _lock:
-            _publish.update(status="running", step="starting", sent=0, total=0,
-                            done=[], error=None, lora=lora)
-        _in_background(_publish_job, job)
+        if not _start_publish(job, wait=False):
+            raise HTTPException(409, "A publish is already running.")
+        return {"ok": True}
+
+    @api.post("/face-lora/recover", dependencies=_gate())
+    def recover(body: dict = Body(default={})):
+        """Fetch a backed-up checkpoint, install it as its run's LoRA and
+        publish it — for a run whose pod died before it finished."""
+        name = str(body.get("name") or "")
+        checkpoint = str(body.get("checkpoint") or "")
+        if not trainer.NAME_RE.match(name):
+            raise HTTPException(400, "Name: lowercase letters, digits, - and _.")
+        if not (checkpoint.startswith(name + "-step")
+                and checkpoint.endswith(".safetensors") and FILE_RE.match(checkpoint)):
+            raise HTTPException(400, "Pick one of that run's checkpoints.")
+        if body.get("consent") is not True:
+            raise HTTPException(400, "Tick the box confirming you have this "
+                                     "person's permission.")
+        if not LICENSE_KEY:
+            raise HTTPException(400, "This pod has no licence to publish to.")
+        file = trainer.lora_file_name(name)
+        if file in _face_loras():
+            raise HTTPException(409, "%s already has a LoRA on this pod — "
+                                     "publish that one instead." % name)
+        if _busy() and _current["run"].name == name:
+            raise HTTPException(409, "That run is training.")
+        job = {"file": file, "name": name, "consent": True, "recover": checkpoint,
+               "trigger": str(body.get("trigger") or "").strip()[:200]}
+        if not _start_publish(job, wait=False):
+            raise HTTPException(409, "A publish is already running.")
         return {"ok": True}

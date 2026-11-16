@@ -749,10 +749,14 @@ export interface ApiClient {
   getFaceLoraPhotos(run: string): Promise<string[]>
   addFaceLoraPhoto(run: string, file: Blob, name: string): Promise<void>
   removeFaceLoraPhoto(run: string, name: string): Promise<void>
-  trainFaceLora(name: string, options: FaceLoraOptions): Promise<{ jobId: string; place: number }>
+  /** `consent`: back up each checkpoint and publish the finished LoRA, unattended. */
+  trainFaceLora(name: string, options: FaceLoraOptions, consent: boolean): Promise<{ jobId: string; place: number }>
   /** Publish to this pod's own licence, in the background — follow it in
    *  `getFaceLora().publish`. */
   publishFaceLora(request: FaceLoraPublish): Promise<void>
+  /** Fetch a backed-up checkpoint, install it as its run's LoRA and publish
+   *  it, in the publish slot — follow it in `getFaceLora().publish`. */
+  recoverFaceLora(request: FaceLoraRecover): Promise<void>
 }
 
 /** The trainer's settings, as ember/trainer/run.py DEFAULTS has them. */
@@ -791,6 +795,32 @@ export interface FaceLoraRun {
   lora_file: string | null
   log_tail: string[]
   images?: number
+  /** Trained with the consent tick: checkpoints backed up, LoRA auto-published. */
+  auto_publish?: boolean
+  backups?: Record<string, FaceLoraBackup>
+}
+
+/** One checkpoint's backup to the licence (ember/trainer/backup.py). */
+export interface FaceLoraBackup {
+  status: 'queued' | 'sending' | 'retrying' | 'done' | 'failed'
+  sent: number
+  total: number
+  note: string | null
+}
+
+/** One run's checkpoints backed up on the licence server. */
+export interface FaceLoraBackedUpRun {
+  name: string
+  trigger: string
+  published: boolean
+  checkpoints: { file: string; step: number; size: number; uploaded_at: string }[]
+}
+
+export interface FaceLoraRecover {
+  name: string
+  checkpoint: string
+  trigger: string
+  consent: boolean
 }
 
 export interface FaceLoraPublishState {
@@ -823,6 +853,11 @@ export interface FaceLoraState {
   publish: FaceLoraPublishState
   published: {
     loras: FaceLoraPublished[]
+    error: string | null
+    loaded: boolean
+  }
+  backedUp: {
+    runs: FaceLoraBackedUpRun[]
     error: string | null
     loaded: boolean
   }

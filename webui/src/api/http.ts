@@ -7,6 +7,7 @@ import type {
   DisplayResult,
   FaceLoraOptions,
   FaceLoraPublish,
+  FaceLoraRecover,
   FaceLoraState,
   GalleryPage,
   PresetList,
@@ -435,11 +436,14 @@ export const httpClient: ApiClient = {
       'DELETE',
     )
   },
-  trainFaceLora(name: string, options: FaceLoraOptions) {
-    return send<{ jobId: string; place: number }>('/face-lora/train', { name, options })
+  trainFaceLora(name: string, options: FaceLoraOptions, consent: boolean) {
+    return send<{ jobId: string; place: number }>('/face-lora/train', { name, options, consent })
   },
   async publishFaceLora(request: FaceLoraPublish) {
     await send<unknown>('/face-lora/publish', request)
+  },
+  async recoverFaceLora(request: FaceLoraRecover) {
+    await send<unknown>('/face-lora/recover', request)
   },
 }
 
