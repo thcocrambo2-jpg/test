@@ -46,8 +46,10 @@ export function QueuePanel() {
         aria-label="Open the queue"
       >
         {live.length > 0 && <span className={s.dot} aria-hidden />}
-        <span>Queue</span>
-        {live.length > 0 && <span className={s.jobTime}>{live.length} running</span>}
+        <span className={s.launcherLabel}>Queue</span>
+        {live.length > 0 && (
+          <span className={cx(s.jobTime, s.launcherLabel)}>{live.length} running</span>
+        )}
         {failed.length > 0 && <span className={s.count}>{failed.length}</span>}
       </button>
 

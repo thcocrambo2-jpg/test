@@ -27,6 +27,39 @@
   color: var(--c-accent);
 }
 
+/* On a phone the form is full width and its sticky Generate bar ends in the
+   same corner, so the pill shrinks to a dot-and-badge circle. The label is
+   still there for screen readers through aria-label; the submit bar leaves
+   the corner free (form.module.css, .submitRow). */
+@media (max-width: 720px) {
+  .launcher {
+    width: 44px;
+    height: 44px;
+    padding: 0;
+    justify-content: center;
+    gap: 0;
+    right: var(--s-4);
+    bottom: var(--s-4);
+  }
+
+  .launcherLabel {
+    display: none;
+  }
+
+  /* No text to lean on: the dot alone fills the circle. */
+  .launcher .dot {
+    width: 10px;
+    height: 10px;
+  }
+
+  /* Both a running dot and a failed badge: badge rides the edge. */
+  .launcher .count {
+    position: absolute;
+    top: -6px;
+    right: -6px;
+  }
+}
+
 .dot {
   width: 7px;
   height: 7px;

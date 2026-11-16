@@ -231,6 +231,16 @@
   white-space: nowrap;
 }
 
+/* The queue launcher is a fixed 44px circle in the bottom-right corner on
+   narrow screens (queue.module.css), where this bar is also full width and
+   sticky at the bottom. The row stops short of that corner so "⤒ Next" is
+   never under it. */
+@media (max-width: 720px) {
+  .submitRow {
+    padding-right: calc(44px + var(--s-4) + var(--s-2));
+  }
+}
+
 .submitHint {
   display: flex;
   align-items: center;
