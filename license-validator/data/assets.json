@@ -922,6 +922,49 @@
       "trigger": "<sks>",
       "enabled": true,
       "sort_order": 580
+    },
+    {
+      "id": "mmh3-realism-slider",
+      "name": "Realism Slider (skin)",
+      "file": "MMH3-RealismSlider-V1.safetensors",
+      "source": {
+        "kind": "civitai",
+        "version": 3421124
+      },
+      "mirror": null,
+      "default_strength": 1.0,
+      "trigger": "",
+      "enabled": true,
+      "sort_order": 670
+    },
+    {
+      "id": "realism-people-fal",
+      "name": "Realism People (fal)",
+      "file": "h3-realism-people-t2v-i2v-r2v.safetensors",
+      "source": {
+        "kind": "hf",
+        "repo": "fal/MiniMax-H3-Realism-People-LoRA",
+        "path": "h3-realism-people-t2v-i2v-r2v.safetensors"
+      },
+      "mirror": null,
+      "default_strength": 1.0,
+      "trigger": "r34l1sm",
+      "enabled": true,
+      "sort_order": 680
+    },
+    {
+      "id": "icy-realism-h3",
+      "name": "ICY Realism",
+      "file": "H3-Icy-real-v1_000004200.safetensors",
+      "source": {
+        "kind": "civitai",
+        "version": 3308945
+      },
+      "mirror": null,
+      "default_strength": 1.0,
+      "trigger": "icyrealism",
+      "enabled": true,
+      "sort_order": 690
     }
   ],
   "models": [
@@ -1383,7 +1426,10 @@
         "messy-bj",
         "motion-booster-v0-2",
         "deepthroat-v0-2",
-        "brstplay-v2-0"
+        "brstplay-v2-0",
+        "mmh3-realism-slider",
+        "realism-people-fal",
+        "icy-realism-h3"
       ]
     },
     "minimax_t2v": {
@@ -1409,7 +1455,10 @@
         "messy-bj",
         "motion-booster-v0-2",
         "deepthroat-v0-2",
-        "brstplay-v2-0"
+        "brstplay-v2-0",
+        "mmh3-realism-slider",
+        "realism-people-fal",
+        "icy-realism-h3"
       ]
     },
     "minimax_r2v": {
@@ -1434,8 +1483,10 @@
         "messy-bj",
         "motion-booster-v0-2",
         "deepthroat-v0-2",
-        "brstplay-v2-0"
-
+        "brstplay-v2-0",
+        "mmh3-realism-slider",
+        "realism-people-fal",
+        "icy-realism-h3"
       ]
     },
     "wan_i2v": {
