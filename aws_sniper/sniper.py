@@ -19,7 +19,8 @@ also refuses to start while an instance it launched earlier (tag
 sniper=ember) is pending or running, so a second snipe can't double the
 bill. Stop or terminate that one first.
 
-Credentials are the usual AWS ones (env vars, ~/.aws, or --profile).
+Credentials: AWS_ACCESS_KEY_ID / AWS_SECRET_ACCESS_KEY in aws_sniper/.env,
+or --profile, or the usual AWS places (env vars, ~/.aws).
 The keys that go into the instance (licence, node tag, HF/CivitAI tokens)
 come from aws_sniper/.env and are written into the user data from
 userdata.sh; nothing else in the template is changed.
@@ -28,6 +29,7 @@ userdata.sh; nothing else in the template is changed.
 import argparse
 import random
 import sys
+import threading
 import time
 import uuid
 from pathlib import Path
@@ -97,13 +99,67 @@ def is_placeholder(value: str) -> bool:
     return not value or any(h in value for h in PLACEHOLDER_HINTS)
 
 
-def build_user_data(env: dict) -> str:
+def aws_keys() -> dict:
+    """AWS_ACCESS_KEY_ID / AWS_SECRET_ACCESS_KEY (and AWS_SESSION_TOKEN, if
+    any) from .env, or {} when they aren't filled in. These stay on this PC:
+    only ENV_KEYS go into the instance's user data."""
+    env = read_env(ENV_FILE)
+    key, secret = env.get("AWS_ACCESS_KEY_ID", ""), env.get("AWS_SECRET_ACCESS_KEY", "")
+    if is_placeholder(key) or is_placeholder(secret):
+        return {}
+    out = {"aws_access_key_id": key, "aws_secret_access_key": secret}
+    if not is_placeholder(env.get("AWS_SESSION_TOKEN", "")):
+        out["aws_session_token"] = env["AWS_SESSION_TOKEN"]
+    return out
+
+
+def make_session(region: str, profile=None):
+    """--profile when given, else the keys in .env, else AWS's usual places
+    (environment variables, ~/.aws, aws configure)."""
+    if profile:
+        return boto3.Session(profile_name=profile, region_name=region)
+    return boto3.Session(region_name=region, **aws_keys())
+
+
+def credentials_source(profile=None) -> str:
+    if profile:
+        return "AWS profile " + profile
+    keys = aws_keys()
+    if keys:
+        return "access key %s...%s from .env" % (keys["aws_access_key_id"][:4],
+                                               keys["aws_access_key_id"][-4:])
+    return "AWS default credentials"
+
+
+def check_env(env: dict) -> None:
     missing = [k for k in REQUIRED_ENV if is_placeholder(env.get(k, ""))]
     if missing:
         sys.exit(f"Set {', '.join(missing)} in {ENV_FILE} (copy .env.example first).")
     for key, value in env.items():
         if key in ENV_KEYS and ("\n" in value or "\r" in value):
             sys.exit(f"{key} in {ENV_FILE} spans more than one line.")
+
+
+def ember_env_text(env: dict) -> str:
+    """/etc/ember.env as userdata.sh writes it: the app's four values only."""
+    check_env(env)
+    return "".join("%s=%s\n" % (k, "" if is_placeholder(env.get(k, "")) else env[k])
+                   for k in ENV_KEYS)
+
+
+def docker_run_command() -> str:
+    """The `docker run ... emberai/ember:latest` line from userdata.sh, on one
+    line, so the page recreates the container exactly as first boot made it."""
+    import re
+    text = USERDATA_TEMPLATE.read_text(encoding="utf-8")
+    m = re.search(r"^docker run .*?emberai/ember:\S+", text, re.S | re.M)
+    if not m:
+        raise RuntimeError("No `docker run` line in %s." % USERDATA_TEMPLATE)
+    return " ".join(m.group(0).replace("\\\n", " ").split())
+
+
+def build_user_data(env: dict) -> str:
+    check_env(env)
     text = USERDATA_TEMPLATE.read_text(encoding="utf-8")
     for key in ENV_KEYS:
         value = env.get(key, "")
@@ -122,10 +178,16 @@ def message_of(err: ClientError) -> str:
 
 
 class Sniper:
-    def __init__(self, args, session):
+    """args: the CLI's namespace (server.py builds the same fields). log
+    prints a line; stop, when set, ends the run between attempts."""
+
+    def __init__(self, args, session, log=None, stop: threading.Event = None):
         self.a = args
         self.ec2 = session.client("ec2")
         self.ssm = session.client("ssm")
+        self.say = log or say
+        self.stop = stop or threading.Event()
+        self.instance_id = None
 
     # ── setup ───────────────────────────────────────────────────────
 
@@ -225,35 +287,38 @@ class Sniper:
         live = self.running_already()
         if live:
             for i in live:
-                say(f"already running: {i['InstanceId']} {i['InstanceType']} "
+                self.say(f"already running: {i['InstanceId']} {i['InstanceType']} "
                     f"in {i['Placement']['AvailabilityZone']} ({i['State']['Name']})")
-            say("Stop or terminate it first. Not launching a second one.")
+            self.say("Stop or terminate it first. Not launching a second one.")
             return 1
 
         user_data = build_user_data(read_env(ENV_FILE))
         ami, root_device, ami_name = self.resolve_ami()
-        say(f"AMI {ami}  {ami_name}")
+        self.say(f"AMI {ami}  {ami_name}")
 
         # zones_of[type] = zones to try for that type, in preference order of types.
         offered = {t: self.zones(t) for t in a.types}
         all_zones = sorted({z for zs in offered.values() for z in zs})
         subnet_of = self.subnets(all_zones) if all_zones else {}
         zones_of = {}
+        only = set(getattr(a, "zones", None) or [])
         for t in a.types:
-            zs = [z for z in offered[t] if z in subnet_of]
+            zs = [z for z in offered[t] if z in subnet_of and (not only or z in only)]
             if zs:
                 zones_of[t] = zs
+            elif only and offered[t]:
+                self.say(f"{t}: none of the chosen zones offer it.")
             elif offered[t]:
-                say(f"{t}: no subnet in the security group's VPC sits in a zone that "
+                self.say(f"{t}: no subnet in the security group's VPC sits in a zone that "
                     "offers it. Create one, or use a security group in the default VPC.")
             else:
-                say(f"{t} is not offered in any zone of {a.region}.")
+                self.say(f"{t} is not offered in any zone of {a.region}.")
         if not zones_of:
             return 1
         market = "spot (persistent, stop on interruption)" if a.spot else "on-demand"
-        say(f"{market}, {a.disk} GB gp3 @ {a.throughput} MB/s")
+        self.say(f"{market}, {a.disk} GB gp3 @ {a.throughput} MB/s")
         for t, zs in zones_of.items():
-            say(f"  {t}: {', '.join(zs)}")
+            self.say(f"  {t}: {', '.join(zs)}")
 
         deadline = time.time() + a.minutes * 60 if a.minutes else None
         rounds = 0
@@ -266,6 +331,9 @@ class Sniper:
                 order += [(t, z) for z in zs]
             outcomes = []
             for itype, zone in order:
+                if self.stop.is_set():
+                    self.say("Stopped. Nothing was launched.")
+                    return 3
                 where = f"{itype} {zone}" if len(zones_of) > 1 else zone
                 params = self.launch_params(itype, ami, root_device, subnet_of[zone], user_data)
                 try:
@@ -279,7 +347,7 @@ class Sniper:
                         outcomes.append(f"{where}: no capacity")
                         continue
                     if code in ZONE_ERRORS:
-                        say(f"{where}: {message_of(err)} (dropping this zone)")
+                        self.say(f"{where}: {message_of(err)} (dropping this zone)")
                         zones_of[itype].remove(zone)
                         if not zones_of[itype]:
                             del zones_of[itype]
@@ -291,44 +359,49 @@ class Sniper:
                     if code in PENDING_ERRORS:
                         outcomes.append(f"{where}: account still being verified")
                         continue
-                    say(f"{where}: {code}: {message_of(err)}")
-                    say("Stopping: retrying won't fix this.")
+                    self.say(f"{where}: {code}: {message_of(err)}")
+                    self.say("Stopping: retrying won't fix this.")
                     return 2
                 inst = resp["Instances"][0]
                 return self.won(inst["InstanceId"], itype, zone)
 
             if a.dry_run:
                 for line in outcomes:
-                    say(line)
-                say("Dry run done: nothing was launched.")
+                    self.say(line)
+                self.say("Dry run done: nothing was launched.")
                 return 0
-            say(f"round {rounds}: " + "; ".join(outcomes))
+            self.say(f"round {rounds}: " + "; ".join(outcomes))
             if not zones_of:
-                say("No zone left to try.")
+                self.say("No zone left to try.")
                 return 1
             if deadline and time.time() >= deadline:
-                say(f"Gave up after {a.minutes} min.")
+                self.say(f"Gave up after {a.minutes} min.")
                 return 1
             wait = a.interval
             if any("verified" in o for o in outcomes):
                 wait = max(wait, 120)
-            time.sleep(wait)
+            if self.stop.wait(wait):
+                self.say("Stopped. Nothing was launched.")
+                return 3
 
     def won(self, instance_id: str, itype: str, zone: str) -> int:
-        say(f"LAUNCHED {instance_id} ({itype}) in {zone}. Waiting for it to run...")
+        self.instance_id = instance_id
+        self.say(f"LAUNCHED {instance_id} ({itype}) in {zone}. Waiting for it to run...")
         alarm(not self.a.no_sound)
         try:
             self.ec2.get_waiter("instance_running").wait(
                 InstanceIds=[instance_id], WaiterConfig={"Delay": 5, "MaxAttempts": 60})
         except Exception as exc:       # the instance exists either way
-            say(f"(waiter: {exc})")
+            self.say(f"(waiter: {exc})")
         inst = self.ec2.describe_instances(InstanceIds=[instance_id])["Reservations"][0]["Instances"][0]
         ip = inst.get("PublicIpAddress", "")
-        say(f"state: {inst['State']['Name']}  public IP: {ip or 'none'}")
+        host = inst.get("PublicDnsName") or ip
+        self.say(f"state: {inst['State']['Name']}  public IP: {ip or 'none'}")
         if ip:
-            say(f"ssh -i {self.a.key_name}.pem ubuntu@{ip}")
-            say("then:  sudo docker logs -f ember     (the trycloudflare link appears there)")
-        say("Billing has started. Stop the instance when you're done.")
+            self.say(f"ssh -i {self.a.key_name}.pem ubuntu@{host}")
+            self.say(f"app (once port 7860 is open and it has started): http://{host}:7860/")
+            self.say("then:  sudo docker logs -f ember     (the trycloudflare link appears there)")
+        self.say("Billing has started. Stop the instance when you're done.")
         return 0
 
 
@@ -342,13 +415,14 @@ def main() -> int:
                          "(default g7e.2xlarge)")
     ap.add_argument("--spot", action="store_true", help="spot instead of on-demand")
     ap.add_argument("--ami", default="", help="AMI id (default: latest DLAMI Base OSS Nvidia, Ubuntu 24.04)")
-    ap.add_argument("--disk", type=int, default=200, help="root gp3 size in GB (default 200)")
+    ap.add_argument("--disk", type=int, default=250, help="root gp3 size in GB (default 250)")
     ap.add_argument("--throughput", type=int, default=250, help="gp3 MB/s, 125-1000 (default 250)")
     ap.add_argument("--iam-profile", default="", help="instance profile name, e.g. one with SSM access")
     ap.add_argument("--name", default="ember-gpu", help="Name tag")
     ap.add_argument("--interval", type=int, default=20, help="seconds between rounds (default 20)")
     ap.add_argument("--minutes", type=int, default=0, help="give up after this many minutes (0 = never)")
-    ap.add_argument("--profile", default=None, help="AWS CLI profile")
+    ap.add_argument("--profile", default=None,
+                    help="AWS CLI profile (default: the keys in aws_sniper/.env)")
     ap.add_argument("--dry-run", action="store_true", help="check permissions in every zone, launch nothing")
     ap.add_argument("--no-sound", action="store_true")
     a = ap.parse_args()
@@ -362,7 +436,7 @@ def main() -> int:
         ap.error("--type is empty")
 
     try:
-        session = boto3.Session(profile_name=a.profile, region_name=a.region)
+        session = make_session(a.region, a.profile)
         return Sniper(a, session).run()
     except NoCredentialsError:
         print("No AWS credentials. Run `aws configure` (or `aws configure sso`), or pass --profile.")

@@ -1,0 +1,684 @@
+<!doctype html>
+<html lang="en" data-theme="dark">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>AWS GPU sniper</title>
+<!-- The app's palette: tokens.css in this folder (a copy of
+     webui/src/theme/tokens.css), served by server.py. -->
+<link rel="stylesheet" href="/tokens.css">
+<style>
+  * { box-sizing:border-box; }
+  body { margin:0; background:var(--c-bg, #1a1a1a); color:var(--c-text, #eff1f6);
+         font:var(--t-md, 14px)/var(--lh-normal, 1.5) var(--font-sans, system-ui, sans-serif); }
+  main { max-width:1180px; margin:0 auto; padding:20px; display:grid; gap:16px; }
+  header.top { display:flex; gap:12px; align-items:baseline; flex-wrap:wrap; }
+  h1 { font-size:var(--t-xl); margin:0; } h2 { font-size:15px; margin:0 0 12px; }
+  .card { background:var(--c-panel); border:1px solid var(--c-border); border-radius:var(--r-lg); padding:16px; }
+  .grid { display:grid; grid-template-columns:repeat(auto-fill,minmax(170px,1fr)); gap:10px; }
+  label { display:flex; flex-direction:column; gap:4px; color:var(--c-text-muted); font-size:var(--t-xs); }
+  label.check { flex-direction:row; align-items:center; gap:6px; color:var(--c-text); font-size:var(--t-sm); }
+  input, select { background:var(--c-input); color:var(--c-text); border:1px solid var(--c-border);
+         border-radius:var(--r-sm); padding:7px 9px; font:inherit; }
+  input[type=checkbox] { padding:0; accent-color:var(--c-accent); }
+  input:focus, select:focus { outline:none; border-color:var(--c-focus); box-shadow:var(--sh-focus); }
+  button { background:var(--c-accent); color:var(--c-text-on-accent); border:0; border-radius:var(--r-sm);
+           padding:8px 16px; font:inherit; font-weight:var(--fw-semibold); cursor:pointer; }
+  button:hover { background:var(--c-accent-hover); }
+  button.ghost { background:transparent; color:var(--c-text); border:1px solid var(--c-border); }
+  button.ghost:hover { background:var(--c-panel-hover); }
+  button.danger { background:transparent; color:var(--c-error); border:1px solid var(--c-error-line); }
+  button.danger:hover { background:var(--c-error-soft); }
+  button.small { padding:3px 9px; font-size:var(--t-xs); font-weight:var(--fw-medium); }
+  button:disabled { opacity:.45; cursor:default; }
+  .row { display:flex; gap:10px; align-items:center; flex-wrap:wrap; margin-top:12px; }
+  .muted { color:var(--c-text-muted); font-size:var(--t-xs); }
+  .note { color:var(--c-warning); font-size:var(--t-xs); }
+  .error { color:var(--c-error); white-space:pre-wrap; font-size:var(--t-sm); }
+  .error:empty { display:none; }
+  .chips { display:flex; gap:8px; flex-wrap:wrap; }
+  .chip { padding:6px 12px; border-radius:var(--r-full); border:1px solid var(--c-border); background:var(--c-input);
+          color:var(--c-text); cursor:pointer; font-size:var(--t-sm); font-weight:var(--fw-medium); }
+  .chip:hover { background:var(--c-input-hover); }
+  .chip.on { border-color:var(--c-accent); background:var(--c-accent-soft); color:var(--c-accent); }
+  .chip:disabled { opacity:.45; cursor:default; }
+  .sub { margin-top:14px; }
+  .sub > .muted { display:block; margin-bottom:6px; }
+  .types { display:flex; flex-direction:column; gap:4px; }
+  .types .t { display:flex; gap:10px; align-items:center; flex-wrap:wrap; background:var(--c-input);
+              border:1px solid var(--c-border); border-radius:var(--r-sm); padding:5px 8px; font-size:var(--t-sm); }
+  .types .t.off { opacity:.5; }
+  .types .t .n { min-width:220px; }
+  .types .t .z { display:flex; gap:6px; flex-wrap:wrap; flex:1; }
+  .types .t .mv { display:flex; gap:2px; }
+  .types .t .mv button { padding:1px 7px; }
+  .badge { display:inline-block; padding:1px 7px; border-radius:var(--r-full); font-size:var(--t-2xs);
+           font-weight:var(--fw-semibold); border:1px solid var(--c-border); color:var(--c-text-muted);
+           white-space:nowrap; font-variant-numeric:tabular-nums; }
+  .good { color:var(--c-success); border-color:var(--c-success-line); background:var(--c-success-soft); }
+  .mid { color:var(--c-info); border-color:var(--c-info-line); background:var(--c-info-soft); }
+  .low { color:var(--c-warning); border-color:var(--c-warning-line); background:var(--c-warning-soft); }
+  .bad { color:var(--c-error); border-color:var(--c-error-line); background:var(--c-error-soft); }
+  .busy { color:var(--c-accent); border-color:var(--c-accent-line); background:var(--c-accent-soft); }
+  pre { background:var(--c-bg-sunken); border:1px solid var(--c-border); border-radius:var(--r-sm); padding:8px 10px;
+        max-height:220px; overflow:auto; font-size:var(--t-xs); color:var(--c-text-muted); white-space:pre-wrap; margin:10px 0 0; }
+  .tablewrap { overflow-x:auto; }
+  table { width:100%; border-collapse:collapse; font-size:var(--t-sm); }
+  th { text-align:left; color:var(--c-text-muted); font-weight:var(--fw-medium); font-size:var(--t-xs);
+       border-bottom:1px solid var(--c-border); padding:6px 8px; white-space:nowrap; }
+  td { border-bottom:1px solid var(--c-border); padding:6px 8px; vertical-align:middle; }
+  tr:last-child td { border-bottom:0; }
+  td.num { font-variant-numeric:tabular-nums; white-space:nowrap; }
+  td .acts { display:flex; gap:4px; flex-wrap:wrap; }
+  code, .mono { font-family:var(--font-mono); font-size:var(--t-xs); }
+  a { color:var(--c-info); }
+  .empty { text-align:center; padding:24px 16px; color:var(--c-text-muted); }
+  .toast { position:fixed; bottom:16px; left:50%; transform:translateX(-50%); background:var(--c-elevated);
+           border:1px solid var(--c-border); border-radius:var(--r-md); padding:8px 14px; box-shadow:var(--sh-lg);
+           font-size:var(--t-sm); max-width:calc(100% - 32px); }
+  .toast[hidden] { display:none; }
+  .dot { display:inline-block; width:9px; height:9px; border-radius:50%; margin-right:6px; vertical-align:middle;
+         background:var(--c-error); box-shadow:0 0 0 3px var(--c-error-soft); }
+  .dot.up { background:var(--c-success); box-shadow:0 0 0 3px var(--c-success-soft); }
+  .applink { white-space:nowrap; }
+  .appbox { border:1px solid var(--c-border); border-radius:var(--r-md); padding:10px 12px; margin-top:10px; background:var(--c-bg-sunken); }
+  .appbox header { display:flex; gap:10px; align-items:center; flex-wrap:wrap; }
+  .appbox header .grow { flex:1; }
+  .appbox details { margin-top:8px; }
+  .appbox details summary { cursor:pointer; color:var(--c-text-muted); font-size:var(--t-xs); }
+  .appbox pre.logs { max-height:420px; }
+  .stats { display:flex; gap:26px; flex-wrap:wrap; align-items:flex-end; }
+  .stats div b { display:block; font-size:18px; font-variant-numeric:tabular-nums; }
+  .stats div span { color:var(--c-text-muted); font-size:var(--t-xs); }
+  .stats .credit input { width:110px; }
+  .lowcredit b { color:var(--c-warning); }
+  .dl { border:1px solid var(--c-border); border-radius:var(--r-md); padding:10px 12px; margin-top:10px; background:var(--c-bg-sunken); }
+  .dl header { display:flex; gap:10px; align-items:center; flex-wrap:wrap; }
+  .dl header .grow { flex:1; }
+  .dl .pick { display:flex; gap:8px; align-items:center; flex-wrap:wrap; margin-top:8px; }
+  .dl .pick input { flex:1; min-width:260px; font-family:var(--font-mono); font-size:var(--t-xs); }
+  details.fold > summary { cursor:pointer; list-style:none; }
+  details.fold > summary::-webkit-details-marker { display:none; }
+  details.fold > summary h2 { margin:0; }
+  details.fold > summary h2::before { content:"\25B8  "; color:var(--c-text-muted); }
+  details.fold[open] > summary h2::before { content:"\25BE  "; }
+  details.fold[open] > summary { margin-bottom:12px; }
+</style>
+</head>
+<body>
+<main>
+  <header class="top">
+    <h1>AWS GPU sniper</h1>
+    <span class="muted" id="who"></span>
+  </header>
+  <div class="error" id="licence"></div>
+  <div class="error" id="banner"></div>
+
+  <section class="card">
+    <h2>Credit <span class="muted">estimated from this page's own record of every run (instance + disk + IP), not read from AWS billing</span></h2>
+    <div class="stats">
+      <div class="credit"><span>Credit total ($)</span>
+        <div class="row" style="margin-top:2px"><input id="credit" type="number" min="0" step="1"><button class="ghost small" id="saveCredit">Save</button></div></div>
+      <div><b id="mSpent">—</b><span id="mSince">spent</span></div>
+      <div id="mLeftBox"><b id="mLeft">—</b><span>left</span></div>
+      <div><b id="mBurn">—</b><span id="mBurnWhat">burning now</span></div>
+      <div><b id="mTime">—</b><span id="mTimeWhat">left at this rate</span></div>
+      <div><b id="mIf">—</b><span id="mIfWhat">if you snipe the first choice now</span></div>
+    </div>
+    <div class="note" id="mNote"></div>
+  </section>
+
+  <section class="card">
+    <h2>Snipe</h2>
+    <div class="grid">
+      <label>Region <select id="region"></select></label>
+      <label>Key pair <select id="key"></select></label>
+      <label>Security group <select id="sg"></select></label>
+      <label>Disk (GB) <input id="disk" type="number" min="100" max="2000" value="250"></label>
+      <label>Disk speed (MB/s) <input id="tput" type="number" min="125" max="1000" step="25" value="250"></label>
+    </div>
+    <div class="row" id="setupRow" hidden>
+      <button class="small" id="setup">Set up this region</button>
+      <span class="muted">One time per region: imports your SSH key (or makes one and saves the .pem) and creates <code>ember-sg</code> with ports 22 and 7860 open. Both are free.</span>
+    </div>
+    <div class="sub">
+      <span class="muted">Market · vCPU quota in this region</span>
+      <div class="chips" id="market"></div>
+    </div>
+    <div class="sub">
+      <span class="muted">Instance types, in order of preference: each round tries every zone of the first, then the next. Zone badges: spot $/hr · placement score (10 = easiest to get).</span>
+      <div class="types" id="types"></div>
+    </div>
+    <div class="sub">
+      <span class="muted">Zones to try</span>
+      <div class="chips" id="zones"></div>
+    </div>
+    <div class="row">
+      <button id="go">Snipe</button>
+      <button class="ghost" id="halt" hidden>Stop sniping</button>
+      <label class="check"><input type="checkbox" id="dry"> Dry run (checks permissions, launches nothing)</label>
+      <button class="ghost small" id="refresh">Refresh prices</button>
+      <span class="muted" id="regionNote"></span>
+    </div>
+    <div class="error" id="snipeErr"></div>
+    <div id="run" hidden>
+      <div class="row"><span class="badge" id="runState"></span><span class="muted" id="runWhat"></span></div>
+      <pre id="runLog"></pre>
+    </div>
+  </section>
+
+  <section class="card">
+    <h2>Instances <span class="muted">launched by the sniper, all regions · refreshes every 10 s</span></h2>
+    <div class="muted" id="sshKey" style="margin-bottom:10px"></div>
+    <div class="error" id="instErr"></div>
+    <div class="tablewrap"><table>
+      <thead><tr><th>Instance</th><th>Where</th><th>Type</th><th>State</th><th>Cost</th><th>This run</th><th>Spent</th><th>App</th><th></th></tr></thead>
+      <tbody id="insts"></tbody>
+    </table></div>
+    <div class="empty" id="noInsts" hidden>No instances. Snipe one above.</div>
+  </section>
+
+  <section class="card">
+    <h2>App <span class="muted">on each running instance, over SSH with SSH_KEY_FILE</span></h2>
+    <div id="apps"></div>
+    <div class="empty" id="noApps" hidden>No running instance.</div>
+  </section>
+
+  <section class="card">
+    <h2>Auto download <span class="muted">saves every new picture and video (with its settings token) from the instance's Gallery to a folder on this PC</span></h2>
+    <div id="dls"></div>
+    <div class="empty" id="noDls" hidden>Nothing to download from: a running instance shows up here once its app link is known.</div>
+  </section>
+
+  <details class="card fold" id="histBox">
+    <summary><h2>Run history <span class="muted">what the credit estimate is built from</span></h2></summary>
+    <div class="tablewrap"><table>
+      <thead><tr><th>Instance</th><th>Where</th><th>Type</th><th>State</th><th>From</th><th>To</th><th>Hours</th><th>$/hr</th><th>Cost</th></tr></thead>
+      <tbody id="hist"></tbody>
+    </table></div>
+  </details>
+</main>
+<div class="toast" id="toast" hidden></div>
+
+<script>
+const $ = id => document.getElementById(id);
+const esc = s => String(s ?? "").replace(/[&<>"']/g, c => ({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]));
+const store = {
+  get(k, d) { try { const v = localStorage.getItem("awssniper." + k); return v === null ? d : JSON.parse(v); } catch { return d; } },
+  set(k, v) { try { localStorage.setItem("awssniper." + k, JSON.stringify(v)); } catch {} },
+};
+let CFG = null, REGION = null, busy = false;
+// Type order and which are ticked, shared by all regions.
+let order = store.get("order", null);
+let ticked = store.get("ticked", ["g7e.2xlarge"]);
+let market = store.get("market", "spot");
+
+async function api(path, body) {
+  const opt = body === undefined ? {} : {method: "POST", headers: {"content-type": "application/json", "x-sniper": "1"},
+                                         body: JSON.stringify(body)};
+  const r = await fetch(path, opt);
+  const j = await r.json().catch(() => ({error: "Bad answer from the server (" + r.status + ")."}));
+  if (!r.ok || j.error) throw new Error(j.error || r.statusText);
+  return j;
+}
+function toast(msg) {
+  const t = $("toast"); t.textContent = msg; t.hidden = false;
+  clearTimeout(toast.t); toast.t = setTimeout(() => t.hidden = true, 4000);
+}
+function scoreClass(s) { return s == null ? "" : s >= 7 ? "good" : s >= 4 ? "mid" : "low"; }
+function money(v, d = 2) { return v == null ? "—" : "$" + v.toFixed(d); }
+
+async function init() {
+  CFG = await api("/api/config");
+  const lic = CFG.licence;
+  $("who").textContent = CFG.profile + (lic.key ? " · licence " + lic.key : "") +
+    (lic.ok ? " · HF token " + (lic.hf ? "set" : "missing") + " · CivitAI token " + (lic.civitai ? "set" : "missing") : "");
+  $("licence").textContent = lic.ok ? "" : "Fill in EMBER_LICENSE_KEY and EMBER_NODE_TAG in " + lic.file + " before sniping.";
+  if (!order) order = Object.keys(CFG.types);
+  order = order.filter(t => CFG.types[t]).concat(Object.keys(CFG.types).filter(t => !order.includes(t)));
+  const reg = store.get("region", "ap-south-1");
+  $("region").innerHTML = Object.entries(CFG.regions).map(([r, n]) =>
+    `<option value="${r}"${r === reg ? " selected" : ""}>${esc(n)} · ${r}</option>`).join("");
+  $("disk").value = store.get("disk", 250); $("tput").value = store.get("tput", 250);
+  $("sshKey").innerHTML = CFG.ssh_key
+    ? `SSH key: <code>${esc(CFG.ssh_key)}</code> (SSH_KEY_FILE in .env)`
+    : `<span class="note">No SSH_KEY_FILE in ${esc(lic.file)}: Copy SSH, Restart app, Apply .env and logs need it.</span>`;
+  await loadRegion();
+  poll(); setInterval(poll, 2000);
+}
+
+async function loadRegion() {
+  const region = $("region").value; store.set("region", region);
+  $("regionNote").textContent = "Loading " + region + "…";
+  $("snipeErr").textContent = "";
+  try { REGION = await api("/api/region?region=" + region); }
+  catch (e) { REGION = null; $("snipeErr").textContent = e.message; $("regionNote").textContent = ""; render(); return; }
+  $("regionNote").textContent = "";
+  const set = REGION.setup || {};
+  $("setupRow").hidden = !!REGION.setup;
+  const keyPick = store.get("key." + region, set.key || REGION.keys[0]);
+  $("key").innerHTML = REGION.keys.length ? REGION.keys.map(k => `<option${k === keyPick ? " selected" : ""}>${esc(k)}</option>`).join("")
+                                           : `<option value="">No key pairs in this region</option>`;
+  const sgPick = store.get("sg." + region, set.sg || (REGION.sgs.find(g => g.ssh && g.name !== "default") || REGION.sgs[0] || {}).id);
+  $("sg").innerHTML = REGION.sgs.map(g => `<option value="${g.id}"${g.id === sgPick ? " selected" : ""}>${esc(g.name)} · ${g.id} (${[g.ssh ? "SSH" : "no SSH", g.app ? "app port 7860 open" : "7860 closed"].join(", ")})</option>`).join("");
+  render();
+}
+
+function quota(m) { return REGION ? REGION.quotas[m] : null; }
+
+function render() {
+  // Market chips. On-demand is here for later; it's usable once its quota is.
+  $("market").innerHTML = ["spot", "on-demand"].map(m => {
+    const q = quota(m);
+    const label = (m === "spot" ? "Spot" : "On-demand") + " · " + (q == null ? "quota ?" : q ? q + " vCPU" : "no quota");
+    return `<button class="chip${m === market ? " on" : ""}" data-m="${m}"${q === 0 ? " disabled" : ""}>${label}</button>`;
+  }).join("");
+  if (quota(market) === 0) {
+    const other = market === "spot" ? "on-demand" : "spot";
+    if (quota(other)) { market = other; return render(); }
+  }
+  const q = quota(market);
+  // Types: ordered, tickable; zone badges with price and score.
+  $("types").innerHTML = order.map((t, i) => {
+    const info = CFG.types[t], zs = (REGION && REGION.zones[t]) || [];
+    const tooBig = q != null && info.vcpu > q, none = !zs.length;
+    const zb = none ? `<span class="muted">not offered in this region</span>` : zs.map(z =>
+      `<span class="badge ${market === "spot" ? scoreClass(z.score) : ""}">${esc(z.zone.slice(-2))}` +
+      (market === "spot" ? ` · ${money(z.price)} · ${z.score ?? "?"}` : "") + `</span>`).join("");
+    return `<div class="t${tooBig || none ? " off" : ""}">
+      <label class="check"><input type="checkbox" data-t="${t}"${ticked.includes(t) ? " checked" : ""}${tooBig || none ? " disabled" : ""}></label>
+      <span class="mv"><button class="ghost small" data-up="${i}" ${i ? "" : "disabled"}>↑</button><button class="ghost small" data-down="${i}" ${i < order.length - 1 ? "" : "disabled"}>↓</button></span>
+      <span class="n"><b>${t}</b> <span class="muted">${esc(info.gpu)} · ${info.vcpu} vCPU</span>
+        ${tooBig ? `<span class="note">needs ${info.vcpu}, quota ${q}</span>` : ""}</span>
+      <span class="z">${zb}</span></div>`;
+  }).join("");
+  // Zones: every zone of a usable ticked type.
+  const usable = activeTypes();
+  const zones = [...new Set(usable.flatMap(t => (REGION.zones[t] || []).map(z => z.zone)))].sort();
+  const skip = store.get("skipzones." + (REGION ? REGION.region : ""), []);
+  $("zones").innerHTML = zones.length ? zones.map(z =>
+    `<button class="chip${skip.includes(z) ? "" : " on"}" data-z="${z}">${z}</button>`).join("")
+    : `<span class="muted">Tick an instance type offered here.</span>`;
+  syncButtons();
+}
+
+function activeTypes() {
+  if (!REGION) return [];
+  const q = quota(market);
+  return order.filter(t => ticked.includes(t) && (REGION.zones[t] || []).length && !(q != null && CFG.types[t].vcpu > q));
+}
+function activeZones() {
+  const skip = store.get("skipzones." + REGION.region, []);
+  return [...document.querySelectorAll("#zones [data-z]")].map(b => b.dataset.z).filter(z => !skip.includes(z));
+}
+function syncButtons() {
+  const ready = REGION && activeTypes().length && activeZones().length && $("key").value && $("sg").value
+                && CFG.licence.ok && quota(market) !== 0;
+  $("go").disabled = busy || !ready;
+  $("halt").hidden = !busy;
+}
+
+document.addEventListener("click", e => {
+  const b = e.target.closest("button"); if (!b) return;
+  if (b.dataset.m) { market = b.dataset.m; store.set("market", market); render(); }
+  else if (b.dataset.up || b.dataset.down) {
+    const i = +(b.dataset.up ?? b.dataset.down), j = b.dataset.up ? i - 1 : i + 1;
+    [order[i], order[j]] = [order[j], order[i]]; store.set("order", order); render();
+  } else if (b.dataset.z) {
+    const k = "skipzones." + REGION.region, skip = store.get(k, []);
+    store.set(k, skip.includes(b.dataset.z) ? skip.filter(z => z !== b.dataset.z) : skip.concat(b.dataset.z));
+    render();
+  } else if (b.dataset.act) instanceAction(b);
+  else if (b.dataset.copy) navigator.clipboard.writeText(b.dataset.copy).then(() => toast("Copied: " + b.dataset.copy));
+});
+document.addEventListener("change", e => {
+  const t = e.target;
+  if (t.dataset.t) { ticked = t.checked ? ticked.concat(t.dataset.t) : ticked.filter(x => x !== t.dataset.t); store.set("ticked", ticked); render(); }
+});
+$("region").onchange = loadRegion;
+$("key").onchange = () => { store.set("key." + REGION.region, $("key").value); syncButtons(); };
+$("sg").onchange = () => { store.set("sg." + REGION.region, $("sg").value); syncButtons(); };
+$("disk").onchange = () => store.set("disk", +$("disk").value);
+$("tput").onchange = () => store.set("tput", +$("tput").value);
+$("refresh").onclick = loadRegion;
+$("setup").onclick = async () => {
+  const region = $("region").value;
+  $("setup").disabled = true; $("snipeErr").textContent = "";
+  try {
+    const r = await api("/api/setup", {region});
+    store.set("key." + region, r.key); store.set("sg." + region, r.sg);   // the defaults from now on
+    if (r.ssh_key) {
+      CFG.ssh_key = r.ssh_key;
+      $("sshKey").innerHTML = `SSH key: <code>${esc(r.ssh_key)}</code> (SSH_KEY_FILE in .env)`;
+    }
+    toast(region + ": " + r.done.join("; "));
+    await loadRegion();
+  } catch (e) { $("snipeErr").textContent = e.message; }
+  $("setup").disabled = false;
+};
+
+$("go").onclick = async () => {
+  $("snipeErr").textContent = "";
+  $("go").disabled = true;
+  try {
+    await api("/api/snipe", {region: REGION.region, market, types: activeTypes(), zones: activeZones(),
+      key: $("key").value, sg: $("sg").value, disk: +$("disk").value, throughput: +$("tput").value,
+      dry_run: $("dry").checked});
+    poll();
+  } catch (e) { $("snipeErr").textContent = e.message; syncButtons(); }
+};
+$("halt").onclick = () => api("/api/snipe/stop", {}).then(poll).catch(e => $("snipeErr").textContent = e.message);
+
+async function instanceAction(b) {
+  const {act, id, region} = b.dataset;
+  if (act === "delete" && !confirm(`Delete ${id}?\n\nThis cancels its spot request and terminates it. Its disk and downloaded models are deleted too.`)) return;
+  if (act === "stop" && !confirm(`Stop ${id}? Billing for the GPU stops; the disk (and models) stay.`)) return;
+  b.disabled = true;
+  try { toast((await api("/api/instance", {action: act, id, region})).message); }
+  catch (e) { toast(e.message); }
+  setTimeout(poll, 1500);
+}
+
+const STATE_CLASS = {sniping: "busy", won: "good", done: "good", stopped: "", error: "bad"};
+function dur(s) { s = Math.max(0, Math.round(s)); const h = Math.floor(s / 3600), m = Math.floor(s % 3600 / 60);
+  return h ? `${h} h ${m} min` : `${m} min`; }
+
+async function poll() {
+  let st;
+  try { st = await api("/api/status"); } catch (e) { $("instErr").textContent = "Server not answering: " + e.message; return; }
+  // The snipe.
+  const s = st.snipe;
+  busy = !!(s && s.state === "sniping");
+  $("run").hidden = !s;
+  if (s) {
+    $("runState").className = "badge " + (STATE_CLASS[s.state] || "");
+    $("runState").textContent = s.dry_run ? "dry run · " + s.state : s.state;
+    $("runWhat").textContent = `${s.market} · ${s.types.join(" → ")} · ${s.region} · since ${new Date(s.started * 1000).toLocaleTimeString()}`;
+    const log = $("runLog"), atEnd = log.scrollTop + log.clientHeight >= log.scrollHeight - 4;
+    log.textContent = s.log.join("\n");
+    if (atEnd) log.scrollTop = log.scrollHeight;
+  }
+  syncButtons();
+  drawMoney(st.money, st.instances);
+  drawDownloads(st);
+  drawApps(st);
+  // Instances.
+  $("instErr").textContent = st.error || "";
+  $("banner").textContent = st.instances.flatMap(i =>
+    i.interrupting ? [`AWS is taking back ${i.name || i.id} (${i.region}): it stops in about 2 minutes. Jobs running then are lost; the disk stays.`]
+    : i.stopped_by_aws ? [`AWS stopped ${i.name || i.id} (${i.region}). It restarts by itself when capacity returns, or Delete it and snipe again.`] : []).join("\n");
+  $("noInsts").hidden = st.instances.length > 0;
+  $("insts").innerHTML = st.instances.map(i => {
+    const up = i.state === "running" ? st.now - i.launched : 0;
+    let state = `<span class="badge ${i.state === "running" ? "good" : i.state === "stopped" ? "" : "busy"}">${i.state}</span>`;
+    if (i.stopped_by_aws) state += ` <span class="note">stopped by AWS · restarts by itself when capacity returns</span>`;
+    if (i.interrupting) state += ` <span class="error">AWS is taking it back: stops in ~2 min</span>`;
+    let app = "—";
+    if (i.url) app = appLink(i);
+    else if (i.state === "running") app = up < 3600 ? `<span class="muted">starting…</span>`
+      : `<span class="muted">no link: open port 7860 in its security group, or SSH and run <code>sudo docker logs ember</code></span>`;
+    const ssh = i.host ? `ssh -i "${CFG.ssh_key || i.key + ".pem"}" ubuntu@${i.host}` : "";
+    const can = {start: i.state === "stopped" && !i.stopped_by_aws, stop: i.state === "running" || i.state === "pending",
+                 delete: i.state !== "shutting-down"};
+    return `<tr>
+      <td><code>${esc(i.id)}</code><div class="muted">${esc(i.name)}</div></td>
+      <td>${esc(CFG.regions[i.region] || i.region)}<div class="muted">${esc(i.zone)}</div></td>
+      <td>${esc(i.type)}<div class="muted">${i.market}</div></td>
+      <td>${state}${i.ip ? `<div class="muted mono">${esc(i.ip)}</div>` : ""}</td>
+      <td class="num">${costCell(i)}</td>
+      <td class="num">${up ? dur(up) + (i.rate_running ? `<div class="muted">≈ ${money(up / 3600 * i.rate_running)}</div>` : "") : "—"}</td>
+      <td class="num">${money((st.money.per_instance || {})[i.id])}</td>
+      <td>${app}</td>
+      <td><div class="acts">
+        ${ssh ? `<button class="ghost small" data-copy="${esc(ssh)}">Copy SSH</button>` : ""}
+        ${can.start ? `<button class="small" data-act="start" data-id="${i.id}" data-region="${i.region}">Start</button>` : ""}
+        ${can.stop ? `<button class="ghost small" data-act="stop" data-id="${i.id}" data-region="${i.region}">Stop</button>` : ""}
+        ${can.delete ? `<button class="danger small" data-act="delete" data-id="${i.id}" data-region="${i.region}">Delete</button>` : ""}
+      </div></td></tr>`;
+  }).join("");
+}
+
+function appLink(i) {
+  const shown = i.url.replace(/#.*$/, "");
+  return `<span class="applink"><span class="dot${i.ready ? " up" : ""}" title="${i.ready ? "app answering" : "app not answering"}"></span>` +
+    `<a href="${esc(i.url)}" target="_blank" rel="noopener">${esc(shown)}</a></span>` +
+    `<div class="muted">${i.ready ? "running" : "not answering (starting, or down)"}</div>`;
+}
+
+// ── App: restart / apply .env / logs, per running instance ──
+let appsShown = "";
+const logsOpen = new Set();
+function drawApps(st) {
+  const rows = st.instances.filter(i => i.state === "running");
+  $("noApps").hidden = rows.length > 0;
+  const ops = st.ops || {};
+  const sig = rows.map(i => i.id + (i.url || "")).join(",");
+  if (sig !== appsShown) {
+    appsShown = sig;
+    $("apps").innerHTML = rows.map(i => `<div class="appbox" data-app="${esc(i.id)}"><header>
+        <b>${esc(i.name || i.id)}</b> <code>${esc(i.id)}</code> <span data-applink></span><span class="grow"></span>
+        <button class="ghost small" data-op="restart" data-id="${esc(i.id)}" title="docker restart: the app reloads its licence, so features added to the key show up">Restart app (feature update)</button>
+        <button class="ghost small" data-op="apply" data-id="${esc(i.id)}" title="Writes /etc/ember.env from aws_sniper/.env and recreates the container">Apply .env &amp; recreate</button>
+      </header>
+      <div class="muted" data-opline style="margin-top:6px"></div>
+      <details data-logs="${esc(i.id)}"${logsOpen.has(i.id) ? " open" : ""}><summary>Docker logs (last 300 lines)</summary>
+        <div class="row" style="margin-top:6px"><label class="check"><input type="checkbox" data-logfollow${store.get("logfollow", true) ? " checked" : ""}> Follow (every 5 s while open)</label><button class="ghost small" data-logrefresh="${esc(i.id)}">Refresh</button><span class="muted" data-logwhen></span></div>
+        <pre class="logs" data-logtext>Open to load.</pre></details>
+    </div>`).join("");
+    for (const id of logsOpen) if (rows.some(i => i.id === id)) loadLogs(id);
+  }
+  for (const box of document.querySelectorAll("#apps [data-app]")) {
+    const i = rows.find(r => r.id === box.dataset.app); if (!i) continue;
+    box.querySelector("[data-applink]").innerHTML = i.url ? appLink(i).replace(/<div class="muted">.*<\/div>/, "")
+      : `<span class="muted">no app link (port 7860 closed)</span>`;
+    const op = ops[i.id], line = box.querySelector("[data-opline]");
+    const busy = op && op.state === "running";
+    box.querySelectorAll("[data-op]").forEach(b => b.disabled = busy);
+    if (!op) { line.innerHTML = ""; continue; }
+    const when = new Date((op.finished || op.started) * 1000).toLocaleTimeString();
+    line.innerHTML = busy ? `<span class="badge busy">${esc(op.label)}…</span>`
+      : `<span class="badge ${op.state === "done" ? "good" : "bad"}">${op.state === "done" ? "done" : "failed"}</span> ${esc(op.label)} · ${when}` +
+        (op.output ? `<pre>${esc(op.output)}</pre>` : "");
+  }
+}
+const logBusy = new Set();
+async function loadLogs(id, quiet) {
+  const box = document.querySelector(`#apps [data-app="${id}"]`); if (!box || logBusy.has(id)) return;
+  const pre = box.querySelector("[data-logtext]");
+  if (!quiet) box.querySelector("[data-logwhen]").textContent = "loading…";
+  logBusy.add(id);
+  try {
+    const {logs} = await api("/api/logs?id=" + encodeURIComponent(id));
+    // Stay at the bottom only if the reader was there: scrolling up to read
+    // something isn't undone by the next refresh.
+    const atEnd = !quiet || pre.scrollTop + pre.clientHeight >= pre.scrollHeight - 8;
+    const keep = pre.scrollTop;
+    pre.textContent = logs || "(no output)";
+    pre.scrollTop = atEnd ? pre.scrollHeight : keep;
+    box.querySelector("[data-logwhen]").textContent = "as of " + new Date().toLocaleTimeString();
+  } catch (e) {
+    if (!quiet) pre.textContent = e.message;
+    box.querySelector("[data-logwhen]").textContent = "couldn't read: " + e.message.split("\n")[0];
+  } finally { logBusy.delete(id); }
+}
+// Follow: only panels that are expanded, and only while Follow is ticked.
+setInterval(() => {
+  for (const id of logsOpen) {
+    const box = document.querySelector(`#apps [data-app="${id}"]`);
+    const follow = box && box.querySelector("[data-logfollow]");
+    if (follow && follow.checked && box.querySelector("details[data-logs]").open) loadLogs(id, true);
+  }
+}, 5000);
+document.addEventListener("change", e => {
+  if (e.target.matches("[data-logfollow]")) store.set("logfollow", e.target.checked);
+});
+document.addEventListener("toggle", e => {
+  const d = e.target; if (!d.dataset || !d.dataset.logs) return;
+  if (d.open) { logsOpen.add(d.dataset.logs); loadLogs(d.dataset.logs); } else logsOpen.delete(d.dataset.logs);
+}, true);
+document.addEventListener("click", async e => {
+  const b = e.target.closest("#apps button"); if (!b) return;
+  if (b.dataset.logrefresh) return loadLogs(b.dataset.logrefresh);
+  const {op, id} = b.dataset; if (!op) return;
+  const msg = op === "restart"
+    ? `Restart the app on ${id}?\n\nIt reloads its licence (new features show up). Jobs in its queue and the one running are lost. Takes a minute or two.`
+    : `Apply .env to ${id}?\n\nWrites the licence key, node tag and tokens from aws_sniper/.env to /etc/ember.env and recreates the container. Models stay; jobs in its queue are lost.`;
+  if (!confirm(msg)) return;
+  try { await api("/api/app", {id, action: op}); poll(); } catch (err) { toast(err.message); }
+});
+
+function costCell(i) {
+  const run = i.rate_running, stop = i.rate_stopped;
+  if (i.state === "stopped" || i.state === "stopping")
+    return `${stop == null ? "—" : money(stop * 730) + "/mo"}<div class="muted">disk only while stopped</div>`;
+  const parts = `${i.market} ${money(i.price, 3)} + ${i.disk_gb} GB disk + IP`;
+  return `${run == null ? "—" : money(run, 3) + "/hr"}<div class="muted">${parts}</div>`;
+}
+
+function hoursText(h) {
+  if (h == null) return "—";
+  return h >= 48 ? `${Math.floor(h)} h (${(h / 24).toFixed(1)} days)` : `${h.toFixed(1)} h`;
+}
+
+// What the first choice in the snipe form would cost per hour, all in.
+function snipeRate() {
+  if (!REGION) return null;
+  const t = activeTypes()[0]; if (!t) return null;
+  let compute = null;
+  if (market === "spot") {
+    const zs = (REGION.zones[t] || []).filter(z => activeZones().includes(z.zone) && z.price != null);
+    if (zs.length) compute = Math.max(...zs.map(z => z.price));     // the dearer zone: errs high
+  } else compute = REGION.on_demand[t];
+  const r = REGION.disk_rates; if (compute == null || !r) return null;
+  const disk = +$("disk").value, tput = +$("tput").value;
+  const month = disk * r.gb + Math.max(0, tput - REGION.free_mibps) * (r.mibps || 0);
+  return {type: t, hourly: compute + month / REGION.hours_per_month + REGION.ipv4_hourly};
+}
+
+let creditShown = null;
+function drawMoney(m) {
+  if (!m) return;
+  if (creditShown !== m.credit_total && document.activeElement !== $("credit")) {
+    $("credit").value = m.credit_total; creditShown = m.credit_total;
+  }
+  $("mSpent").textContent = money(m.spent);
+  $("mSince").textContent = m.since ? "spent since " + new Date(m.since * 1000).toLocaleDateString() : "spent";
+  $("mLeft").textContent = money(m.left);
+  $("mLeftBox").className = m.left < m.credit_total * 0.15 ? "lowcredit" : "";
+  if (m.running) {
+    $("mBurn").textContent = money(m.burn_hourly, 3) + "/hr";
+    $("mBurnWhat").textContent = `burning now (${m.running} running)`;
+    $("mTime").textContent = hoursText(m.hours_left);
+    $("mTimeWhat").textContent = "left at this rate";
+  } else if (m.storage_hourly > 0) {
+    $("mBurn").textContent = money(m.storage_hourly * 730) + "/mo";
+    $("mBurnWhat").textContent = "disks of stopped instances";
+    $("mTime").textContent = m.days_left_stopped == null ? "—" : Math.floor(m.days_left_stopped) + " days";
+    $("mTimeWhat").textContent = "left if everything stays stopped";
+  } else {
+    $("mBurn").textContent = "$0"; $("mBurnWhat").textContent = "nothing running or stored";
+    $("mTime").textContent = "—"; $("mTimeWhat").textContent = "left at this rate";
+  }
+  const s = snipeRate();
+  if (s && m.left > 0) {
+    // a new one on top of what's already burning (only one runs at a time,
+    // so with one running this is what the next instance would cost)
+    const base = m.running ? m.burn_hourly : m.storage_hourly;
+    $("mIf").textContent = hoursText(m.left / (s.hourly + (m.running ? 0 : base)));
+    $("mIfWhat").textContent = `running a ${s.type} (${money(s.hourly, 3)}/hr all in)`;
+  } else { $("mIf").textContent = "—"; $("mIfWhat").textContent = "if you snipe the first choice now"; }
+  $("mNote").textContent = m.unknown_rate ? "Some prices couldn't be read, so parts of the estimate are missing." : "";
+}
+
+$("saveCredit").onclick = async () => {
+  try { const s = await api("/api/settings", {credit_total: +$("credit").value}); creditShown = null; toast("Credit total saved: " + money(s.credit_total)); poll(); }
+  catch (e) { toast(e.message); }
+};
+$("credit").onkeydown = e => { if (e.key === "Enter") $("saveCredit").click(); };
+
+// ── Auto download ──
+const dlFolder = id => store.get("dlfolder." + id, store.get("dlfolder", ""));
+function fmtBytes(b) { return b > 1e9 ? (b / 1e9).toFixed(2) + " GB" : (b / 1e6).toFixed(1) + " MB"; }
+let dlShown = "";
+function drawDownloads(st) {
+  const jobs = Object.fromEntries((st.downloads || []).map(d => [d.pod_id, d]));
+  const ids = [...new Set(st.instances.filter(i => i.url).map(i => i.id).concat(Object.keys(jobs)))];
+  $("noDls").hidden = ids.length > 0;
+  // Rebuilt only when the rows or a job's status change, so a folder being typed isn't wiped.
+  const sig = ids.map(id => id + ":" + (jobs[id] ? jobs[id].status : "-")).join(",");
+  if (sig !== dlShown) {
+    dlShown = sig;
+    $("dls").innerHTML = ids.map(id => {
+      const inst = st.instances.find(i => i.id === id), j = jobs[id];
+      const name = inst ? `${esc(inst.name || id)} <span class="muted">${esc(inst.region)} · ${esc(inst.type)}</span>` : esc(j.pod_name);
+      const active = j && !["stopped", "error"].includes(j.status);
+      const pick = inst && inst.url ? `<div class="pick">
+        <input data-dlfolder value="${esc(j ? j.folder : dlFolder(id))}" placeholder="C:\\Users\\you\\Downloads\\aws">
+        <button class="ghost small" data-dlpick>Choose…</button>
+        <label class="check" title="Each new file waits 15 s before it's saved, so one you delete in the Gallery meanwhile is never downloaded"><input type="checkbox" data-dlhold${store.get("dlhold", false) ? " checked" : ""}> Hold new files 15 s</label>
+        <button class="small" data-dlstart="${esc(id)}">Start</button></div>` : "";
+      return `<div class="dl" data-dl="${esc(id)}"><header>
+        <b>${name}</b> <code>${esc(id)}</code> <span class="badge" data-dlstate></span><span class="grow"></span>
+        ${active ? `<button class="ghost small" data-dlstop="${esc(id)}">Stop</button>`
+                 : j ? `<button class="ghost small" data-dldismiss="${esc(id)}">Dismiss</button>` : ""}
+        ${j ? `<button class="ghost small" data-dlopen="${esc(j.folder)}">Open folder</button>` : ""}
+      </header>
+      ${j ? `<div class="muted" data-dlline style="margin-top:6px"></div>` : ""}
+      ${active ? "" : pick}
+      </div>`;
+    }).join("");
+  }
+  for (const box of document.querySelectorAll("#dls [data-dl]")) {
+    const j = jobs[box.dataset.dl];
+    const badge = box.querySelector("[data-dlstate]");
+    badge.textContent = j ? j.status : "not started";
+    badge.className = "badge " + (!j ? "" : j.status === "running" ? "good" : j.status === "error" ? "bad" : j.status === "stopped" ? "" : "low");
+    const line = box.querySelector("[data-dlline]");
+    if (line && j) {
+      const cur = j.current ? ` · now ${esc(j.current.name)}` : "";
+      line.innerHTML = `${j.saved} saved this run · ${j.have} in the folder's record · ${j.total_on_pod} in the Gallery` +
+        (j.hold ? (j.held ? ` · ${j.held} new, held ${j.hold} s` : ` · new files held ${j.hold} s`) : "") + (j.waiting ? ` · ${j.waiting} still being written` : "") +
+        ` · ${fmtBytes(j.bytes)}${cur}<br><code>${esc(j.folder)}</code>` + (j.error ? `<div class="error">${esc(j.error)}</div>` : "");
+    }
+  }
+}
+document.addEventListener("click", async e => {
+  const b = e.target.closest("#dls button"); if (!b) return;
+  const box = b.closest("[data-dl]");
+  try {
+    if (b.dataset.dlstart) {
+      const folder = box.querySelector("[data-dlfolder]").value.trim();
+      const hold = box.querySelector("[data-dlhold]").checked;
+      store.set("dlfolder." + b.dataset.dlstart, folder); store.set("dlfolder", folder); store.set("dlhold", hold);
+      await api("/api/downloads/start", {instance_id: b.dataset.dlstart, folder, hold});
+    } else if (b.dataset.dlstop) await api("/api/downloads/stop", {instance_id: b.dataset.dlstop});
+    else if (b.dataset.dldismiss) await api("/api/downloads/dismiss", {instance_id: b.dataset.dldismiss});
+    else if (b.dataset.dlopen) return void await api("/api/open-folder", {folder: b.dataset.dlopen});
+    else if (b.hasAttribute("data-dlpick")) {
+      const input = box.querySelector("[data-dlfolder]");
+      const r = await api("/api/pick-folder", {initial: input.value});
+      if (r.folder) input.value = r.folder;
+      return;
+    }
+    dlShown = ""; poll();
+  } catch (err) { toast(err.message); }
+});
+
+// ── Run history ──
+$("histBox").addEventListener("toggle", () => { if ($("histBox").open) drawHistory().catch(e => toast(e.message)); });
+async function drawHistory() {
+  const {runs} = await api("/api/history");
+  const t = s => new Date(s * 1000).toLocaleString([], {month: "short", day: "numeric", hour: "2-digit", minute: "2-digit"});
+  $("hist").innerHTML = runs.length ? runs.map(r => `<tr>
+    <td><code>${esc(r.id)}</code><div class="muted">${esc(r.name || "")}</div></td>
+    <td>${esc(CFG.regions[r.region] || r.region)}</td><td>${esc(r.type)}<div class="muted">${esc(r.market)}</div></td>
+    <td><span class="badge ${r.state === "running" ? "good" : ""}">${r.state}</span></td>
+    <td class="num">${t(r.start)}</td><td class="num">${r.end ? t(r.end) : "now"}</td>
+    <td class="num">${r.hours.toFixed(2)}</td><td class="num">${money(r.rate, 3)}</td><td class="num">${money(r.cost)}</td></tr>`).join("")
+    : `<tr><td colspan="9" class="muted">No runs recorded yet.</td></tr>`;
+}
+
+init().catch(e => { $("snipeErr").textContent = e.message; });
+</script>
+</body>
+</html>

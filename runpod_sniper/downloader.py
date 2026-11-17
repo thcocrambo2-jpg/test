@@ -8,8 +8,9 @@ gives. Pictures and videos both; a file the pod is still writing (a video
 mid-encode) is left for the next round, which /api/v1/media says by
 answering it Cache-Control: no-store.
 
-Each new file is held for HOLD seconds after it first shows up, so a
-generation deleted in the Gallery within that time is never downloaded.
+Each new file can be held for a few seconds after it first shows up
+(hold, default HOLD), so a generation deleted in the Gallery within that
+time is never downloaded. hold=0 saves it at once.
 
 Nothing is downloaded twice: each pod keeps a record in its folder,
 .ember-downloads-<pod id>.json, written after every file. A file already in
@@ -61,13 +62,14 @@ class NeedsKey(Exception):
 
 class Download:
     def __init__(self, pod_id: str, pod_name: str, folder: str, app_url: str = "",
-                 access_key: str = "", account: str = ""):
+                 access_key: str = "", account: str = "", hold: int = HOLD):
         self.pod_id = pod_id
         self.pod_name = pod_name or pod_id
         self.account = account
         self.folder = Path(folder).expanduser()
         self.app_url = (app_url or proxy_url(pod_id)).rstrip("/")
         self.access_key = access_key
+        self.hold = max(0, int(hold))
         self.lock = threading.Lock()
         self.stop_event = threading.Event()
         self.thread = None
@@ -123,7 +125,7 @@ class Download:
                 "last_poll": self.last_poll, "total_on_pod": self.total_on_pod,
                 "have": len(self.record["files"]), "saved": self.saved,
                 "already": self.already, "waiting": self.waiting,
-                "held": self.held, "hold": HOLD,
+                "held": self.held, "hold": self.hold,
                 "next_due": self.next_due,
                 "failed": self.failed, "tokens": self.tokens,
                 "bytes": self.bytes,
@@ -135,7 +137,8 @@ class Download:
         """What server.py keeps to resume this after a restart."""
         return {"pod_id": self.pod_id, "pod_name": self.pod_name,
                 "folder": str(self.folder), "app_url": self.app_url,
-                "access_key": self.access_key, "account": self.account}
+                "access_key": self.access_key, "account": self.account,
+                "hold": self.hold}
 
     # ── HTTP to the pod's app ───────────────────────────────────────
 
@@ -254,9 +257,9 @@ class Download:
             if self.stop_event.is_set():
                 return
             seen = self.first_seen.setdefault(item["id"], now)
-            if now - seen < HOLD:                        # still deletable
+            if now - seen < self.hold:                   # still deletable
                 held += 1
-                due = seen + HOLD
+                due = seen + self.hold
                 next_due = due if next_due is None else min(next_due, due)
                 continue
             tries = self.item_fails.get(item["id"], 0)
