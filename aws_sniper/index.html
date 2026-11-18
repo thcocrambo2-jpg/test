@@ -572,8 +572,14 @@ function drawMoney(m) {
   if (creditShown !== m.credit_total && document.activeElement !== $("credit")) {
     $("credit").value = m.credit_total; creditShown = m.credit_total;
   }
-  $("mSpent").textContent = money(m.spent);
-  $("mSince").textContent = m.since ? "spent since " + new Date(m.since * 1000).toLocaleDateString() : "spent";
+  if (m.aws) {
+    // AWS's figure at the sync (it includes use outside this page) plus what ran since.
+    $("mSpent").textContent = money(m.aws.initial - m.aws.estimated + (m.spent_since_sync || 0));
+    $("mSince").textContent = `spent (AWS, page's own record ${money(m.spent)})`;
+  } else {
+    $("mSpent").textContent = money(m.spent);
+    $("mSince").textContent = m.since ? "spent since " + new Date(m.since * 1000).toLocaleDateString() : "spent";
+  }
   $("mLeft").textContent = money(m.left);
   const base = m.aws ? m.aws.initial : m.credit_total;
   $("mLeftBox").className = m.left < base * 0.15 ? "lowcredit" : "";
