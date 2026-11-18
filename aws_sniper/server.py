@@ -1019,6 +1019,36 @@ def _set_env_line(key: str, value: str) -> None:
     path.write_text("\n".join(lines).rstrip("\n") + "\n", encoding="utf-8")
 
 
+def _ssh_key_line(account: str):
+    """(the .env line the account's key comes from, its value): its own
+    SSH_KEY_FILE__<name> when set, else the plain SSH_KEY_FILE."""
+    env = core.read_env(core.ENV_FILE)
+    own = "SSH_KEY_FILE" + core.ACCOUNT_SEP + account
+    if account != core.MAIN_ACCOUNT and env.get(own, "").strip().strip('"'):
+        return own, env[own].strip().strip('"')
+    return "SSH_KEY_FILE", env.get("SSH_KEY_FILE", "").strip().strip('"')
+
+
+def _ensure_key_pair(ec2, pairs: dict, name: str, pem: Path, account: str, region: str,
+                     line: str) -> list:
+    """The region has key pair `name` holding pem's public key: imported if
+    missing. One already there with another key is an error, not a guess:
+    instances launched with it would refuse this .pem."""
+    public = _public_key(pem)
+    have = pairs.get(name)
+    if not have:
+        ec2.import_key_pair(KeyName=name, PublicKeyMaterial=public.encode())
+        return ["imported key pair %s from %s" % (name, pem)]
+    theirs = (have.get("PublicKey") or "").split()[:2]
+    if theirs and theirs != public.split()[:2]:
+        raise ValueError("Account %s already has a key pair %s in %s, but it isn't the key in %s. "
+                         "Point %s at that key pair's .pem, or, if that .pem is lost, delete key "
+                         "pair %s in that account (EC2 > Key pairs, %s) and set up again. "
+                         "Running instances keep their key either way."
+                         % (account, name, region, pem, line, name, region))
+    return []
+
+
 def _setup_region(region: str, account: str) -> dict:
     """Make sure the account's region has the key pair for SSH_KEY_FILE (or
     a new one, saved to keys/ and written to .env) and ember-sg with 22 and
@@ -1030,24 +1060,28 @@ def _setup_region(region: str, account: str) -> dict:
     ec2 = _client(region, account=account)
     done = []
     # The key pair.
-    pem = _ssh_key(account)
-    existing = {k["KeyName"] for k in ec2.describe_key_pairs()["KeyPairs"]}
-    if pem and pem.is_file():
+    line, raw = _ssh_key_line(account)
+    pairs = {k["KeyName"]: k for k in ec2.describe_key_pairs(IncludePublicKey=True)["KeyPairs"]}
+    if raw:
+        pem = Path(raw).expanduser()
+        if not pem.is_file():
+            # Never make a new key in its place: instances launched with
+            # this one would be locked out, and .env would point elsewhere.
+            raise ValueError("%s in .env points to %s, which doesn't exist. Fix the path (or "
+                             "remove the line to have a new key made)." % (line, pem))
         name = pem.stem
-        if name not in existing:
-            ec2.import_key_pair(KeyName=name, PublicKeyMaterial=_public_key(pem).encode())
-            done.append("imported key pair %s from %s" % (name, pem))
+        done += _ensure_key_pair(ec2, pairs, name, pem, account, region, line)
     else:
+        # No key at all for this account (so none for main either): make
+        # one, shared by every account that has no SSH_KEY_FILE__<name>.
         name = NEW_KEY_NAME
         KEYS_DIR.mkdir(exist_ok=True)
         pem = KEYS_DIR / (name + ".pem")
-        if name in existing:
-            if not pem.is_file():
-                raise ValueError("%s already has a key pair %s, but its .pem isn't in %s. "
-                                 "Set SSH_KEY_FILE in .env to it." % (region, name, KEYS_DIR))
-        elif pem.is_file():          # made in another region: same key here
-            ec2.import_key_pair(KeyName=name, PublicKeyMaterial=_public_key(pem).encode())
-            done.append("imported key pair %s from %s" % (name, pem))
+        if pem.is_file():               # made earlier: the same key here
+            done += _ensure_key_pair(ec2, pairs, name, pem, account, region, line)
+        elif name in pairs:
+            raise ValueError("Account %s already has a key pair %s in %s, but its .pem isn't in "
+                             "%s. Set %s in .env to that .pem." % (account, name, region, KEYS_DIR, line))
         else:
             material = ec2.create_key_pair(KeyName=name, KeyType="ed25519",
                                            KeyFormat="pem")["KeyMaterial"]

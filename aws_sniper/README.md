@@ -88,6 +88,10 @@ of `SSH_KEY_FILE` as a key pair named after the file, or, with no
 (git-ignored) and writes `SSH_KEY_FILE` into `.env`; then creates
 `ember-sg` in the default VPC with ports 22 and 7860 open. It only adds
 what's missing, and the page picks that key and group by default after.
+It never writes over a `.pem`, and stops instead of guessing when
+`SSH_KEY_FILE` (or the account's `SSH_KEY_FILE__<name>`) points to a file
+that doesn't exist, or when the region already has a key pair of that name
+holding a different key.
 
 **App** (each running instance, over SSH with `SSH_KEY_FILE` from `.env`):
 the app link with a green/red dot, **Restart app** (`docker restart`: the
