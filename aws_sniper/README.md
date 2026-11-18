@@ -6,6 +6,23 @@ script tries every zone that offers the type, round after round, until one
 launch succeeds. Then it prints the IP and the SSH command, and plays the
 alarm.
 
+## For a friend (Windows)
+
+`python aws_sniper/make_zip.py` builds `aws_sniper.zip`: the page plus
+`start.bat`, without `.env`, keys or any local state. Your friend needs
+Python 3.10+, a G and VT vCPU quota in their region (spot 8 for one
+g7e.2xlarge) and an IAM access key.
+
+1. Unzip, double-click `start.bat`. It installs boto3 the first time,
+   makes `.env` from `.env.example` and opens it in Notepad.
+2. Fill in `AWS_ACCESS_KEY_ID`, `AWS_SECRET_ACCESS_KEY`,
+   `EMBER_LICENSE_KEY`, `EMBER_NODE_TAG` (tokens optional), save, run
+   `start.bat` again. The page opens at http://127.0.0.1:7896.
+3. Pick the region and Snipe. The first snipe in a region sets it up:
+   creates the key pair `ember-key` (its `.pem` saved in `keys/`, its path
+   written to `.env`) and `ember-sg` with ports 22 and 7860 open. Disk
+   defaults to 250 GB.
+
 ## Set up
 
 ```
@@ -48,7 +65,14 @@ when an instance launches and again when its app answers.
 A snipe is refused while any instance it launched is running, or was
 stopped by AWS (a persistent spot request brings that one back by itself).
 
-**Credit.** Each instance shows its full hourly cost while running
+**Sync with AWS** reads the real balance with the Billing API's
+`GetCredits` (AWS lists no price for it, unlike Cost Explorer's $0.01 a
+request): the estimated amount of every enabled, unexpired credit, which
+includes this month's use so far, also anything used outside this page.
+Credit left is then that balance minus what the page has seen run since
+the sync. Sync now and then; AWS updates its estimate a few times a day.
+
+**Credit (before the first sync).** Each instance shows its full hourly cost while running
 (instance + disk + public IP) and its disk cost while stopped, from the
 Pricing API and the spot price history. Spending isn't read from AWS
 billing: `history.json` records every running and stopped stretch the

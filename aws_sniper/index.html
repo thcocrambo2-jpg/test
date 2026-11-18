@@ -115,9 +115,13 @@
   <div class="error" id="banner"></div>
 
   <section class="card">
-    <h2>Credit <span class="muted">estimated from this page's own record of every run (instance + disk + IP), not read from AWS billing</span></h2>
+    <h2>Credit <span class="muted">AWS's balance at the last sync, minus what this page has seen run since (instance + disk + IP)</span></h2>
+    <div class="row" style="margin-top:0;margin-bottom:12px">
+      <button class="small" id="syncCredit">Sync with AWS</button>
+      <span class="muted" id="mAws">Not synced yet: using the credit total below. Sync reads your real balance, including anything used outside this page.</span>
+    </div>
     <div class="stats">
-      <div class="credit"><span>Credit total ($)</span>
+      <div class="credit"><span id="creditLabel">Credit total ($)</span>
         <div class="row" style="margin-top:2px"><input id="credit" type="number" min="0" step="1"><button class="ghost small" id="saveCredit">Save</button></div></div>
       <div><b id="mSpent">—</b><span id="mSince">spent</span></div>
       <div id="mLeftBox"><b id="mLeft">—</b><span>left</span></div>
@@ -139,7 +143,7 @@
     </div>
     <div class="row" id="setupRow" hidden>
       <button class="small" id="setup">Set up this region</button>
-      <span class="muted">One time per region: imports your SSH key (or makes one and saves the .pem) and creates <code>ember-sg</code> with ports 22 and 7860 open. Both are free.</span>
+      <span class="muted">One time per region (Snipe does it by itself if you skip this): imports your SSH key (or makes one and saves the .pem) and creates <code>ember-sg</code> with ports 22 and 7860 open. Both are free.</span>
     </div>
     <div class="sub">
       <span class="muted">Market · vCPU quota in this region</span>
@@ -312,7 +316,8 @@ function activeZones() {
   return [...document.querySelectorAll("#zones [data-z]")].map(b => b.dataset.z).filter(z => !skip.includes(z));
 }
 function syncButtons() {
-  const ready = REGION && activeTypes().length && activeZones().length && $("key").value && $("sg").value
+  const ready = REGION && activeTypes().length && activeZones().length
+                && (($("key").value && $("sg").value) || !REGION.setup)
                 && CFG.licence.ok && quota(market) !== 0;
   $("go").disabled = busy || !ready;
   $("halt").hidden = !busy;
@@ -341,19 +346,21 @@ $("sg").onchange = () => { store.set("sg." + REGION.region, $("sg").value); sync
 $("disk").onchange = () => store.set("disk", +$("disk").value);
 $("tput").onchange = () => store.set("tput", +$("tput").value);
 $("refresh").onclick = loadRegion;
-$("setup").onclick = async () => {
+async function runSetup() {
   const region = $("region").value;
+  const r = await api("/api/setup", {region});
+  store.set("key." + region, r.key); store.set("sg." + region, r.sg);   // the defaults from now on
+  if (r.ssh_key) {
+    CFG.ssh_key = r.ssh_key;
+    $("sshKey").innerHTML = `SSH key: <code>${esc(r.ssh_key)}</code> (SSH_KEY_FILE in .env)`;
+  }
+  toast(region + ": " + r.done.join("; "));
+  await loadRegion();
+  return r;
+}
+$("setup").onclick = async () => {
   $("setup").disabled = true; $("snipeErr").textContent = "";
-  try {
-    const r = await api("/api/setup", {region});
-    store.set("key." + region, r.key); store.set("sg." + region, r.sg);   // the defaults from now on
-    if (r.ssh_key) {
-      CFG.ssh_key = r.ssh_key;
-      $("sshKey").innerHTML = `SSH key: <code>${esc(r.ssh_key)}</code> (SSH_KEY_FILE in .env)`;
-    }
-    toast(region + ": " + r.done.join("; "));
-    await loadRegion();
-  } catch (e) { $("snipeErr").textContent = e.message; }
+  try { await runSetup(); } catch (e) { $("snipeErr").textContent = e.message; }
   $("setup").disabled = false;
 };
 
@@ -361,6 +368,10 @@ $("go").onclick = async () => {
   $("snipeErr").textContent = "";
   $("go").disabled = true;
   try {
+    if (!REGION.setup) {                 // first snipe here: key pair + ember-sg first
+      $("regionNote").textContent = "Setting up " + REGION.region + "…";
+      await runSetup();
+    }
     await api("/api/snipe", {region: REGION.region, market, types: activeTypes(), zones: activeZones(),
       key: $("key").value, sg: $("sg").value, disk: +$("disk").value, throughput: +$("tput").value,
       dry_run: $("dry").checked});
@@ -564,7 +575,18 @@ function drawMoney(m) {
   $("mSpent").textContent = money(m.spent);
   $("mSince").textContent = m.since ? "spent since " + new Date(m.since * 1000).toLocaleDateString() : "spent";
   $("mLeft").textContent = money(m.left);
-  $("mLeftBox").className = m.left < m.credit_total * 0.15 ? "lowcredit" : "";
+  const base = m.aws ? m.aws.initial : m.credit_total;
+  $("mLeftBox").className = m.left < base * 0.15 ? "lowcredit" : "";
+  if (m.aws) {
+    const a = m.aws, ago = (Date.now() / 1000 - a.synced) / 3600;
+    $("mAws").innerHTML = `AWS balance <b>${money(a.estimated)}</b> of ${money(a.initial)} (${a.credits.length} credits` +
+      (a.expires ? `, first expiry ${new Date(a.expires * 1000).toLocaleDateString()}` : "") + `) · synced ` +
+      new Date(a.synced * 1000).toLocaleString([], {month: "short", day: "numeric", hour: "2-digit", minute: "2-digit"}) +
+      ` · − ${money(m.spent_since_sync)} run since = left` +
+      (ago > 24 ? ` <span class="note">over a day old: sync again</span>` : "") +
+      `<div class="muted">AWS updates its estimate a few times a day, so very recent use may not be in it yet.</div>`;
+    $("creditLabel").textContent = "Credit total ($), used only before a sync";
+  }
   if (m.running) {
     $("mBurn").textContent = money(m.burn_hourly, 3) + "/hr";
     $("mBurnWhat").textContent = `burning now (${m.running} running)`;
@@ -590,6 +612,12 @@ function drawMoney(m) {
   $("mNote").textContent = m.unknown_rate ? "Some prices couldn't be read, so parts of the estimate are missing." : "";
 }
 
+$("syncCredit").onclick = async () => {
+  $("syncCredit").disabled = true;
+  try { const a = await api("/api/credits/sync", {}); toast(`AWS balance: ${money(a.estimated)} across ${a.credits.length} credits`); poll(); }
+  catch (e) { toast("Sync failed: " + e.message); }
+  $("syncCredit").disabled = false;
+};
 $("saveCredit").onclick = async () => {
   try { const s = await api("/api/settings", {credit_total: +$("credit").value}); creditShown = null; toast("Credit total saved: " + money(s.credit_total)); poll(); }
   catch (e) { toast(e.message); }

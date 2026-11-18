@@ -55,3 +55,4 @@ aws_sniper/downloads.json
 aws_sniper/*.part
 aws_sniper/known_hosts
 aws_sniper/keys/
+aws_sniper.zip

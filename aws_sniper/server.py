@@ -337,6 +337,18 @@ class History:
                     segs[-1]["end"] = now
                     h.setdefault("gone", now)
 
+    def spent_since(self, since: float, now: float) -> float:
+        """What the stretches cost from `since` to now (the part of each
+        stretch after `since`)."""
+        with self.lock:
+            cost = 0.0
+            for h in self.data.values():
+                for s in h["segments"]:
+                    start, end = max(s["start"], since), (s["end"] or now)
+                    if end > start and s["rate"] is not None:
+                        cost += (end - start) / 3600 * s["rate"]
+            return cost
+
     def spent(self, now: float) -> dict:
         with self.lock:
             per, total, unknown, since = {}, 0.0, False, None
@@ -822,8 +834,40 @@ def _settings() -> dict:
         data = {}
     credit = data.get("credit_total")
     regions = data.get("regions") if isinstance(data.get("regions"), dict) else {}
+    aws = data.get("aws_credit") if isinstance(data.get("aws_credit"), dict) else None
     return {"credit_total": float(credit) if isinstance(credit, (int, float)) else DEFAULT_CREDIT,
-            "regions": regions}
+            "regions": regions, "aws_credit": aws}
+
+
+def _sync_credits() -> dict:
+    """AWS's credit balance (Billing API GetCredits; AWS lists no price for
+    it, unlike Cost Explorer). Sums the estimated amount, which includes
+    this month's usage so far, of every enabled credit that hasn't
+    expired. Saved in settings.json as aws_credit."""
+    from datetime import timedelta
+    now = datetime.now(timezone.utc)
+    account = _client("us-east-1", "sts").get_caller_identity()["Account"]
+    resp = _client("us-east-1", "billing").get_credits(
+        accountId=account, startDate=now - timedelta(days=364))
+    credits = []
+    for c in resp.get("credits", []):
+        end = c.get("endDate")
+        if c.get("creditStatus", "ENABLED") != "ENABLED" or (end and end <= now):
+            continue
+        amount = lambda k: float((c.get(k) or {}).get("currencyAmount") or 0)
+        credits.append({"description": c.get("description") or c.get("creditType") or "credit",
+                        "initial": amount("initialAmount"), "remaining": amount("remainingAmount"),
+                        "estimated": amount("estimatedAmount"),
+                        "expires": end.timestamp() if end else None})
+    data = {"synced": time.time(), "estimated": sum(c["estimated"] for c in credits),
+            "remaining": sum(c["remaining"] for c in credits),
+            "initial": sum(c["initial"] for c in credits),
+            "expires": min((c["expires"] for c in credits if c["expires"]), default=None),
+            "credits": credits}
+    s = _settings()
+    s["aws_credit"] = data
+    _write_settings(s)
+    return data
 
 
 def _write_settings(s: dict) -> None:
@@ -867,6 +911,20 @@ def _public_key(pem: Path) -> str:
     if res.returncode != 0 or not res.stdout.startswith(("ssh-", "ecdsa-")):
         raise ValueError("Can't read %s: %s" % (pem, (res.stderr or res.stdout).strip()))
     return res.stdout.strip()
+
+
+def _owner_only(path: Path) -> None:
+    """ssh refuses a private key others can read. Windows' OpenSSH checks
+    the file's ACL, so drop the inherited entries and keep only the user."""
+    import os
+    import subprocess
+    if sys.platform == "win32":
+        user = os.environ.get("USERNAME", "")
+        if user:
+            subprocess.run(["icacls", str(path), "/inheritance:r", "/grant:r", user + ":F"],
+                           capture_output=True, timeout=30)
+    else:
+        path.chmod(0o600)
 
 
 def _set_env_line(key: str, value: str) -> None:
@@ -915,6 +973,7 @@ def _setup_region(region: str) -> dict:
             material = ec2.create_key_pair(KeyName=name, KeyType="ed25519",
                                            KeyFormat="pem")["KeyMaterial"]
             pem.write_text(material, encoding="utf-8", newline="\n")
+            _owner_only(pem)
             done.append("created key pair %s, saved to %s" % (name, pem))
         _set_env_line("SSH_KEY_FILE", str(pem))
     # The security group, in the default VPC.
@@ -955,9 +1014,18 @@ def _money(rows: list) -> dict:
     """Credit, what's been spent (from history.json), the burn rate now,
     and how long the rest lasts."""
     now = time.time()
-    credit = _settings()["credit_total"]
+    settings = _settings()
+    credit = settings["credit_total"]
     spent = HISTORY.spent(now)
-    left = credit - spent["total"]
+    synced = settings.get("aws_credit")
+    if synced:
+        # AWS's own balance at the last sync (it already counts whatever
+        # was used outside this page), minus what the page saw since.
+        since_sync = HISTORY.spent_since(synced["synced"], now)
+        left = synced["estimated"] - since_sync
+    else:
+        since_sync = None
+        left = credit - spent["total"]
     running = [r for r in rows if r["state"] in ("pending", "running")]
     stopped = [r for r in rows if r["state"] in ("stopping", "stopped")]
     unknown = any(r["rate_running" if r in running else "rate_stopped"] is None
@@ -966,6 +1034,7 @@ def _money(rows: list) -> dict:
             + sum(r["rate_stopped"] or 0 for r in stopped))
     storage = sum(r["rate_stopped"] or 0 for r in rows if r["state"] != "shutting-down")
     return {"credit_total": credit, "spent": spent["total"], "left": left,
+            "aws": synced, "spent_since_sync": since_sync,
             "since": spent["since"], "per_instance": spent["per"],
             "unknown_rate": spent["unknown_rate"] or unknown,
             "burn_hourly": burn, "running": len(running),
@@ -1184,6 +1253,8 @@ class Handler(BaseHTTPRequestHandler):
                 return self.json({"ok": True, "message": _action(body)})
             if url.path == "/api/settings":
                 return self.json(_save_settings(body))
+            if url.path == "/api/credits/sync":
+                return self.json(_sync_credits())
             if url.path == "/api/setup":
                 return self.json(_setup_region(str(body.get("region") or "")))
             if url.path == "/api/app":
