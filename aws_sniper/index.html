@@ -92,6 +92,7 @@
   .stats div span { color:var(--c-text-muted); font-size:var(--t-xs); }
   .stats .credit input { width:110px; }
   .lowcredit b { color:var(--c-warning); }
+  label.acct { flex-direction:row; align-items:center; gap:6px; font-size:var(--t-sm); }
   .dl { border:1px solid var(--c-border); border-radius:var(--r-md); padding:10px 12px; margin-top:10px; background:var(--c-bg-sunken); }
   .dl header { display:flex; gap:10px; align-items:center; flex-wrap:wrap; }
   .dl header .grow { flex:1; }
@@ -109,13 +110,26 @@
 <main>
   <header class="top">
     <h1>AWS GPU sniper</h1>
+    <label class="acct">Account <select id="account"></select></label>
+    <button class="ghost small" id="addAcct">+ Add account</button>
     <span class="muted" id="who"></span>
   </header>
+  <section class="card" id="addBox" hidden>
+    <h2>Add an AWS account <span class="muted">IAM → Users → Security credentials → Create access key. The keys are checked with AWS, then saved to .env on this PC.</span></h2>
+    <div class="grid">
+      <label>Name <input id="newName" placeholder="friend" maxlength="31" autocomplete="off"></label>
+      <label>Access key id <input id="newKey" placeholder="AKIA..." autocomplete="off"></label>
+      <label>Secret access key <input id="newSecret" type="password" autocomplete="off"></label>
+    </div>
+    <div class="row"><button id="saveAcct">Check and add</button><button class="ghost" id="cancelAcct">Cancel</button>
+      <span class="muted">It uses your SSH_KEY_FILE and licence unless .env has <code>SSH_KEY_FILE__name</code>, <code>EMBER_LICENSE_KEY__name</code> etc.</span></div>
+    <div class="error" id="acctErr"></div>
+  </section>
   <div class="error" id="licence"></div>
   <div class="error" id="banner"></div>
 
   <section class="card">
-    <h2>Credit <span class="muted">AWS's balance at the last sync, minus what this page has seen run since (instance + disk + IP)</span></h2>
+    <h2>Credit <span class="badge" data-acctname></span> <span class="muted">AWS's balance at the last sync, minus what this page has seen run since (instance + disk + IP)</span></h2>
     <div class="row" style="margin-top:0;margin-bottom:12px">
       <button class="small" id="syncCredit">Sync with AWS</button>
       <span class="muted" id="mAws">Not synced yet: using the credit total below. Sync reads your real balance, including anything used outside this page.</span>
@@ -133,14 +147,15 @@
   </section>
 
   <section class="card">
-    <h2>Snipe</h2>
+    <h2>Snipe <span class="badge" data-acctname></span></h2>
     <div class="grid">
       <label>Region <select id="region"></select></label>
       <label>Key pair <select id="key"></select></label>
       <label>Security group <select id="sg"></select></label>
-      <label>Disk (GB) <input id="disk" type="number" min="100" max="2000" value="250"></label>
-      <label>Disk speed (MB/s) <input id="tput" type="number" min="125" max="1000" step="25" value="250"></label>
+      <label>Root disk (GB) <input id="disk" type="number" min="75" max="2000" value="75"></label>
+      <label>Root disk speed (MB/s) <input id="tput" type="number" min="125" max="1000" step="25" value="125"></label>
     </div>
+    <div class="muted" style="margin-top:6px">The root disk holds only the OS. Models and the app image go on the instance's own 1.7 TB NVMe SSD (free, several GB/s), which is wiped when the instance stops: a start downloads them again.</div>
     <div class="row" id="setupRow" hidden>
       <button class="small" id="setup">Set up this region</button>
       <span class="muted">One time per region (Snipe does it by itself if you skip this): imports your SSH key (or makes one and saves the .pem) and creates <code>ember-sg</code> with ports 22 and 7860 open. Both are free.</span>
@@ -165,6 +180,7 @@
       <span class="muted" id="regionNote"></span>
     </div>
     <div class="error" id="snipeErr"></div>
+    <div class="muted" id="otherSnipes"></div>
     <div id="run" hidden>
       <div class="row"><span class="badge" id="runState"></span><span class="muted" id="runWhat"></span></div>
       <pre id="runLog"></pre>
@@ -172,7 +188,7 @@
   </section>
 
   <section class="card">
-    <h2>Instances <span class="muted">launched by the sniper, all regions · refreshes every 10 s</span></h2>
+    <h2>Instances <span class="muted">launched by the sniper, every account and region · refreshes every 10 s</span></h2>
     <div class="muted" id="sshKey" style="margin-bottom:10px"></div>
     <div class="error" id="instErr"></div>
     <div class="tablewrap"><table>
@@ -197,7 +213,7 @@
   <details class="card fold" id="histBox">
     <summary><h2>Run history <span class="muted">what the credit estimate is built from</span></h2></summary>
     <div class="tablewrap"><table>
-      <thead><tr><th>Instance</th><th>Where</th><th>Type</th><th>State</th><th>From</th><th>To</th><th>Hours</th><th>$/hr</th><th>Cost</th></tr></thead>
+      <thead><tr><th>Instance</th><th>Account</th><th>Where</th><th>Type</th><th>State</th><th>From</th><th>To</th><th>Hours</th><th>$/hr</th><th>Cost</th></tr></thead>
       <tbody id="hist"></tbody>
     </table></div>
   </details>
@@ -211,7 +227,9 @@ const store = {
   get(k, d) { try { const v = localStorage.getItem("awssniper." + k); return v === null ? d : JSON.parse(v); } catch { return d; } },
   set(k, v) { try { localStorage.setItem("awssniper." + k, JSON.stringify(v)); } catch {} },
 };
-let CFG = null, REGION = null, busy = false;
+let CFG = null, REGION = null, busy = false, ACCT = null;
+const acct = () => ACCT ? ACCT.name : "main";
+const acctOf = name => (CFG.accounts.find(a => a.name === name) || CFG.accounts[0]);
 // Type order and which are ticked, shared by all regions.
 let order = store.get("order", null);
 let ticked = store.get("ticked", ["g7e.2xlarge"]);
@@ -234,36 +252,67 @@ function money(v, d = 2) { return v == null ? "—" : "$" + v.toFixed(d); }
 
 async function init() {
   CFG = await api("/api/config");
-  const lic = CFG.licence;
-  $("who").textContent = CFG.profile + (lic.key ? " · licence " + lic.key : "") +
-    (lic.ok ? " · HF token " + (lic.hf ? "set" : "missing") + " · CivitAI token " + (lic.civitai ? "set" : "missing") : "");
-  $("licence").textContent = lic.ok ? "" : "Fill in EMBER_LICENSE_KEY and EMBER_NODE_TAG in " + lic.file + " before sniping.";
+  drawAccounts(store.get("account", "main"));
   if (!order) order = Object.keys(CFG.types);
   order = order.filter(t => CFG.types[t]).concat(Object.keys(CFG.types).filter(t => !order.includes(t)));
   const reg = store.get("region", "ap-south-1");
   $("region").innerHTML = Object.entries(CFG.regions).map(([r, n]) =>
     `<option value="${r}"${r === reg ? " selected" : ""}>${esc(n)} · ${r}</option>`).join("");
-  $("disk").value = store.get("disk", 250); $("tput").value = store.get("tput", 250);
-  $("sshKey").innerHTML = CFG.ssh_key
-    ? `SSH key: <code>${esc(CFG.ssh_key)}</code> (SSH_KEY_FILE in .env)`
-    : `<span class="note">No SSH_KEY_FILE in ${esc(lic.file)}: Copy SSH, Restart app, Apply .env and logs need it.</span>`;
+  $("disk").value = store.get("rootDisk", 75); $("tput").value = store.get("rootTput", 125);
   await loadRegion();
   poll(); setInterval(poll, 2000);
 }
+
+function drawAccounts(pick) {
+  ACCT = acctOf(pick);
+  store.set("account", ACCT.name);
+  $("account").innerHTML = CFG.accounts.map(a => `<option value="${esc(a.name)}"${a.name === ACCT.name ? " selected" : ""}>` +
+    `${esc(a.name)}${a.id ? " · " + a.id : a.error ? " · keys not working" : ""}</option>`).join("");
+  document.querySelectorAll("[data-acctname]").forEach(b => { b.textContent = ACCT.name; b.hidden = CFG.accounts.length < 2; });
+  const lic = ACCT.licence;
+  $("who").textContent = ACCT.source + (lic.key ? " · licence " + lic.key : "") +
+    (lic.ok ? " · HF token " + (lic.hf ? "set" : "missing") + " · CivitAI token " + (lic.civitai ? "set" : "missing") : "");
+  $("licence").textContent = (ACCT.error ? `Account ${ACCT.name}: ${ACCT.error}\n` : "") +
+    (lic.ok ? "" : "Fill in EMBER_LICENSE_KEY and EMBER_NODE_TAG in " + lic.file + " before sniping.");
+  $("sshKey").innerHTML = ACCT.ssh_key
+    ? `SSH key: <code>${esc(ACCT.ssh_key)}</code> (SSH_KEY_FILE in .env)`
+    : `<span class="note">No SSH_KEY_FILE in ${esc(CFG.env_file)}: Copy SSH, Restart app, Apply .env and logs need it.</span>`;
+}
+$("account").onchange = async () => {
+  drawAccounts($("account").value);
+  creditShown = null;
+  await loadRegion(); poll();
+};
+$("addAcct").onclick = () => { $("addBox").hidden = !$("addBox").hidden; $("acctErr").textContent = ""; };
+$("cancelAcct").onclick = () => { $("addBox").hidden = true; };
+$("saveAcct").onclick = async () => {
+  $("saveAcct").disabled = true; $("acctErr").textContent = "";
+  try {
+    const r = await api("/api/accounts", {name: $("newName").value, key_id: $("newKey").value, secret: $("newSecret").value});
+    ["newName", "newKey", "newSecret"].forEach(id => $(id).value = "");
+    $("addBox").hidden = true;
+    CFG = await api("/api/config");
+    drawAccounts(r.name); creditShown = null;
+    toast(`Added ${r.name} (AWS account ${r.id}).`);
+    await loadRegion(); poll();
+  } catch (e) { $("acctErr").textContent = e.message; }
+  $("saveAcct").disabled = false;
+};
 
 async function loadRegion() {
   const region = $("region").value; store.set("region", region);
   $("regionNote").textContent = "Loading " + region + "…";
   $("snipeErr").textContent = "";
-  try { REGION = await api("/api/region?region=" + region); }
+  try { REGION = await api("/api/region?region=" + region + "&account=" + encodeURIComponent(acct())); }
   catch (e) { REGION = null; $("snipeErr").textContent = e.message; $("regionNote").textContent = ""; render(); return; }
   $("regionNote").textContent = "";
   const set = REGION.setup || {};
   $("setupRow").hidden = !!REGION.setup;
-  const keyPick = store.get("key." + region, set.key || REGION.keys[0]);
+  const pref = k => acct() === "main" ? store.get(k + "." + region, undefined) : undefined;   // saved before accounts
+  const keyPick = store.get(`key.${acct()}.${region}`, pref("key") ?? (set.key || REGION.keys[0]));
   $("key").innerHTML = REGION.keys.length ? REGION.keys.map(k => `<option${k === keyPick ? " selected" : ""}>${esc(k)}</option>`).join("")
                                            : `<option value="">No key pairs in this region</option>`;
-  const sgPick = store.get("sg." + region, set.sg || (REGION.sgs.find(g => g.ssh && g.name !== "default") || REGION.sgs[0] || {}).id);
+  const sgPick = store.get(`sg.${acct()}.${region}`, pref("sg") ?? (set.sg || (REGION.sgs.find(g => g.ssh && g.name !== "default") || REGION.sgs[0] || {}).id));
   $("sg").innerHTML = REGION.sgs.map(g => `<option value="${g.id}"${g.id === sgPick ? " selected" : ""}>${esc(g.name)} · ${g.id} (${[g.ssh ? "SSH" : "no SSH", g.app ? "app port 7860 open" : "7860 closed"].join(", ")})</option>`).join("");
   render();
 }
@@ -318,7 +367,7 @@ function activeZones() {
 function syncButtons() {
   const ready = REGION && activeTypes().length && activeZones().length
                 && (($("key").value && $("sg").value) || !REGION.setup)
-                && CFG.licence.ok && quota(market) !== 0;
+                && ACCT.licence.ok && !ACCT.error && quota(market) !== 0;
   $("go").disabled = busy || !ready;
   $("halt").hidden = !busy;
 }
@@ -341,20 +390,19 @@ document.addEventListener("change", e => {
   if (t.dataset.t) { ticked = t.checked ? ticked.concat(t.dataset.t) : ticked.filter(x => x !== t.dataset.t); store.set("ticked", ticked); render(); }
 });
 $("region").onchange = loadRegion;
-$("key").onchange = () => { store.set("key." + REGION.region, $("key").value); syncButtons(); };
-$("sg").onchange = () => { store.set("sg." + REGION.region, $("sg").value); syncButtons(); };
-$("disk").onchange = () => store.set("disk", +$("disk").value);
-$("tput").onchange = () => store.set("tput", +$("tput").value);
+$("key").onchange = () => { store.set(`key.${acct()}.${REGION.region}`, $("key").value); syncButtons(); };
+$("sg").onchange = () => { store.set(`sg.${acct()}.${REGION.region}`, $("sg").value); syncButtons(); };
+$("disk").onchange = () => store.set("rootDisk", +$("disk").value);
+$("tput").onchange = () => store.set("rootTput", +$("tput").value);
 $("refresh").onclick = loadRegion;
 async function runSetup() {
   const region = $("region").value;
-  const r = await api("/api/setup", {region});
-  store.set("key." + region, r.key); store.set("sg." + region, r.sg);   // the defaults from now on
-  if (r.ssh_key) {
-    CFG.ssh_key = r.ssh_key;
-    $("sshKey").innerHTML = `SSH key: <code>${esc(r.ssh_key)}</code> (SSH_KEY_FILE in .env)`;
+  const r = await api("/api/setup", {region, account: acct()});
+  store.set(`key.${acct()}.${region}`, r.key); store.set(`sg.${acct()}.${region}`, r.sg);   // the defaults from now on
+  if (r.ssh_key && r.ssh_key !== ACCT.ssh_key) {     // a new .pem: every account without its own uses it
+    CFG = await api("/api/config"); drawAccounts(acct());
   }
-  toast(region + ": " + r.done.join("; "));
+  toast(`${acct()} · ${region}: ` + r.done.join("; "));
   await loadRegion();
   return r;
 }
@@ -372,20 +420,20 @@ $("go").onclick = async () => {
       $("regionNote").textContent = "Setting up " + REGION.region + "…";
       await runSetup();
     }
-    await api("/api/snipe", {region: REGION.region, market, types: activeTypes(), zones: activeZones(),
+    await api("/api/snipe", {account: acct(), region: REGION.region, market, types: activeTypes(), zones: activeZones(),
       key: $("key").value, sg: $("sg").value, disk: +$("disk").value, throughput: +$("tput").value,
       dry_run: $("dry").checked});
     poll();
   } catch (e) { $("snipeErr").textContent = e.message; syncButtons(); }
 };
-$("halt").onclick = () => api("/api/snipe/stop", {}).then(poll).catch(e => $("snipeErr").textContent = e.message);
+$("halt").onclick = () => api("/api/snipe/stop", {account: acct()}).then(poll).catch(e => $("snipeErr").textContent = e.message);
 
 async function instanceAction(b) {
-  const {act, id, region} = b.dataset;
+  const {act, id, region, account} = b.dataset;
   if (act === "delete" && !confirm(`Delete ${id}?\n\nThis cancels its spot request and terminates it. Its disk and downloaded models are deleted too.`)) return;
-  if (act === "stop" && !confirm(`Stop ${id}? Billing for the GPU stops; the disk (and models) stay.`)) return;
+  if (act === "stop" && !confirm(`Stop ${id}? Billing for the GPU stops; the root disk stays.\n\nThe models and app image on the local SSD are wiped: starting it again downloads them again (~20 min).`)) return;
   b.disabled = true;
-  try { toast((await api("/api/instance", {action: act, id, region})).message); }
+  try { toast((await api("/api/instance", {action: act, id, region, account})).message); }
   catch (e) { toast(e.message); }
   setTimeout(poll, 1500);
 }
@@ -396,7 +444,7 @@ function dur(s) { s = Math.max(0, Math.round(s)); const h = Math.floor(s / 3600)
 
 async function poll() {
   let st;
-  try { st = await api("/api/status"); } catch (e) { $("instErr").textContent = "Server not answering: " + e.message; return; }
+  try { st = await api("/api/status?account=" + encodeURIComponent(acct())); } catch (e) { $("instErr").textContent = "Server not answering: " + e.message; return; }
   // The snipe.
   const s = st.snipe;
   busy = !!(s && s.state === "sniping");
@@ -404,11 +452,12 @@ async function poll() {
   if (s) {
     $("runState").className = "badge " + (STATE_CLASS[s.state] || "");
     $("runState").textContent = s.dry_run ? "dry run · " + s.state : s.state;
-    $("runWhat").textContent = `${s.market} · ${s.types.join(" → ")} · ${s.region} · since ${new Date(s.started * 1000).toLocaleTimeString()}`;
+    $("runWhat").textContent = `${s.account} · ${s.market} · ${s.types.join(" → ")} · ${s.region} · since ${new Date(s.started * 1000).toLocaleTimeString()}`;
     const log = $("runLog"), atEnd = log.scrollTop + log.clientHeight >= log.scrollHeight - 4;
     log.textContent = s.log.join("\n");
     if (atEnd) log.scrollTop = log.scrollHeight;
   }
+  $("otherSnipes").textContent = (st.other_snipes || []).map(o => `Also sniping in account ${o.account} (${o.region}): pick it above to see or stop it.`).join("\n");
   syncButtons();
   drawMoney(st.money, st.instances);
   drawDownloads(st);
@@ -416,8 +465,8 @@ async function poll() {
   // Instances.
   $("instErr").textContent = st.error || "";
   $("banner").textContent = st.instances.flatMap(i =>
-    i.interrupting ? [`AWS is taking back ${i.name || i.id} (${i.region}): it stops in about 2 minutes. Jobs running then are lost; the disk stays.`]
-    : i.stopped_by_aws ? [`AWS stopped ${i.name || i.id} (${i.region}). It restarts by itself when capacity returns, or Delete it and snipe again.`] : []).join("\n");
+    i.interrupting ? [`AWS is taking back ${i.name || i.id} (${i.account}, ${i.region}): it stops in about 2 minutes. Jobs running then are lost, and the models on its local SSD are wiped.`]
+    : i.stopped_by_aws ? [`AWS stopped ${i.name || i.id} (${i.account}, ${i.region}). It restarts by itself when capacity returns, or Delete it and snipe again.`] : []).join("\n");
   $("noInsts").hidden = st.instances.length > 0;
   $("insts").innerHTML = st.instances.map(i => {
     const up = i.state === "running" ? st.now - i.launched : 0;
@@ -428,12 +477,12 @@ async function poll() {
     if (i.url) app = appLink(i);
     else if (i.state === "running") app = up < 3600 ? `<span class="muted">starting…</span>`
       : `<span class="muted">no link: open port 7860 in its security group, or SSH and run <code>sudo docker logs ember</code></span>`;
-    const ssh = i.host ? `ssh -i "${CFG.ssh_key || i.key + ".pem"}" ubuntu@${i.host}` : "";
+    const ssh = i.host ? `ssh -i "${acctOf(i.account).ssh_key || i.key + ".pem"}" ubuntu@${i.host}` : "";
     const can = {start: i.state === "stopped" && !i.stopped_by_aws, stop: i.state === "running" || i.state === "pending",
                  delete: i.state !== "shutting-down"};
     return `<tr>
       <td><code>${esc(i.id)}</code><div class="muted">${esc(i.name)}</div></td>
-      <td>${esc(CFG.regions[i.region] || i.region)}<div class="muted">${esc(i.zone)}</div></td>
+      <td>${CFG.accounts.length > 1 ? `<span class="badge">${esc(i.account)}</span> ` : ""}${esc(CFG.regions[i.region] || i.region)}<div class="muted">${esc(i.zone)}</div></td>
       <td>${esc(i.type)}<div class="muted">${i.market}</div></td>
       <td>${state}${i.ip ? `<div class="muted mono">${esc(i.ip)}</div>` : ""}</td>
       <td class="num">${costCell(i)}</td>
@@ -442,9 +491,9 @@ async function poll() {
       <td>${app}</td>
       <td><div class="acts">
         ${ssh ? `<button class="ghost small" data-copy="${esc(ssh)}">Copy SSH</button>` : ""}
-        ${can.start ? `<button class="small" data-act="start" data-id="${i.id}" data-region="${i.region}">Start</button>` : ""}
-        ${can.stop ? `<button class="ghost small" data-act="stop" data-id="${i.id}" data-region="${i.region}">Stop</button>` : ""}
-        ${can.delete ? `<button class="danger small" data-act="delete" data-id="${i.id}" data-region="${i.region}">Delete</button>` : ""}
+        ${can.start ? `<button class="small" data-act="start" data-id="${i.id}" data-region="${i.region}" data-account="${esc(i.account)}">Start</button>` : ""}
+        ${can.stop ? `<button class="ghost small" data-act="stop" data-id="${i.id}" data-region="${i.region}" data-account="${esc(i.account)}">Stop</button>` : ""}
+        ${can.delete ? `<button class="danger small" data-act="delete" data-id="${i.id}" data-region="${i.region}" data-account="${esc(i.account)}">Delete</button>` : ""}
       </div></td></tr>`;
   }).join("");
 }
@@ -467,7 +516,7 @@ function drawApps(st) {
   if (sig !== appsShown) {
     appsShown = sig;
     $("apps").innerHTML = rows.map(i => `<div class="appbox" data-app="${esc(i.id)}"><header>
-        <b>${esc(i.name || i.id)}</b> <code>${esc(i.id)}</code> <span data-applink></span><span class="grow"></span>
+        <b>${esc(i.name || i.id)}</b> <code>${esc(i.id)}</code>${CFG.accounts.length > 1 ? ` <span class="badge">${esc(i.account)}</span>` : ""} <span data-applink></span><span class="grow"></span>
         <button class="ghost small" data-op="restart" data-id="${esc(i.id)}" title="docker restart: the app reloads its licence, so features added to the key show up">Restart app (feature update)</button>
         <button class="ghost small" data-op="apply" data-id="${esc(i.id)}" title="Writes /etc/ember.env from aws_sniper/.env and recreates the container">Apply .env &amp; recreate</button>
       </header>
@@ -568,7 +617,7 @@ function snipeRate() {
 
 let creditShown = null;
 function drawMoney(m) {
-  if (!m) return;
+  if (!m || m.account !== acct()) return;      // an answer for the account picked before
   if (creditShown !== m.credit_total && document.activeElement !== $("credit")) {
     $("credit").value = m.credit_total; creditShown = m.credit_total;
   }
@@ -592,6 +641,9 @@ function drawMoney(m) {
       (ago > 24 ? ` <span class="note">over a day old: sync again</span>` : "") +
       `<div class="muted">AWS updates its estimate a few times a day, so very recent use may not be in it yet.</div>`;
     $("creditLabel").textContent = "Credit total ($), used only before a sync";
+  } else {
+    $("mAws").textContent = "Not synced yet: using the credit total below. Sync reads your real balance, including anything used outside this page.";
+    $("creditLabel").textContent = "Credit total ($)";
   }
   if (m.running) {
     $("mBurn").textContent = money(m.burn_hourly, 3) + "/hr";
@@ -620,12 +672,12 @@ function drawMoney(m) {
 
 $("syncCredit").onclick = async () => {
   $("syncCredit").disabled = true;
-  try { const a = await api("/api/credits/sync", {}); toast(`AWS balance: ${money(a.estimated)} across ${a.credits.length} credits`); poll(); }
+  try { const a = await api("/api/credits/sync", {account: acct()}); toast(`${acct()}: AWS balance ${money(a.estimated)} across ${a.credits.length} credits`); poll(); }
   catch (e) { toast("Sync failed: " + e.message); }
   $("syncCredit").disabled = false;
 };
 $("saveCredit").onclick = async () => {
-  try { const s = await api("/api/settings", {credit_total: +$("credit").value}); creditShown = null; toast("Credit total saved: " + money(s.credit_total)); poll(); }
+  try { const s = await api("/api/settings", {account: acct(), credit_total: +$("credit").value}); creditShown = null; toast("Credit total saved: " + money(s.credit_total)); poll(); }
   catch (e) { toast(e.message); }
 };
 $("credit").onkeydown = e => { if (e.key === "Enter") $("saveCredit").click(); };
@@ -644,7 +696,7 @@ function drawDownloads(st) {
     dlShown = sig;
     $("dls").innerHTML = ids.map(id => {
       const inst = st.instances.find(i => i.id === id), j = jobs[id];
-      const name = inst ? `${esc(inst.name || id)} <span class="muted">${esc(inst.region)} · ${esc(inst.type)}</span>` : esc(j.pod_name);
+      const name = inst ? `${esc(inst.name || id)} <span class="muted">${esc(inst.account)} · ${esc(inst.region)} · ${esc(inst.type)}</span>` : esc(j.pod_name);
       const active = j && !["stopped", "error"].includes(j.status);
       const pick = inst && inst.url ? `<div class="pick">
         <input data-dlfolder value="${esc(j ? j.folder : dlFolder(id))}" placeholder="C:\\Users\\you\\Downloads\\aws">
@@ -705,11 +757,11 @@ async function drawHistory() {
   const t = s => new Date(s * 1000).toLocaleString([], {month: "short", day: "numeric", hour: "2-digit", minute: "2-digit"});
   $("hist").innerHTML = runs.length ? runs.map(r => `<tr>
     <td><code>${esc(r.id)}</code><div class="muted">${esc(r.name || "")}</div></td>
-    <td>${esc(CFG.regions[r.region] || r.region)}</td><td>${esc(r.type)}<div class="muted">${esc(r.market)}</div></td>
+    <td>${esc(r.account)}</td><td>${esc(CFG.regions[r.region] || r.region)}</td><td>${esc(r.type)}<div class="muted">${esc(r.market)}</div></td>
     <td><span class="badge ${r.state === "running" ? "good" : ""}">${r.state}</span></td>
     <td class="num">${t(r.start)}</td><td class="num">${r.end ? t(r.end) : "now"}</td>
     <td class="num">${r.hours.toFixed(2)}</td><td class="num">${money(r.rate, 3)}</td><td class="num">${money(r.cost)}</td></tr>`).join("")
-    : `<tr><td colspan="9" class="muted">No runs recorded yet.</td></tr>`;
+    : `<tr><td colspan="10" class="muted">No runs recorded yet.</td></tr>`;
 }
 
 init().catch(e => { $("snipeErr").textContent = e.message; });

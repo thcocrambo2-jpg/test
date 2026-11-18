@@ -20,8 +20,8 @@ g7e.2xlarge) and an IAM access key.
    `start.bat` again. The page opens at http://127.0.0.1:7896.
 3. Pick the region and Snipe. The first snipe in a region sets it up:
    creates the key pair `ember-key` (its `.pem` saved in `keys/`, its path
-   written to `.env`) and `ember-sg` with ports 22 and 7860 open. Disk
-   defaults to 250 GB.
+   written to `.env`) and `ember-sg` with ports 22 and 7860 open. Models
+   go on the instance's local SSD; the root disk is 75 GB.
 
 ## Set up
 
@@ -102,6 +102,48 @@ from the instance's tunnel link and the link's `#k=` key. A restart's new
 link is picked up by itself, and downloads resume when the server
 restarts (`downloads.json`).
 
+## Accounts
+
+The plain `AWS_ACCESS_KEY_ID` / `AWS_SECRET_ACCESS_KEY` lines are the
+account **main**. Add more with **+ Add account** on the page (it checks the
+keys with AWS, then writes them to `.env`) or by hand:
+
+```
+AWS_ACCESS_KEY_ID__friend=AKIA...
+AWS_SECRET_ACCESS_KEY__friend=...
+```
+
+Any other `.env` line ending in `__friend` (`SSH_KEY_FILE__friend`,
+`EMBER_LICENSE_KEY__friend`, `HF_TOKEN__friend`...) overrides that line for
+that account; without one it uses the plain line, so one `.pem` and one
+licence can serve every account (the first setup in an account's region
+imports the `.pem`'s public key there). An account never falls back to
+main's AWS keys.
+
+The account picker at the top chooses which account the Credit and Snipe
+cards work on: its credit, Sync with AWS, region setup, quotas, zones and
+prices (zone names differ between accounts). The Instances, App and Auto
+download cards show every account's instances, each tagged with its
+account. One snipe and one running instance at a time per account, so two
+accounts can each run one. `settings.json` keeps each account's credit and
+setup under `accounts`, `history.json` tags each run with its account.
+
+## Disks
+
+g7e instances come with a local NVMe SSD (1.7 TB usable on g7e.2xlarge,
+included in the price) that the DLAMI mounts at `/opt/dlami/nvme` on every
+boot. `userdata.sh` bind-mounts it over `/workspace` (models),
+`/var/lib/docker` and `/var/lib/containerd` (the app image) before Docker
+starts. Measured on g7e.2xlarge: 6.3 GB/s read on the SSD against 279 MB/s on
+the network root disk, which the instance caps at 250 MB/s (625 burst)
+whatever volume type you pay for.
+
+The SSD is wiped when the instance stops, including a spot interruption, so
+a start pulls the image and downloads the models again (~20 min); the
+`ember-start` service starts the container on every boot when it's missing.
+The root disk (EBS) holds only the OS: 75 GB, the AMI's minimum, at the free
+125 MB/s.
+
 ## Run from the command line
 
 ```
@@ -114,8 +156,9 @@ python aws_sniper/sniper.py --key-name ember-key --sg sg-0123456789abcdef0 --spo
 |---|---|---|
 | `--type` | `g7e.2xlarge` | Instance type, or several in order of preference: `g7e.2xlarge,g6e.2xlarge` tries every g7e zone first each round, then g6e |
 | `--region` | `us-east-1` | Region. The quota is per region. |
+| `--account` | main | Account from `.env` (`AWS_ACCESS_KEY_ID__<name>`); its overrides apply too |
 | `--spot` | off | Persistent spot that stops (not terminates) when interrupted |
-| `--disk` / `--throughput` | 250 GB / 250 MB/s | Root gp3 volume. The full model set (Krea + MiniMax) needs ~205 GB with the OS and image; 200 GB ran out. |
+| `--disk` / `--throughput` | 75 GB / 125 MB/s | Root gp3 volume, OS only (~41 GB used); raised to the AMI's minimum if it needs more. See *Disks* below. |
 | `--ami` | latest DLAMI Base OSS Nvidia (Ubuntu 24.04) | AMI id |
 | `--iam-profile` | none | Instance profile, e.g. one with SSM access |
 | `--interval` | 20 s | Pause between rounds |

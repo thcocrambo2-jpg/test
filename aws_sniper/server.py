@@ -3,7 +3,10 @@
     python aws_sniper/server.py [--port 7896] [--profile ember] [--no-sound]
 
 AWS credentials: AWS_ACCESS_KEY_ID / AWS_SECRET_ACCESS_KEY in aws_sniper/.env,
-or --profile for one set up with `aws configure`.
+or --profile for one set up with `aws configure`. More accounts:
+AWS_ACCESS_KEY_ID__<name> / AWS_SECRET_ACCESS_KEY__<name> (or the page's Add
+account); the page picks one for credit, setup and sniping, and lists every
+account's instances.
 
 A page on http://127.0.0.1:7896 for sniper.py: pick region, market,
 instance types and zones (with live spot price and placement score),
@@ -92,14 +95,48 @@ _sessions = {}
 _cache = {}
 
 
-def _client(region: str, service: str = "ec2"):
+def _client(region: str, service: str = "ec2", account: str = core.MAIN_ACCOUNT):
     with _lock:
-        if region not in _sessions:
-            _sessions[region] = core.make_session(region, PROFILE)
-        key = (region, service)
+        if (account, region) not in _sessions:
+            _sessions[(account, region)] = core.make_session(region, PROFILE, account)
+        key = (account, region, service)
         if key not in _sessions:
-            _sessions[key] = _sessions[region].client(service)
+            _sessions[key] = _sessions[(account, region)].client(service)
         return _sessions[key]
+
+
+def _forget_account(account: str) -> None:
+    """Its keys changed: build its sessions again."""
+    with _lock:
+        for k in [k for k in _sessions if k[0] == account]:
+            del _sessions[k]
+        for k in [k for k in _cache if isinstance(k, tuple) and account in k]:
+            del _cache[k]
+
+
+def _accounts() -> list:
+    return core.accounts()
+
+
+def _account(raw) -> str:
+    name = str(raw or core.MAIN_ACCOUNT)
+    if name not in _accounts():
+        raise ValueError("Unknown account %s." % name)
+    return name
+
+
+def _account_id(account: str):
+    """(12-digit id, error): who the keys belong to, cached for a day."""
+    def fetch():
+        try:
+            return _client("us-east-1", "sts", account).get_caller_identity()["Account"], ""
+        except (ClientError, BotoCoreError, NoCredentialsError, ValueError) as exc:
+            return None, _err(exc)
+    hit = _cached(("sts", account), 86400, fetch)
+    if hit[0] is None:
+        with _lock:
+            _cache.pop(("sts", account), None)       # try again next time
+    return hit
 
 
 def _cached(key, seconds: float, fn):
@@ -118,7 +155,7 @@ def _err(exc: Exception) -> str:
     if isinstance(exc, ClientError):
         return "%s: %s" % (core.code_of(exc), core.message_of(exc))
     if isinstance(exc, NoCredentialsError):
-        return "No AWS credentials: run `aws configure` or start with --profile."
+        return "No AWS credentials: put AWS_ACCESS_KEY_ID / AWS_SECRET_ACCESS_KEY in %s." % core.ENV_FILE
     return str(exc)
 
 
@@ -129,20 +166,21 @@ def _alarm() -> None:
 # ── region facts: keys, security groups, quotas, zones ──────────────
 
 
-def _quota(region: str, market: str):
+def _quota(region: str, market: str, account: str):
     try:
-        q = _client(region, "service-quotas").get_service_quota(
+        q = _client(region, "service-quotas", account).get_service_quota(
             ServiceCode="ec2", QuotaCode=QUOTAS[market])
         return int(q["Quota"]["Value"])
     except (ClientError, BotoCoreError):
         return None
 
 
-def _scores(region: str, itype: str) -> dict:
+def _scores(region: str, itype: str, account: str) -> dict:
     """Zone name -> spot placement score (1-10). AWS limits how often these
-    can be asked, so they're cached for 30 minutes."""
+    can be asked, so they're cached for 30 minutes. Zone names differ per
+    account (1a in one is not 1a in another), so this is per account."""
     def fetch():
-        ec2 = _client(region)
+        ec2 = _client(region, account=account)
         names = {z["ZoneId"]: z["ZoneName"]
                  for z in ec2.describe_availability_zones()["AvailabilityZones"]}
         try:
@@ -153,25 +191,25 @@ def _scores(region: str, itype: str) -> dict:
             return {}
         return {names.get(s["AvailabilityZoneId"], s["AvailabilityZoneId"]): s["Score"]
                 for s in resp.get("SpotPlacementScores", [])}
-    return _cached(("scores", region, itype), 1800, fetch)
+    return _cached(("scores", region, itype, account), 1800, fetch)
 
 
-def _spot_prices(region: str) -> dict:
-    """(type, zone) -> current Linux spot price."""
+def _spot_prices(region: str, account: str) -> dict:
+    """(type, zone) -> current Linux spot price, in the account's zone names."""
     def fetch():
-        resp = _client(region).describe_spot_price_history(
+        resp = _client(region, account=account).describe_spot_price_history(
             InstanceTypes=list(TYPES), ProductDescriptions=["Linux/UNIX"],
             StartTime=datetime.now(timezone.utc))
         out = {}
         for p in resp["SpotPriceHistory"]:
             out.setdefault((p["InstanceType"], p["AvailabilityZone"]), float(p["SpotPrice"]))
         return out
-    return _cached(("prices", region), 300, fetch)
+    return _cached(("prices", region, account), 300, fetch)
 
 
 def _price_list(filters: dict) -> list:
     """(attributes, unit, USD) for every on-demand price matching filters."""
-    pricing = _client("us-east-1", "pricing")
+    pricing = _client("us-east-1", "pricing", _accounts()[0])
     out = []
     pages = pricing.get_paginator("get_products").paginate(
         ServiceCode="AmazonEC2",
@@ -233,8 +271,8 @@ def _admits(group: dict, port: int) -> bool:
                for p in group.get("IpPermissions", []))
 
 
-def _region_view(region: str) -> dict:
-    ec2 = _client(region)
+def _region_view(region: str, account: str) -> dict:
+    ec2 = _client(region, account=account)
     keys = sorted(k["KeyName"] for k in ec2.describe_key_pairs()["KeyPairs"])
     sgs = []
     for g in ec2.describe_security_groups()["SecurityGroups"]:
@@ -243,22 +281,22 @@ def _region_view(region: str) -> dict:
     offers = ec2.describe_instance_type_offerings(
         LocationType="availability-zone",
         Filters=[{"Name": "instance-type", "Values": list(TYPES)}])["InstanceTypeOfferings"]
-    prices = _spot_prices(region)
+    prices = _spot_prices(region, account)
     zones = {}
     for o in sorted(offers, key=lambda o: o["Location"]):
         t, z = o["InstanceType"], o["Location"]
         zones.setdefault(t, []).append({"zone": z, "price": prices.get((t, z))})
     for t, rows in zones.items():
-        scores = _scores(region, t)
+        scores = _scores(region, t, account)
         for r in rows:
             r["score"] = scores.get(r["zone"])
-    quotas = _cached(("quotas", region), 600,
-                     lambda: {m: _quota(region, m) for m in QUOTAS})
+    quotas = _cached(("quotas", region, account), 600,
+                     lambda: {m: _quota(region, m, account) for m in QUOTAS})
     on_demand = {t: _on_demand_price(region, t) for t in zones}
-    setup = _settings()["regions"].get(region)
+    setup = _settings(account)["regions"].get(region)
     if setup and not (setup.get("key") in keys and any(g["id"] == setup.get("sg") for g in sgs)):
         setup = None                 # deleted since: set up again
-    return {"region": region, "keys": keys, "sgs": sgs, "quotas": quotas, "setup": setup,
+    return {"region": region, "account": account, "keys": keys, "sgs": sgs, "quotas": quotas, "setup": setup,
             "zones": zones, "on_demand": on_demand, "disk_rates": _disk_rates(region),
             "free_iops": FREE_IOPS, "free_mibps": FREE_MIBPS,
             "hours_per_month": HOURS_PER_MONTH, "ipv4_hourly": IPV4_HOURLY}
@@ -268,9 +306,10 @@ def _region_view(region: str) -> dict:
 
 
 class History:
-    """history.json: {instance id: {region, type, market, name, segments:
-    [{state: running|stopped, start, end|null, rate}]}}. rate is $/hr: the
-    whole running cost while running, the disks alone while stopped."""
+    """history.json: {instance id: {account, region, type, market, name,
+    segments: [{state: running|stopped, start, end|null, rate}]}}. rate is
+    $/hr: the whole running cost while running, the disks alone while
+    stopped. Runs recorded before accounts existed are main's."""
 
     def __init__(self):
         self.lock = threading.Lock()
@@ -298,8 +337,8 @@ class History:
             if want is None and row["id"] not in self.data:
                 return                            # terminated before we ever saw it
             h = self.data.setdefault(row["id"], {"segments": []})
-            h.update(region=row["region"], type=row["type"], market=row["market"],
-                     name=row["name"])
+            h.update(account=row["account"], region=row["region"], type=row["type"],
+                     market=row["market"], name=row["name"])
             segs = h["segments"]
             cur = segs[-1] if segs and segs[-1]["end"] is None else None
             if want is None:                      # terminated
@@ -328,41 +367,47 @@ class History:
 
     def lost(self, seen: set, regions_ok: set, now: float) -> None:
         """Open stretches of instances no longer listed at all (terminated
-        over an hour ago) end now."""
+        over an hour ago) end now. regions_ok: (account, region) pairs read."""
         with self.lock:
             for iid, h in self.data.items():
                 segs = h["segments"]
-                if (iid not in seen and h.get("region") in regions_ok and segs
+                where = (h.get("account") or core.MAIN_ACCOUNT, h.get("region"))
+                if (iid not in seen and where in regions_ok and segs
                         and segs[-1]["end"] is None):
                     segs[-1]["end"] = now
                     h.setdefault("gone", now)
 
-    def spent_since(self, since: float, now: float) -> float:
-        """What the stretches cost from `since` to now (the part of each
-        stretch after `since`)."""
+    def spent_since(self, since: float, now: float, account: str) -> float:
+        """What the account's stretches cost from `since` to now (the part
+        of each stretch after `since`)."""
         with self.lock:
             cost = 0.0
             for h in self.data.values():
+                if (h.get("account") or core.MAIN_ACCOUNT) != account:
+                    continue
                 for s in h["segments"]:
                     start, end = max(s["start"], since), (s["end"] or now)
                     if end > start and s["rate"] is not None:
                         cost += (end - start) / 3600 * s["rate"]
             return cost
 
-    def spent(self, now: float) -> dict:
+    def spent(self, now: float, account: str) -> dict:
+        """The account's total, and per instance for every account."""
         with self.lock:
             per, total, unknown, since = {}, 0.0, False, None
             for iid, h in self.data.items():
+                mine = (h.get("account") or core.MAIN_ACCOUNT) == account
                 cost = 0.0
                 for s in h["segments"]:
                     hours = ((s["end"] or now) - s["start"]) / 3600
                     if s["rate"] is None:
-                        unknown = unknown or hours > 0
+                        unknown = unknown or (mine and hours > 0)
                     else:
                         cost += hours * s["rate"]
-                    since = s["start"] if since is None else min(since, s["start"])
+                    if mine:
+                        since = s["start"] if since is None else min(since, s["start"])
                 per[iid] = cost
-                total += cost
+                total += cost if mine else 0
             return {"total": total, "per": per, "unknown_rate": unknown, "since": since}
 
     def runs(self, now: float) -> list:
@@ -372,6 +417,7 @@ class History:
                 for s in h["segments"]:
                     hours = ((s["end"] or now) - s["start"]) / 3600
                     out.append({"id": iid, "name": h.get("name"), "region": h.get("region"),
+                                "account": h.get("account") or core.MAIN_ACCOUNT,
                                 "type": h.get("type"), "market": h.get("market"),
                                 "hours": hours,
                                 "cost": None if s["rate"] is None else hours * s["rate"], **s})
@@ -408,6 +454,7 @@ class Instances:
     def __init__(self):
         self.rows = []
         self.error = ""
+        self.errors = []       # per account, e.g. one whose keys don't work
         self.links = {}        # instance id -> {"url", "checked", "ready", "probed"}
         self.announced = set()
         self.first = True
@@ -427,10 +474,13 @@ class Instances:
 
     def poll(self) -> None:
         with self.poll_lock:
-            with ThreadPoolExecutor(len(REGIONS)) as pool:
-                found = dict(zip(REGIONS, pool.map(self.region_rows, REGIONS)))
+            where = [(acc, reg) for acc in _accounts() for reg in REGIONS]
+            with ThreadPoolExecutor(min(32, len(where))) as pool:
+                found = dict(zip(where, pool.map(lambda w: self.region_rows(*w), where)))
             now = time.time()
-            ok = {r for r, rows in found.items() if rows is not None}
+            errors = sorted({rows for rows in found.values() if isinstance(rows, str)})
+            found = {w: (None if isinstance(rows, str) else rows) for w, rows in found.items()}
+            ok = {w for w, rows in found.items() if rows is not None}
             rows = [r for rs in found.values() if rs for r in rs]
             for r in rows:
                 HISTORY.observe(r, now)
@@ -441,8 +491,9 @@ class Instances:
                 self.link(r)
                 self.interruption(r)
             _follow_links(rows)
-            rows.sort(key=lambda r: (r["state"] == "stopped", r["region"], r["id"]))
+            rows.sort(key=lambda r: (r["state"] == "stopped", r["account"], r["region"], r["id"]))
             self.rows = rows
+            self.errors = errors
 
     def interruption(self, row: dict) -> None:
         """The alarm when AWS takes a spot instance back: once at the ~2
@@ -461,17 +512,26 @@ class Instances:
                 if not self.first:
                     _alarm()
 
-    def region_rows(self, region: str):
-        """This region's instances, or None when the region can't be read."""
-        ec2 = _client(region)
+    def region_rows(self, account: str, region: str):
+        """This account's instances in this region, None when the region
+        can't be read, or a message when the account's keys don't work."""
         try:
+            ec2 = _client(region, account=account)
             resp = ec2.describe_instances(Filters=[
                 {"Name": "tag:" + core.TAG_KEY, "Values": [core.TAG_VALUE]},
                 {"Name": "instance-state-name",
                  "Values": ["pending", "running", "stopping", "stopped", "shutting-down",
                             "terminated"]}])
+        except ValueError as exc:                    # no keys for this account
+            return str(exc)
+        except NoCredentialsError as exc:
+            return "%s: %s" % (account, _err(exc))
         except ClientError as exc:
-            if core.code_of(exc) in QUIET_REGION_ERRORS:
+            bad_keys = core.code_of(exc) in ("AuthFailure", "InvalidClientTokenId",
+                                             "SignatureDoesNotMatch")
+            if bad_keys and region == "us-east-1":     # always enabled: say it once
+                return "Account %s: %s" % (account, _err(exc))
+            if bad_keys or core.code_of(exc) in QUIET_REGION_ERRORS:
                 return None
             raise
         insts = [i for r in resp["Reservations"] for i in r["Instances"]]
@@ -491,7 +551,7 @@ class Instances:
                     {"Name": "attachment.instance-id", "Values": live}])["Volumes"]:
                 for att in v.get("Attachments", []):
                     disks.setdefault(att["InstanceId"], []).append(v)
-        prices = _spot_prices(region) if sirs else {}
+        prices = _spot_prices(region, account) if sirs else {}
         rates = _disk_rates(region)
         group_ids = sorted({g["GroupId"] for i in insts for g in i.get("SecurityGroups", [])})
         open_groups = set()
@@ -514,7 +574,7 @@ class Instances:
             compute = prices.get((itype, zone)) if sir else _on_demand_price(region, itype)
             disk_hr = None if disk_month is None else disk_month / HOURS_PER_MONTH
             rows.append({
-                "id": iid, "name": name, "region": region, "zone": zone,
+                "id": iid, "name": name, "account": account, "region": region, "zone": zone,
                 "type": itype, "state": i["State"]["Name"],
                 "market": "spot" if sir else "on-demand", "spot_request": sir,
                 "spot_state": st.get("state"), "spot_code": code,
@@ -553,7 +613,8 @@ class Instances:
         elif now - info["checked"] >= (60 if info["ready"] else 20):
             info["checked"] = now
             try:
-                out = _client(row["region"]).get_console_output(InstanceId=iid, Latest=True)
+                out = _client(row["region"], account=row["account"]).get_console_output(
+                    InstanceId=iid, Latest=True)
                 text = base64.b64decode(out.get("Output") or "").decode("utf-8", "replace")
                 urls = URL_RE.findall(text)
                 if urls and urls[-1] != info["url"]:
@@ -569,12 +630,13 @@ class Instances:
                 _alarm()
         row.update(url=info["url"], ready=info["ready"])
 
-    def busy(self) -> list:
-        """Instances that block a new snipe: running anywhere, or stopped by
-        AWS (a persistent spot request brings those back by itself)."""
-        return [r for r in self.rows
-                if r["state"] in ("pending", "running", "stopping", "shutting-down")
-                or r["stopped_by_aws"]]
+    def busy(self, account: str) -> list:
+        """The account's instances that block a new snipe there: running in
+        any region, or stopped by AWS (a persistent spot request brings
+        those back by itself)."""
+        return [r for r in self.rows if r["account"] == account and
+                (r["state"] in ("pending", "running", "stopping", "shutting-down")
+                 or r["stopped_by_aws"])]
 
 
 def _reachable(url: str) -> bool:
@@ -614,9 +676,9 @@ class Snipe:
             type=",".join(r["types"]), zones=r["zones"], spot=r["market"] == "spot",
             ami="", disk=r["disk"], throughput=r["throughput"], iam_profile="",
             name="ember-gpu", interval=20, minutes=0, dry_run=r["dry_run"],
-            no_sound=not SOUND)
+            no_sound=not SOUND, account=r["account"])
         try:
-            sn = core.Sniper(args, core.make_session(r["region"], PROFILE),
+            sn = core.Sniper(args, core.make_session(r["region"], PROFILE, r["account"]),
                              log=self.say, stop=self.stop)
             rc = sn.run()
             self.instance_id = sn.instance_id
@@ -631,16 +693,17 @@ class Snipe:
 
     def view(self) -> dict:
         return {"state": self.state, "log": list(self.log), "region": self.req["region"],
+                "account": self.req["account"],
                 "market": self.req["market"], "types": self.req["types"],
                 "started": self.started, "instance_id": self.instance_id,
                 "dry_run": self.req["dry_run"]}
 
 
-_snipe = None
+_snipes = {}                   # account -> its latest Snipe (one at a time per account)
 
 
 def _start_snipe(body: dict) -> None:
-    global _snipe
+    account = _account(body.get("account"))
     region = str(body.get("region") or "")
     if region not in REGIONS:
         raise ValueError("Unknown region.")
@@ -653,27 +716,28 @@ def _start_snipe(body: dict) -> None:
     key, sg = str(body.get("key") or ""), str(body.get("sg") or "")
     if not key or not re.match(r"^sg-[0-9a-f]+$", sg):
         raise ValueError("Pick a key pair and a security group.")
-    disk, tput = int(body.get("disk") or 250), int(body.get("throughput") or 250)
-    if not 100 <= disk <= 2000 or not 125 <= tput <= 1000:
-        raise ValueError("Disk 100-2000 GB, throughput 125-1000 MB/s.")
+    disk, tput = int(body.get("disk") or 75), int(body.get("throughput") or 125)
+    if not 75 <= disk <= 2000 or not 125 <= tput <= 1000:
+        raise ValueError("Disk 75-2000 GB, throughput 125-1000 MB/s.")
     dry = bool(body.get("dry_run"))
     with _lock:
-        if _snipe and _snipe.state == "sniping":
-            raise ValueError("A snipe is already running.")
+        old = _snipes.get(account)
+        if old and old.state == "sniping":
+            raise ValueError("A snipe is already running in account %s." % account)
     if not dry:
         INSTANCES.poll()                   # fresh, not up to 10 s old
-        busy = INSTANCES.busy()
+        busy = INSTANCES.busy(account)
         if busy:
             b = busy[0]
             why = "was stopped by AWS and will come back by itself" if b["stopped_by_aws"] \
                 else "is " + b["state"]
-            raise ValueError("%s (%s, %s) %s. Stop or delete it first: one instance at a time."
-                             % (b["id"], b["type"], b["region"], why))
-    run = Snipe({"region": region, "market": market, "types": chosen,
+            raise ValueError("%s (%s, %s) %s. Stop or delete it first: one instance at a time "
+                             "per account." % (b["id"], b["type"], b["region"], why))
+    run = Snipe({"account": account, "region": region, "market": market, "types": chosen,
                  "zones": [str(z) for z in body.get("zones") or []], "key": key,
                  "sg": sg, "disk": disk, "throughput": tput, "dry_run": dry})
     with _lock:
-        _snipe = run
+        _snipes[account] = run
     threading.Thread(target=run.run, daemon=True).start()
 
 
@@ -681,7 +745,7 @@ def _action(body: dict) -> str:
     region, iid, act = body.get("region"), str(body.get("id") or ""), body.get("action")
     if region not in REGIONS or not re.match(r"^i-[0-9a-f]+$", iid):
         raise ValueError("Bad instance.")
-    ec2 = _client(region)
+    ec2 = _client(region, account=_account(body.get("account")))
     inst = ec2.describe_instances(InstanceIds=[iid])["Reservations"][0]["Instances"][0]
     tags = {t["Key"]: t["Value"] for t in inst.get("Tags", [])}
     if tags.get(core.TAG_KEY) != core.TAG_VALUE:
@@ -691,7 +755,7 @@ def _action(body: dict) -> str:
         msg = "Starting %s." % iid
     elif act == "stop":
         ec2.stop_instances(InstanceIds=[iid])
-        msg = "Stopping %s. The disk stays." % iid
+        msg = "Stopping %s. The root disk stays; the models on the local SSD are wiped." % iid
     elif act == "delete":
         sir = inst.get("SpotInstanceRequestId")
         if sir:     # first, or the persistent request launches a replacement
@@ -704,8 +768,8 @@ def _action(body: dict) -> str:
     return msg
 
 
-def _licence() -> dict:
-    env = core.read_env(core.ENV_FILE)
+def _licence(account: str) -> dict:
+    env = core.account_env(account)
     key = env.get("EMBER_LICENSE_KEY", "")
     ok = all(not core.is_placeholder(env.get(k, "")) for k in core.REQUIRED_ENV)
     return {"file": str(core.ENV_FILE), "ok": ok,
@@ -721,8 +785,8 @@ GIT_SSH = Path(r"C:\Program Files\Git\usr\bin\ssh.exe")
 _ops = {}                              # instance id -> the last restart/apply and its output
 
 
-def _ssh_key():
-    raw = core.read_env(core.ENV_FILE).get("SSH_KEY_FILE", "").strip().strip('"')
+def _ssh_key(account: str = core.MAIN_ACCOUNT):
+    raw = core.account_env(account).get("SSH_KEY_FILE", "").strip().strip('"')
     return Path(raw).expanduser() if raw else None
 
 
@@ -742,7 +806,7 @@ def _ssh(row: dict, command: str, stdin: str = None, timeout: int = 180) -> str:
     """Run command on the instance as ubuntu. Returns its output; raises
     ValueError with the output when it fails."""
     import subprocess
-    key = _ssh_key()
+    key = _ssh_key(row["account"])
     if not key:
         raise ValueError("Set SSH_KEY_FILE in %s to your .pem file." % core.ENV_FILE)
     if not key.is_file():
@@ -790,7 +854,7 @@ def _app_op(iid: str, kind: str) -> None:
                           "name=^ember$ --format 'container: {{.Status}}'"), None
     elif kind == "apply":
         try:
-            stdin = core.ember_env_text(core.read_env(core.ENV_FILE))
+            stdin = core.ember_env_text(core.account_env(row["account"]))
         except SystemExit as exc:
             raise ValueError(str(exc))
         command = ("sudo tee /etc/ember.env >/dev/null && sudo chmod 600 /etc/ember.env && "
@@ -825,13 +889,23 @@ def _app_op(iid: str, kind: str) -> None:
 # ── settings and money ─────────────────────────────────────────────
 
 
-def _settings() -> dict:
-    """settings.json: credit_total, and regions: {region: {sg, key}} that
-    "Set up region" made, which the page picks by default."""
+def _settings_file() -> dict:
+    """settings.json: {"accounts": {name: {credit_total, regions, aws_credit}}}.
+    A file from before accounts (those keys at the top) is main's."""
     try:
         data = json.loads(SETTINGS_FILE.read_text(encoding="utf-8"))
     except (OSError, ValueError):
         data = {}
+    if not isinstance(data.get("accounts"), dict):
+        old = {k: data[k] for k in ("credit_total", "regions", "aws_credit") if k in data}
+        data = {"accounts": {core.MAIN_ACCOUNT: old} if old else {}}
+    return data
+
+
+def _settings(account: str) -> dict:
+    """One account's settings: credit_total, regions: {region: {sg, key}}
+    that "Set up region" made (the page picks them by default), aws_credit."""
+    data = _settings_file()["accounts"].get(account) or {}
     credit = data.get("credit_total")
     regions = data.get("regions") if isinstance(data.get("regions"), dict) else {}
     aws = data.get("aws_credit") if isinstance(data.get("aws_credit"), dict) else None
@@ -839,16 +913,16 @@ def _settings() -> dict:
             "regions": regions, "aws_credit": aws}
 
 
-def _sync_credits() -> dict:
+def _sync_credits(account: str) -> dict:
     """AWS's credit balance (Billing API GetCredits; AWS lists no price for
     it, unlike Cost Explorer). Sums the estimated amount, which includes
     this month's usage so far, of every enabled credit that hasn't
     expired. Saved in settings.json as aws_credit."""
     from datetime import timedelta
     now = datetime.now(timezone.utc)
-    account = _client("us-east-1", "sts").get_caller_identity()["Account"]
-    resp = _client("us-east-1", "billing").get_credits(
-        accountId=account, startDate=now - timedelta(days=364))
+    account_id = _client("us-east-1", "sts", account).get_caller_identity()["Account"]
+    resp = _client("us-east-1", "billing", account).get_credits(
+        accountId=account_id, startDate=now - timedelta(days=364))
     credits = []
     for c in resp.get("credits", []):
         end = c.get("endDate")
@@ -864,25 +938,28 @@ def _sync_credits() -> dict:
             "initial": sum(c["initial"] for c in credits),
             "expires": min((c["expires"] for c in credits if c["expires"]), default=None),
             "credits": credits}
-    s = _settings()
+    s = _settings(account)
     s["aws_credit"] = data
-    _write_settings(s)
+    _write_settings(account, s)
     return data
 
 
-def _write_settings(s: dict) -> None:
+def _write_settings(account: str, s: dict) -> None:
     with _lock:
-        SETTINGS_FILE.write_text(json.dumps(s, indent=1) + "\n", encoding="utf-8")
+        data = _settings_file()
+        data["accounts"][account] = s
+        SETTINGS_FILE.write_text(json.dumps(data, indent=1) + "\n", encoding="utf-8")
 
 
 def _save_settings(body: dict) -> dict:
-    s = _settings()
+    account = _account(body.get("account"))
+    s = _settings(account)
     if "credit_total" in body:
         credit = float(body["credit_total"])
         if not 0 <= credit <= 1_000_000:
             raise ValueError("Credit must be between 0 and 1,000,000.")
         s["credit_total"] = round(credit, 2)
-    _write_settings(s)
+    _write_settings(account, s)
     return s
 
 
@@ -942,16 +1019,18 @@ def _set_env_line(key: str, value: str) -> None:
     path.write_text("\n".join(lines).rstrip("\n") + "\n", encoding="utf-8")
 
 
-def _setup_region(region: str) -> dict:
-    """Make sure the region has the key pair for SSH_KEY_FILE (or a new one,
-    saved to keys/ and written to .env) and ember-sg with 22 and 7860 open.
-    Creates only what's missing, so running it twice changes nothing."""
+def _setup_region(region: str, account: str) -> dict:
+    """Make sure the account's region has the key pair for SSH_KEY_FILE (or
+    a new one, saved to keys/ and written to .env) and ember-sg with 22 and
+    7860 open. Creates only what's missing, so running it twice changes
+    nothing. Another account uses main's SSH_KEY_FILE unless it has its
+    own SSH_KEY_FILE__<name>, so one .pem opens every account's instances."""
     if region not in REGIONS:
         raise ValueError("Unknown region.")
-    ec2 = _client(region)
+    ec2 = _client(region, account=account)
     done = []
     # The key pair.
-    pem = _ssh_key()
+    pem = _ssh_key(account)
     existing = {k["KeyName"] for k in ec2.describe_key_pairs()["KeyPairs"]}
     if pem and pem.is_file():
         name = pem.stem
@@ -1003,25 +1082,62 @@ def _setup_region(region: str) -> dict:
             except ClientError as exc:
                 if core.code_of(exc) != "InvalidPermission.Duplicate":
                     raise
-    s = _settings()
+    s = _settings(account)
     s["regions"][region] = {"sg": group["GroupId"], "key": name}
-    _write_settings(s)
-    return {"region": region, "sg": group["GroupId"], "key": name,
+    _write_settings(account, s)
+    return {"region": region, "account": account, "sg": group["GroupId"], "key": name,
             "ssh_key": str(pem), "done": done or ["already set up: nothing to change"]}
 
 
-def _money(rows: list) -> dict:
+def _add_account(body: dict) -> dict:
+    """Check the keys with AWS (STS: who they belong to), then write them to
+    .env as AWS_ACCESS_KEY_ID__<name> / AWS_SECRET_ACCESS_KEY__<name>."""
+    name = str(body.get("name") or "").strip().lower()
+    key, secret = str(body.get("key_id") or "").strip(), str(body.get("secret") or "").strip()
+    if not core.ACCOUNT_RE.match(name) or name == core.MAIN_ACCOUNT:
+        raise ValueError("Name: lowercase letters, digits and -, up to 31, not 'main'.")
+    if name in _accounts():
+        raise ValueError("There's already an account %s." % name)
+    if not re.match(r"^A[SK]IA[A-Z0-9]{12,}$", key) or len(secret) < 30 or any(c.isspace() for c in secret):
+        raise ValueError("That doesn't look like an access key id (AKIA...) and its secret.")
+    try:
+        ident = boto3.Session(aws_access_key_id=key, aws_secret_access_key=secret,
+                              region_name="us-east-1").client("sts").get_caller_identity()
+    except (ClientError, BotoCoreError) as exc:
+        raise ValueError("AWS refused those keys: %s" % _err(exc))
+    for k, v in (("AWS_ACCESS_KEY_ID", key), ("AWS_SECRET_ACCESS_KEY", secret)):
+        _set_env_line(k + core.ACCOUNT_SEP + name, v)
+    _forget_account(name)
+    INSTANCES.wake.set()
+    return {"name": name, "id": ident["Account"], "arn": ident["Arn"]}
+
+
+def _accounts_view() -> list:
+    names = _accounts()
+    with ThreadPoolExecutor(len(names)) as pool:
+        ids = list(pool.map(_account_id, names))
+    out = []
+    for name, (aid, error) in zip(names, ids):
+        key = _ssh_key(name)
+        out.append({"name": name, "id": aid, "error": error,
+                    "source": core.credentials_source(PROFILE, name),
+                    "ssh_key": str(key) if key else "", "licence": _licence(name)})
+    return out
+
+
+def _money(rows: list, account: str) -> dict:
     """Credit, what's been spent (from history.json), the burn rate now,
     and how long the rest lasts."""
     now = time.time()
-    settings = _settings()
+    settings = _settings(account)
     credit = settings["credit_total"]
-    spent = HISTORY.spent(now)
+    spent = HISTORY.spent(now, account)
     synced = settings.get("aws_credit")
+    rows = [r for r in rows if r["account"] == account]
     if synced:
         # AWS's own balance at the last sync (it already counts whatever
         # was used outside this page), minus what the page saw since.
-        since_sync = HISTORY.spent_since(synced["synced"], now)
+        since_sync = HISTORY.spent_since(synced["synced"], now, account)
         left = synced["estimated"] - since_sync
     else:
         since_sync = None
@@ -1033,7 +1149,7 @@ def _money(rows: list) -> dict:
     burn = (sum(r["rate_running"] or 0 for r in running)
             + sum(r["rate_stopped"] or 0 for r in stopped))
     storage = sum(r["rate_stopped"] or 0 for r in rows if r["state"] != "shutting-down")
-    return {"credit_total": credit, "spent": spent["total"], "left": left,
+    return {"account": account, "credit_total": credit, "spent": spent["total"], "left": left,
             "aws": synced, "spent_since_sync": since_sync,
             "since": spent["since"], "per_instance": spent["per"],
             "unknown_rate": spent["unknown_rate"] or unknown,
@@ -1111,7 +1227,8 @@ def _start_download(body: dict) -> None:
     # Off unless asked for: with a hold, each new file waits HOLD seconds so
     # one deleted in the Gallery meanwhile is never saved.
     hold = downloader.HOLD if body.get("hold") else 0
-    d = downloader.Download(iid, (row["name"] or iid) + " · " + row["region"], str(folder),
+    d = downloader.Download(iid, (row["name"] or iid) + " · " + row["account"] + " · " + row["region"],
+                            str(folder),
                             app_url=origin, access_key=key, account="aws", hold=hold)
     try:
         d.start()
@@ -1201,24 +1318,33 @@ class Handler(BaseHTTPRequestHandler):
             if url.path == "/tokens.css":
                 return self.send(200, TOKENS_CSS.read_bytes(), "text/css; charset=utf-8")
             if url.path == "/api/config":
-                key = _ssh_key()
-                return self.json({"regions": REGIONS, "types": TYPES,
-                                  "ssh_key": str(key) if key else "",
-                                  "profile": core.credentials_source(PROFILE), "licence": _licence()})
+                return self.json({"regions": REGIONS, "types": TYPES, "env_file": str(core.ENV_FILE),
+                                  "accounts": _accounts_view()})
             if url.path == "/api/region":
                 region = query.get("region", [""])[0]
                 if region not in REGIONS:
                     return self.error("Unknown region.")
-                return self.json(_region_view(region))
+                try:
+                    account = _account(query.get("account", [""])[0])
+                    return self.json(_region_view(region, account))
+                except ValueError as exc:
+                    return self.error(str(exc))
             if url.path == "/api/status":
+                try:
+                    account = _account(query.get("account", [""])[0])
+                except ValueError:
+                    account = core.MAIN_ACCOUNT          # gone from .env: show main's
                 with _lock:
-                    run = _snipe
+                    run = _snipes.get(account)
+                    others = [v.view() for a, v in _snipes.items()
+                              if a != account and v.state == "sniping"]
                     downloads = [d.view() for d in _downloads.values()]
                     ops = {k: dict(v) for k, v in _ops.items()}
                 rows = INSTANCES.rows
-                return self.json({"snipe": run.view() if run else None,
-                                  "instances": rows, "error": INSTANCES.error,
-                                  "money": _money(rows), "downloads": downloads,
+                return self.json({"snipe": run.view() if run else None, "other_snipes": others,
+                                  "instances": rows,
+                                  "error": "\n".join(filter(None, [INSTANCES.error] + INSTANCES.errors)),
+                                  "money": _money(rows, account), "downloads": downloads,
                                   "ops": ops, "now": time.time()})
             if url.path == "/api/history":
                 return self.json({"runs": HISTORY.runs(time.time())})
@@ -1245,7 +1371,7 @@ class Handler(BaseHTTPRequestHandler):
                 return self.json({"ok": True})
             if url.path == "/api/snipe/stop":
                 with _lock:
-                    run = _snipe
+                    run = _snipes.get(str(body.get("account") or core.MAIN_ACCOUNT))
                 if run:
                     run.stop.set()
                 return self.json({"ok": True})
@@ -1254,9 +1380,12 @@ class Handler(BaseHTTPRequestHandler):
             if url.path == "/api/settings":
                 return self.json(_save_settings(body))
             if url.path == "/api/credits/sync":
-                return self.json(_sync_credits())
+                return self.json(_sync_credits(_account(body.get("account"))))
             if url.path == "/api/setup":
-                return self.json(_setup_region(str(body.get("region") or "")))
+                return self.json(_setup_region(str(body.get("region") or ""),
+                                               _account(body.get("account"))))
+            if url.path == "/api/accounts":
+                return self.json(_add_account(body))
             if url.path == "/api/app":
                 _app_op(str(body.get("id") or ""), str(body.get("action") or ""))
                 return self.json({"ok": True})
@@ -1302,8 +1431,8 @@ def main() -> None:
     PROFILE, SOUND = a.profile, not a.no_sound
     _resume_downloads()
     threading.Thread(target=INSTANCES.loop, daemon=True).start()
-    print("AWS sniper on http://127.0.0.1:%d  (%s)" % (a.port, core.credentials_source(PROFILE)),
-          flush=True)
+    print("AWS sniper on http://127.0.0.1:%d  (accounts: %s)" % (a.port, ", ".join(
+        "%s = %s" % (n, core.credentials_source(PROFILE, n)) for n in _accounts())), flush=True)
     ThreadingHTTPServer(("127.0.0.1", a.port), Handler).serve_forever()
 
 

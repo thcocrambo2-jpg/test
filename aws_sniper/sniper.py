@@ -20,7 +20,10 @@ sniper=ember) is pending or running, so a second snipe can't double the
 bill. Stop or terminate that one first.
 
 Credentials: AWS_ACCESS_KEY_ID / AWS_SECRET_ACCESS_KEY in aws_sniper/.env,
-or --profile, or the usual AWS places (env vars, ~/.aws).
+or --profile, or the usual AWS places (env vars, ~/.aws). More accounts:
+AWS_ACCESS_KEY_ID__<name> / AWS_SECRET_ACCESS_KEY__<name>, picked with
+--account <name>; any other .env line ending in __<name> (SSH_KEY_FILE,
+the licence, the tokens) overrides that line for that account.
 The keys that go into the instance (licence, node tag, HF/CivitAI tokens)
 come from aws_sniper/.env and are written into the user data from
 userdata.sh; nothing else in the template is changed.
@@ -28,6 +31,7 @@ userdata.sh; nothing else in the template is changed.
 
 import argparse
 import random
+import re
 import sys
 import threading
 import time
@@ -99,11 +103,45 @@ def is_placeholder(value: str) -> bool:
     return not value or any(h in value for h in PLACEHOLDER_HINTS)
 
 
-def aws_keys() -> dict:
+MAIN_ACCOUNT = "main"
+ACCOUNT_SEP = "__"
+ACCOUNT_RE = re.compile(r"^[a-z0-9][a-z0-9-]{0,30}$")
+AWS_KEY_NAMES = ("AWS_ACCESS_KEY_ID", "AWS_SECRET_ACCESS_KEY", "AWS_SESSION_TOKEN")
+
+
+def accounts() -> list:
+    """"main" (the plain AWS_* lines) and every <name> with an
+    AWS_ACCESS_KEY_ID__<name> line in .env, in file order."""
+    names = [MAIN_ACCOUNT]
+    prefix = "AWS_ACCESS_KEY_ID" + ACCOUNT_SEP
+    for key in read_env(ENV_FILE):
+        name = key[len(prefix):] if key.startswith(prefix) else ""
+        if ACCOUNT_RE.match(name) and name not in names:
+            names.append(name)
+    return names
+
+
+def account_env(account: str = None) -> dict:
+    """.env as one account sees it: the plain lines, with any
+    <KEY>__<account> line in place of <KEY>. Another account never borrows
+    main's AWS keys (that would launch in main's account)."""
+    env = read_env(ENV_FILE)
+    out = {k: v for k, v in env.items() if ACCOUNT_SEP not in k}
+    if account and account != MAIN_ACCOUNT:
+        for k in AWS_KEY_NAMES:
+            out.pop(k, None)
+        suffix = ACCOUNT_SEP + account
+        for k, v in env.items():
+            if k.endswith(suffix):
+                out[k[:-len(suffix)]] = v
+    return out
+
+
+def aws_keys(account: str = None) -> dict:
     """AWS_ACCESS_KEY_ID / AWS_SECRET_ACCESS_KEY (and AWS_SESSION_TOKEN, if
     any) from .env, or {} when they aren't filled in. These stay on this PC:
     only ENV_KEYS go into the instance's user data."""
-    env = read_env(ENV_FILE)
+    env = account_env(account)
     key, secret = env.get("AWS_ACCESS_KEY_ID", ""), env.get("AWS_SECRET_ACCESS_KEY", "")
     if is_placeholder(key) or is_placeholder(secret):
         return {}
@@ -113,18 +151,22 @@ def aws_keys() -> dict:
     return out
 
 
-def make_session(region: str, profile=None):
-    """--profile when given, else the keys in .env, else AWS's usual places
-    (environment variables, ~/.aws, aws configure)."""
-    if profile:
+def make_session(region: str, profile=None, account: str = None):
+    """--profile when given, else the account's keys in .env, else (main
+    only) AWS's usual places (environment variables, ~/.aws, aws configure)."""
+    if profile and (not account or account == MAIN_ACCOUNT):
         return boto3.Session(profile_name=profile, region_name=region)
-    return boto3.Session(region_name=region, **aws_keys())
+    keys = aws_keys(account)
+    if not keys and account and account != MAIN_ACCOUNT:
+        raise ValueError("Account %s has no AWS_ACCESS_KEY_ID__%s / AWS_SECRET_ACCESS_KEY__%s in %s."
+                         % (account, account, account, ENV_FILE))
+    return boto3.Session(region_name=region, **keys)
 
 
-def credentials_source(profile=None) -> str:
-    if profile:
+def credentials_source(profile=None, account: str = None) -> str:
+    if profile and (not account or account == MAIN_ACCOUNT):
         return "AWS profile " + profile
-    keys = aws_keys()
+    keys = aws_keys(account)
     if keys:
         return "access key %s...%s from .env" % (keys["aws_access_key_id"][:4],
                                                keys["aws_access_key_id"][-4:])
@@ -203,7 +245,13 @@ class Sniper:
         if not ami:
             ami = self.ssm.get_parameter(Name=DEFAULT_AMI_PARAM)["Parameter"]["Value"]
         image = self.ec2.describe_images(ImageIds=[ami])["Images"][0]
-        return ami, image["RootDeviceName"], image.get("Name", "")
+        root = image["RootDeviceName"]
+        need = max((b.get("Ebs", {}).get("VolumeSize") or 0 for b in image.get("BlockDeviceMappings", [])
+                    if b.get("DeviceName") == root), default=0)
+        if need > self.a.disk:
+            self.say(f"The AMI needs a {need} GB root disk; using {need} GB instead of {self.a.disk}.")
+            self.a.disk = need
+        return ami, root, image.get("Name", "")
 
     def zones(self, itype: str) -> list:
         resp = self.ec2.describe_instance_type_offerings(
@@ -292,7 +340,7 @@ class Sniper:
             self.say("Stop or terminate it first. Not launching a second one.")
             return 1
 
-        user_data = build_user_data(read_env(ENV_FILE))
+        user_data = build_user_data(account_env(getattr(a, "account", None)))
         ami, root_device, ami_name = self.resolve_ami()
         self.say(f"AMI {ami}  {ami_name}")
 
@@ -316,7 +364,7 @@ class Sniper:
         if not zones_of:
             return 1
         market = "spot (persistent, stop on interruption)" if a.spot else "on-demand"
-        self.say(f"{market}, {a.disk} GB gp3 @ {a.throughput} MB/s")
+        self.say(f"{market}, {a.disk} GB gp3 root @ {a.throughput} MB/s; models and Docker on the local NVMe SSD")
         for t, zs in zones_of.items():
             self.say(f"  {t}: {', '.join(zs)}")
 
@@ -415,12 +463,16 @@ def main() -> int:
                          "(default g7e.2xlarge)")
     ap.add_argument("--spot", action="store_true", help="spot instead of on-demand")
     ap.add_argument("--ami", default="", help="AMI id (default: latest DLAMI Base OSS Nvidia, Ubuntu 24.04)")
-    ap.add_argument("--disk", type=int, default=250, help="root gp3 size in GB (default 250)")
-    ap.add_argument("--throughput", type=int, default=250, help="gp3 MB/s, 125-1000 (default 250)")
+    ap.add_argument("--disk", type=int, default=75,
+                    help="root gp3 size in GB, OS only: models and Docker go on the local NVMe SSD "
+                         "(default 75, the AMI's minimum)")
+    ap.add_argument("--throughput", type=int, default=125, help="root gp3 MB/s, 125-1000 (default 125, free)")
     ap.add_argument("--iam-profile", default="", help="instance profile name, e.g. one with SSM access")
     ap.add_argument("--name", default="ember-gpu", help="Name tag")
     ap.add_argument("--interval", type=int, default=20, help="seconds between rounds (default 20)")
     ap.add_argument("--minutes", type=int, default=0, help="give up after this many minutes (0 = never)")
+    ap.add_argument("--account", default=None,
+                    help="account name from .env (AWS_ACCESS_KEY_ID__<name>); default: the plain keys")
     ap.add_argument("--profile", default=None,
                     help="AWS CLI profile (default: the keys in aws_sniper/.env)")
     ap.add_argument("--dry-run", action="store_true", help="check permissions in every zone, launch nothing")
@@ -436,13 +488,16 @@ def main() -> int:
         ap.error("--type is empty")
 
     try:
-        session = make_session(a.region, a.profile)
+        session = make_session(a.region, a.profile, a.account)
         return Sniper(a, session).run()
     except NoCredentialsError:
         print("No AWS credentials. Run `aws configure` (or `aws configure sso`), or pass --profile.")
         return 1
     except ClientError as err:
         print(f"{code_of(err)}: {message_of(err)}")
+        return 1
+    except ValueError as err:          # make_session: the account has no keys
+        print(err)
         return 1
     except KeyboardInterrupt:
         print("\nStopped. Nothing was launched in the round that was interrupted "
