@@ -104,6 +104,39 @@
   details.fold > summary h2::before { content:"\25B8  "; color:var(--c-text-muted); }
   details.fold[open] > summary h2::before { content:"\25BE  "; }
   details.fold[open] > summary { margin-bottom:12px; }
+  .tab { display:grid; gap:16px; }
+  .tab[hidden] { display:none; }
+  nav.tabs { display:flex; gap:4px; border-bottom:1px solid var(--c-border); }
+  nav.tabs button { background:transparent; color:var(--c-text-muted); border-radius:var(--r-sm) var(--r-sm) 0 0;
+                    border-bottom:2px solid transparent; padding:8px 14px; }
+  nav.tabs button:hover { background:var(--c-panel-hover); color:var(--c-text); }
+  nav.tabs button.on { color:var(--c-accent); border-bottom-color:var(--c-accent); }
+  textarea { width:100%; background:var(--c-input); color:var(--c-text); border:1px solid var(--c-border);
+             border-radius:var(--r-sm); padding:7px 9px; font:inherit; font-size:var(--t-sm); resize:vertical; }
+  textarea:focus { outline:none; border-color:var(--c-focus); box-shadow:var(--sh-focus); }
+  .drop { margin-top:14px; border:1px dashed var(--c-border); border-radius:var(--r-md); padding:18px; text-align:center;
+          color:var(--c-text-muted); font-size:var(--t-sm); background:var(--c-bg-sunken); }
+  .drop.over { border-color:var(--c-accent); background:var(--c-accent-soft); color:var(--c-accent); }
+  .pcur { display:grid; grid-template-columns:minmax(200px,300px) 1fr; gap:16px; margin-top:14px; align-items:start; }
+  @media (max-width:700px) { .pcur { grid-template-columns:1fr; } }
+  .pcur .drop { margin-top:0; display:flex; flex-direction:column; gap:8px; align-items:center; }
+  .pcur .drop img { max-width:100%; max-height:320px; border-radius:var(--r-sm); }
+  .pstrip { display:flex; gap:10px; flex-wrap:wrap; }
+  .pstrip button { background:var(--c-input); border:2px solid transparent; padding:4px; width:112px; color:var(--c-text);
+                   display:flex; flex-direction:column; gap:4px; font-weight:var(--fw-medium); font-size:var(--t-2xs); }
+  .pstrip button:hover { background:var(--c-input-hover); }
+  .pstrip button.on { border-color:var(--c-accent); }
+  .pstrip img { width:100%; height:100px; object-fit:cover; border-radius:var(--r-sm); }
+  .pstrip span { overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+  .pres { border:1px solid var(--c-border); border-radius:var(--r-md); padding:10px 12px; margin-top:10px; background:var(--c-bg-sunken); }
+  .pres header { display:flex; gap:8px; align-items:center; flex-wrap:wrap; font-size:var(--t-sm); }
+  .pres header .grow { flex:1; }
+  .pres pre { max-height:300px; color:var(--c-text); font-size:var(--t-sm); font-family:var(--font-sans); }
+  .phist { border-bottom:1px solid var(--c-border); padding:8px 0; }
+  .phist:last-child { border-bottom:0; }
+  .phist summary { cursor:pointer; display:flex; gap:8px; align-items:center; flex-wrap:wrap; font-size:var(--t-sm); }
+  .phist summary img { width:36px; height:36px; object-fit:cover; border-radius:var(--r-sm); }
+  .phist pre { color:var(--c-text); font-size:var(--t-sm); font-family:var(--font-sans); max-height:320px; }
 </style>
 </head>
 <body>
@@ -125,9 +158,14 @@
       <span class="muted">It uses your SSH_KEY_FILE and licence unless .env has <code>SSH_KEY_FILE__name</code>, <code>EMBER_LICENSE_KEY__name</code> etc.</span></div>
     <div class="error" id="acctErr"></div>
   </section>
+  <nav class="tabs">
+    <button data-tab="sniper">Sniper</button>
+    <button data-tab="prompt">Image to prompt</button>
+  </nav>
   <div class="error" id="licence"></div>
   <div class="error" id="banner"></div>
 
+  <div class="tab" id="tab-sniper">
   <section class="card">
     <h2>Credit <span class="badge" data-acctname></span> <span class="muted">AWS's balance at the last sync, minus what this page has seen run since (instance + disk + IP)</span></h2>
     <div class="row" style="margin-top:0;margin-bottom:12px">
@@ -217,6 +255,50 @@
       <tbody id="hist"></tbody>
     </table></div>
   </details>
+  </div>
+
+  <div class="tab" id="tab-prompt" hidden>
+  <section class="card">
+    <h2>Image to prompt <span class="muted">a vision model on Bedrock writes an image-generation prompt for the picture · paid from the credit of account <b data-acctplain></b></span></h2>
+    <div class="stats">
+      <div><b id="pLast">—</b><span id="pLastWhat">last Generate</span></div>
+      <div><b id="pSession">—</b><span id="pSessionWhat">this session</span></div>
+      <div><b id="pTotal">—</b><span id="pTotalWhat">all time on this page</span></div>
+    </div>
+    <div class="pcur">
+      <div class="drop" id="pDrop">
+        <img id="pCurImg" alt="" hidden>
+        <div class="muted" id="pCurName">No picture yet: drop one here, paste with Ctrl+V, or upload.</div>
+        <button class="ghost small" id="pPick">Upload new picture…</button>
+        <input type="file" id="pFile" accept="image/jpeg,image/png,image/webp,image/gif" hidden>
+      </div>
+      <div>
+        <div><span class="muted">Base prompt · pick one or both</span><div class="chips" id="pPrompt" style="margin-top:6px"></div></div>
+        <div class="sub"><span class="muted">Model · $ per million tokens, in / out · pick one or both</span><div class="chips" id="pModel"></div></div>
+        <div class="sub"><span class="muted">Changes (optional): override the photo, e.g. "small bust", "red saree", "evening light". Lines starting with # are ignored.</span>
+          <textarea id="pChanges" rows="3" placeholder="Leave empty to recreate the photo as it is"></textarea></div>
+        <div class="sub"><span class="muted">Send to the app · Krea 2 V2 · Natural Raw 2 as it is, batch 1 · each job goes to the top of the queue</span>
+          <div class="row" style="margin-top:6px">
+            <label>Instance <select id="pInst"></select></label>
+          </div>
+          <div class="muted" id="pAppNote" style="margin-top:6px"></div></div>
+        <div class="row"><button id="pGo" disabled>Generate</button>
+          <label class="check"><input type="checkbox" id="pAuto"> Send new prompts to the top of the queue</label>
+          <span class="muted" id="pNote"></span></div>
+      </div>
+    </div>
+    <div class="error" id="pErr"></div>
+    <div id="pResults"></div>
+  </section>
+  <details class="card fold" id="pPicsBox" open>
+    <summary><h2>Earlier pictures <span class="muted">click one to make it the current picture · kept in aws_sniper/img2prompt/images</span></h2></summary>
+    <div class="pstrip" id="pStrip"></div>
+  </details>
+  <details class="card fold" id="pHistBox">
+    <summary><h2>Past prompts <span class="muted" id="pHistWhat">every picture · kept in aws_sniper/img2prompt/history.json</span></h2></summary>
+    <div id="pHist"></div>
+  </details>
+  </div>
 </main>
 <div class="toast" id="toast" hidden></div>
 
@@ -227,7 +309,7 @@ const store = {
   get(k, d) { try { const v = localStorage.getItem("awssniper." + k); return v === null ? d : JSON.parse(v); } catch { return d; } },
   set(k, v) { try { localStorage.setItem("awssniper." + k, JSON.stringify(v)); } catch {} },
 };
-let CFG = null, REGION = null, busy = false, ACCT = null;
+let CFG = null, REGION = null, busy = false, ACCT = null, LAST_ST = null;
 const acct = () => ACCT ? ACCT.name : "main";
 const acctOf = name => (CFG.accounts.find(a => a.name === name) || CFG.accounts[0]);
 // Type order and which are ticked, shared by all regions.
@@ -269,6 +351,7 @@ function drawAccounts(pick) {
   $("account").innerHTML = CFG.accounts.map(a => `<option value="${esc(a.name)}"${a.name === ACCT.name ? " selected" : ""}>` +
     `${esc(a.name)}${a.id ? " · " + a.id : a.error ? " · keys not working" : ""}</option>`).join("");
   document.querySelectorAll("[data-acctname]").forEach(b => { b.textContent = ACCT.name; b.hidden = CFG.accounts.length < 2; });
+  document.querySelectorAll("[data-acctplain]").forEach(b => b.textContent = ACCT.name);
   const lic = ACCT.licence;
   $("who").textContent = ACCT.source + (lic.key ? " · licence " + lic.key : "") +
     (lic.ok ? " · HF token " + (lic.hf ? "set" : "missing") + " · CivitAI token " + (lic.civitai ? "set" : "missing") : "");
@@ -459,6 +542,8 @@ async function poll() {
   }
   $("otherSnipes").textContent = (st.other_snipes || []).map(o => `Also sniping in account ${o.account} (${o.region}): pick it above to see or stop it.`).join("\n");
   syncButtons();
+  LAST_ST = st;
+  if (P.cfg) drawInstances();
   drawMoney(st.money, st.instances);
   drawDownloads(st);
   drawApps(st);
@@ -629,6 +714,7 @@ function drawMoney(m) {
     $("mSpent").textContent = money(m.spent);
     $("mSince").textContent = m.since ? "spent since " + new Date(m.since * 1000).toLocaleDateString() : "spent";
   }
+  if (m.spent_prompts) $("mSince").textContent += ` · incl. ${money(m.spent_prompts, 3)} image prompts`;
   $("mLeft").textContent = money(m.left);
   const base = m.aws ? m.aws.initial : m.credit_total;
   $("mLeftBox").className = m.left < base * 0.15 ? "lowcredit" : "";
@@ -764,6 +850,268 @@ async function drawHistory() {
     : `<tr><td colspan="10" class="muted">No runs recorded yet.</td></tr>`;
 }
 
+// ── Tabs ──
+function showTab(name) {
+  if (!$("tab-" + name)) name = "sniper";
+  store.set("tab", name);
+  document.querySelectorAll("nav.tabs [data-tab]").forEach(b => b.classList.toggle("on", b.dataset.tab === name));
+  document.querySelectorAll(".tab").forEach(t => t.hidden = t.id !== "tab-" + name);
+  if (name === "prompt" && !P.cfg) loadPrompt().catch(e => $("pErr").textContent = e.message);
+}
+document.querySelectorAll("nav.tabs [data-tab]").forEach(b => b.onclick = () => showTab(b.dataset.tab));
+
+// ── Image to prompt ──
+// One current picture, used by every Generate until another is uploaded or
+// picked from the earlier ones. Generate writes one prompt per ticked model
+// × ticked base prompt, all at once. Pictures and results stay on this PC.
+const P = {cfg: null, cur: store.get("p.cur", null), pending: [], fails: [], running: false, lastRun: null,
+           models: store.get("p.models", null), prompts: store.get("p.prompts", null)};
+const money3 = v => v == null ? "—" : v < 0.01 && v > 0 ? "$" + v.toFixed(4) : "$" + v.toFixed(3);
+const imgUrl = id => "/api/img2prompt/image?id=" + encodeURIComponent(id);
+const when = s => new Date(s * 1000).toLocaleString([], {month: "short", day: "numeric", hour: "2-digit", minute: "2-digit"});
+const curImage = () => P.cfg && P.cfg.images.find(i => i.id === P.cur);
+
+async function loadPrompt() {
+  P.cfg = await api("/api/img2prompt");
+  const pick = (saved, all, dflt) => { const s = (saved || []).filter(k => all[k]); return s.length ? s : [dflt]; };
+  P.models = pick(P.models, P.cfg.models, P.cfg.default_model);
+  P.prompts = pick(P.prompts, P.cfg.prompts, P.cfg.default_prompt);
+  if (!curImage()) P.cur = P.cfg.images.length ? P.cfg.images[0].id : null;
+  drawPrompt();
+}
+function drawPrompt() {
+  drawPromptChips(); drawPromptTotals(P.cfg.totals); drawCurrent(); drawStrip(); drawResults(); drawPromptHistory();
+  if (LAST_ST) drawInstances();
+}
+
+// ── Send to the app: the picked account's running instances with an app link ──
+P.inst = null; P.app = null; P.instSig = "";
+function drawInstances() {
+  const rows = LAST_ST.instances.filter(i => i.account === acct() && i.state === "running" && i.url);
+  const sig = acct() + "|" + rows.map(i => i.id + (i.ready ? "+" : "-")).join(",");
+  if (sig === P.instSig) return;
+  P.instSig = sig;
+  const want = store.get("p.inst", null);
+  const pick = (rows.find(i => i.id === want) || rows.find(i => i.id === P.inst) || rows[0] || {}).id || null;
+  $("pInst").innerHTML = rows.length ? rows.map(i => `<option value="${esc(i.id)}"${i.id === pick ? " selected" : ""}>` +
+      `${esc(i.name || i.id)} · ${esc(i.type)}${i.ready ? "" : " · app not answering"}</option>`).join("")
+    : `<option value="">No running instance with the app in account ${esc(acct())}</option>`;
+  $("pInst").disabled = !rows.length;
+  if (pick !== P.inst || !P.app) { P.inst = pick; loadAppOptions(); }
+  drawResults(); drawPromptHistory();
+}
+async function loadAppOptions() {
+  const id = P.inst; P.app = null;
+  drawAppNote();
+  if (!id) return;
+  try {
+    const o = await api("/api/img2prompt/app?id=" + encodeURIComponent(id));
+    if (P.inst !== id) return;
+    P.app = o;
+  } catch (e) { if (P.inst === id) P.appError = e.message; }
+  drawAppNote();
+}
+function drawAppNote() {
+  const n = P.cfg.negative;
+  const negLine = n.error ? `<span class="error">${esc(n.error)}</span>`
+    : n.text ? `Negative: from <code>${esc(n.file)}</code> (${n.text.split(/\s+/).length} words).`
+    : `Negative: Natural Raw 2's own, while "negative" in <code>${esc(n.file)}</code> is empty.`;
+  let s = negLine;
+  if (P.inst && !P.app && P.appError) s = `<span class="error">${esc(P.appError)}</span> ` + s;
+  else if (P.app && !P.app.has_preset) s = `<span class="note">This instance doesn't offer the ${esc(P.app.preset)} preset: queueing will fail.</span> ` + s;
+  $("pAppNote").innerHTML = s;
+  P.appError = null;
+}
+$("pInst").onchange = () => { P.inst = $("pInst").value; store.set("p.inst", P.inst); loadAppOptions(); drawResults(); drawPromptHistory(); };
+$("pAuto").checked = store.get("p.auto", false);
+$("pAuto").onchange = () => store.set("p.auto", $("pAuto").checked);
+
+const queueable = r => r.text && !r.text.startsWith("SKIP:");
+async function queueRecord(r) {
+  if (!P.inst) throw new Error("No running instance to send it to.");
+  const inst = P.inst, name = $("pInst").selectedOptions[0].textContent.split(" · ")[0];
+  r.queueState = "sending"; r.queueError = ""; drawResults(); drawPromptHistory();
+  try {
+    const res = await api("/api/img2prompt/queue", {id: inst, time: r.time});
+    (r.queued = r.queued || []).push(res.sent);
+    r.queueState = "";
+    toast(`Queued at the top on ${name}`);
+  } catch (e) { r.queueState = ""; r.queueError = e.message; }
+  drawResults(); drawPromptHistory();
+}
+function queueBits(r) {
+  const n = (r.queued || []).length;
+  return (n ? `<span class="badge good" title="${esc((r.queued || []).map(q => `${when(q.time)} · ${q.instance} · job ${q.job}`).join("\n"))}">queued${n > 1 ? " ×" + n : ""}</span>` : "") +
+    (r.queueState === "sending" ? `<span class="badge busy">sending…</span>` : "") +
+    `<button class="small" data-pqueue="${r.time}"${!queueable(r) || !P.inst || r.queueState ? " disabled" : ""} title="${queueable(r) ? "Krea 2 V2 · Natural Raw 2 · batch 1, at the top of the queue" : "The model skipped this picture"}">⤒ Queue</button>`;
+}
+function drawPromptChips() {
+  const c = P.cfg;
+  $("pPrompt").innerHTML = Object.entries(c.prompts).map(([k, what]) =>
+    `<button class="chip${P.prompts.includes(k) ? " on" : ""}" data-pprompt="${k}">${k} · ${esc(what)}</button>`).join("");
+  $("pModel").innerHTML = Object.entries(c.models).map(([k, m]) =>
+    `<button class="chip${P.models.includes(k) ? " on" : ""}" data-pmodel="${k}">${esc(m.label)} · $${m.in.toFixed(2)} / $${m.out.toFixed(2)}</button>`).join("");
+  syncGo();
+}
+function syncGo() {
+  const n = P.models.length * P.prompts.length;
+  $("pGo").disabled = P.running || !curImage();
+  $("pGo").textContent = P.running ? "Generating…" : n > 1 ? `Generate ${n} prompts` : "Generate";
+}
+function drawPromptTotals(t) {
+  $("pSession").textContent = money3(t.session);
+  $("pSessionWhat").textContent = `this session · ${t.session_count} prompt${t.session_count === 1 ? "" : "s"} since the server started ${when(t.session_started)}`;
+  $("pTotal").textContent = money3(t.total);
+  $("pTotalWhat").textContent = `all time on this page · ${t.count} prompt${t.count === 1 ? "" : "s"}` + (t.since ? " since " + new Date(t.since * 1000).toLocaleDateString() : "");
+  if (P.lastRun) {
+    $("pLast").textContent = money3(P.lastRun.cost);
+    $("pLastWhat").textContent = `last Generate · ${P.lastRun.n} prompt${P.lastRun.n === 1 ? "" : "s"}`;
+  }
+}
+function drawCurrent() {
+  const im = curImage();
+  $("pCurImg").hidden = !im;
+  if (im && $("pCurImg").dataset.id !== im.id) { $("pCurImg").src = imgUrl(im.id); $("pCurImg").dataset.id = im.id; }
+  $("pCurName").textContent = im ? `${im.name} · used for every Generate until you upload or pick another`
+                                 : "No picture yet: drop one here, paste with Ctrl+V, or upload.";
+  syncGo();
+}
+function drawStrip() {
+  const ims = P.cfg.images;
+  $("pPicsBox").hidden = !ims.length;
+  $("pStrip").innerHTML = ims.map(i => `<button class="${i.id === P.cur ? "on" : ""}" data-puse="${i.id}" title="${esc(i.name)}">
+      <img src="${imgUrl(i.id)}" alt="" loading="lazy"><span>${esc(i.name)}</span>
+      <span class="muted">${i.prompts} prompt${i.prompts === 1 ? "" : "s"}</span></button>`).join("");
+}
+function recLine(r) {
+  const m = (P.cfg.models[r.model] || {}).label || r.model;
+  return `<b>${esc(m)}</b> · ${esc(r.prompt)} · ${r.tokens_in} in / ${r.tokens_out} out · <b>${money3(r.cost)}</b> · ${r.seconds} s` +
+    (r.changes ? ` · changes: ${esc(r.changes.replace(/\n/g, "; "))}` : "") +
+    (r.stop === "length" ? ` <span class="note">cut off at the token limit</span>` : "");
+}
+// The current picture's prompts: running ones first, then failures, then results newest first.
+function drawResults() {
+  const label = (m, v) => `<b>${esc(P.cfg.models[m].label)}</b> · ${esc(v)}`;
+  const recs = P.cfg.records.filter(r => r.image === P.cur);
+  $("pResults").innerHTML =
+    P.pending.filter(p => p.image === P.cur).map(p => `<div class="pres"><header>${label(p.model, p.prompt)}
+      <span class="badge busy">writing…</span></header></div>`).join("") +
+    P.fails.filter(p => p.image === P.cur).map(p => `<div class="pres"><header>${label(p.model, p.prompt)}
+      <span class="badge bad">failed</span></header><div class="error">${esc(p.error)}</div></div>`).join("") +
+    recs.map(r => `<div class="pres"><header><span>${recLine(r)}</span><span class="grow"></span>
+        <span class="muted">${when(r.time)}</span>
+        ${queueBits(r)}
+        <button class="ghost small" data-pcopy="${r.time}">Copy</button><button class="ghost small" data-psave="${r.time}">Save .txt</button></header>
+      ${r.queueError ? `<div class="error">Queue: ${esc(r.queueError)}</div>` : ""}
+      <pre>${esc(r.text)}</pre></div>`).join("") ||
+    (curImage() ? `<div class="muted" style="margin-top:10px">No prompts for this picture yet.</div>` : "");
+}
+function drawPromptHistory() {
+  const recs = P.cfg.records;
+  $("pHistWhat").textContent = `every picture, the last ${recs.length} · kept in aws_sniper/img2prompt/history.json`;
+  $("pHist").innerHTML = recs.length ? recs.map(r => `<details class="phist"><summary>
+      ${r.image ? `<img src="${imgUrl(r.image)}" alt="" loading="lazy">` : ""}
+      <span class="muted">${when(r.time)}</span> <b>${esc(r.name)}</b>${CFG && CFG.accounts.length > 1 ? ` <span class="badge">${esc(r.account)}</span>` : ""}
+      <span class="muted">${recLine(r)}</span></summary>
+      <pre>${esc(r.text)}</pre>
+      ${r.queueError ? `<div class="error">Queue: ${esc(r.queueError)}</div>` : ""}
+      <div class="row" style="margin-top:6px">${queueBits(r)}<button class="ghost small" data-pcopy="${r.time}">Copy</button><button class="ghost small" data-psave="${r.time}">Save .txt</button>
+        ${r.image && P.cfg.images.some(i => i.id === r.image) ? `<button class="ghost small" data-puse="${r.image}">Use this picture</button>` : ""}</div>
+    </details>`).join("") : `<div class="muted">Nothing yet.</div>`;
+}
+function setCurrent(id) {
+  P.cur = id; store.set("p.cur", id); P.fails = [];
+  drawCurrent(); drawStrip(); drawResults();
+}
+
+const readB64 = f => new Promise((ok, bad) => {
+  const fr = new FileReader();
+  fr.onload = () => ok(String(fr.result).split(",")[1]);
+  fr.onerror = () => bad(fr.error || new Error("Couldn't read the file."));
+  fr.readAsDataURL(f);
+});
+async function uploadImage(files) {
+  $("pErr").textContent = "";
+  const f = files.find(f => f.type.startsWith("image/"));
+  if (!f) { $("pErr").textContent = "That isn't an image."; return; }
+  if (!["image/jpeg", "image/png", "image/webp", "image/gif"].includes(f.type)) { $("pErr").textContent = `${f.name}: use a JPEG, PNG, WebP or GIF.`; return; }
+  if (f.size > 15 * 2 ** 20) { $("pErr").textContent = `${f.name}: over 15 MB.`; return; }
+  if (files.length > 1) toast("One picture at a time: using " + (f.name || "the first one") + ".");
+  $("pCurName").textContent = "Uploading…";
+  try {
+    const {image} = await api("/api/img2prompt/upload", {name: f.name || `pasted-${Date.now()}.${f.type.split("/")[1]}`,
+                                                         type: f.type, data: await readB64(f)});
+    image.prompts = P.cfg.records.filter(r => r.image === image.id).length;
+    P.cfg.images = [image].concat(P.cfg.images.filter(i => i.id !== image.id));
+    setCurrent(image.id);
+  } catch (e) { $("pErr").textContent = e.message; drawCurrent(); }
+}
+
+async function generate() {
+  const im = curImage(); if (!im || P.running) return;
+  P.running = true; P.fails = []; $("pErr").textContent = "";
+  const changes = $("pChanges").value, account = acct();
+  const jobs = P.models.flatMap(model => P.prompts.map(prompt => ({image: im.id, model, prompt})));
+  P.pending = jobs.slice(); P.lastRun = {cost: 0, n: 0};
+  const autoQueue = $("pAuto").checked && !!P.inst, queued = [];
+  if ($("pAuto").checked && !P.inst) toast("No running instance: the prompts won't be queued.");
+  syncGo(); drawResults();
+  await Promise.all(jobs.map(async job => {
+    try {
+      const r = await api("/api/img2prompt", {account, changes, ...job});
+      P.cfg.records.unshift(r.record);
+      P.lastRun.cost += r.record.cost; P.lastRun.n++;
+      drawPromptTotals(r.totals);
+      if (autoQueue && queueable(r.record)) queued.push(r.record);
+    } catch (e) { P.fails.push({...job, error: e.message}); }
+    P.pending = P.pending.filter(p => p !== job);
+    drawResults();
+  }));
+  // One after another, so each lands on top of the one before.
+  for (const rec of queued) await queueRecord(rec);
+  P.running = false;
+  toast(`${P.lastRun.n} prompt${P.lastRun.n === 1 ? "" : "s"} for ${money3(P.lastRun.cost)}` + (P.fails.length ? ` · ${P.fails.length} failed` : ""));
+  const c = await api("/api/img2prompt").catch(() => null);
+  if (c) P.cfg = c;
+  drawPrompt();
+  poll();                                              // the Credit card counts this spend too
+}
+
+function saveTxt(name, text) {
+  const a = document.createElement("a");
+  a.href = URL.createObjectURL(new Blob([text + "\n"], {type: "text/plain"}));
+  a.download = name.replace(/[\\/:*?"<>|]/g, "_") + ".prompt.txt";
+  document.body.appendChild(a); a.click(); a.remove();
+  setTimeout(() => URL.revokeObjectURL(a.href), 1000);
+}
+const copyText = t => navigator.clipboard.writeText(t).then(() => toast("Prompt copied."), () => toast("Couldn't copy."));
+function toggleIn(list, k) { return list.includes(k) ? (list.length > 1 ? list.filter(x => x !== k) : list) : list.concat(k); }
+$("tab-prompt").addEventListener("click", e => {
+  const b = e.target.closest("button"); if (!b) return;
+  const rec = t => P.cfg.records.find(r => String(r.time) === t);
+  if (b.dataset.pprompt) { P.prompts = toggleIn(P.prompts, b.dataset.pprompt); store.set("p.prompts", P.prompts); drawPromptChips(); }
+  else if (b.dataset.pmodel) { P.models = toggleIn(P.models, b.dataset.pmodel); store.set("p.models", P.models); drawPromptChips(); }
+  else if (b.dataset.puse) { setCurrent(b.dataset.puse); window.scrollTo({top: 0, behavior: "smooth"}); }
+  else if (b.dataset.pcopy) copyText(rec(b.dataset.pcopy).text);
+  else if (b.dataset.psave) { const r = rec(b.dataset.psave); saveTxt(r.name.replace(/\.[^.]+$/, "") + "." + r.model + "-" + r.prompt, r.text); }
+});
+$("pPick").onclick = () => $("pFile").click();
+$("pFile").onchange = () => { uploadImage([...$("pFile").files]); $("pFile").value = ""; };
+$("pGo").onclick = () => generate();
+$("pChanges").value = store.get("p.changes", "");
+$("pChanges").oninput = () => store.set("p.changes", $("pChanges").value);
+// The whole tab takes drops, so one that misses the box doesn't open the image in the browser.
+const drop = $("pDrop"), ptab = $("tab-prompt");
+ptab.addEventListener("dragover", e => { e.preventDefault(); drop.classList.add("over"); });
+ptab.addEventListener("dragleave", e => { if (!ptab.contains(e.relatedTarget)) drop.classList.remove("over"); });
+ptab.addEventListener("drop", e => { e.preventDefault(); drop.classList.remove("over"); uploadImage([...e.dataTransfer.files]); });
+document.addEventListener("paste", e => {
+  if ($("tab-prompt").hidden || e.target === $("pChanges")) return;
+  const files = [...(e.clipboardData || {}).files || []];
+  if (files.length) { e.preventDefault(); uploadImage(files); }
+});
+
+showTab(store.get("tab", "sniper"));
 init().catch(e => { $("snipeErr").textContent = e.message; });
 </script>
 </body>

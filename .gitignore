@@ -52,6 +52,8 @@ windows-docker/
 aws_sniper/history.json
 aws_sniper/settings.json
 aws_sniper/downloads.json
+aws_sniper/img2prompt/history.json
+aws_sniper/img2prompt/images/
 aws_sniper/*.part
 aws_sniper/known_hosts
 aws_sniper/keys/

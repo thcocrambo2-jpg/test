@@ -106,6 +106,37 @@ from the instance's tunnel link and the link's `#k=` key. A restart's new
 link is picked up by itself, and downloads resume when the server
 restarts (`downloads.json`).
 
+## Image to prompt (second tab)
+
+Upload one picture (drop, paste or choose); it stays the current picture
+for every Generate until you upload another or click one of the earlier
+pictures. Tick one or both base prompts (`v1` copies the photo's body
+exactly, `v2` writes flowing photographer-style prose) and one or both
+models: **Qwen3-VL 235B** ($0.53 / $2.66 per million tokens in / out) or
+**Kimi K2.5** ($0.60 / $3.00). Generate writes one prompt per model and
+base prompt, all at once (both and both = 4 prompts), on Bedrock in
+us-east-1 with the picked account's keys. The optional changes box
+overrides the photo.
+
+**Send to the app:** pick one of the account's running instances (those
+with an app link). **⤒ Queue** on any prompt, or the tick "Send new
+prompts to the top of the queue" before Generate, makes a Krea 2 V2 job
+with the **Natural Raw 2** preset as it is (its size, steps, LoRAs), batch
+1, and moves it to the top of that app's queue. The negative is
+`"negative"` in `img2prompt/negative.json` (read on every send); while it's
+empty, Natural Raw 2's own negative is used. A prompt the model skipped
+(`SKIP: ...`) can't be queued.
+
+The tab shows what the last Generate cost, the total this session (since
+the server started) and the total ever. The Credit card counts it too,
+since Bedrock is paid from the same credit. The IAM user needs Bedrock
+access (`bedrock-mantle` in us-east-1).
+
+Everything stays in `aws_sniper/img2prompt/`, so copying the aws_sniper
+folder to another PC brings it along: the base prompts, `images/` (every
+uploaded picture) and `history.json` (every prompt with its tokens and
+cost). The last two are git-ignored and left out of the friends' zip.
+
 ## Accounts
 
 The plain `AWS_ACCESS_KEY_ID` / `AWS_SECRET_ACCESS_KEY` lines are the

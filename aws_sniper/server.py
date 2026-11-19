@@ -30,6 +30,10 @@ until the server saw it again, so the estimate errs high, never low.
 Auto download: runpod_sniper/downloader.py, unchanged, pointed at the
 instance's tunnel link with the link's #k= key; a new link after a
 restart is picked up by itself.
+
+Image to prompt (second tab): imgprompt.py, a vision model on Bedrock
+writes prompts for a picture; pictures and spend are kept in img2prompt/ and
+taken off the account's credit.
 """
 
 import argparse
@@ -57,6 +61,7 @@ from botocore.exceptions import BotoCoreError, ClientError, NoCredentialsError  
 
 sys.path.insert(1, str(HERE.parent / "runpod_sniper"))
 import downloader                             # noqa: E402  (the Runpod page's, as is)
+import imgprompt                              # noqa: E402  (the Image to prompt tab)
 
 TOKENS_CSS = HERE / "tokens.css"
 HISTORY_FILE = HERE / "history.json"
@@ -837,6 +842,14 @@ def _instance_row(iid: str) -> dict:
     return row
 
 
+def _app_link(iid: str):
+    """(origin, key) of a running instance's app, for the Image to prompt tab's queue."""
+    row = _instance_row(iid)
+    if row["state"] != "running" or not row.get("url"):
+        raise ValueError("%s has no app link yet (not running, or the app hasn't started)." % (row.get("name") or iid))
+    return _link_parts(row["url"])
+
+
 def _docker_logs(iid: str, lines: int = 300) -> str:
     row = _instance_row(iid)
     return _ssh(row, "sudo docker ps -a --filter name=^ember$ --format "
@@ -1168,14 +1181,17 @@ def _money(rows: list, account: str) -> dict:
     spent = HISTORY.spent(now, account)
     synced = settings.get("aws_credit")
     rows = [r for r in rows if r["account"] == account]
+    # Image to prompt runs on Bedrock, paid from the same credit.
+    prompts = imgprompt.LOG.spent(account)
     if synced:
         # AWS's own balance at the last sync (it already counts whatever
         # was used outside this page), minus what the page saw since.
-        since_sync = HISTORY.spent_since(synced["synced"], now, account)
+        since_sync = (HISTORY.spent_since(synced["synced"], now, account)
+                      + imgprompt.LOG.spent(account, synced["synced"]))
         left = synced["estimated"] - since_sync
     else:
         since_sync = None
-        left = credit - spent["total"]
+        left = credit - spent["total"] - prompts
     running = [r for r in rows if r["state"] in ("pending", "running")]
     stopped = [r for r in rows if r["state"] in ("stopping", "stopped")]
     unknown = any(r["rate_running" if r in running else "rate_stopped"] is None
@@ -1183,7 +1199,8 @@ def _money(rows: list, account: str) -> dict:
     burn = (sum(r["rate_running"] or 0 for r in running)
             + sum(r["rate_stopped"] or 0 for r in stopped))
     storage = sum(r["rate_stopped"] or 0 for r in rows if r["state"] != "shutting-down")
-    return {"account": account, "credit_total": credit, "spent": spent["total"], "left": left,
+    return {"account": account, "credit_total": credit, "spent": spent["total"] + prompts,
+            "spent_prompts": prompts, "left": left,
             "aws": synced, "spent_since_sync": since_sync,
             "since": spent["since"], "per_instance": spent["per"],
             "unknown_rate": spent["unknown_rate"] or unknown,
@@ -1382,6 +1399,18 @@ class Handler(BaseHTTPRequestHandler):
                                   "ops": ops, "now": time.time()})
             if url.path == "/api/history":
                 return self.json({"runs": HISTORY.runs(time.time())})
+            if url.path == "/api/img2prompt":
+                return self.json(imgprompt.config())
+            if url.path == "/api/img2prompt/app":
+                try:
+                    return self.json(imgprompt.app_options(*_app_link(query.get("id", [""])[0])))
+                except (ValueError, RuntimeError) as exc:
+                    return self.error(str(exc), 502 if isinstance(exc, RuntimeError) else 400)
+            if url.path == "/api/img2prompt/image":
+                found = imgprompt.image_file(query.get("id", [""])[0])
+                if not found:
+                    return self.error("No such picture.", 404)
+                return self.send(200, found[0], found[1])
             if url.path == "/api/logs":
                 try:
                     return self.json({"logs": _docker_logs(query.get("id", [""])[0])})
@@ -1399,7 +1428,27 @@ class Handler(BaseHTTPRequestHandler):
         url = urlparse(self.path)
         try:
             length = int(self.headers.get("content-length") or 0)
-            body = json.loads(self.rfile.read(min(length, 100_000)) or b"{}")
+            # an image, base64: a third bigger than the file
+            limit = 22_000_000 if url.path == "/api/img2prompt/upload" else 100_000
+            if length > limit:
+                return self.error("Request too large (%d MB)." % (length // 2 ** 20), 413)
+            body = json.loads(self.rfile.read(length) or b"{}")
+            if url.path == "/api/img2prompt/upload":
+                return self.json({"image": imgprompt.upload(body)})
+            if url.path == "/api/img2prompt/queue":
+                iid = str(body.get("id") or "")
+                try:
+                    return self.json(imgprompt.send_to_queue(*_app_link(iid), iid, body))
+                except RuntimeError as exc:
+                    return self.error(str(exc), 502)
+            if url.path == "/api/img2prompt":
+                account = _account(body.get("account"))
+                session = core.make_session(imgprompt.REGION, PROFILE, account)
+                try:
+                    rec = imgprompt.generate(session, account, body)
+                except RuntimeError as exc:
+                    return self.error(str(exc), 502)
+                return self.json({"record": rec, "totals": imgprompt.LOG.totals()})
             if url.path == "/api/snipe":
                 _start_snipe(body)
                 return self.json({"ok": True})
