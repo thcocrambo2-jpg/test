@@ -5,7 +5,7 @@
 Holds only what the page needs. Never the .env (keys), the keys/ folder
 (.pem files), or the per-user state (history, settings, downloads,
 known_hosts, and the Image to prompt tab's history.json and images/: only
-its two base prompts and negative.json go in). The Runpod page's downloader.py and
+its base prompts and negative.json go in). The Runpod page's downloader.py and
 ember_token.py go in beside server.py, which looks in its own folder first.
 """
 
@@ -18,8 +18,8 @@ OUT = HERE.parent / "aws_sniper.zip"
 
 FILES = ["server.py", "sniper.py", "imgprompt.py", "index.html", "tokens.css", "userdata.sh",
          "requirements.txt", ".env.example", "README.md", "start.bat",
-         "img2prompt/base_prompt_gpt_v1.md", "img2prompt/base_prompt_gpt_v2.md",
-         "img2prompt/negative.json"]
+         "img2prompt/negative.json"] + sorted(
+            "img2prompt/" + p.name for p in (HERE / "img2prompt").glob("base_prompt_gpt_*.md"))
 FROM_RUNPOD = ["downloader.py", "ember_token.py"]
 NEVER = {".env", "history.json", "settings.json", "downloads.json", "known_hosts", "img2prompt/history.json"}
 

@@ -110,13 +110,26 @@ restarts (`downloads.json`).
 
 Upload one picture (drop, paste or choose); it stays the current picture
 for every Generate until you upload another or click one of the earlier
-pictures. Tick one or both base prompts (`v1` copies the photo's body
+pictures. Tick one or more base prompts (`v1` copies the photo's body
 exactly, `v2` writes flowing photographer-style prose) and one or both
 models: **Qwen3-VL 235B** ($0.53 / $2.66 per million tokens in / out) or
 **Kimi K2.5** ($0.60 / $3.00). Generate writes one prompt per model and
 base prompt, all at once (both and both = 4 prompts), on Bedrock in
 us-east-1 with the picked account's keys. The optional changes box
 overrides the photo.
+
+**Your own base prompts:** every `img2prompt/base_prompt_gpt_<name>.md`
+is one (`<name>` is letters, digits, `_` or `-`, e.g. `v3`). Add or edit
+a file and open the tab again or press **↻ Reload**: no code change, no
+restart. An optional first line `<!-- what it does -->` becomes the
+chip's description and isn't sent to the model. Each result keeps the
+name and `prompt_sha` (first 8 hex of the text sent), so results from an
+edited v3 can be told apart in `history.json`.
+
+**Delete picture…** under the current picture deletes it and every prompt
+written for it. Their cost stays in the totals and the Credit card
+(`history.json` keeps only time, account and cost), and jobs already sent
+to an instance's queue keep running.
 
 **Send to the app:** pick one of the account's running instances (those
 with an app link). **⤒ Queue** on any prompt, or the tick "Send new

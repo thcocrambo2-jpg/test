@@ -1435,6 +1435,9 @@ class Handler(BaseHTTPRequestHandler):
             body = json.loads(self.rfile.read(length) or b"{}")
             if url.path == "/api/img2prompt/upload":
                 return self.json({"image": imgprompt.upload(body)})
+            if url.path == "/api/img2prompt/delete":
+                return self.json({"deleted": imgprompt.delete_image(body),
+                                  "totals": imgprompt.LOG.totals()})
             if url.path == "/api/img2prompt/queue":
                 iid = str(body.get("id") or "")
                 try:

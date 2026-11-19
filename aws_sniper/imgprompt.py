@@ -7,10 +7,14 @@ Same request as tmp/gpt-img2prompt/run.py.
 
 Everything lives in img2prompt/ next to this file, so copying the
 aws_sniper folder carries it along: the base prompts
-(base_prompt_gpt_v1.md, _v2.md), the uploaded pictures in images/ (named
+(every base_prompt_gpt_<name>.md, read fresh each time, so a new v3 is a
+new file and nothing else), the uploaded pictures in images/ (named
 by content hash, so the same picture is stored once, and any can be
 picked again), and history.json with every generation (which picture,
-tokens, cost, the prompt it wrote), so totals survive restarts. Prices are
+tokens, cost, the prompt it wrote), so totals survive restarts. Deleting
+a picture deletes its file and every prompt written for it; only each
+prompt's time, account and cost stay (history.json "removed"), so the
+totals and the Credit card still count money that was really spent. Prices are
 Bedrock's standard on-demand rates in us-east-1 from the AWS Pricing API
 (2026-11-19).
 """
@@ -45,10 +49,12 @@ MODELS = {
              "in": 0.60, "out": 3.00},
 }
 DEFAULT_MODEL = "qwen"
-PROMPTS = {
-    "v1": "Detailed rules; copies the photo's body exactly",
-    "v2": "Flowing photographer-style prose",
-}
+# Base prompts are the files img2prompt/base_prompt_gpt_<name>.md; <name>
+# (letters, digits, _ or -) is what the tab shows. An optional first line
+# <!-- what it does --> becomes the chip's description and isn't sent.
+PROMPT_RE = re.compile(r"^base_prompt_gpt_([A-Za-z0-9_-]{1,32})\.md$")
+NAME_RE = re.compile(r"^[A-Za-z0-9_-]{1,32}$")
+DESC_RE = re.compile(r"^\s*<!--(.*?)-->[ \t]*\r?\n?", re.S)
 DEFAULT_PROMPT = "v1"
 FORMATS = {"image/jpeg": "jpg", "image/png": "png", "image/webp": "webp", "image/gif": "gif"}
 MIME = {ext: mime for mime, ext in FORMATS.items()}
@@ -66,11 +72,37 @@ CHANGES = ("\n\nThe user's changes, in their own words:\n%s\n\n"
            "don't mention exactly as in the photo. Never mention that anything was changed.")
 
 
-def _prompt_file(version: str) -> Path:
+def _natural(name: str):
+    return [int(p) if p.isdigit() else p.lower() for p in re.split(r"(\d+)", name)]
+
+
+def prompts() -> dict:
+    """{name: description} of every base prompt file, v2 before v10."""
+    found = {}
+    for path in DATA.glob("base_prompt_gpt_*.md"):
+        m = PROMPT_RE.match(path.name)
+        if not m or not path.is_file():
+            continue
+        try:
+            d = DESC_RE.match(path.read_text(encoding="utf-8"))
+        except OSError:
+            continue
+        found[m.group(1)] = " ".join(d.group(1).split()) if d else ""
+    return {k: found[k] for k in sorted(found, key=_natural)}
+
+
+def base_prompt(version: str) -> str:
+    """The base prompt's text as sent: without its <!-- description --> line."""
+    if not NAME_RE.match(version):
+        raise ValueError("Unknown base prompt %s." % version)
     path = DATA / ("base_prompt_gpt_%s.md" % version)
-    if not path.is_file():
-        raise ValueError("Base prompt %s not found: %s is missing." % (version, path))
-    return path
+    try:
+        text = DESC_RE.sub("", path.read_text(encoding="utf-8"), count=1).strip()
+    except OSError:
+        raise ValueError("Base prompt %s not found: %s is missing." % (version, path)) from None
+    if not text:
+        raise ValueError("Base prompt %s is empty: %s." % (version, path))
+    return text
 
 
 def cost(model: str, tokens_in: int, tokens_out: int) -> float:
@@ -79,7 +111,8 @@ def cost(model: str, tokens_in: int, tokens_out: int) -> float:
 
 
 class Log:
-    """img2prompt.json: {"records": [...], "images": {id: {...}}}."""
+    """history.json: {"records": [...], "images": {id: {...}},
+    "removed": [{time, account, cost}] of prompts deleted with their picture}."""
 
     def __init__(self):
         self.lock = threading.Lock()
@@ -89,18 +122,43 @@ class Log:
             saved = {}
         self.records = saved.get("records", [])
         self.images = saved.get("images", {})
+        self.removed = saved.get("removed", [])
 
     def _save(self) -> None:
         DATA.mkdir(exist_ok=True)
         tmp = LOG_FILE.with_suffix(".json.part")
-        tmp.write_text(json.dumps({"records": self.records, "images": self.images}, indent=1),
-                       encoding="utf-8")
+        tmp.write_text(json.dumps({"records": self.records, "images": self.images,
+                                   "removed": self.removed}, indent=1), encoding="utf-8")
         tmp.replace(LOG_FILE)
 
     def add(self, rec: dict) -> None:
         with self.lock:
-            self.records.append(rec)
+            if rec.get("image") in self.images:
+                self.records.append(rec)
+            else:                         # its picture was deleted while the model was writing
+                self.removed.append(_spend(rec))
             self._save()
+
+    def delete_image(self, iid: str) -> dict:
+        """Forget the picture and every prompt written for it; their spend stays counted."""
+        with self.lock:
+            e = self.images.pop(iid, None)
+            if e is None:
+                raise ValueError("That picture isn't stored here any more.")
+            gone = [r for r in self.records if r.get("image") == iid]
+            self.records = [r for r in self.records if r.get("image") != iid]
+            self.removed.extend(_spend(r) for r in gone)
+            self._save()
+        try:
+            (IMAGES / ("%s.%s" % (iid, e["ext"]))).unlink()
+        except FileNotFoundError:
+            pass
+        return {"id": iid, "name": e["name"], "prompts": len(gone),
+                "cost": sum(r["cost"] for r in gone)}
+
+    def _costed(self) -> list:
+        """Everything ever paid for: kept prompts and deleted ones."""
+        return self.records + self.removed
 
     def add_image(self, iid: str, entry: dict) -> dict:
         with self.lock:
@@ -144,20 +202,25 @@ class Log:
 
     def spent(self, account: str = None, since: float = 0) -> float:
         with self.lock:
-            return sum(r["cost"] for r in self.records
+            return sum(r["cost"] for r in self._costed()
                        if r["time"] >= since and (account is None or r["account"] == account))
 
     def totals(self) -> dict:
         with self.lock:
-            session = [r for r in self.records if r["time"] >= STARTED]
+            paid = self._costed()
+            session = [r for r in paid if r["time"] >= STARTED]
             return {"session": sum(r["cost"] for r in session), "session_count": len(session),
-                    "total": sum(r["cost"] for r in self.records), "count": len(self.records),
-                    "since": self.records[0]["time"] if self.records else None,
+                    "total": sum(r["cost"] for r in paid), "count": len(paid),
+                    "since": min((r["time"] for r in paid), default=None),
                     "session_started": STARTED}
 
     def recent(self, n: int = 300) -> list:
         with self.lock:
             return list(reversed(self.records[-n:]))
+
+
+def _spend(rec: dict) -> dict:
+    return {"time": rec["time"], "account": rec["account"], "cost": rec["cost"]}
 
 
 LOG = Log()
@@ -168,8 +231,10 @@ def config() -> dict:
         neg = {"text": negative(), "file": str(NEGATIVE_FILE)}
     except ValueError as exc:
         neg = {"text": "", "file": str(NEGATIVE_FILE), "error": str(exc)}
-    return {"models": MODELS, "default_model": DEFAULT_MODEL, "prompts": PROMPTS,
-            "default_prompt": DEFAULT_PROMPT, "region": REGION, "totals": LOG.totals(),
+    found = prompts()
+    return {"models": MODELS, "default_model": DEFAULT_MODEL, "prompts": found,
+            "default_prompt": DEFAULT_PROMPT if DEFAULT_PROMPT in found else next(iter(found), None),
+            "prompt_dir": str(DATA), "region": REGION, "totals": LOG.totals(),
             "records": LOG.recent(), "images": LOG.image_list(),
             "negative": neg}
 
@@ -194,6 +259,13 @@ def upload(body: dict) -> dict:
                                "size": len(data), "added": now, "used": now})
 
 
+def delete_image(body: dict) -> dict:
+    iid = str(body.get("id") or "")
+    if not ID_RE.match(iid):
+        raise ValueError("Bad picture id.")
+    return LOG.delete_image(iid)
+
+
 def image_file(iid: str):
     """(bytes, mime) of a stored picture, or None."""
     e = LOG.image(iid) if ID_RE.match(iid or "") else None
@@ -210,8 +282,7 @@ def generate(session, account: str, body: dict) -> dict:
     version = str(body.get("prompt") or DEFAULT_PROMPT)
     if model not in MODELS:
         raise ValueError("Unknown model %s." % model)
-    if version not in PROMPTS:
-        raise ValueError("Unknown base prompt %s." % version)
+    system = base_prompt(version)
     iid = str(body.get("image") or "")
     found = image_file(iid)
     if not found:
@@ -223,7 +294,7 @@ def generate(session, account: str, body: dict) -> dict:
 
     ask = ASK + (CHANGES % changes if changes else "")
     req = {"model": MODELS[model]["id"], "max_tokens": MAX_TOKENS, "messages": [
-        {"role": "system", "content": _prompt_file(version).read_text(encoding="utf-8")},
+        {"role": "system", "content": system},
         {"role": "user", "content": [
             {"type": "image_url", "image_url": {
                 "url": "data:%s;base64,%s" % (mime, base64.b64encode(data).decode())}},
@@ -246,6 +317,7 @@ def generate(session, account: str, body: dict) -> dict:
     tin, tout = usage.get("prompt_tokens") or 0, usage.get("completion_tokens") or 0
     rec = {"time": time.time(), "account": account, "image": iid, "name": LOG.image(iid)["name"],
            "model": model, "prompt": version, "changes": changes,
+           "prompt_sha": hashlib.sha256(system.encode()).hexdigest()[:8],
            "tokens_in": tin, "tokens_out": tout, "cost": cost(model, tin, tout),
            "seconds": round(time.time() - t, 1), "stop": choice.get("finish_reason"),
            "text": (choice["message"].get("content") or "").strip()}

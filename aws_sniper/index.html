@@ -269,11 +269,12 @@
       <div class="drop" id="pDrop">
         <img id="pCurImg" alt="" hidden>
         <div class="muted" id="pCurName">No picture yet: drop one here, paste with Ctrl+V, or upload.</div>
-        <button class="ghost small" id="pPick">Upload new picture…</button>
+        <div class="row"><button class="ghost small" id="pPick">Upload new picture…</button>
+          <button class="ghost small" id="pDel" hidden title="Deletes the picture and every prompt written for it">Delete picture…</button></div>
         <input type="file" id="pFile" accept="image/jpeg,image/png,image/webp,image/gif" hidden>
       </div>
       <div>
-        <div><span class="muted">Base prompt · pick one or both</span><div class="chips" id="pPrompt" style="margin-top:6px"></div></div>
+        <div><span class="muted">Base prompt · pick one or more · <span id="pPromptDir">each base_prompt_gpt_&lt;name&gt;.md in aws_sniper/img2prompt/</span></span> <button class="ghost small" id="pReload" title="Read the base prompt files again">↻ Reload</button><div class="chips" id="pPrompt" style="margin-top:6px"></div></div>
         <div class="sub"><span class="muted">Model · $ per million tokens, in / out · pick one or both</span><div class="chips" id="pModel"></div></div>
         <div class="sub"><span class="muted">Changes (optional): override the photo, e.g. "small bust", "red saree", "evening light". Lines starting with # are ignored.</span>
           <textarea id="pChanges" rows="3" placeholder="Leave empty to recreate the photo as it is"></textarea></div>
@@ -856,7 +857,8 @@ function showTab(name) {
   store.set("tab", name);
   document.querySelectorAll("nav.tabs [data-tab]").forEach(b => b.classList.toggle("on", b.dataset.tab === name));
   document.querySelectorAll(".tab").forEach(t => t.hidden = t.id !== "tab-" + name);
-  if (name === "prompt" && !P.cfg) loadPrompt().catch(e => $("pErr").textContent = e.message);
+  // Every visit reads the base prompt files again, so a new or edited v3 shows up.
+  if (name === "prompt" && !P.running) loadPrompt().catch(e => $("pErr").textContent = e.message);
 }
 document.querySelectorAll("nav.tabs [data-tab]").forEach(b => b.onclick = () => showTab(b.dataset.tab));
 
@@ -873,7 +875,7 @@ const curImage = () => P.cfg && P.cfg.images.find(i => i.id === P.cur);
 
 async function loadPrompt() {
   P.cfg = await api("/api/img2prompt");
-  const pick = (saved, all, dflt) => { const s = (saved || []).filter(k => all[k]); return s.length ? s : [dflt]; };
+  const pick = (saved, all, dflt) => { const s = (saved || []).filter(k => k in all); return s.length ? s : dflt == null ? [] : [dflt]; };
   P.models = pick(P.models, P.cfg.models, P.cfg.default_model);
   P.prompts = pick(P.prompts, P.cfg.prompts, P.cfg.default_prompt);
   if (!curImage()) P.cur = P.cfg.images.length ? P.cfg.images[0].id : null;
@@ -947,15 +949,17 @@ function queueBits(r) {
 }
 function drawPromptChips() {
   const c = P.cfg;
-  $("pPrompt").innerHTML = Object.entries(c.prompts).map(([k, what]) =>
-    `<button class="chip${P.prompts.includes(k) ? " on" : ""}" data-pprompt="${k}">${k} · ${esc(what)}</button>`).join("");
+  $("pPrompt").innerHTML = Object.keys(c.prompts).length ? Object.entries(c.prompts).map(([k, what]) =>
+    `<button class="chip${P.prompts.includes(k) ? " on" : ""}" data-pprompt="${esc(k)}" title="base_prompt_gpt_${esc(k)}.md">${esc(k)}${what ? " · " + esc(what) : ""}</button>`).join("")
+    : `<span class="error">No base prompts: add a base_prompt_gpt_&lt;name&gt;.md to ${esc(c.prompt_dir)}, then ↻ Reload.</span>`;
   $("pModel").innerHTML = Object.entries(c.models).map(([k, m]) =>
     `<button class="chip${P.models.includes(k) ? " on" : ""}" data-pmodel="${k}">${esc(m.label)} · $${m.in.toFixed(2)} / $${m.out.toFixed(2)}</button>`).join("");
   syncGo();
 }
 function syncGo() {
   const n = P.models.length * P.prompts.length;
-  $("pGo").disabled = P.running || !curImage();
+  $("pGo").disabled = P.running || !curImage() || !P.prompts.length;
+  $("pDel").disabled = P.running;
   $("pGo").textContent = P.running ? "Generating…" : n > 1 ? `Generate ${n} prompts` : "Generate";
 }
 function drawPromptTotals(t) {
@@ -971,6 +975,7 @@ function drawPromptTotals(t) {
 function drawCurrent() {
   const im = curImage();
   $("pCurImg").hidden = !im;
+  $("pDel").hidden = !im;
   if (im && $("pCurImg").dataset.id !== im.id) { $("pCurImg").src = imgUrl(im.id); $("pCurImg").dataset.id = im.id; }
   $("pCurName").textContent = im ? `${im.name} · used for every Generate until you upload or pick another`
                                  : "No picture yet: drop one here, paste with Ctrl+V, or upload.";
@@ -1047,6 +1052,23 @@ async function uploadImage(files) {
   } catch (e) { $("pErr").textContent = e.message; drawCurrent(); }
 }
 
+async function deleteImage() {
+  const im = curImage(); if (!im || P.running) return;
+  const n = P.cfg.records.filter(r => r.image === im.id).length;
+  if (!confirm(`Delete ${im.name}?\n\nThe picture and its ${n} prompt${n === 1 ? "" : "s"} are deleted for good. ` +
+               `What they cost stays in the totals and the Credit card. Jobs already sent to an instance's queue keep running.`)) return;
+  $("pErr").textContent = "";
+  try {
+    const r = await api("/api/img2prompt/delete", {id: im.id});
+    P.cfg.images = P.cfg.images.filter(i => i.id !== im.id);
+    P.cfg.records = P.cfg.records.filter(x => x.image !== im.id);
+    P.cfg.totals = r.totals;
+    setCurrent(P.cfg.images.length ? P.cfg.images[0].id : null);
+    drawPrompt();
+    toast(`Deleted ${r.deleted.name} and ${r.deleted.prompts} prompt${r.deleted.prompts === 1 ? "" : "s"}.`);
+  } catch (e) { $("pErr").textContent = e.message; }
+}
+
 async function generate() {
   const im = curImage(); if (!im || P.running) return;
   P.running = true; P.fails = []; $("pErr").textContent = "";
@@ -1096,6 +1118,8 @@ $("tab-prompt").addEventListener("click", e => {
   else if (b.dataset.psave) { const r = rec(b.dataset.psave); saveTxt(r.name.replace(/\.[^.]+$/, "") + "." + r.model + "-" + r.prompt, r.text); }
 });
 $("pPick").onclick = () => $("pFile").click();
+$("pDel").onclick = () => deleteImage();
+$("pReload").onclick = () => loadPrompt().then(() => toast(`${Object.keys(P.cfg.prompts).length} base prompts.`), e => $("pErr").textContent = e.message);
 $("pFile").onchange = () => { uploadImage([...$("pFile").files]); $("pFile").value = ""; };
 $("pGo").onclick = () => generate();
 $("pChanges").value = store.get("p.changes", "");
