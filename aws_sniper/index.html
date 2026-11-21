@@ -34,6 +34,7 @@
   .row { display:flex; gap:10px; align-items:center; flex-wrap:wrap; margin-top:12px; }
   .muted { color:var(--c-text-muted); font-size:var(--t-xs); }
   .note { color:var(--c-warning); font-size:var(--t-xs); }
+  .nocap { color:var(--c-error); font-weight:var(--fw-semibold); }
   .error { color:var(--c-error); white-space:pre-wrap; font-size:var(--t-sm); }
   .error:empty { display:none; }
   .chips { display:flex; gap:8px; flex-wrap:wrap; }
@@ -136,7 +137,17 @@
   .phist:last-child { border-bottom:0; }
   .phist summary { cursor:pointer; display:flex; gap:8px; align-items:center; flex-wrap:wrap; font-size:var(--t-sm); }
   .phist summary img { width:36px; height:36px; object-fit:cover; border-radius:var(--r-sm); }
+  .pqueue { margin-top:10px; display:flex; flex-direction:column; gap:6px; }
+  .pqrow img { width:28px; height:28px; object-fit:cover; border-radius:var(--r-sm); vertical-align:middle; }
   .phist pre { color:var(--c-text); font-size:var(--t-sm); font-family:var(--font-sans); max-height:320px; }
+  .trefs { display:flex; flex-direction:column; gap:8px; margin-top:8px; }
+  .trefs:empty { display:none; }
+  .tref { display:flex; gap:10px; align-items:center; }
+  .tref img { width:64px; height:64px; object-fit:cover; border-radius:var(--r-sm); flex:none; }
+  .tref input { flex:1; min-width:0; }
+  #tDrop { margin-top:8px; padding:12px; }
+  .tbrief { font-size:var(--t-sm); margin:6px 0; white-space:pre-wrap; }
+  .tthumb { width:28px; height:28px; object-fit:cover; border-radius:var(--r-sm); vertical-align:middle; margin-right:6px; }
 </style>
 </head>
 <body>
@@ -161,6 +172,7 @@
   <nav class="tabs">
     <button data-tab="sniper">Sniper</button>
     <button data-tab="prompt">Image to prompt</button>
+    <button data-tab="text">Text to prompt</button>
   </nav>
   <div class="error" id="licence"></div>
   <div class="error" id="banner"></div>
@@ -278,14 +290,18 @@
         <div class="sub"><span class="muted">Model · $ per million tokens, in / out · pick one or both</span><div class="chips" id="pModel"></div></div>
         <div class="sub"><span class="muted">Changes (optional): override the photo, e.g. "small bust", "red saree", "evening light". Lines starting with # are ignored.</span>
           <textarea id="pChanges" rows="3" placeholder="Leave empty to recreate the photo as it is"></textarea></div>
-        <div class="sub"><span class="muted">Send to the app · Krea 2 V2 · Natural Raw 2 as it is, batch 1 · each job goes to the top of the queue</span>
+        <div id="pSendSlot"><div class="sub" id="pSend"><span class="muted">Send to the app · Krea 2 V2 · Natural Raw 2, batch 1, your steps and aspect if set · each job goes to the top of the queue · the same on both prompt tabs</span>
           <div class="row" style="margin-top:6px">
             <label>Instance <select id="pInst"></select></label>
+            <label>Steps <input type="number" id="pSteps" min="1" max="150" step="1" style="width:5.5em" title="Empty: the preset's own step count"></label>
+            <button class="small" id="pStepsReset" title="Back to Natural Raw 2's own step count">Preset</button>
+            <label>Aspect <select id="pAspect" title="Every job uses this aspect"><option value="">Preset's own</option></select></label>
           </div>
-          <div class="muted" id="pAppNote" style="margin-top:6px"></div></div>
+          <div class="muted" id="pAppNote" style="margin-top:6px"></div></div></div>
         <div class="row"><button id="pGo" disabled>Generate</button>
           <label class="check"><input type="checkbox" id="pAuto"> Send new prompts to the top of the queue</label>
           <span class="muted" id="pNote"></span></div>
+        <div id="pQueue" class="pqueue" hidden></div>
       </div>
     </div>
     <div class="error" id="pErr"></div>
@@ -300,12 +316,64 @@
     <div id="pHist"></div>
   </details>
   </div>
+
+  <div class="tab" id="tab-text" hidden>
+  <section class="card">
+    <h2>Text to prompt <span class="muted">write a short brief, add reference pictures if you like, and a model on Bedrock writes the detailed prompt · paid from the credit of account <b data-acctplain></b></span></h2>
+    <div class="stats">
+      <div><b id="tLast">—</b><span id="tLastWhat">last Generate</span></div>
+      <div><b id="tSession">—</b><span id="tSessionWhat">this session</span></div>
+      <div><b id="tTotal">—</b><span id="tTotalWhat">all time on this page</span></div>
+    </div>
+    <div class="sub"><span class="muted">Brief · who, what, where, the light, the camera: anything it says is kept, everything else is filled in</span>
+      <textarea id="tBrief" rows="5" placeholder="e.g. 28-year-old Indian woman in a mustard cotton kurta on a balcony swing at dusk, laughing at a friend off-camera, phone photo"></textarea></div>
+    <div class="sub"><span class="muted" id="tRefsWhat">Reference pictures (optional) · say what to take from each, e.g. "background like this", "this outfit", "this pose"</span>
+      <div class="trefs" id="tRefs"></div>
+      <div class="drop" id="tDrop"><span class="muted">Drop pictures here, paste with Ctrl+V, or</span>
+        <button class="ghost small" id="tPick">Add pictures…</button>
+        <input type="file" id="tFile" accept="image/jpeg,image/png,image/webp,image/gif" multiple hidden></div></div>
+    <div class="sub"><span class="muted">Base prompt · pick one or more · each base_prompt_&lt;name&gt;.md in aws_sniper/txt2prompt/</span> <button class="ghost small" id="tReload" title="Read the base prompt files again">↻ Reload</button><div class="chips" id="tPrompt" style="margin-top:6px"></div></div>
+    <div class="sub"><span class="muted">Model · $ per million tokens, in / out · pick one or both</span><div class="chips" id="tModel"></div></div>
+    <div id="tSendSlot"></div>
+    <div class="row"><button id="tGo" disabled>Generate</button>
+      <label class="check"><input type="checkbox" id="tAuto"> Send new prompts to the top of the queue</label></div>
+    <div class="error" id="tErr"></div>
+    <div id="tResults"></div>
+  </section>
+  <details class="card fold" id="tHistBox">
+    <summary><h2>Past prompts <span class="muted" id="tHistWhat">kept in aws_sniper/txt2prompt/history.json</span></h2></summary>
+    <div id="tHist"></div>
+  </details>
+  </div>
 </main>
 <div class="toast" id="toast" hidden></div>
 
 <script>
 const $ = id => document.getElementById(id);
-const esc = s => String(s ?? "").replace(/[&<>"']/g, c => ({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]));
+// Sniping log only: "round 43: g7e.2xlarge ap-south-1a: no capacity; g7e.2xlarge ap-south-1b: no capacity"
+// becomes "round 43: g7e.2x aps1a/b: no capacity" (xlarge -> x, zone -> aps1a, same result grouped).
+const shortType = t => t.replace(/\.(\d*)xlarge$/, (m, n) => "." + (n || "1") + "x");
+const shortZone = z => z.replace(/^([a-z]+)-([a-z])[a-z]*-(\d+)([a-z])$/, "$1$2$3$4");
+function shortRound(line) {
+  const m = line.match(/^(.*?round \d+: )(.*)$/);
+  if (!m) return line;
+  const byResult = new Map();                     // result -> Map(type -> [zones])
+  for (const seg of m[2].split("; ")) {
+    const k = seg.match(/^(?:(\S+) )?([a-z]{2}-[a-z]+-\d+[a-z]): (.+)$/);
+    if (!k) return line;                          // unexpected shape: show it untouched
+    const [, type = "", zone, result] = k;
+    if (!byResult.has(result)) byResult.set(result, new Map());
+    const types = byResult.get(result);
+    if (!types.has(type)) types.set(type, []);
+    types.get(type).push(shortZone(zone));
+  }
+  return m[1] + [...byResult].map(([result, types]) => [...types].map(([type, zones]) => {
+    zones.sort();
+    const z = zones.map((x, i) => i && x.slice(0, -1) === zones[0].slice(0, -1) ? x.slice(-1) : x).join("/");
+    return (type ? shortType(type) + " " : "") + z;
+  }).join(", ") + ": " + result).join("; ");
+}
+const esc = s =>String(s ?? "").replace(/[&<>"']/g, c => ({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]));
 const store = {
   get(k, d) { try { const v = localStorage.getItem("awssniper." + k); return v === null ? d : JSON.parse(v); } catch { return d; } },
   set(k, v) { try { localStorage.setItem("awssniper." + k, JSON.stringify(v)); } catch {} },
@@ -528,7 +596,13 @@ function dur(s) { s = Math.max(0, Math.round(s)); const h = Math.floor(s / 3600)
 
 async function poll() {
   let st;
-  try { st = await api("/api/status?account=" + encodeURIComponent(acct())); } catch (e) { $("instErr").textContent = "Server not answering: " + e.message; return; }
+  // Not api(): its error field is a note (e.g. one account's keys don't
+  // work), shown below, and the rest of the answer is still good.
+  try {
+    const r = await fetch("/api/status?account=" + encodeURIComponent(acct()));
+    st = await r.json();
+    if (!r.ok) throw new Error(st.error || r.statusText);
+  } catch (e) { $("instErr").textContent = "Server not answering: " + e.message; return; }
   // The snipe.
   const s = st.snipe;
   busy = !!(s && s.state === "sniping");
@@ -538,7 +612,7 @@ async function poll() {
     $("runState").textContent = s.dry_run ? "dry run · " + s.state : s.state;
     $("runWhat").textContent = `${s.account} · ${s.market} · ${s.types.join(" → ")} · ${s.region} · since ${new Date(s.started * 1000).toLocaleTimeString()}`;
     const log = $("runLog"), atEnd = log.scrollTop + log.clientHeight >= log.scrollHeight - 4;
-    log.textContent = s.log.join("\n");
+    log.innerHTML = esc(s.log.map(shortRound).join("\n")).replace(/no capacity/g, '<span class="nocap">no capacity</span>');
     if (atEnd) log.scrollTop = log.scrollHeight;
   }
   $("otherSnipes").textContent = (st.other_snipes || []).map(o => `Also sniping in account ${o.account} (${o.region}): pick it above to see or stop it.`).join("\n");
@@ -859,6 +933,12 @@ function showTab(name) {
   document.querySelectorAll(".tab").forEach(t => t.hidden = t.id !== "tab-" + name);
   // Every visit reads the base prompt files again, so a new or edited v3 shows up.
   if (name === "prompt" && !P.running) loadPrompt().catch(e => $("pErr").textContent = e.message);
+  // Text to prompt sends through the Image to prompt tab's instance, steps and aspect.
+  if (name === "text") {
+    if (!P.cfg) loadPrompt().catch(e => $("tErr").textContent = e.message);
+    if (!T.active) loadText().catch(e => $("tErr").textContent = e.message);
+  }
+  (name === "text" ? $("tSendSlot") : $("pSendSlot")).appendChild($("pSend"));
 }
 document.querySelectorAll("nav.tabs [data-tab]").forEach(b => b.onclick = () => showTab(b.dataset.tab));
 
@@ -867,6 +947,7 @@ document.querySelectorAll("nav.tabs [data-tab]").forEach(b => b.onclick = () => 
 // picked from the earlier ones. Generate writes one prompt per ticked model
 // × ticked base prompt, all at once. Pictures and results stay on this PC.
 const P = {cfg: null, cur: store.get("p.cur", null), pending: [], fails: [], running: false, lastRun: null,
+           queue: [], runSeq: 0,
            models: store.get("p.models", null), prompts: store.get("p.prompts", null)};
 const money3 = v => v == null ? "—" : v < 0.01 && v > 0 ? "$" + v.toFixed(4) : "$" + v.toFixed(3);
 const imgUrl = id => "/api/img2prompt/image?id=" + encodeURIComponent(id);
@@ -900,7 +981,7 @@ function drawInstances() {
     : `<option value="">No running instance with the app in account ${esc(acct())}</option>`;
   $("pInst").disabled = !rows.length;
   if (pick !== P.inst || !P.app) { P.inst = pick; loadAppOptions(); }
-  drawResults(); drawPromptHistory();
+  drawResults(); drawPromptHistory(); drawTextResults(); drawTextHistory();
 }
 async function loadAppOptions() {
   const id = P.inst; P.app = null;
@@ -918,34 +999,74 @@ function drawAppNote() {
   const negLine = n.error ? `<span class="error">${esc(n.error)}</span>`
     : n.text ? `Negative: from <code>${esc(n.file)}</code> (${n.text.split(/\s+/).length} words).`
     : `Negative: Natural Raw 2's own, while "negative" in <code>${esc(n.file)}</code> is empty.`;
-  let s = negLine;
+  const ps = P.app && P.app.preset_steps;
+  $("pSteps").placeholder = ps != null ? String(ps) : "preset";
+  const st = stepsOverride();
+  const stepLine = st == null && $("pSteps").value.trim() ? `<span class="error">Steps must be a whole number from 1 to 150.</span>`
+    : st != null ? `Steps: ${st} on every job${ps != null && ps !== st ? ` (Natural Raw 2 has ${ps})` : ""}.`
+    : `Steps: Natural Raw 2's own${ps != null ? ` (${ps})` : ""}.`;
+  drawAspects();
+  const pa = P.app && P.app.preset_aspect, ar = $("pAspect").value;
+  const offered = !P.app || (P.app.aspects || []).includes(ar);
+  const aspectLine = ar && !offered ? `<span class="error">This instance has no ${esc(ar)} aspect: queueing will fail.</span>`
+    : ar ? `Aspect: ${esc(ar)} on every job${pa && pa !== ar ? ` (Natural Raw 2 has ${esc(pa)})` : ""}.`
+    : `Aspect: Natural Raw 2's own${pa ? ` (${esc(pa)})` : ""}.`;
+  let s = stepLine + " " + aspectLine + " " + negLine;
   if (P.inst && !P.app && P.appError) s = `<span class="error">${esc(P.appError)}</span> ` + s;
   else if (P.app && !P.app.has_preset) s = `<span class="note">This instance doesn't offer the ${esc(P.app.preset)} preset: queueing will fail.</span> ` + s;
   $("pAppNote").innerHTML = s;
   P.appError = null;
 }
 $("pInst").onchange = () => { P.inst = $("pInst").value; store.set("p.inst", P.inst); loadAppOptions(); drawResults(); drawPromptHistory(); };
+// Steps override: empty = the preset's own; a number is sent with every job.
+function stepsOverride() {
+  const v = $("pSteps").value.trim();
+  if (!v) return null;
+  const n = Number(v);
+  return Number.isInteger(n) && n >= 1 && n <= 150 ? n : null;
+}
+$("pSteps").value = store.get("p.steps", "") ?? "";
+$("pSteps").oninput = () => { store.set("p.steps", $("pSteps").value.trim()); if (P.cfg) drawAppNote(); };
+$("pStepsReset").onclick = () => { $("pSteps").value = ""; store.set("p.steps", ""); if (P.cfg) drawAppNote(); };
+// Aspect override: "" = the preset's own; the list is the instance's own labels.
+function drawAspects() {
+  const want = store.get("p.aspect", "") || "";
+  const all = (P.app && P.app.aspects) || [];
+  const pa = P.app && P.app.preset_aspect;
+  const opts = [`<option value="">Preset's own${pa ? " · " + esc(pa) : ""}</option>`]
+    .concat(all.map(a => `<option value="${esc(a)}"${a === want ? " selected" : ""}>${esc(a)}</option>`));
+  if (want && !all.includes(want))      // kept so the choice survives an instance that lacks it
+    opts.push(`<option value="${esc(want)}" selected>${esc(want)}${P.app ? " · not on this instance" : ""}</option>`);
+  $("pAspect").innerHTML = opts.join("");
+}
+$("pAspect").onchange = () => { store.set("p.aspect", $("pAspect").value); if (P.cfg) drawAppNote(); };
 $("pAuto").checked = store.get("p.auto", false);
 $("pAuto").onchange = () => store.set("p.auto", $("pAuto").checked);
 
 const queueable = r => r.text && !r.text.startsWith("SKIP:");
-async function queueRecord(r) {
+function redrawQueued() {
+  if (P.cfg) { drawResults(); drawPromptHistory(); }
+  drawTextResults(); drawTextHistory();
+}
+async function queueRecord(r, kind = "image") {
   if (!P.inst) throw new Error("No running instance to send it to.");
   const inst = P.inst, name = $("pInst").selectedOptions[0].textContent.split(" · ")[0];
-  r.queueState = "sending"; r.queueError = ""; drawResults(); drawPromptHistory();
+  r.queueState = "sending"; r.queueError = ""; redrawQueued();
   try {
-    const res = await api("/api/img2prompt/queue", {id: inst, time: r.time});
+    // An invalid entry goes as typed, so the server refuses it instead of quietly using the preset's.
+    const res = await api(kind === "text" ? "/api/txt2prompt/queue" : "/api/img2prompt/queue", {id: inst, time: r.time, steps: stepsOverride() ?? ($("pSteps").value.trim() || null),
+                                                      aspect: $("pAspect").value || null});
     (r.queued = r.queued || []).push(res.sent);
     r.queueState = "";
     toast(`Queued at the top on ${name}`);
   } catch (e) { r.queueState = ""; r.queueError = e.message; }
-  drawResults(); drawPromptHistory();
+  redrawQueued();
 }
-function queueBits(r) {
+function queueBits(r, attr = "pqueue") {
   const n = (r.queued || []).length;
   return (n ? `<span class="badge good" title="${esc((r.queued || []).map(q => `${when(q.time)} · ${q.instance} · job ${q.job}`).join("\n"))}">queued${n > 1 ? " ×" + n : ""}</span>` : "") +
     (r.queueState === "sending" ? `<span class="badge busy">sending…</span>` : "") +
-    `<button class="small" data-pqueue="${r.time}"${!queueable(r) || !P.inst || r.queueState ? " disabled" : ""} title="${queueable(r) ? "Krea 2 V2 · Natural Raw 2 · batch 1, at the top of the queue" : "The model skipped this picture"}">⤒ Queue</button>`;
+    `<button class="small" data-${attr}="${r.time}"${!queueable(r) || !P.inst || r.queueState ? " disabled" : ""} title="${queueable(r) ? "Krea 2 V2 · Natural Raw 2 · batch 1, at the top of the queue" : "The model skipped it: nothing to queue"}">⤒ Queue</button>`;
 }
 function drawPromptChips() {
   const c = P.cfg;
@@ -958,18 +1079,32 @@ function drawPromptChips() {
 }
 function syncGo() {
   const n = P.models.length * P.prompts.length;
-  $("pGo").disabled = P.running || !curImage() || !P.prompts.length;
-  $("pDel").disabled = P.running;
-  $("pGo").textContent = P.running ? "Generating…" : n > 1 ? `Generate ${n} prompts` : "Generate";
+  $("pGo").disabled = !curImage() || !P.prompts.length;
+  $("pDel").disabled = imageBusy(P.cur);
+  $("pDel").title = imageBusy(P.cur) ? "This picture has prompts being written or waiting" : "";
+  const what = n > 1 ? `${n} prompts` : "";
+  $("pGo").textContent = (what ? `Generate ${what}` : "Generate") + (P.active ? ` · ${P.active} writing` : "");
+  drawQueue();
 }
-function drawPromptTotals(t) {
-  $("pSession").textContent = money3(t.session);
-  $("pSessionWhat").textContent = `this session · ${t.session_count} prompt${t.session_count === 1 ? "" : "s"} since the server started ${when(t.session_started)}`;
-  $("pTotal").textContent = money3(t.total);
-  $("pTotalWhat").textContent = `all time on this page · ${t.count} prompt${t.count === 1 ? "" : "s"}` + (t.since ? " since " + new Date(t.since * 1000).toLocaleDateString() : "");
-  if (P.lastRun) {
-    $("pLast").textContent = money3(P.lastRun.cost);
-    $("pLastWhat").textContent = `last Generate · ${P.lastRun.n} prompt${P.lastRun.n === 1 ? "" : "s"}`;
+// A picture with a run going or waiting can't be deleted under it.
+const imageBusy = id => !!id && (P.pending.some(p => p.image === id) || P.queue.some(r => r.image === id));
+function drawQueue() {
+  const q = P.queue;
+  $("pQueue").hidden = !q.length;
+  $("pQueue").innerHTML = q.length ? `<div class="muted">Waiting · ${q.length} run${q.length === 1 ? "" : "s"}, each starts when one of the ${MAX_RUNS} writing finishes</div>` +
+    q.map((r, i) => `<div class="row pqrow">${i + 1}. <img src="${imgUrl(r.image)}" alt="" loading="lazy"> <b>${esc(r.name)}</b>
+      <span class="muted">${r.jobs.length} prompt${r.jobs.length === 1 ? "" : "s"}${r.changes.trim() ? " · with changes" : ""}${r.auto ? " · auto-send" : ""}</span>
+      <button class="ghost small" data-pqcancel="${r.id}">✕ Remove</button></div>`).join("") : "";
+}
+function drawPromptTotals(t) { drawTotals("p", t, P.lastRun); }
+function drawTotals(pre, t, last) {
+  $(pre + "Session").textContent = money3(t.session);
+  $(pre + "SessionWhat").textContent = `this session · ${t.session_count} prompt${t.session_count === 1 ? "" : "s"} since the server started ${when(t.session_started)}`;
+  $(pre + "Total").textContent = money3(t.total);
+  $(pre + "TotalWhat").textContent = `all time on this page · ${t.count} prompt${t.count === 1 ? "" : "s"}` + (t.since ? " since " + new Date(t.since * 1000).toLocaleDateString() : "");
+  if (last) {
+    $(pre + "Last").textContent = money3(last.cost);
+    $(pre + "LastWhat").textContent = `last Generate · ${last.n} prompt${last.n === 1 ? "" : "s"}`;
   }
 }
 function drawCurrent() {
@@ -998,7 +1133,10 @@ function recLine(r) {
 function drawResults() {
   const label = (m, v) => `<b>${esc(P.cfg.models[m].label)}</b> · ${esc(v)}`;
   const recs = P.cfg.records.filter(r => r.image === P.cur);
+  const waiting = P.queue.filter(r => r.image === P.cur).flatMap(r => r.jobs);
   $("pResults").innerHTML =
+    waiting.map(p => `<div class="pres"><header>${label(p.model, p.prompt)}
+      <span class="badge">waiting</span></header></div>`).join("") +
     P.pending.filter(p => p.image === P.cur).map(p => `<div class="pres"><header>${label(p.model, p.prompt)}
       <span class="badge busy">writing…</span></header></div>`).join("") +
     P.fails.filter(p => p.image === P.cur).map(p => `<div class="pres"><header>${label(p.model, p.prompt)}
@@ -1029,6 +1167,32 @@ function setCurrent(id) {
   drawCurrent(); drawStrip(); drawResults();
 }
 
+// Bedrock refuses a request over about 3.5 MB, and the picture goes in it as
+// base64 (a third bigger). So a picture bigger than maxBytes or maxSide pixels
+// is redrawn as a JPEG that fits; a small one goes as it is.
+async function shrinkImage(file, maxSide, maxBytes) {
+  const name = file.name || `pasted-${Date.now()}.${file.type.split("/")[1]}`;
+  let bmp;
+  try { bmp = await createImageBitmap(file); } catch { return {blob: file, type: file.type, name}; }
+  const side = Math.max(bmp.width, bmp.height);
+  if (file.size <= maxBytes && side <= maxSide) { bmp.close(); return {blob: file, type: file.type, name}; }
+  let scale = Math.min(1, maxSide / side), blob = null;
+  for (let tries = 0; tries < 8; tries++) {
+    const c = document.createElement("canvas");
+    c.width = Math.max(1, Math.round(bmp.width * scale)); c.height = Math.max(1, Math.round(bmp.height * scale));
+    const g = c.getContext("2d");
+    g.fillStyle = "#fff"; g.fillRect(0, 0, c.width, c.height);      // transparent PNGs get a white background
+    g.drawImage(bmp, 0, 0, c.width, c.height);
+    for (const q of [0.92, 0.85, 0.75]) {
+      blob = await new Promise(ok => c.toBlob(ok, "image/jpeg", q));
+      if (blob && blob.size <= maxBytes) break;
+    }
+    if (blob && blob.size <= maxBytes) break;
+    scale *= 0.8;
+  }
+  bmp.close();
+  return {blob, type: "image/jpeg", name: name.replace(/\.[^.]*$/, "") + ".jpg"};
+}
 const readB64 = f => new Promise((ok, bad) => {
   const fr = new FileReader();
   fr.onload = () => ok(String(fr.result).split(",")[1]);
@@ -1040,12 +1204,11 @@ async function uploadImage(files) {
   const f = files.find(f => f.type.startsWith("image/"));
   if (!f) { $("pErr").textContent = "That isn't an image."; return; }
   if (!["image/jpeg", "image/png", "image/webp", "image/gif"].includes(f.type)) { $("pErr").textContent = `${f.name}: use a JPEG, PNG, WebP or GIF.`; return; }
-  if (f.size > 15 * 2 ** 20) { $("pErr").textContent = `${f.name}: over 15 MB.`; return; }
   if (files.length > 1) toast("One picture at a time: using " + (f.name || "the first one") + ".");
   $("pCurName").textContent = "Uploading…";
   try {
-    const {image} = await api("/api/img2prompt/upload", {name: f.name || `pasted-${Date.now()}.${f.type.split("/")[1]}`,
-                                                         type: f.type, data: await readB64(f)});
+    const s = await shrinkImage(f, 2048, 1.5 * 2 ** 20);
+    const {image} = await api("/api/img2prompt/upload", {name: s.name, type: s.type, data: await readB64(s.blob)});
     image.prompts = P.cfg.records.filter(r => r.image === image.id).length;
     P.cfg.images = [image].concat(P.cfg.images.filter(i => i.id !== image.id));
     setCurrent(image.id);
@@ -1053,7 +1216,7 @@ async function uploadImage(files) {
 }
 
 async function deleteImage() {
-  const im = curImage(); if (!im || P.running) return;
+  const im = curImage(); if (!im || imageBusy(im.id)) return;
   const n = P.cfg.records.filter(r => r.image === im.id).length;
   if (!confirm(`Delete ${im.name}?\n\nThe picture and its ${n} prompt${n === 1 ? "" : "s"} are deleted for good. ` +
                `What they cost stays in the totals and the Credit card. Jobs already sent to an instance's queue keep running.`)) return;
@@ -1069,33 +1232,66 @@ async function deleteImage() {
   } catch (e) { $("pErr").textContent = e.message; }
 }
 
-async function generate() {
-  const im = curImage(); if (!im || P.running) return;
-  P.running = true; P.fails = []; $("pErr").textContent = "";
-  const changes = $("pChanges").value, account = acct();
-  const jobs = P.models.flatMap(model => P.prompts.map(prompt => ({image: im.id, model, prompt})));
-  P.pending = jobs.slice(); P.lastRun = {cost: 0, n: 0};
-  const autoQueue = $("pAuto").checked && !!P.inst, queued = [];
-  if ($("pAuto").checked && !P.inst) toast("No running instance: the prompts won't be queued.");
+// Generate never waits: each click snapshots the picture, models, base prompts,
+// changes and the auto-send tick into a run. Up to MAX_RUNS runs write at once;
+// the rest wait in line.
+const MAX_RUNS = 5;
+P.active = 0; P.sendChain = Promise.resolve();
+function generate() {
+  const im = curImage(); if (!im || !P.prompts.length) return;
+  $("pErr").textContent = "";
+  const run = {id: ++P.runSeq, image: im.id, name: im.name, changes: $("pChanges").value, account: acct(),
+               auto: $("pAuto").checked,
+               jobs: P.models.flatMap(model => P.prompts.map(prompt => ({image: im.id, model, prompt})))};
+  P.queue.push(run);
+  pump();
+  if (P.queue.length) toast(`${MAX_RUNS} runs already writing: ${run.name} waits · ${P.queue.length} in line.`);
+  syncGo(); drawResults();
+}
+function pump() {
+  while (P.active < MAX_RUNS && P.queue.length) {
+    const run = P.queue.shift();
+    P.active++; P.running = true;
+    runOne(run).catch(e => $("pErr").textContent = e.message).finally(() => {
+      P.active--; P.running = P.active > 0;
+      pump();
+      if (!P.running) refreshPrompt();
+      syncGo();
+    });
+  }
+}
+// Re-read history once nothing is writing, so a refresh never drops a run's live state.
+async function refreshPrompt() {
+  const c = await api("/api/img2prompt").catch(() => null);
+  if (c && !P.running) { P.cfg = c; drawPrompt(); }
+}
+
+async function runOne(run) {
+  P.fails = P.fails.filter(f => f.image !== run.image);
+  const {changes, account, jobs} = run;
+  P.pending = P.pending.concat(jobs);
+  const last = {cost: 0, n: 0};
+  const autoQueue = run.auto && !!P.inst, queued = [], fails = [];
+  if (run.auto && !P.inst) toast("No running instance: the prompts won't be queued.");
   syncGo(); drawResults();
   await Promise.all(jobs.map(async job => {
     try {
       const r = await api("/api/img2prompt", {account, changes, ...job});
       P.cfg.records.unshift(r.record);
-      P.lastRun.cost += r.record.cost; P.lastRun.n++;
+      last.cost += r.record.cost; last.n++;
+      P.lastRun = last;
       drawPromptTotals(r.totals);
       if (autoQueue && queueable(r.record)) queued.push(r.record);
-    } catch (e) { P.fails.push({...job, error: e.message}); }
+    } catch (e) { const f = {...job, error: e.message}; fails.push(f); P.fails.push(f); }
     P.pending = P.pending.filter(p => p !== job);
     drawResults();
   }));
-  // One after another, so each lands on top of the one before.
-  for (const rec of queued) await queueRecord(rec);
-  P.running = false;
-  toast(`${P.lastRun.n} prompt${P.lastRun.n === 1 ? "" : "s"} for ${money3(P.lastRun.cost)}` + (P.fails.length ? ` · ${P.fails.length} failed` : ""));
-  const c = await api("/api/img2prompt").catch(() => null);
-  if (c) P.cfg = c;
-  drawPrompt();
+  // Sends to the instance go single file across all runs, each landing on top of the one before.
+  P.sendChain = P.sendChain.then(async () => { for (const rec of queued) await queueRecord(rec); });
+  await P.sendChain;
+  toast(`${run.name}: ${last.n} prompt${last.n === 1 ? "" : "s"} for ${money3(last.cost)}` + (fails.length ? ` · ${fails.length} failed` : "") +
+        (P.queue.length ? ` · ${P.queue.length} run${P.queue.length === 1 ? "" : "s"} waiting` : ""));
+  drawPromptHistory(); drawStrip();
   poll();                                              // the Credit card counts this spend too
 }
 
@@ -1111,9 +1307,11 @@ function toggleIn(list, k) { return list.includes(k) ? (list.length > 1 ? list.f
 $("tab-prompt").addEventListener("click", e => {
   const b = e.target.closest("button"); if (!b) return;
   const rec = t => P.cfg.records.find(r => String(r.time) === t);
-  if (b.dataset.pprompt) { P.prompts = toggleIn(P.prompts, b.dataset.pprompt); store.set("p.prompts", P.prompts); drawPromptChips(); }
+  if (b.dataset.pqcancel) { P.queue = P.queue.filter(r => String(r.id) !== b.dataset.pqcancel); syncGo(); drawResults(); }
+  else if (b.dataset.pprompt) { P.prompts = toggleIn(P.prompts, b.dataset.pprompt); store.set("p.prompts", P.prompts); drawPromptChips(); }
   else if (b.dataset.pmodel) { P.models = toggleIn(P.models, b.dataset.pmodel); store.set("p.models", P.models); drawPromptChips(); }
   else if (b.dataset.puse) { setCurrent(b.dataset.puse); window.scrollTo({top: 0, behavior: "smooth"}); }
+  else if (b.dataset.pqueue) queueRecord(rec(b.dataset.pqueue)).catch(err => toast(err.message));
   else if (b.dataset.pcopy) copyText(rec(b.dataset.pcopy).text);
   else if (b.dataset.psave) { const r = rec(b.dataset.psave); saveTxt(r.name.replace(/\.[^.]+$/, "") + "." + r.model + "-" + r.prompt, r.text); }
 });
@@ -1133,6 +1331,168 @@ document.addEventListener("paste", e => {
   if ($("tab-prompt").hidden || e.target === $("pChanges")) return;
   const files = [...(e.clipboardData || {}).files || []];
   if (files.length) { e.preventDefault(); uploadImage(files); }
+});
+
+// ── Text to prompt ──
+// A brief plus optional reference pictures, each with a note on what to take
+// from it. Generate writes one prompt per ticked model × base prompt, all at
+// once; clicking again while they write starts another set.
+const T = {cfg: null, refs: store.get("t.refs", []) || [], pending: [], fails: [], mine: [], active: 0, seq: 0,
+           lastRun: null, models: store.get("t.models", null), prompts: store.get("t.prompts", null)};
+const tImgUrl = id => "/api/txt2prompt/image?id=" + encodeURIComponent(id);
+async function loadText() {
+  T.cfg = await api("/api/txt2prompt");
+  const pick = (saved, all, dflt) => { const s = (saved || []).filter(k => k in all); return s.length ? s : dflt == null ? [] : [dflt]; };
+  T.models = pick(T.models, T.cfg.models, T.cfg.default_model);
+  T.prompts = pick(T.prompts, T.cfg.prompts, T.cfg.default_prompt);
+  drawText();
+}
+function drawText() {
+  drawTextChips(); drawTotals("t", T.cfg.totals, T.lastRun); drawRefs(); drawTextResults(); drawTextHistory();
+}
+function drawTextChips() {
+  const c = T.cfg;
+  $("tPrompt").innerHTML = Object.keys(c.prompts).length ? Object.entries(c.prompts).map(([k, what]) =>
+    `<button class="chip${T.prompts.includes(k) ? " on" : ""}" data-tprompt="${esc(k)}" title="base_prompt_${esc(k)}.md">${esc(k)}${what ? " · " + esc(what) : ""}</button>`).join("")
+    : `<span class="error">No base prompts: add a base_prompt_&lt;name&gt;.md to ${esc(c.prompt_dir)}, then ↻ Reload.</span>`;
+  $("tModel").innerHTML = Object.entries(c.models).map(([k, m]) =>
+    `<button class="chip${T.models.includes(k) ? " on" : ""}" data-tmodel="${k}">${esc(m.label)} · $${m.in.toFixed(2)} / $${m.out.toFixed(2)}</button>`).join("");
+  syncTGo();
+}
+function syncTGo() {
+  const n = T.models.length * T.prompts.length;
+  $("tGo").disabled = !T.cfg || !$("tBrief").value.trim() || !T.prompts.length;
+  $("tGo").textContent = (n > 1 ? `Generate ${n} prompts` : "Generate") + (T.active ? ` · ${T.pending.length} writing` : "");
+}
+const saveRefs = () => store.set("t.refs", T.refs);
+function drawRefs() {
+  const max = T.cfg ? T.cfg.max_refs : 6;
+  $("tRefsWhat").textContent = `Reference pictures (optional, up to ${max}) · say what to take from each, e.g. "background like this", "this outfit", "this pose"` +
+    (T.refs.length ? ` · ${T.refs.length} added` : "");
+  $("tRefs").innerHTML = T.refs.map((r, i) => `<div class="tref">
+      <img src="${tImgUrl(r.id)}" alt="" title="${esc(r.name)}">
+      <input data-tnote="${i}" value="${esc(r.note || "")}" maxlength="300" placeholder="What to take from it, e.g. background like this">
+      <button class="ghost small" data-tdel="${i}" title="Remove this reference">✕</button></div>`).join("");
+  $("tDrop").hidden = T.refs.length >= max;
+}
+async function addRefs(files) {
+  $("tErr").textContent = "";
+  const ok = ["image/jpeg", "image/png", "image/webp", "image/gif"];
+  const max = T.cfg ? T.cfg.max_refs : 6;
+  for (const f of files) {
+    if (T.refs.length >= max) { toast(`At most ${max} reference pictures.`); break; }
+    if (!ok.includes(f.type)) { $("tErr").textContent = `${f.name || "That file"}: use a JPEG, PNG, WebP or GIF.`; continue; }
+    try {
+      // Small enough that all six fit in one Bedrock request.
+      const s = await shrinkImage(f, 1536, 380 * 1024);
+      const {image} = await api("/api/txt2prompt/upload", {name: s.name, type: s.type, data: await readB64(s.blob)});
+      if (!T.refs.some(r => r.id === image.id)) T.refs.push({id: image.id, name: image.name, note: ""});
+      saveRefs(); drawRefs();
+    } catch (e) { $("tErr").textContent = e.message; }
+  }
+}
+function tRecLine(r) {
+  const m = (T.cfg.models[r.model] || {}).label || r.model;
+  return `<b>${esc(m)}</b> · ${esc(r.prompt)} · ${r.tokens_in} in / ${r.tokens_out} out · <b>${money3(r.cost)}</b> · ${r.seconds} s` +
+    (r.stop === "length" ? ` <span class="note">cut off at the token limit</span>` : "");
+}
+const refThumbs = r => (r.refs || []).map(x => `<img class="tthumb" src="${tImgUrl(x.id)}" alt="" title="${esc(x.note || "no note")}">`).join("");
+const tButtons = r => `${queueBits(r, "tqueue")}<button class="ghost small" data-tcopy="${r.time}">Copy</button>` +
+  `<button class="ghost small" data-tsave="${r.time}">Save .txt</button><button class="ghost small" data-tuse="${r.time}">Use this brief</button>`;
+// This page's Generates: waiting ones first, then failures, then results newest first.
+function drawTextResults() {
+  if (!T.cfg) return;
+  const label = j => `<b>${esc(T.cfg.models[j.model].label)}</b> · ${esc(j.prompt)} · <span class="muted">${esc(j.name)}</span>`;
+  const recs = T.cfg.records.filter(r => T.mine.includes(r.time));
+  $("tResults").innerHTML =
+    T.pending.map(j => `<div class="pres"><header>${label(j)}<span class="badge busy">writing…</span></header></div>`).join("") +
+    T.fails.map(j => `<div class="pres"><header>${label(j)}<span class="badge bad">failed</span></header><div class="error">${esc(j.error)}</div></div>`).join("") +
+    recs.map(r => `<div class="pres"><header><span>${tRecLine(r)}</span><span class="grow"></span>
+        <span class="muted">${when(r.time)}</span>${tButtons(r)}</header>
+      <div class="muted tbrief">${refThumbs(r)}${esc(r.brief)}</div>
+      ${r.queueError ? `<div class="error">Queue: ${esc(r.queueError)}</div>` : ""}
+      <pre>${esc(r.text)}</pre></div>`).join("");
+}
+function drawTextHistory() {
+  if (!T.cfg) return;
+  const recs = T.cfg.records;
+  $("tHistWhat").textContent = `the last ${recs.length} · kept in aws_sniper/txt2prompt/history.json`;
+  $("tHist").innerHTML = recs.length ? recs.map(r => `<details class="phist"><summary>
+      ${refThumbs(r)}<span class="muted">${when(r.time)}</span> <b>${esc(r.name)}</b>${CFG && CFG.accounts.length > 1 ? ` <span class="badge">${esc(r.account)}</span>` : ""}
+      <span class="muted">${tRecLine(r)}</span></summary>
+      <div class="muted tbrief">${esc(r.brief)}${(r.refs || []).map((x, i) => `<br>Reference ${i + 1}: ${esc(x.note || "no note")}`).join("")}</div>
+      <pre>${esc(r.text)}</pre>
+      ${r.queueError ? `<div class="error">Queue: ${esc(r.queueError)}</div>` : ""}
+      <div class="row" style="margin-top:6px">${tButtons(r)}</div>
+    </details>`).join("") : `<div class="muted">Nothing yet.</div>`;
+}
+function tGenerate() {
+  const brief = $("tBrief").value.trim();
+  if (!T.cfg || !brief || !T.prompts.length) return;
+  $("tErr").textContent = "";
+  const refs = T.refs.map(r => ({id: r.id, note: r.note || ""})), account = acct();
+  const auto = $("tAuto").checked && !!P.inst;
+  if ($("tAuto").checked && !P.inst) toast("No running instance: the prompts won't be queued.");
+  const name = brief.split("\n")[0].slice(0, 60);
+  const jobs = T.models.flatMap(model => T.prompts.map(prompt => ({key: ++T.seq, model, prompt, name})));
+  const last = {cost: 0, n: 0}, queued = [], fails = [];
+  T.pending = T.pending.concat(jobs); T.active++; T.lastRun = last;
+  syncTGo(); drawTextResults();
+  Promise.all(jobs.map(async job => {
+    try {
+      const r = await api("/api/txt2prompt", {account, brief, refs, model: job.model, prompt: job.prompt});
+      T.cfg.records.unshift(r.record); T.mine.push(r.record.time);
+      last.cost += r.record.cost; last.n++;
+      drawTotals("t", r.totals, last);
+      if (auto && queueable(r.record)) queued.push(r.record);
+    } catch (e) { const f = {...job, error: e.message}; fails.push(f); T.fails.unshift(f); }
+    T.pending = T.pending.filter(p => p !== job);
+    syncTGo(); drawTextResults();
+  })).then(async () => {
+    // Shares the Image to prompt tab's single-file line to the instance.
+    P.sendChain = P.sendChain.then(async () => { for (const rec of queued) await queueRecord(rec, "text"); });
+    await P.sendChain;
+    T.active--; syncTGo(); drawTextHistory();
+    toast(`${name}: ${last.n} prompt${last.n === 1 ? "" : "s"} for ${money3(last.cost)}` + (fails.length ? ` · ${fails.length} failed` : ""));
+    poll();                                            // the Credit card counts this spend too
+  });
+}
+$("tab-text").addEventListener("click", e => {
+  const b = e.target.closest("button"); if (!b) return;
+  const rec = t => T.cfg.records.find(r => String(r.time) === t);
+  if (b.dataset.tprompt) { T.prompts = toggleIn(T.prompts, b.dataset.tprompt); store.set("t.prompts", T.prompts); drawTextChips(); }
+  else if (b.dataset.tmodel) { T.models = toggleIn(T.models, b.dataset.tmodel); store.set("t.models", T.models); drawTextChips(); }
+  else if (b.dataset.tdel) { T.refs.splice(Number(b.dataset.tdel), 1); saveRefs(); drawRefs(); }
+  else if (b.dataset.tqueue) queueRecord(rec(b.dataset.tqueue), "text").catch(err => toast(err.message));
+  else if (b.dataset.tcopy) copyText(rec(b.dataset.tcopy).text);
+  else if (b.dataset.tsave) { const r = rec(b.dataset.tsave); saveTxt(r.name.replace(/[^\w -]+/g, "").trim().slice(0, 40) + "." + r.model + "-" + r.prompt, r.text); }
+  else if (b.dataset.tuse) {
+    const r = rec(b.dataset.tuse);
+    $("tBrief").value = r.brief; store.set("t.brief", r.brief);
+    T.refs = (r.refs || []).map(x => ({id: x.id, name: x.name, note: x.note || ""})); saveRefs();
+    drawRefs(); syncTGo(); window.scrollTo({top: 0, behavior: "smooth"});
+  }
+});
+$("tRefs").addEventListener("input", e => {
+  const i = e.target.dataset.tnote; if (i == null || !T.refs[i]) return;
+  T.refs[i].note = e.target.value; saveRefs();
+});
+$("tPick").onclick = () => $("tFile").click();
+$("tFile").onchange = () => { addRefs([...$("tFile").files]); $("tFile").value = ""; };
+$("tReload").onclick = () => loadText().then(() => toast(`${Object.keys(T.cfg.prompts).length} base prompts.`), e => $("tErr").textContent = e.message);
+$("tGo").onclick = () => tGenerate();
+$("tBrief").value = store.get("t.brief", "") || "";
+$("tBrief").oninput = () => { store.set("t.brief", $("tBrief").value); syncTGo(); };
+$("tAuto").checked = store.get("t.auto", false);
+$("tAuto").onchange = () => store.set("t.auto", $("tAuto").checked);
+const tdrop = $("tDrop"), ttab = $("tab-text");
+ttab.addEventListener("dragover", e => { e.preventDefault(); tdrop.classList.add("over"); });
+ttab.addEventListener("dragleave", e => { if (!ttab.contains(e.relatedTarget)) tdrop.classList.remove("over"); });
+ttab.addEventListener("drop", e => { e.preventDefault(); tdrop.classList.remove("over"); addRefs([...e.dataTransfer.files]); });
+document.addEventListener("paste", e => {
+  if ($("tab-text").hidden) return;
+  const files = [...(e.clipboardData || {}).files || []].filter(f => f.type.startsWith("image/"));
+  if (files.length) { e.preventDefault(); addRefs(files); }       // plain text pastes into the brief as usual
 });
 
 showTab(store.get("tab", "sniper"));

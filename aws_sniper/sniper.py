@@ -13,8 +13,10 @@ prints how to reach it, and sounds the alarm.
     python aws_sniper/sniper.py ... --type g7e.2xlarge,g6e.2xlarge   # fallback
     python aws_sniper/sniper.py ... --dry-run       # check permissions only
 
-Exactly one instance: a launch is one RunInstances call with MaxCount=1,
-the calls are sequential, and the run stops at the first success. A run
+One instance: a launch is one RunInstances call with MaxCount=1, and no
+new round starts after the first success. Rounds overlap (a new one every
+--interval seconds), so a try already on its way can still land a second
+instance; the log then says EXTRA INSTANCE and you terminate it. A run
 also refuses to start while an instance it launched earlier (tag
 sniper=ember) is pending or running, so a second snipe can't double the
 bill. Stop or terminate that one first.
@@ -30,6 +32,7 @@ userdata.sh; nothing else in the template is changed.
 """
 
 import argparse
+import queue
 import random
 import re
 import sys
@@ -40,7 +43,8 @@ from pathlib import Path
 
 try:
     import boto3
-    from botocore.exceptions import ClientError, NoCredentialsError
+    from botocore.exceptions import ClientError, HTTPClientError, NoCredentialsError
+    from botocore.exceptions import ConnectionError as BotoConnectionError
 except ImportError:
     sys.exit("boto3 is missing:  pip install -r aws_sniper/requirements.txt")
 
@@ -64,7 +68,13 @@ ZONE_ERRORS = {"Unsupported", "InvalidAvailabilityZone"}
 # Slow down and keep going.
 THROTTLE_ERRORS = {"RequestLimitExceeded", "Throttling", "ThrottlingException"}
 # The account is still being verified: keep going, but slowly.
-PENDING_ERRORS = {"PendingVerification", "Blocked"}
+PENDING_ERRORS = {"PendingVerification"}
+# The account itself is held (billing or verification); retrying never clears it.
+BLOCKED_ERRORS = {"Blocked"}
+# The vCPU quota is full: after a launch, that just means another round won.
+QUOTA_ERRORS = {"VcpuLimitExceeded", "InstanceLimitExceeded", "MaxSpotInstanceCountExceeded"}
+# Rounds that may run at once (each one is a few seconds of tries).
+MAX_ROUNDS_IN_FLIGHT = 4
 # Anything else (quota, permissions, bad parameters) is fatal: retrying
 # would only repeat it.
 
@@ -230,6 +240,8 @@ class Sniper:
         self.say = log or say
         self.stop = stop or threading.Event()
         self.instance_id = None
+        self.wins = []                  # (instance id, type, zone), in launch order
+        self.lock = threading.Lock()
 
     # ── setup ───────────────────────────────────────────────────────
 
@@ -369,68 +381,145 @@ class Sniper:
             self.say(f"  {t}: {', '.join(zs)}")
 
         deadline = time.time() + a.minutes * 60 if a.minutes else None
-        rounds = 0
+        if a.dry_run:                   # one pass, then say what would happen
+            res = self.one_round(1, zones_of, ami, root_device, subnet_of, user_data)
+            if res[0] == "fatal":
+                return res[1]
+            for line in res[1]:
+                self.say(line)
+            self.say("Dry run done: nothing was launched.")
+            return 0
+
+        # Overlapping rounds: a new one starts every --interval seconds even
+        # while earlier ones are still going (each try takes ~2 s, so a full
+        # round takes longer than the interval). The first launch wins and
+        # no new round starts after it; a try already on its way can still
+        # land a second instance, which is reported loudly below.
+        results = queue.Queue()
+        active, rounds, next_start = 0, 0, time.time()
+        fatal = None
         while True:
-            rounds += 1
+            now = time.time()
+            starting = (not self.wins and fatal is None and not self.stop.is_set()
+                        and zones_of and active < MAX_ROUNDS_IN_FLIGHT and now >= next_start
+                        and not (deadline and now >= deadline))
+            if starting:
+                rounds += 1
+                active += 1
+                next_start = now + a.interval
+                threading.Thread(target=lambda n=rounds: results.put(self.one_round(
+                    n, zones_of, ami, root_device, subnet_of, user_data)), daemon=True).start()
+            elif active == 0 and (self.wins or fatal is not None or self.stop.is_set()
+                                  or not zones_of or (deadline and now >= deadline)):
+                break                   # nothing running and nothing more to start
+            try:
+                res = results.get(timeout=0.2)
+            except queue.Empty:
+                continue
+            active -= 1
+            if res[0] == "fatal":
+                fatal = res[1] if fatal is None else fatal
+            elif res[0] == "slow":      # account still being verified: back off
+                next_start = max(next_start, time.time() + 120)
+
+        if self.wins:
+            first = self.wins[0]
+            for extra in self.wins[1:]:
+                self.say(f"!!! EXTRA INSTANCE {extra[0]} ({extra[1]}) in {extra[2]} also launched. "
+                         "TERMINATE IT: it is billing too.")
+            rc = self.won(*first)
+            if len(self.wins) > 1:
+                self.say("!!! Reminder: terminate the extra instance(s): "
+                         + ", ".join(w[0] for w in self.wins[1:]))
+            return rc
+        if fatal is not None:
+            return fatal
+        if self.stop.is_set():
+            self.say("Stopped. Nothing was launched.")
+            return 3
+        if not zones_of:
+            self.say("No zone left to try.")
+            return 1
+        self.say(f"Gave up after {a.minutes} min.")
+        return 1
+
+    def one_round(self, n: int, zones_of: dict, ami, root_device, subnet_of, user_data) -> tuple:
+        """Try every (type, zone) once, types in preference order. Returns
+        ("fatal", rc), ("slow", outcomes) when the account is still being
+        verified, or ("done", outcomes). A launch goes into self.wins."""
+        with self.lock:
             order = []
             for t, zs in zones_of.items():      # types in preference order
                 zs = zs[:]
                 random.shuffle(zs)
                 order += [(t, z) for z in zs]
-            outcomes = []
-            for itype, zone in order:
-                if self.stop.is_set():
-                    self.say("Stopped. Nothing was launched.")
-                    return 3
-                where = f"{itype} {zone}" if len(zones_of) > 1 else zone
-                params = self.launch_params(itype, ami, root_device, subnet_of[zone], user_data)
-                try:
-                    resp = self.ec2.run_instances(**params)
-                except ClientError as err:
-                    code = code_of(err)
-                    if code == "DryRunOperation":
-                        outcomes.append(f"{where}: would succeed")
-                        continue
-                    if code in CAPACITY_ERRORS:
-                        outcomes.append(f"{where}: no capacity")
-                        continue
-                    if code in ZONE_ERRORS:
-                        self.say(f"{where}: {message_of(err)} (dropping this zone)")
-                        zones_of[itype].remove(zone)
-                        if not zones_of[itype]:
-                            del zones_of[itype]
-                        continue
-                    if code in THROTTLE_ERRORS:
-                        outcomes.append(f"{where}: throttled")
-                        time.sleep(5)
-                        continue
-                    if code in PENDING_ERRORS:
-                        outcomes.append(f"{where}: account still being verified")
-                        continue
+            several = len(zones_of) > 1
+        outcomes = []
+        for itype, zone in order:
+            if self.stop.is_set() or self.wins:
+                return ("done", outcomes)       # quietly: the run is ending
+            where = f"{itype} {zone}" if several else zone
+            params = self.launch_params(itype, ami, root_device, subnet_of[zone], user_data)
+            try:
+                resp = self.run_instances_retrying(params)
+                if resp is None:
+                    return ("done", outcomes)
+            except ClientError as err:
+                code = code_of(err)
+                if code == "DryRunOperation":
+                    outcomes.append(f"{where}: would succeed")
+                    continue
+                if code in CAPACITY_ERRORS:
+                    outcomes.append(f"{where}: no capacity")
+                    continue
+                if self.wins and code in QUOTA_ERRORS:
+                    continue        # another round already launched: quota full
+                if code in ZONE_ERRORS:
+                    self.say(f"{where}: {message_of(err)} (dropping this zone)")
+                    with self.lock:
+                        if zone in zones_of.get(itype, []):
+                            zones_of[itype].remove(zone)
+                            if not zones_of[itype]:
+                                del zones_of[itype]
+                    continue
+                if code in THROTTLE_ERRORS:
+                    outcomes.append(f"{where}: throttled")
+                    time.sleep(5)
+                    continue
+                if code in BLOCKED_ERRORS:
                     self.say(f"{where}: {code}: {message_of(err)}")
-                    self.say("Stopping: retrying won't fix this.")
-                    return 2
-                inst = resp["Instances"][0]
-                return self.won(inst["InstanceId"], itype, zone)
+                    self.say("Stopping: AWS has blocked this account. Check its email and "
+                             "Billing > Payments, and open the account-verification case "
+                             "linked above; sniping can't get past this.")
+                    return ("fatal", 2)
+                if code in PENDING_ERRORS:
+                    outcomes.append(f"{where}: account still being verified "
+                                    f"({code}: {message_of(err)})")
+                    continue
+                self.say(f"{where}: {code}: {message_of(err)}")
+                self.say("Stopping: retrying won't fix this.")
+                return ("fatal", 2)
+            inst = resp["Instances"][0]
+            with self.lock:
+                self.wins.append((inst["InstanceId"], itype, zone))
+            return ("done", outcomes)
+        if not self.a.dry_run and not self.wins and not self.stop.is_set():
+            self.say(f"round {n}: " + "; ".join(outcomes))
+        kind = "slow" if any("verified" in o for o in outcomes) else "done"
+        return (kind, outcomes)
 
-            if a.dry_run:
-                for line in outcomes:
-                    self.say(line)
-                self.say("Dry run done: nothing was launched.")
-                return 0
-            self.say(f"round {rounds}: " + "; ".join(outcomes))
-            if not zones_of:
-                self.say("No zone left to try.")
-                return 1
-            if deadline and time.time() >= deadline:
-                self.say(f"Gave up after {a.minutes} min.")
-                return 1
-            wait = a.interval
-            if any("verified" in o for o in outcomes):
-                wait = max(wait, 120)
-            if self.stop.wait(wait):
-                self.say("Stopped. Nothing was launched.")
-                return 3
+    def run_instances_retrying(self, params: dict):
+        """run_instances, retried through network trouble (timeouts, dropped
+        connections) with the same request. Its ClientToken makes the retry
+        safe: if the lost attempt did launch, AWS hands back that instance
+        instead of starting a second one. None when stopped meanwhile."""
+        while True:
+            try:
+                return self.ec2.run_instances(**params)
+            except (BotoConnectionError, HTTPClientError) as err:   # network only
+                self.say(f"network trouble ({err}); retrying the same request in 10 s")
+                if self.stop.wait(10):
+                    return None
 
     def won(self, instance_id: str, itype: str, zone: str) -> int:
         self.instance_id = instance_id
@@ -469,7 +558,7 @@ def main() -> int:
     ap.add_argument("--throughput", type=int, default=125, help="root gp3 MB/s, 125-1000 (default 125, free)")
     ap.add_argument("--iam-profile", default="", help="instance profile name, e.g. one with SSM access")
     ap.add_argument("--name", default="ember-gpu", help="Name tag")
-    ap.add_argument("--interval", type=int, default=20, help="seconds between rounds (default 20)")
+    ap.add_argument("--interval", type=int, default=20, help="seconds between round starts; rounds overlap (default 20)")
     ap.add_argument("--minutes", type=int, default=0, help="give up after this many minutes (0 = never)")
     ap.add_argument("--account", default=None,
                     help="account name from .env (AWS_ACCESS_KEY_ID__<name>); default: the plain keys")

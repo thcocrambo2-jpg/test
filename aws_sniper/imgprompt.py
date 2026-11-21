@@ -52,7 +52,6 @@ DEFAULT_MODEL = "qwen"
 # Base prompts are the files img2prompt/base_prompt_gpt_<name>.md; <name>
 # (letters, digits, _ or -) is what the tab shows. An optional first line
 # <!-- what it does --> becomes the chip's description and isn't sent.
-PROMPT_RE = re.compile(r"^base_prompt_gpt_([A-Za-z0-9_-]{1,32})\.md$")
 NAME_RE = re.compile(r"^[A-Za-z0-9_-]{1,32}$")
 DESC_RE = re.compile(r"^\s*<!--(.*?)-->[ \t]*\r?\n?", re.S)
 DEFAULT_PROMPT = "v1"
@@ -76,26 +75,26 @@ def _natural(name: str):
     return [int(p) if p.isdigit() else p.lower() for p in re.split(r"(\d+)", name)]
 
 
-def prompts() -> dict:
-    """{name: description} of every base prompt file, v2 before v10."""
+def prompts(data: Path = DATA, prefix: str = "base_prompt_gpt_") -> dict:
+    """{name: description} of every <prefix><name>.md in data, v2 before v10."""
     found = {}
-    for path in DATA.glob("base_prompt_gpt_*.md"):
-        m = PROMPT_RE.match(path.name)
+    for path in data.glob(prefix + "*.md"):
+        m = NAME_RE.match(path.name[len(prefix):-3])
         if not m or not path.is_file():
             continue
         try:
             d = DESC_RE.match(path.read_text(encoding="utf-8"))
         except OSError:
             continue
-        found[m.group(1)] = " ".join(d.group(1).split()) if d else ""
+        found[m.group(0)] = " ".join(d.group(1).split()) if d else ""
     return {k: found[k] for k in sorted(found, key=_natural)}
 
 
-def base_prompt(version: str) -> str:
+def base_prompt(version: str, data: Path = DATA, prefix: str = "base_prompt_gpt_") -> str:
     """The base prompt's text as sent: without its <!-- description --> line."""
     if not NAME_RE.match(version):
         raise ValueError("Unknown base prompt %s." % version)
-    path = DATA / ("base_prompt_gpt_%s.md" % version)
+    path = data / ("%s%s.md" % (prefix, version))
     try:
         text = DESC_RE.sub("", path.read_text(encoding="utf-8"), count=1).strip()
     except OSError:
@@ -114,10 +113,11 @@ class Log:
     """history.json: {"records": [...], "images": {id: {...}},
     "removed": [{time, account, cost}] of prompts deleted with their picture}."""
 
-    def __init__(self):
+    def __init__(self, path: Path = LOG_FILE, images: Path = IMAGES):
         self.lock = threading.Lock()
+        self.path, self.dir = path, images
         try:
-            saved = json.loads(LOG_FILE.read_text(encoding="utf-8"))
+            saved = json.loads(path.read_text(encoding="utf-8"))
         except (OSError, ValueError):
             saved = {}
         self.records = saved.get("records", [])
@@ -125,15 +125,15 @@ class Log:
         self.removed = saved.get("removed", [])
 
     def _save(self) -> None:
-        DATA.mkdir(exist_ok=True)
-        tmp = LOG_FILE.with_suffix(".json.part")
+        self.path.parent.mkdir(parents=True, exist_ok=True)
+        tmp = self.path.with_suffix(".json.part")
         tmp.write_text(json.dumps({"records": self.records, "images": self.images,
                                    "removed": self.removed}, indent=1), encoding="utf-8")
-        tmp.replace(LOG_FILE)
+        tmp.replace(self.path)
 
     def add(self, rec: dict) -> None:
         with self.lock:
-            if rec.get("image") in self.images:
+            if "image" not in rec or rec["image"] in self.images:
                 self.records.append(rec)
             else:                         # its picture was deleted while the model was writing
                 self.removed.append(_spend(rec))
@@ -150,7 +150,7 @@ class Log:
             self.removed.extend(_spend(r) for r in gone)
             self._save()
         try:
-            (IMAGES / ("%s.%s" % (iid, e["ext"]))).unlink()
+            (self.dir / ("%s.%s" % (iid, e["ext"]))).unlink()
         except FileNotFoundError:
             pass
         return {"id": iid, "name": e["name"], "prompts": len(gone),
@@ -239,7 +239,8 @@ def config() -> dict:
             "negative": neg}
 
 
-def upload(body: dict) -> dict:
+def upload(body: dict, log: "Log" = None) -> dict:
+    log = log or LOG
     mime = str(body.get("type") or "")
     if mime not in FORMATS:
         raise ValueError("Use a JPEG, PNG, WebP or GIF image (got %s)." % (mime or "unknown type"))
@@ -250,12 +251,12 @@ def upload(body: dict) -> dict:
         raise ValueError("Image over %d MB." % (MAX_IMAGE // 2 ** 20))
     iid = hashlib.sha256(data).hexdigest()[:16]
     ext = FORMATS[mime]
-    IMAGES.mkdir(parents=True, exist_ok=True)
-    path = IMAGES / ("%s.%s" % (iid, ext))
+    log.dir.mkdir(parents=True, exist_ok=True)
+    path = log.dir / ("%s.%s" % (iid, ext))
     if not path.exists():
         path.write_bytes(data)
     now = time.time()
-    return LOG.add_image(iid, {"name": str(body.get("name") or "image")[:200], "ext": ext,
+    return log.add_image(iid, {"name": str(body.get("name") or "image")[:200], "ext": ext,
                                "size": len(data), "added": now, "used": now})
 
 
@@ -266,10 +267,11 @@ def delete_image(body: dict) -> dict:
     return LOG.delete_image(iid)
 
 
-def image_file(iid: str):
+def image_file(iid: str, log: "Log" = None):
     """(bytes, mime) of a stored picture, or None."""
-    e = LOG.image(iid) if ID_RE.match(iid or "") else None
-    path = e and IMAGES / ("%s.%s" % (iid, e["ext"]))
+    log = log or LOG
+    e = log.image(iid) if ID_RE.match(iid or "") else None
+    path = e and log.dir / ("%s.%s" % (iid, e["ext"]))
     if not path or not path.is_file():
         return None
     return path.read_bytes(), MIME[e["ext"]]
@@ -293,13 +295,26 @@ def generate(session, account: str, body: dict) -> dict:
                         if l.strip() and not l.strip().startswith("#"))
 
     ask = ASK + (CHANGES % changes if changes else "")
-    req = {"model": MODELS[model]["id"], "max_tokens": MAX_TOKENS, "messages": [
+    out = ask_model(session, account, model, system, [
+        image_part(data, mime), {"type": "text", "text": ask}])
+    rec = {"time": time.time(), "account": account, "image": iid, "name": LOG.image(iid)["name"],
+           "model": model, "prompt": version, "changes": changes,
+           "prompt_sha": hashlib.sha256(system.encode()).hexdigest()[:8], **out}
+    LOG.add(rec)
+    return rec
+
+
+def image_part(data: bytes, mime: str) -> dict:
+    return {"type": "image_url", "image_url": {
+        "url": "data:%s;base64,%s" % (mime, base64.b64encode(data).decode())}}
+
+
+def ask_model(session, account: str, model: str, system: str, content: list,
+              max_tokens: int = MAX_TOKENS) -> dict:
+    """One Bedrock chat call -> tokens, cost, seconds, finish reason and text."""
+    req = {"model": MODELS[model]["id"], "max_tokens": max_tokens, "messages": [
         {"role": "system", "content": system},
-        {"role": "user", "content": [
-            {"type": "image_url", "image_url": {
-                "url": "data:%s;base64,%s" % (mime, base64.b64encode(data).decode())}},
-            {"type": "text", "text": ask},
-        ]},
+        {"role": "user", "content": content},
     ]}
     creds = session.get_credentials()
     if creds is None:
@@ -308,21 +323,21 @@ def generate(session, account: str, body: dict) -> dict:
     try:
         r = _chat(creds.get_frozen_credentials(), req)
     except urllib.error.HTTPError as exc:
-        raise RuntimeError("Bedrock said HTTP %d: %s" % (
-            exc.code, exc.read()[:400].decode(errors="replace"))) from None
+        detail = exc.read()[:400].decode(errors="replace")
+        if "length limit exceeded" in detail:      # Bedrock's request cap, about 3.5 MB
+            size = len(json.dumps(req)) / 2 ** 20
+            raise RuntimeError("Too big for Bedrock (%.1f MB request, the limit is about 3.5 MB): "
+                               "upload the picture again and the page shrinks it%s." % (
+                                   size, ", or use fewer references" if len(content) > 2 else "")) from None
+        raise RuntimeError("Bedrock said HTTP %d: %s" % (exc.code, detail)) from None
     except (OSError, ValueError) as exc:     # no network, timeout, a reply that isn't JSON
         raise RuntimeError("Bedrock didn't answer: %s" % exc) from None
     choice = r["choices"][0]
     usage = r.get("usage") or {}
     tin, tout = usage.get("prompt_tokens") or 0, usage.get("completion_tokens") or 0
-    rec = {"time": time.time(), "account": account, "image": iid, "name": LOG.image(iid)["name"],
-           "model": model, "prompt": version, "changes": changes,
-           "prompt_sha": hashlib.sha256(system.encode()).hexdigest()[:8],
-           "tokens_in": tin, "tokens_out": tout, "cost": cost(model, tin, tout),
-           "seconds": round(time.time() - t, 1), "stop": choice.get("finish_reason"),
-           "text": (choice["message"].get("content") or "").strip()}
-    LOG.add(rec)
-    return rec
+    return {"tokens_in": tin, "tokens_out": tout, "cost": cost(model, tin, tout),
+            "seconds": round(time.time() - t, 1), "stop": choice.get("finish_reason"),
+            "text": (choice["message"].get("content") or "").strip()}
 
 
 # ── sending a prompt to the app's queue ──────────────────────────────
@@ -371,32 +386,80 @@ def _app(origin: str, key: str, method: str, path: str, body=None):
 
 
 def app_options(origin: str, key: str) -> dict:
-    """Whether the instance's Krea 2 V2 tab offers the preset."""
+    """Whether the instance's Krea 2 V2 tab offers the preset, its step count
+    and aspect, and the aspects the tab accepts."""
     p = _app(origin, key, "GET", "/presets/" + APP_TAB)
-    return {"preset": APP_PRESET, "has_preset": APP_PRESET in [r["name"] for r in p.get("presets") or []]}
+    has = APP_PRESET in [r["name"] for r in p.get("presets") or []]
+    values = {}
+    if has:
+        values = _app(origin, key, "POST", "/schema/%s/apply" % APP_TAB, {"preset": APP_PRESET}).get("values") or {}
+    return {"preset": APP_PRESET, "has_preset": has, "preset_steps": values.get("steps"),
+            "preset_aspect": values.get("aspect"), "aspects": _aspects(origin, key)}
+
+
+def _aspects(origin: str, key: str) -> list:
+    """The tab's aspect choices, as the app labels them ("3:4 (Portrait Standard)")."""
+    schema = _app(origin, key, "GET", "/schema/" + APP_TAB) or {}
+    for f in schema.get("fields") or []:
+        if f.get("name") == "aspect":
+            return [str(c) for c in f.get("choices") or []]
+    return []
+
+
+MAX_STEPS = 150
+
+
+def _steps(raw):
+    """The page's step override: None keeps the preset's own."""
+    if raw in (None, ""):
+        return None
+    try:
+        n = int(raw)
+    except (TypeError, ValueError):
+        raise ValueError("Steps must be a whole number.") from None
+    if not 1 <= n <= MAX_STEPS:
+        raise ValueError("Steps must be between 1 and %d." % MAX_STEPS)
+    return n
 
 
 def send_to_queue(origin: str, key: str, instance: str, body: dict) -> dict:
-    """The record's prompt -> a Krea 2 V2 job (Natural Raw 2, batch 1), moved to the top."""
+    """The record's prompt -> a Krea 2 V2 job (Natural Raw 2, batch 1, the page's
+    steps/aspect if set), moved to the top."""
     rec = LOG.find(body.get("time"))
     if not rec:
         raise ValueError("That prompt isn't in the history any more.")
     if not rec["text"] or rec["text"].startswith("SKIP:"):
         raise ValueError("The model skipped this picture: there is no prompt to queue.")
+    result = queue_text(origin, key, instance, rec["text"], body)
+    LOG.mark_queued(rec["time"], result["sent"])
+    return result
+
+
+def queue_text(origin: str, key: str, instance: str, text: str, body: dict) -> dict:
+    """A prompt -> a Krea 2 V2 job (Natural Raw 2, batch 1, body's steps/aspect
+    if set), moved to the top of the instance's queue."""
+    steps = _steps(body.get("steps"))
+    aspect = str(body.get("aspect") or "").strip() or None
+    if aspect and aspect not in _aspects(origin, key):    # the app would quietly use 3:4 instead
+        raise ValueError("This instance has no %s aspect." % aspect)
     preset = APP_PRESET
     applied = _app(origin, key, "POST", "/schema/%s/apply" % APP_TAB, {"preset": preset})
     values = applied.get("values") or {}
     if not values:
         raise ValueError("Preset %s isn't on offer on this instance." % preset)
-    values.update(prompt=rec["text"], batch_count=1)      # everything else: the preset's own
+    values.update(prompt=text, batch_count=1)      # everything else: the preset's own
+    if steps is not None:
+        values["steps"] = steps                            # the page's override beats the preset
+    if aspect:
+        values["aspect"] = aspect                          # so does the aspect
     neg = negative()
     if neg:
         values["negative"] = neg
     job = _app(origin, key, "POST", "/tabs/%s/generate" % APP_TAB, {"values": values})["jobId"]
     moved = _app(origin, key, "POST", "/jobs/%s/move" % job, {"to": "top"})
     sent = {"time": time.time(), "instance": instance, "job": job, "preset": preset,
-            "aspect": values.get("aspect"), "negative": "negative.json" if neg else "preset"}
-    LOG.mark_queued(rec["time"], sent)
+            "aspect": values.get("aspect"), "steps": values.get("steps"),
+            "negative": "negative.json" if neg else "preset"}
     return {"sent": sent, "message": (moved or {}).get("message") or ""}
 
 

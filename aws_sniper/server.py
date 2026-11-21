@@ -34,6 +34,10 @@ restart is picked up by itself.
 Image to prompt (second tab): imgprompt.py, a vision model on Bedrock
 writes prompts for a picture; pictures and spend are kept in img2prompt/ and
 taken off the account's credit.
+
+Text to prompt (third tab): txtprompt.py, the same models write a prompt
+from a short brief plus reference pictures; kept in txt2prompt/, spend
+taken off the credit too.
 """
 
 import argparse
@@ -62,6 +66,7 @@ from botocore.exceptions import BotoCoreError, ClientError, NoCredentialsError  
 sys.path.insert(1, str(HERE.parent / "runpod_sniper"))
 import downloader                             # noqa: E402  (the Runpod page's, as is)
 import imgprompt                              # noqa: E402  (the Image to prompt tab)
+import txtprompt                              # noqa: E402  (the Text to prompt tab)
 
 TOKENS_CSS = HERE / "tokens.css"
 HISTORY_FILE = HERE / "history.json"
@@ -680,7 +685,7 @@ class Snipe:
             key_name=r["key"], sg=r["sg"], region=r["region"], types=r["types"],
             type=",".join(r["types"]), zones=r["zones"], spot=r["market"] == "spot",
             ami="", disk=r["disk"], throughput=r["throughput"], iam_profile="",
-            name="ember-gpu", interval=20, minutes=0, dry_run=r["dry_run"],
+            name="ember-gpu", interval=5, minutes=0, dry_run=r["dry_run"],
             no_sound=not SOUND, account=r["account"])
         try:
             sn = core.Sniper(args, core.make_session(r["region"], PROFILE, r["account"]),
@@ -1181,13 +1186,14 @@ def _money(rows: list, account: str) -> dict:
     spent = HISTORY.spent(now, account)
     synced = settings.get("aws_credit")
     rows = [r for r in rows if r["account"] == account]
-    # Image to prompt runs on Bedrock, paid from the same credit.
-    prompts = imgprompt.LOG.spent(account)
+    # Image and Text to prompt run on Bedrock, paid from the same credit.
+    prompts = imgprompt.LOG.spent(account) + txtprompt.LOG.spent(account)
     if synced:
         # AWS's own balance at the last sync (it already counts whatever
         # was used outside this page), minus what the page saw since.
         since_sync = (HISTORY.spent_since(synced["synced"], now, account)
-                      + imgprompt.LOG.spent(account, synced["synced"]))
+                      + imgprompt.LOG.spent(account, synced["synced"])
+                      + txtprompt.LOG.spent(account, synced["synced"]))
         left = synced["estimated"] - since_sync
     else:
         since_sync = None
@@ -1411,6 +1417,13 @@ class Handler(BaseHTTPRequestHandler):
                 if not found:
                     return self.error("No such picture.", 404)
                 return self.send(200, found[0], found[1])
+            if url.path == "/api/txt2prompt":
+                return self.json(txtprompt.config())
+            if url.path == "/api/txt2prompt/image":
+                found = txtprompt.image_file(query.get("id", [""])[0])
+                if not found:
+                    return self.error("No such picture.", 404)
+                return self.send(200, found[0], found[1])
             if url.path == "/api/logs":
                 try:
                     return self.json({"logs": _docker_logs(query.get("id", [""])[0])})
@@ -1429,12 +1442,28 @@ class Handler(BaseHTTPRequestHandler):
         try:
             length = int(self.headers.get("content-length") or 0)
             # an image, base64: a third bigger than the file
-            limit = 22_000_000 if url.path == "/api/img2prompt/upload" else 100_000
+            limit = 22_000_000 if url.path in ("/api/img2prompt/upload", "/api/txt2prompt/upload") else 100_000
             if length > limit:
                 return self.error("Request too large (%d MB)." % (length // 2 ** 20), 413)
             body = json.loads(self.rfile.read(length) or b"{}")
             if url.path == "/api/img2prompt/upload":
                 return self.json({"image": imgprompt.upload(body)})
+            if url.path == "/api/txt2prompt/upload":
+                return self.json({"image": txtprompt.upload(body)})
+            if url.path == "/api/txt2prompt/queue":
+                iid = str(body.get("id") or "")
+                try:
+                    return self.json(txtprompt.send_to_queue(*_app_link(iid), iid, body))
+                except RuntimeError as exc:
+                    return self.error(str(exc), 502)
+            if url.path == "/api/txt2prompt":
+                account = _account(body.get("account"))
+                session = core.make_session(imgprompt.REGION, PROFILE, account)
+                try:
+                    rec = txtprompt.generate(session, account, body)
+                except RuntimeError as exc:
+                    return self.error(str(exc), 502)
+                return self.json({"record": rec, "totals": txtprompt.LOG.totals()})
             if url.path == "/api/img2prompt/delete":
                 return self.json({"deleted": imgprompt.delete_image(body),
                                   "totals": imgprompt.LOG.totals()})

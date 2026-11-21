@@ -118,6 +118,14 @@ base prompt, all at once (both and both = 4 prompts), on Bedrock in
 us-east-1 with the picked account's keys. The optional changes box
 overrides the photo.
 
+**Several at once:** Generate never waits. Each click saves that picture,
+models, base prompts, changes and the auto-send tick as a run; up to 5 runs
+write at the same time, and any more wait in line (listed under the button
+with **✕ Remove**) until one finishes. The line lives in the open page only,
+so a reload drops runs not yet started. Auto-sent jobs go to the instance
+one at a time, in the order their runs finish. A picture with a run going
+or waiting can't be deleted.
+
 **Your own base prompts:** every `img2prompt/base_prompt_gpt_<name>.md`
 is one (`<name>` is letters, digits, `_` or `-`, e.g. `v3`). Add or edit
 a file and open the tab again or press **↻ Reload**: no code change, no
@@ -134,8 +142,13 @@ to an instance's queue keep running.
 **Send to the app:** pick one of the account's running instances (those
 with an app link). **⤒ Queue** on any prompt, or the tick "Send new
 prompts to the top of the queue" before Generate, makes a Krea 2 V2 job
-with the **Natural Raw 2** preset as it is (its size, steps, LoRAs), batch
-1, and moves it to the top of that app's queue. The negative is
+with the **Natural Raw 2** preset (its size, LoRAs and so on), batch 1,
+and moves it to the top of that app's queue. **Steps** next to the
+instance shows the preset's own count as a placeholder; type a number
+(1-150) and every job, auto-sent ones included, uses it instead; empty or
+**Preset** goes back to the preset's. **Aspect** works the same way: pick
+one of the instance's aspects and every job uses it, or "Preset's own". The
+negative is
 `"negative"` in `img2prompt/negative.json` (read on every send); while it's
 empty, Natural Raw 2's own negative is used. A prompt the model skipped
 (`SKIP: ...`) can't be queued.
@@ -149,6 +162,34 @@ Everything stays in `aws_sniper/img2prompt/`, so copying the aws_sniper
 folder to another PC brings it along: the base prompts, `images/` (every
 uploaded picture) and `history.json` (every prompt with its tokens and
 cost). The last two are git-ignored and left out of the friends' zip.
+
+## Text to prompt (third tab)
+
+Write a short brief (who, what, where, the light, the camera) and, if you
+like, add up to 6 reference pictures (drop, paste or **Add pictures…**),
+each with a note on what to take from it: "background like this", "this
+outfit", "this pose". The model keeps everything the brief says, takes
+only the noted part from each reference (never the people in it: the
+subject is always the brief's), and fills in the rest. Tick base prompts
+and models as on Image to prompt; Generate writes one prompt per pair, all
+at once, and you can click it again while they write.
+
+The base prompts are `txt2prompt/base_prompt_<name>.md`: **v1** is a
+detailed scene (built on Image to prompt's v3), **v2** the same with
+explicit adult content allowed (built on v4). Add your own the same way
+as on Image to prompt (new file, then **↻ Reload**). Both refuse, with a
+`SKIP: ...` line that can't be queued, a brief for anyone under 18, a
+real public figure or someone made to look like a person in a reference,
+and v2 also non-consensual acts.
+
+Sending to the app uses the same instance, Steps, Aspect and negative as
+Image to prompt (the controls move to whichever tab is open). **Use this
+brief** on any past prompt puts its brief and references back. The brief,
+references and notes stay in the page between visits; the reference
+pictures and every prompt (tokens, cost, the brief) are kept in
+`txt2prompt/images/` and `txt2prompt/history.json`, git-ignored and left
+out of the friends' zip. The cost counts in the tab's totals and the
+Credit card.
 
 ## Accounts
 
