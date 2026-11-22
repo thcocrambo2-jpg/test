@@ -194,11 +194,23 @@
 #tab-chat .achip { display:flex; align-items:center; gap:var(--s-2); padding:3px 4px 3px 3px; border:1px solid var(--c-border); border-radius:var(--r-md);
   background:var(--c-elevated); font-size:var(--t-xs); }
 #tab-chat .achip .tile { width:28px; height:28px; border-radius:var(--r-sm); }
+#tab-chat .achip .tile .h, #tab-chat .mopt .tile .h { display:none; }   /* the label beside a small thumbnail already says it */
 #tab-chat .achip button { color:var(--c-text-faint); width:20px; height:20px; border-radius:var(--r-xs); }
 #tab-chat .achip button:hover { color:var(--c-text); background:var(--c-panel-hover); }
 #tab-chat .composer textarea { display:block; width:100%; border:0; background:transparent; resize:none; padding:var(--s-2) var(--s-3);
   min-height:44px; max-height:240px; line-height:var(--lh-normal); font:inherit; font-size:var(--t-md); color:var(--c-text); box-shadow:none; border-radius:0; }
 #tab-chat .composer textarea:focus { outline:none; border:0; box-shadow:none; }
+/* @handle highlight: the textarea's own text is transparent and the same text
+   is drawn behind it, with known handles marked. Both boxes must lay text out
+   identically: same font, padding, wrapping and scrollbar gutter. */
+#tab-chat .inputWrap { position:relative; }
+#tab-chat .composer textarea, #tab-chat .hl { scrollbar-gutter:stable; overflow-wrap:break-word; letter-spacing:normal; }
+#tab-chat .composer textarea { position:relative; z-index:1; color:transparent; caret-color:var(--c-text); }
+#tab-chat .composer textarea::selection { color:transparent; background:var(--c-accent-soft); }
+#tab-chat .hl { position:absolute; inset:0; padding:var(--s-2) var(--s-3); margin:0; border:0; font:inherit; font-size:var(--t-md);
+  line-height:var(--lh-normal); color:var(--c-text); white-space:pre-wrap; overflow:hidden; pointer-events:none; }
+#tab-chat .hl mark { color:var(--c-accent); background:var(--c-accent-soft); border-radius:var(--r-xs);
+  box-shadow:0 0 0 2px var(--c-accent-soft); }   /* spread, not padding: padding would shift the text */
 #tab-chat .cbar { display:flex; align-items:center; gap:var(--s-1); padding:0 var(--s-1); }
 #tab-chat .send { width:36px; height:36px; border-radius:var(--r-full); padding:0; font-size:var(--t-lg); }
 #tab-chat .hintline { width:100%; max-width:780px; margin:var(--s-2) auto 0; font-size:var(--t-2xs); color:var(--c-text-faint); text-align:center; }
@@ -322,7 +334,8 @@ body { background:var(--c-bg); color:var(--c-text); font:var(--t-md)/var(--lh-no
         <div class="mentions hidden" id="cMentions"></div>
         <div class="editChip hidden" id="cEditChip"></div>
         <div class="attach" id="cAttach"></div>
-        <textarea id="cInput" rows="1" placeholder="Message Qwen · @ to mention a picture"></textarea>
+        <div class="inputWrap"><div class="hl" id="cHl" aria-hidden="true"></div>
+        <textarea id="cInput" rows="1" placeholder="Message Qwen · @ to mention a picture"></textarea></div>
         <div class="cbar">
           <button class="btn ghost icon sm" id="cAttachBtn" title="Upload pictures">📎</button>
           <input type="file" id="cFile" accept="image/jpeg,image/png,image/webp,image/gif" multiple hidden>
@@ -520,6 +533,7 @@ async function loadLib() {
   try { C.lib = (await api("/api/chat/library")).images; } catch {}
   $("cLibCount").textContent = C.lib.length || "";
   if (chat()) { drawConv(); }
+  drawHl();                                            // handles in the box may only now be known
 }
 async function openChat(id) {
   if (!C.streams[id]) C.open[id] = await api("/api/chat/c?id=" + encodeURIComponent(id));
@@ -767,7 +781,7 @@ function drawComposer() {
     ["Recreate a photo", "recreate @", "recreate"], ["Scene from a brief", "28-year-old woman in a mustard cotton kurta on a balcony swing at dusk, laughing at a friend off-camera, phone photo"],
     ["Use library pictures", "outfit from @ , background like @ "], ["Ask anything", "what lens makes a portrait look like a phone photo?", "free"],
   ].map(([l, v, m]) => `<button class="pill" data-starter="${esc(v)}" data-smode="${m || ""}">${l}</button>`).join("");
-  drawHead();
+  drawHl(); drawHead();
 }
 C.price = {in: 0.53, out: 2.66};
 $("cComposer").addEventListener("click", e => {
@@ -792,7 +806,13 @@ $("cStarters").addEventListener("click", e => {
   autosize(); drawComposer();
   if (t.value.slice(0, pos).endsWith("@")) openMentions("");
 });
-function autosize() { const t = $("cInput"); t.style.height = "auto"; t.style.height = Math.min(t.scrollHeight, 240) + "px"; }
+function autosize() { const t = $("cInput"); t.style.height = "auto"; t.style.height = Math.min(t.scrollHeight, 240) + "px"; drawHl(); }
+function drawHl() {                                    // the text behind the box, known @handles marked; a typo stays plain
+  const t = $("cInput");
+  $("cHl").innerHTML = esc(t.value).replace(/@([A-Za-z0-9_-]{1,32})/g, (m, h) => libBy(h) ? `<mark>${m}</mark>` : m) + String.fromCharCode(0x200b);   // a zero-width space keeps a trailing new line's height
+  $("cHl").scrollTop = t.scrollTop;
+}
+$("cInput").addEventListener("scroll", () => { $("cHl").scrollTop = $("cInput").scrollTop; });
 function syncAttached() {
   for (const m of $("cInput").value.matchAll(/@([A-Za-z0-9_-]{1,32})/g)) {
     const p = libBy(m[1]);
