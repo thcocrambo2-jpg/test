@@ -860,6 +860,28 @@ def _app_link(iid: str):
     return _link_parts(row["url"])
 
 
+def _custom_link(link: str):
+    """(origin, key) of an app link typed on the Chat page, for an app the
+    sniper didn't start: host:7860, http(s)://host[:port], optional #k=KEY."""
+    link = (link or "").strip()
+    if "://" not in link:
+        link = "http://" + link
+    parts = urlparse(link)
+    if parts.scheme not in ("http", "https") or not parts.hostname:
+        raise ValueError("Not an app link: %s" % link)
+    return _link_parts(link)
+
+
+def _chat_target(where: dict):
+    """(origin, key, label) for the Chat page: a sniper instance by id, or a typed link."""
+    link = str(where.get("link") or "")
+    if link:
+        origin, key = _custom_link(link)
+        return origin, key, origin.split("://", 1)[1]
+    iid = str(where.get("id") or "")
+    return _app_link(iid) + (iid,)
+
+
 def _docker_logs(iid: str, lines: int = 300) -> str:
     row = _instance_row(iid)
     return _ssh(row, "sudo docker ps -a --filter name=^ember$ --format "
@@ -1468,6 +1490,12 @@ class Handler(BaseHTTPRequestHandler):
                 return self.json(chatprompt.config())
             if url.path == "/api/chat/c":
                 return self.json(chatprompt.STORE.get(query.get("id", [""])[0]))
+            if url.path == "/api/chat/app":
+                try:
+                    where = {k: query.get(k, [""])[0] for k in ("id", "link")}
+                    return self.json(imgprompt.app_options(*_chat_target(where)[:2]))
+                except (ValueError, RuntimeError) as exc:
+                    return self.error(str(exc), 502 if isinstance(exc, RuntimeError) else 400)
             if url.path == "/api/chat/library":
                 return self.json({"images": chatprompt.library()})
             if url.path == "/api/chat/image":
@@ -1513,9 +1541,8 @@ class Handler(BaseHTTPRequestHandler):
             if url.path == "/api/chat/delete":
                 return self.json(chatprompt.delete_chat(body))
             if url.path == "/api/chat/queue":
-                iid = str(body.get("id") or "")
                 try:
-                    return self.json(chatprompt.send_to_queue(*_app_link(iid), iid, body))
+                    return self.json(chatprompt.send_to_queue(*_chat_target(body), body))
                 except RuntimeError as exc:
                     return self.error(str(exc), 502)
             if url.path == "/api/chat/send":

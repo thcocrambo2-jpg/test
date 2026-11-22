@@ -195,7 +195,7 @@ Credit card.
 ## Chat (its own page)
 
 **Chat ↗** next to the tabs opens `http://127.0.0.1:7896/chat` in its own
-browser tab (← goes back). The account that pays is picked in the chat's
+browser tab. The account that pays is picked in the chat's
 header, separately from the sniper's. A chat with **Qwen3-VL** that writes and edits prompts, laid out like Grok
 in Ember's look. Write a brief, attach pictures (📎, paste, drop, or 🖼
 **Library**) and mention them by `@handle` ("outfit from @kurta, background
@@ -222,9 +222,18 @@ The **Library** shows every picture on this PC: chat uploads plus the
 Image to prompt and Text to prompt ones (read only; only chat uploads can be
 deleted here). Every picture gets a renamable `@handle`.
 
-**⚙** has the chat's own Send to the app settings (instance, steps, aspect,
-auto-send), separate from the prompt tabs'; every mode's queued prompts get
-`chat2prompt/negative.json`. Chats, handles and spend are
+**⚙** has the chat's own Send to the app settings, separate from the prompt
+tabs':
+- **Instance**: every running instance in every account (the account picker
+  only says who pays for Qwen), plus your own app links.
+- **Add an app link**: for a pod the sniper didn't start, as `host:7860`, or
+  the app's full link with `#k=KEY` if it asks for a key. Links are kept in
+  this browser.
+- **Steps**, and **Auto-send** (on by default).
+
+The aspect is the **▭** pill under the message box, 3:4 unless you pick
+another; the list is the app's own once it has been read. Every mode's
+queued prompts get `chat2prompt/negative.json`. Chats, handles and spend are
 kept in `chat2prompt/chats.json` and chat uploads in `chat2prompt/images/`,
 git-ignored and left out of the friends' zip. A message costs about the same
 as a Text to prompt generation (~$0.006 for a full prompt), however long the

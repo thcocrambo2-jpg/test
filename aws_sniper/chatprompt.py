@@ -558,11 +558,21 @@ def delete_chat(body: dict) -> dict:
 
 def send_to_queue(origin: str, key: str, instance: str, body: dict) -> dict:
     """A reply's prompt -> a Krea 2 V2 job at the top of the instance's queue,
-    with the chat's own steps / aspect and chat2prompt/negative.json."""
+    with the chat's own steps / aspect and chat2prompt/negative.json. The
+    page sends the aspect as a bare ratio ("3:4"); the app's own label for
+    it ("3:4 (Portrait Standard)") is looked up here."""
     cid, mid = str(body.get("chat") or ""), int(body.get("msg") or 0)
     m = STORE.message(cid, mid)
     if not m.get("prompt") or m["prompt"].startswith("SKIP:"):
         raise ValueError("That reply has no prompt to queue.")
+    want = str(body.get("aspect") or "").strip()
+    if want:
+        choices = ip._aspects(origin, key)
+        label = next((c for c in choices if c == want or c.split(" ", 1)[0] == want), None)
+        if not label:
+            raise ValueError("The app has no %s aspect (it offers %s)."
+                             % (want, ", ".join(c.split(" ", 1)[0] for c in choices) or "none"))
+        body = dict(body, aspect=label)
     result = ip.queue_text(origin, key, instance, m["prompt"], body, NEGATIVE_FILE)
     STORE.mark_queued(cid, mid, result["sent"])
     return result

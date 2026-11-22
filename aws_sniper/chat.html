@@ -112,15 +112,22 @@
   border-radius:var(--r-lg); box-shadow:var(--sh-lg); padding:var(--s-4); display:flex; flex-direction:column; gap:var(--s-3); animation:crise var(--d-base) var(--e-out); }
 #tab-chat .pop h3 { font-size:var(--t-sm); font-weight:var(--fw-semibold); }
 #tab-chat .pop .two { display:grid; grid-template-columns:1fr 1fr; gap:var(--s-3); }
-#tab-chat .switch { display:flex; align-items:center; gap:var(--s-2); font-size:var(--t-sm); cursor:pointer; }
-#tab-chat .switch input { accent-color:var(--c-accent); }
+#tab-chat .switch { display:flex; align-items:flex-start; gap:var(--s-2); font-size:var(--t-sm); line-height:var(--lh-normal); cursor:pointer; }
+#tab-chat .switch input { accent-color:var(--c-accent); flex:none; width:15px; height:15px; margin:calc((1em * var(--lh-normal) - 15px) / 2) 0 0; }
+#tab-chat .pop .row { display:flex; gap:var(--s-2); }
+#tab-chat .pop .row .input { flex:1; min-width:0; }
+#tab-chat .caret { flex:none; width:10px; height:10px; background:var(--icon-caret) no-repeat center / contain; opacity:.8; }
+#tab-chat .ratio { flex:none; display:inline-flex; align-items:center; justify-content:center; width:14px; height:14px; }
+#tab-chat .menu button .ratio { height:calc(1em * var(--lh-normal)); }   /* level with the row's first line */
+#tab-chat .ratio i { display:block; border:1.5px solid currentColor; border-radius:2px; }
 @keyframes crise { from { opacity:0; transform:translateY(10px) scale(.99); } }
 
 /* main column */
 #tab-chat .cmain { display:flex; flex-direction:column; min-width:0; min-height:0; }
 #tab-chat .chatHead { display:flex; align-items:center; gap:var(--s-3); padding:var(--s-3) var(--s-5); border-bottom:1px solid var(--c-border); min-height:52px; }
 #tab-chat .chatTitle { font-size:var(--t-lg); font-weight:var(--fw-semibold); letter-spacing:-.012em; overflow:hidden; text-overflow:ellipsis;
-  white-space:nowrap; cursor:text; border-radius:var(--r-xs); padding:2px var(--s-1); min-width:0; }
+  white-space:nowrap; cursor:text; border-radius:var(--r-xs); padding:2px var(--s-1); min-width:0; flex:1 1 0; margin-right:auto; }
+#tab-chat .chatHead > :not(.chatTitle) { flex:none; }
 #tab-chat .chatTitle:hover { background:var(--c-panel); }
 #tab-chat .menuBtn { display:none; }
 #tab-chat .scroll { flex:1; min-height:0; overflow-y:auto; }
@@ -236,6 +243,10 @@
 #tab-chat .libBar { display:flex; gap:var(--s-3); align-items:center; flex-wrap:wrap; margin-bottom:var(--s-4); }
 #tab-chat .libBar .search { flex:1; min-width:200px; }
 #tab-chat .libGrid { display:grid; grid-template-columns:repeat(auto-fill, minmax(150px, 1fr)); gap:var(--s-3); }
+/* the library keeps one size whatever the filter shows: the bar stays put and the grid scrolls */
+#tab-chat .modal.lib { height:min(86vh, 820px); }
+#tab-chat .modal.lib .modalBody { flex:1; min-height:0; display:flex; flex-direction:column; overflow:hidden; }
+#tab-chat .modal.lib .libGrid { flex:1; min-height:0; overflow-y:auto; align-content:start; padding:3px; margin:-3px; }
 #tab-chat .lcard { background:var(--c-bg-sunken); border:1px solid var(--c-border); border-radius:var(--r-lg); overflow:hidden; display:flex; flex-direction:column;
   transition:border-color var(--d-fast) var(--e-out); }
 #tab-chat .lcard:hover { border-color:var(--c-border-strong); }
@@ -263,7 +274,10 @@
   #tab-chat.drawer .cnav { transform:none; }
   #tab-chat .scrim { position:absolute; inset:0; background:var(--c-overlay); z-index:calc(var(--z-panel) - 1); }
   #tab-chat .col { padding:var(--s-4) var(--s-3) var(--s-3); }
-  #tab-chat .chatHead { padding:var(--s-2) var(--s-3); }
+  #tab-chat .chatHead { padding:var(--s-2) var(--s-3); gap:var(--s-2); }
+  #tab-chat .chatHead .modelPill, #tab-chat #cHeadMode { display:none; }   /* the mode pill sits under the message box */
+  #tab-chat .chatTitle { font-size:var(--t-md); }
+  #tab-chat .chatHead .acctSel { max-width:42vw; flex:0 1 auto; min-width:0; }
   #tab-chat .composerWrap { padding:0 var(--s-3) var(--s-3); }
   #tab-chat .bubble { max-width:92%; }
   #tab-chat .pop .two { grid-template-columns:1fr; }
@@ -276,8 +290,6 @@ html, body { margin:0; height:100%; }
 body { background:var(--c-bg); color:var(--c-text); font:var(--t-md)/var(--lh-normal) var(--font-sans); }
 #tab-chat { height:100vh; height:100dvh; min-height:0; border:0; border-radius:0;
             grid-template-rows:minmax(0,1fr); grid-auto-rows:0; }   /* #cFloat (menus, toasts) gets no row of its own */
-#tab-chat .back { color:var(--c-text-muted); font-size:var(--t-xs); text-decoration:none; padding:0 var(--s-1) var(--s-1); }
-#tab-chat .back:hover { color:var(--c-text); }
 #tab-chat .acctSel { width:auto; max-width:200px; height:28px; padding:0 var(--s-8) 0 var(--s-3); font-size:var(--t-xs); }
 </style>
 </head>
@@ -285,7 +297,6 @@ body { background:var(--c-bg); color:var(--c-text); font:var(--t-md)/var(--lh-no
 <div id="tab-chat">
   <aside class="cnav" id="cNav">
     <div class="navTop">
-      <a class="back" href="/" title="Back to the sniper">← AWS GPU sniper</a>
       <button class="btn primary block" id="cNew">＋ New chat</button>
       <div class="search"><span>⌕</span><input class="input" id="cSearch" placeholder="Search chats" autocomplete="off"></div>
     </div>
@@ -299,8 +310,7 @@ body { background:var(--c-bg); color:var(--c-text); font:var(--t-md)/var(--lh-no
     <div class="chatHead">
       <button class="btn ghost icon sm menuBtn" id="cMenu" title="Chats">☰</button>
       <div class="chatTitle" id="cTitle" title="Click to rename">New chat</div>
-      <span class="grow"></span>
-      <span class="pill" title="Model">Qwen3-VL</span>
+      <span class="pill modelPill" title="Model">Qwen3-VL</span>
       <select class="select acctSel" id="cAcct" title="Account that pays: its Bedrock credit"></select>
       <button class="btn ghost sm" id="cHeadMode" data-float title="Base prompt for this chat"></button>
       <button class="btn ghost icon sm" id="cSettings" data-float title="Send to the app">⚙</button>
@@ -318,6 +328,7 @@ body { background:var(--c-bg); color:var(--c-text); font:var(--t-md)/var(--lh-no
           <input type="file" id="cFile" accept="image/jpeg,image/png,image/webp,image/gif" multiple hidden>
           <button class="btn ghost icon sm" id="cLibBtn" title="Pick from the library">🖼</button>
           <button class="pill" id="cModePill" data-float title="Base prompt for this chat"></button>
+          <button class="pill" id="cAspectPill" data-float title="Aspect ratio of queued pictures"></button>
           <span class="grow"></span>
           <span class="faint" id="cCost" title="Rough estimate for this message"></span>
           <button class="btn primary send" id="cSend" title="Send (Enter)">↑</button>
@@ -464,11 +475,9 @@ function confirmBox(title, text, okLabel, ok) {
   b.querySelector("[data-ok]").onclick = () => { b.remove(); ok(); };
 }
 function fit() {}                                    // the page is all chat: CSS sizes it
-function negLine() {                                   // the negative every queued job gets, as the prompt tabs show it
-  const n = (C.cfg && C.cfg.negative) || {};
-  return n.error ? `Negative: ${esc(n.error)}`
-    : n.text ? `Negative: chat2prompt/negative.json (${n.text.split(/\s+/).length} words), sent with every queued prompt.`
-    : `Negative: Natural Raw 2's own, while "negative" in chat2prompt/negative.json is empty.`;
+function ratioIcon(r) {                                // a little frame in the ratio's shape, as Google Flow shows it
+  const [w, h] = String(r).split(":").map(Number), k = 12 / Math.max(w || 1, h || 1);
+  return `<span class="ratio"><i style="width:${Math.max(5, Math.round((w || 1) * k))}px;height:${Math.max(5, Math.round((h || 1) * k))}px"></i></span>`;
 }
 function fades() {
   // prompts are small boxes that scroll inside; nothing to fade
@@ -598,7 +607,7 @@ $("cMenu").onclick = () => {
 function drawHead() {
   const c = chat();
   $("cTitle").textContent = c ? c.title : "New chat";
-  $("cHeadMode").textContent = "Mode: " + modeLabel(curMode()) + " ▾";
+  $("cHeadMode").innerHTML = `Mode: ${esc(modeLabel(curMode()))}<span class="caret"></span>`;
   $("cMain").classList.toggle("blank", !c || !c.messages.length);
 }
 // liveSplit: talk and prompt of a reply still arriving (a half-arrived tag is hidden)
@@ -668,7 +677,7 @@ function asstTurn(c, m) {
         <button class="btn sm${target ? " primary" : ""}" data-edit="${m.id}" ${dis || (skip ? "disabled" : "")} title="Send only this prompt as context with your next message">✎ ${target ? "Editing this" : "Edit"}</button>
         <button class="btn ghost sm" data-copy="${m.id}" ${dis}>⧉ Copy</button>
         <button class="btn ghost sm" data-save="${m.id}" ${dis}>⤓ Save .txt</button>
-        <button class="btn ghost sm" data-queue="${m.id}" ${dis || (skip || m.queueState ? "disabled" : "")} title="Krea 2 V2 · Natural Raw 2 · batch 1, top of the queue (⚙ for instance, steps, aspect)">⤒ Queue</button>
+        <button class="btn ghost sm" data-queue="${m.id}" ${dis || (skip || m.queueState ? "disabled" : "")} title="Krea 2 V2 · Natural Raw 2 · batch 1, top of the queue (⚙ for instance and steps, ▭ under the message box for aspect)">⤒ Queue</button>
         <button class="btn ghost sm" data-regen="${m.id}" ${dis || (busy ? "disabled" : "")}>↻ Regenerate</button>
         <span class="grow"></span>
         ${live ? "" : `<button class="btn ghost sm" data-open="${m.id}">${m.open ? "Show less" : "Show all"}</button>`}
@@ -744,7 +753,8 @@ function drawComposer() {
   $("cEditChip").classList.toggle("hidden", !chips.length);
   $("cEditChip").innerHTML = chips.join(`<span style="width:1px;align-self:stretch;background:var(--c-accent-line)"></span>`);
   $("cAttach").innerHTML = C.attached.map(p => `<span class="achip">${tile(p)}<span>@${esc(p.handle)}</span><button data-unattach="${esc(p.src + ":" + p.id)}" title="Remove">✕</button></span>`).join("");
-  $("cModePill").innerHTML = `<b>${esc(modeLabel(curMode()))}</b>${t && curMode() !== "free" ? " · edit" : ""} ▾`;
+  $("cModePill").innerHTML = `<b>${esc(modeLabel(curMode()))}</b>${t && curMode() !== "free" ? " · edit" : ""}<span class="caret"></span>`;
+  $("cAspectPill").innerHTML = `${ratioIcon(aspect())}<b>${esc(aspect())}</b><span class="caret"></span>`;
   $("cInput").placeholder = t ? `Say what to change in v${t.v}, e.g. "shorter hair, night time" · @ to add a picture` : "Message Qwen · @ to mention a picture";
   $("cSend").textContent = busy ? "■" : "↑";
   $("cSend").title = busy ? "Stop: keeps what was written" : "Send (Enter)";
@@ -952,7 +962,7 @@ async function send() {
     if (i >= 0) c.messages[i] = msg; else c.messages.push(msg);
     totals(done.totals);
     if (msg.edit_of != null && msg.prompt && !msg.error) C.edit[cid] = msg.id;      // keep editing: the new version is the target
-    if (store.get("c.auto", false) && isPrompt(msg) && !msg.stopped && !msg.error) queueMsg(cid, msg, true);
+    if (store.get("c.auto", true) && isPrompt(msg) && !msg.stopped && !msg.error) queueMsg(cid, msg, true);
   } else {
     // Stopped or cut off: read back what the server saved (it saves once it notices).
     for (let n = 0; n < 12; n++) {
@@ -971,60 +981,131 @@ function stop(cid) { const s = C.streams[cid]; if (s) { s.ctrl.abort(); ctoast("
 $("cSend").onclick = () => send();
 
 // ── sending a prompt to an instance ──────────────────────────────────
-function instances() {
-  return ((typeof LAST_ST !== "undefined" && LAST_ST && LAST_ST.instances) || [])
-    .filter(i => i.account === acct() && i.state === "running" && i.url);
+// Where a prompt goes: any running sniper instance, in any account (the
+// account picker only says who pays for Qwen), or an app link you typed in
+// ⚙ for a pod the sniper didn't start (host:7860, optional #k=KEY).
+const NR2_STEPS = 20;                                 // Natural Raw 2's own steps (prod DB, 11-22), shown until an app is read
+const ASPECTS = ["1:1", "3:4", "4:3", "2:3", "3:2", "9:16", "16:9"];   // until the app's own list is read
+const aspect = () => store.get("c.ar", "3:4");
+const links = () => store.get("c.links", []);
+function targets() {
+  const inst = ((typeof LAST_ST !== "undefined" && LAST_ST && LAST_ST.instances) || [])
+    .filter(i => i.state === "running" && i.url)
+    .map(i => ({key: i.id, id: i.id, name: i.name || i.id, group: "Account " + i.account,
+                note: (i.type || "") + (i.ready ? "" : " · app not answering")}));
+  return inst.concat(links().map(l => ({key: "link:" + l.url, link: l.url, name: l.name, group: "Your links", note: ""})));
 }
-function pickInst() { const rows = instances(); return rows.find(i => i.id === store.get("c.inst", null)) || rows[0] || null; }
+function pickTarget() { const rows = targets(); return rows.find(t => t.key === store.get("c.inst", null)) || rows[0] || null; }
+const where = t => t.link ? "link=" + encodeURIComponent(t.link) : "id=" + encodeURIComponent(t.id);
+const reading = {};
+const needsRead = t => !C.appOpts[t.key] || !!C.appOpts[t.key].error;
+function appOpts(t) {                                  // the target's preset steps and aspect list: read once, retried after an error
+  if (!needsRead(t)) return Promise.resolve(C.appOpts[t.key]);
+  return reading[t.key] = reading[t.key] || api("/api/chat/app?" + where(t))
+    .catch(err => ({aspects: [], error: err.message}))
+    .then(o => {
+      C.appOpts[t.key] = o; delete reading[t.key];
+      if (o.preset_steps != null) store.set("c.presetSteps", o.preset_steps);
+      return o;
+    });
+}
+setInterval(() => { const t = pickTarget(); if (t && needsRead(t)) appOpts(t); }, 15000);   // so ⚙ already knows the preset's steps
+function normLink(raw) {                               // "1.2.3.4:7860" -> {url: "http://1.2.3.4:7860/", name}
+  raw = raw.trim(); if (!raw) return null;
+  try {
+    const u = new URL(/^[a-z]+:\/\//i.test(raw) ? raw : "http://" + raw);
+    if (!/^https?:$/.test(u.protocol) || !u.hostname) return null;
+    return {url: u.origin + "/" + u.hash, name: u.host};
+  } catch { return null; }
+}
 function queueMsg(cid, m, auto) {
-  const inst = pickInst();
-  if (!inst) { ctoast("No running instance with the app in this account: start one, or pick it under ⚙."); return; }
+  const t = pickTarget();
+  if (!t) { ctoast(`${auto ? "Auto-send" : "Queue"}: no running instance or app link: start one, or add a link under ⚙.`); return; }
   m.queueState = "sending"; drawConvIf(cid);
   C.sendChain = C.sendChain.then(async () => {           // one at a time, each landing on top of the last
     try {
-      const res = await api("/api/chat/queue", {chat: cid, msg: m.id, id: inst.id,
-        steps: store.get("c.steps", "") || null, aspect: store.get("c.aspect", "") || null});
+      const res = await api("/api/chat/queue", Object.assign({chat: cid, msg: m.id,
+        steps: store.get("c.steps", "") || null, aspect: aspect()}, t.link ? {link: t.link} : {id: t.id}));
       (m.queued = m.queued || []).push(res.sent);
-      ctoast(`${auto ? "Auto-sent" : "Queued"} v${m.v} at the top on ${inst.name || inst.id}`);
+      ctoast(`${auto ? "Auto-sent" : "Queued"} v${m.v} at the top on ${t.name} · ${aspect()}`);
     } catch (e) { ctoast("Queue: " + e.message); }
     m.queueState = ""; drawConvIf(cid);
   });
 }
+$("cAspectPill").onclick = async e => {
+  e.stopPropagation(); closeFloating();
+  const anchor = $("cAspectPill"), t = pickTarget();
+  const m = document.createElement("div"); m.className = "menu"; m.style.minWidth = "180px";
+  const draw = () => {
+    const o = t && C.appOpts[t.key], have = o && o.aspects && o.aspects.length ? o.aspects : null;
+    const rows = have ? have.map(a => [a.split(" ", 1)[0], a.slice(a.indexOf(" ") + 1).replace(/^\(|\)$/g, "")]) : ASPECTS.map(a => [a, ""]);
+    m.innerHTML = rows.map(([r, label]) => `<button data-ar="${esc(r)}"><span class="tick">${r === aspect() ? "✓" : ""}</span>${ratioIcon(r)}
+      <span><b>${esc(r)}</b>${label && label !== r ? `<small>${esc(label)}</small>` : ""}</span></button>`).join("") +
+      `<hr><div class="faint" style="padding:6px 10px">${t ? (o ? (o.error ? esc(o.error) : "From " + esc(t.name)) : "Reading " + esc(t.name) + "…") : "No instance or link yet"}</div>`;
+  };
+  draw();
+  m.onclick = ev => { const r = ev.target.closest("[data-ar]")?.dataset.ar; if (!r) return; store.set("c.ar", r); closeFloating(); drawComposer(); };
+  placeNear(m, anchor, false);
+  if (t && needsRead(t)) { await appOpts(t); if (m.isConnected) { draw(); placeNear(m, anchor, false); } }
+};
 $("cSettings").onclick = async e => {
   e.stopPropagation();
   if ($("cFloat").querySelector(".pop")) { closeFloating(); return; }
   closeFloating();
-  const rows = instances(), cur = pickInst();
   const p = document.createElement("div"); p.className = "pop";
+  let cur = null;
   const draw = () => {
-    const o = cur && C.appOpts[cur.id], steps = store.get("c.steps", ""), aspect = store.get("c.aspect", "");
-    const aspects = (o && o.aspects) || (aspect ? [aspect] : []);
+    const rows = targets(); cur = pickTarget();
+    const o = cur && C.appOpts[cur.key], steps = store.get("c.steps", "");
+    const preset = o && o.preset_steps != null ? o.preset_steps : store.get("c.presetSteps", NR2_STEPS);   // last one read, while no app is up
+    const groups = [...new Set(rows.map(r => r.group))];
     p.innerHTML = `<h3>Send to the app</h3>
-      <div class="muted">Krea 2 V2 · Natural Raw 2 · batch 1 · each job goes to the top of the queue. The chat's own settings.</div>
-      <div class="field"><span class="label">Instance</span><select class="select" id="cSetInst" ${rows.length ? "" : "disabled"}>${rows.length ? rows.map(i =>
-        `<option value="${esc(i.id)}"${cur && i.id === cur.id ? " selected" : ""}>${esc(i.name || i.id)} · ${esc(i.type)}${i.ready ? "" : " · app not answering"}</option>`).join("")
-        : `<option>No running instance with the app in account ${esc(acct())}</option>`}</select></div>
-      <div class="two"><div class="field"><span class="label">Steps</span><input class="input" id="cSetSteps" type="number" min="1" max="150" step="1"
-          placeholder="${o && o.preset_steps != null ? o.preset_steps + " (preset)" : "preset"}" value="${esc(steps)}"></div>
-        <div class="field"><span class="label">Aspect</span><select class="select" id="cSetAspect"><option value="">Preset's own${o && o.preset_aspect ? " · " + esc(o.preset_aspect) : ""}</option>${
-          aspects.map(a => `<option value="${esc(a)}"${a === aspect ? " selected" : ""}>${esc(a)}</option>`).join("")}</select></div></div>
-      <label class="switch"><input type="checkbox" id="cSetAuto"${store.get("c.auto", false) ? " checked" : ""}> Auto-send every new prompt to the top of the queue</label>
-      <div class="faint">${cur && !o ? "Reading the instance's preset…" : negLine()}</div>`;
+      <div class="muted">Krea 2 V2 · Natural Raw 2 · batch 1 · each job goes to the top of the queue. Aspect is the ▭ pill under the message box.</div>
+      <div class="field"><span class="label">Instance</span><select class="select" id="cSetInst" ${rows.length ? "" : "disabled"}>${rows.length ? groups.map(g =>
+        `<optgroup label="${esc(g)}">${rows.filter(r => r.group === g).map(r =>
+          `<option value="${esc(r.key)}"${cur && r.key === cur.key ? " selected" : ""}>${esc(r.name)}${r.note ? " · " + esc(r.note) : ""}</option>`).join("")}</optgroup>`).join("")
+        : `<option>None running · add a link below</option>`}</select></div>
+      ${cur && cur.link ? `<button class="btn ghost sm" id="cLinkDel" style="align-self:flex-start">Remove ${esc(cur.name)} from your links</button>` : ""}
+      <div class="field"><span class="label">Add an app link</span><div class="row">
+        <input class="input" id="cLinkIn" placeholder="host:7860, or the app link with #k=…" autocomplete="off">
+        <button class="btn" id="cLinkAdd">Add</button></div>
+        <span class="faint">For a pod the sniper didn't start. Paste the full link if the app asks for a key.</span></div>
+      <div class="field"><span class="label">Steps${steps === "" && preset != null ? " · the preset's" : ""}</span><input class="input" id="cSetSteps" type="number" min="1" max="150" step="1"
+          placeholder="preset" value="${esc(steps !== "" ? steps : preset != null ? preset : "")}"></div>
+      <label class="switch"><input type="checkbox" id="cSetAuto"${store.get("c.auto", true) ? " checked" : ""}><span>Auto-send every new prompt to the top of the queue</span></label>
+      ${o && o.error ? `<div class="faint">${esc(o.error)}</div>` : cur && !o ? `<div class="faint">Reading the app's preset…</div>` : ""}`;
   };
-  draw();
+  const load = async () => { draw(); if (cur && needsRead(cur)) { await appOpts(cur); if (p.isConnected && document.activeElement?.id !== "cSetSteps") draw(); } };
+  const addLink = () => {
+    const l = normLink($("cLinkIn").value);
+    if (!l) { ctoast("That isn't an app link: try host:7860 or https://…"); return; }
+    store.set("c.links", links().filter(x => x.url !== l.url).concat(l));
+    store.set("c.inst", "link:" + l.url); delete C.appOpts["link:" + l.url];
+    ctoast(`Added ${l.name}: prompts now go there`); load();
+  };
   p.addEventListener("change", ev => {
     const id = ev.target.id;
-    if (id === "cSetInst") { store.set("c.inst", ev.target.value); closeFloating(); $("cSettings").click(); return; }
-    if (id === "cSetAspect") store.set("c.aspect", ev.target.value);
+    if (id === "cSetInst") { store.set("c.inst", ev.target.value); load(); }
     if (id === "cSetAuto") store.set("c.auto", ev.target.checked);
   });
-  p.addEventListener("input", ev => { if (ev.target.id === "cSetSteps") store.set("c.steps", ev.target.value.trim()); });
+  p.addEventListener("input", ev => {                  // the preset's own number, or a cleared box, keeps following the preset
+    if (ev.target.id !== "cSetSteps") return;
+    const v = ev.target.value.trim(), o = cur && C.appOpts[cur.key];
+    const preset = o && o.preset_steps != null ? o.preset_steps : store.get("c.presetSteps", NR2_STEPS);
+    store.set("c.steps", preset != null && Number(v) === preset ? "" : v);
+  });
+  p.addEventListener("focusout", ev => { if (ev.target.id === "cSetSteps" && !ev.target.value.trim()) draw(); });
+  p.addEventListener("keydown", ev => { if (ev.target.id === "cLinkIn" && ev.key === "Enter") { ev.preventDefault(); addLink(); } });
+  p.addEventListener("click", ev => {
+    ev.stopPropagation();                              // a redraw detaches the clicked button: don't let it read as an outside click
+    if (ev.target.id === "cLinkAdd") addLink();
+    if (ev.target.id === "cLinkDel" && cur && cur.link) {
+      store.set("c.links", links().filter(x => x.url !== cur.link)); store.set("c.inst", null);
+      ctoast(`Removed ${cur.name}`); load();
+    }
+  });
   placeNear(p, $("cSettings"), true);
-  if (cur && !C.appOpts[cur.id]) {
-    try { C.appOpts[cur.id] = await api("/api/img2prompt/app?id=" + encodeURIComponent(cur.id)); }
-    catch (err) { C.appOpts[cur.id] = {aspects: [], error: err.message}; }
-    if (p.isConnected) { draw(); }
-  }
+  load();
 };
 
 // ── library ──────────────────────────────────────────────────────────
@@ -1037,7 +1118,7 @@ function openLibrary() {
       <div class="libBar"><div class="segmented" id="cLibSeg"></div>
         <div class="search"><span>⌕</span><input class="input" id="cLibSearch" placeholder="Search name or @handle" autocomplete="off"></div>
         <button class="btn sm" data-upload>📎 Upload</button></div>
-      <div class="libGrid" id="cLibGrid"></div></div>`);
+      <div class="libGrid" id="cLibGrid"></div></div>`, "lib");
   b.querySelector("#cLibSearch").value = libQ;
   const draw = () => {
     b.querySelector("#cLibSeg").innerHTML = [["all", "All"], ["chat", "Chat"], ["img", "Image to prompt"], ["txt", "Text to prompt"]].map(([k, l]) =>
