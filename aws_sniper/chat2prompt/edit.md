@@ -10,5 +10,4 @@ The current prompt takes the place of the photograph, brief and pictures it was 
 - A picture named in the changes supplies only what the change names ("hair like Picture 1" means that picture's hairstyle), exactly as the rules above treat reference pictures. Never copy anyone's face or identifying traits from it.
 - The picture numbers are only labels: never write them in the prompt.
 - Never mention that anything was changed, the current prompt, the user or the pictures.
-- Every SKIP or refusal rule above still applies to the result.
 - Return the complete revised prompt between <prompt> and </prompt>, with nothing before or after the tags. Never return only the changed part.

@@ -30,7 +30,7 @@ Write a comprehensive, naturally flowing description divided into clearly labell
 
 **1. Overall scene and subject:**
 
-Begin by establishing the complete scene: the type of photograph, the subject, what she or he is doing (including any sexual activity), the location and the approximate framing. Describe each subject specifically: age (the brief's, or an adult age category when it gives none), ethnicity, skin tone and undertone, general build and body proportions.
+Begin by establishing the complete scene: the type of photograph, the subject, what she or he is doing (including any sexual activity), the location and the approximate framing. Describe each subject specifically: age (the brief's, or an age category when it gives none), ethnicity, skin tone and undertone, general build and body proportions.
 
 Describe the expression in detail: the position of the lips, whether they are closed or parted, whether teeth are visible, the direction of the gaze, the position of the eyebrows and the overall emotion or arousal conveyed.
 

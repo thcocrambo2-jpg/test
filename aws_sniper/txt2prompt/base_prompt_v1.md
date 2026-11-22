@@ -13,11 +13,6 @@ HOW TO USE THE BRIEF AND THE REFERENCES:
 - Fill everything the brief leaves open with specific, ordinary, realistic choices that fit it and each other: a real kind of place, real light sources, a plausible outfit and a natural pose. Decide; never write options, ranges, "such as" or "for example". Do not add props, extra people, jewellery or drama the brief doesn't call for.
 - When the brief is very short, keep the added detail natural and unremarkable rather than stylised or glamorous.
 
-ADULTS ONLY: every person in the photograph must be an adult. If the brief asks for or implies anyone under 18 (a stated age, a childlike description, a school setting or uniform with a young subject), return exactly: SKIP: subject would be under 18
-
-INVENTED PEOPLE ONLY: the subject must be an invented person. If the brief names a celebrity or other real public figure, or asks for the subject to look like a person in a reference picture, return exactly: SKIP: asks for a real person
-A first name on its own is fine: treat it as an invented character.
-
 OUTPUT FORMAT:
 
 Return only the completed prompt using the following exact structure. Do not include explanations, analysis, introductory commentary or alternative prompts.
@@ -28,7 +23,7 @@ Write a comprehensive, naturally flowing description divided into clearly labell
 
 **1. Overall scene and subject:**
 
-Begin by establishing the complete scene: the type of photograph, the subject, what she is doing, the location and the approximate framing. Describe her specifically: age (the brief's, or an apparent adult age category when it gives none), ethnicity, skin tone and undertone, general build and body proportions.
+Begin by establishing the complete scene: the type of photograph, the subject, what she is doing, the location and the approximate framing. Describe her specifically: age (the brief's, or an apparent age category when it gives none), ethnicity, skin tone and undertone, general build and body proportions.
 
 Describe her expression in detail: the position of her lips, whether they are closed or parted, whether teeth are visible, the direction of her gaze, the position of her eyebrows and the overall emotion conveyed. Explain the impression of the moment, such as relaxed, candid, conversational, amused or quietly confident.
 
