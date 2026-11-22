@@ -1,0 +1,1121 @@
+<!doctype html>
+<html lang="en" data-theme="dark">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Sniper chat</title>
+<!-- The Chat page of the AWS sniper (chatprompt.py), opened from the sniper's
+     Chat button and served by server.py at /chat. Ember's look: tokens.css
+     (a copy of webui/src/theme/tokens.css) plus the styles below. -->
+<link rel="stylesheet" href="/tokens.css">
+<style>
+/* ── Chat tab: Ember's look (webui/src shell, ui and fields styles), every
+   rule scoped to #tab-chat so the sniper's own button / input styles stay
+   out of it and nothing here reaches the other tabs. ── */
+#tab-chat { display:grid; grid-template-columns:260px minmax(0,1fr); gap:0; position:relative; min-height:480px;
+            border:1px solid var(--c-border); border-radius:var(--r-lg); overflow:hidden; background:var(--c-bg);
+            font-size:var(--t-md); line-height:var(--lh-normal); -webkit-font-smoothing:antialiased; }
+#tab-chat[hidden] { display:none; }
+#tab-chat *, #tab-chat *::before, #tab-chat *::after { box-sizing:border-box; }
+#tab-chat button { background:none; border:0; padding:0; color:inherit; font:inherit; font-weight:inherit; border-radius:0; cursor:pointer; }
+#tab-chat button:hover { background:none; }
+#tab-chat label { display:flex; flex-direction:row; gap:0; color:inherit; font-size:inherit; }
+#tab-chat h2, #tab-chat h3, #tab-chat p { margin:0; }
+#tab-chat .hidden { display:none !important; }
+#tab-chat :focus-visible { outline:2px solid var(--c-focus); outline-offset:2px; border-radius:var(--r-xs); }
+#tab-chat * { scrollbar-width:thin; scrollbar-color:var(--c-border-strong) transparent; }
+
+/* button */
+#tab-chat .btn { --bg:var(--c-elevated); --fg:var(--c-text); --bd:var(--c-border);
+  display:inline-flex; align-items:center; justify-content:center; gap:var(--s-2); padding:0 var(--s-4); height:34px;
+  border:1px solid var(--bd); border-radius:var(--r-md); background:var(--bg); color:var(--fg); font-size:var(--t-sm);
+  font-weight:var(--fw-medium); white-space:nowrap;
+  transition:background var(--d-fast) var(--e-out), border-color var(--d-fast) var(--e-out), transform var(--d-fast) var(--e-out); }
+#tab-chat .btn:hover:not(:disabled) { background:var(--c-panel-hover); border-color:var(--c-border-strong); }
+#tab-chat .btn:active:not(:disabled) { transform:translateY(1px); }
+#tab-chat .btn:disabled { opacity:.48; cursor:not-allowed; }
+#tab-chat .btn.primary { --bg:var(--c-accent); --fg:var(--c-text-on-accent); --bd:var(--c-accent); font-weight:var(--fw-semibold); }
+#tab-chat .btn.primary:hover:not(:disabled) { background:var(--c-accent-hover); border-color:var(--c-accent-hover); }
+#tab-chat .btn.ghost { --bg:transparent; --bd:transparent; color:var(--c-text-muted); }
+#tab-chat .btn.ghost:hover:not(:disabled) { background:var(--c-panel-hover); border-color:transparent; color:var(--c-text); }
+#tab-chat .btn.danger { --fg:var(--c-error); --bd:var(--c-error-line); --bg:transparent; }
+#tab-chat .btn.danger:hover:not(:disabled) { background:var(--c-error-soft); border-color:var(--c-error); }
+#tab-chat .btn.sm { height:28px; padding:0 var(--s-3); font-size:var(--t-xs); }
+#tab-chat .btn.icon { padding:0; width:34px; }
+#tab-chat .btn.icon.sm { width:28px; }
+#tab-chat .btn.block { width:100%; }
+#tab-chat .spinner { width:12px; height:12px; border-radius:50%; border:2px solid currentColor; border-right-color:transparent;
+  animation:cspin 700ms linear infinite; flex:none; display:inline-block; }
+@keyframes cspin { to { transform:rotate(360deg); } }
+
+/* pill */
+#tab-chat .pill { display:inline-flex; align-items:center; gap:var(--s-2); padding:3px var(--s-3); border-radius:var(--r-full);
+  border:1px solid var(--c-border); background:var(--c-elevated); font-size:var(--t-xs); color:var(--c-text-muted); line-height:1.6; white-space:nowrap; }
+#tab-chat .pill b { color:var(--c-text); font-weight:var(--fw-semibold); }
+#tab-chat .pill.accent { border-color:var(--c-accent-line); background:var(--c-accent-soft); color:var(--c-accent); }
+#tab-chat .pill.success { border-color:var(--c-success-line); background:var(--c-success-soft); color:var(--c-success); }
+#tab-chat .pill.warning { border-color:var(--c-warning-line); background:var(--c-warning-soft); color:var(--c-warning); }
+#tab-chat .pill.danger { border-color:var(--c-error-line); background:var(--c-error-soft); color:var(--c-error); }
+#tab-chat button.pill:hover { border-color:var(--c-border-strong); color:var(--c-text); background:var(--c-elevated); }
+
+/* fields */
+#tab-chat .input, #tab-chat .select { width:100%; background:var(--c-input); color:var(--c-text); border:1px solid var(--c-border);
+  border-radius:var(--r-md); padding:0 var(--s-3); height:34px; font:inherit; font-size:var(--t-sm); transition:border-color var(--d-fast) var(--e-out); }
+#tab-chat .input:hover, #tab-chat .select:hover { border-color:var(--c-border-strong); }
+#tab-chat .input:focus, #tab-chat .select:focus { outline:none; border-color:var(--c-accent); box-shadow:0 0 0 3px var(--c-accent-soft); }
+#tab-chat .input::placeholder, #tab-chat textarea::placeholder { color:var(--c-text-faint); }
+#tab-chat .select { appearance:none; padding-right:var(--s-8); cursor:pointer; background-image:var(--icon-caret);
+  background-repeat:no-repeat; background-position:right var(--s-3) center; }
+#tab-chat .select option { background:var(--c-input); }
+#tab-chat .label { font-size:var(--t-xs); font-weight:var(--fw-medium); color:var(--c-text-muted); letter-spacing:.012em; }
+#tab-chat .field { display:flex; flex-direction:column; gap:var(--s-2); min-width:0; }
+#tab-chat .muted { color:var(--c-text-muted); font-size:var(--t-xs); }
+#tab-chat .faint { color:var(--c-text-faint); font-size:var(--t-2xs); }
+#tab-chat .grow { flex:1; }
+
+/* chat list = Ember's nav */
+#tab-chat .cnav { border-right:1px solid var(--c-border); background:var(--c-bg); padding:var(--s-4) var(--s-3) var(--s-3);
+  display:flex; flex-direction:column; gap:var(--s-4); min-height:0; }
+#tab-chat .navTop { display:flex; flex-direction:column; gap:var(--s-2); }
+#tab-chat .search { position:relative; }
+#tab-chat .search .input { padding-left:30px; }
+#tab-chat .search span { position:absolute; left:10px; top:50%; transform:translateY(-50%); color:var(--c-text-faint); font-size:var(--t-sm); pointer-events:none; }
+#tab-chat .navScroll { flex:1; min-height:0; overflow-y:auto; display:flex; flex-direction:column; gap:var(--s-5); }
+#tab-chat .navGroup { display:flex; flex-direction:column; gap:2px; }
+#tab-chat .navTitle { font-size:var(--t-2xs); font-weight:var(--fw-semibold); letter-spacing:.09em; text-transform:uppercase;
+  color:var(--c-text-faint); padding:0 var(--s-3) var(--s-2); }
+#tab-chat .navLink { display:flex; align-items:center; gap:var(--s-2); padding:var(--s-2) var(--s-2) var(--s-2) var(--s-3);
+  border-radius:var(--r-md); color:var(--c-text-muted); font-size:var(--t-sm); font-weight:var(--fw-medium);
+  border-left:2px solid transparent; cursor:pointer; transition:background var(--d-fast) var(--e-out), color var(--d-fast) var(--e-out); }
+#tab-chat .navLink:hover { background:var(--c-panel); color:var(--c-text); }
+#tab-chat .navLink.on, #tab-chat .navLink.on:hover { background:var(--c-accent-soft); color:var(--c-accent); border-left-color:var(--c-accent); }
+#tab-chat .navLabel { flex:1; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+#tab-chat .navLink .more { opacity:0; padding:0 var(--s-1); border-radius:var(--r-xs); line-height:1; height:22px; }
+#tab-chat .navLink:hover .more, #tab-chat .navLink.on .more, #tab-chat .navLink .more.open { opacity:1; }
+#tab-chat .navLink .more:hover { background:var(--c-panel-hover); }
+#tab-chat .navFoot { border-top:1px solid var(--c-border); padding-top:var(--s-3); display:flex; flex-direction:column; gap:var(--s-2); }
+#tab-chat .spend { display:flex; justify-content:space-between; font-size:var(--t-2xs); color:var(--c-text-faint); padding:0 var(--s-1); font-variant-numeric:tabular-nums; }
+#tab-chat .spend b { color:var(--c-text-muted); font-weight:var(--fw-semibold); }
+#tab-chat .navEmpty { padding:var(--s-6) var(--s-3); text-align:center; color:var(--c-text-faint); font-size:var(--t-xs); }
+
+/* menus and popovers */
+#tab-chat .menu { position:fixed; z-index:var(--z-panel); background:var(--c-elevated); border:1px solid var(--c-border);
+  border-radius:var(--r-md); box-shadow:var(--sh-lg); padding:var(--s-1); min-width:180px; animation:crise var(--d-base) var(--e-out); }
+#tab-chat .menu button { display:flex; width:100%; align-items:flex-start; gap:var(--s-2); text-align:left;
+  padding:var(--s-2) var(--s-3); border-radius:var(--r-sm); color:var(--c-text); font-size:var(--t-sm); }
+#tab-chat .menu button:hover { background:var(--c-panel-hover); }
+#tab-chat .menu button.danger { color:var(--c-error); }
+#tab-chat .menu button small { display:block; color:var(--c-text-faint); font-size:var(--t-2xs); line-height:var(--lh-snug); }
+#tab-chat .menu button .tick { width:14px; flex:none; color:var(--c-accent); }
+#tab-chat .menu hr { border:0; border-top:1px solid var(--c-border); margin:var(--s-1) 0; }
+#tab-chat .pop { position:fixed; z-index:var(--z-panel); width:min(340px, calc(100vw - 32px)); background:var(--c-elevated); border:1px solid var(--c-border);
+  border-radius:var(--r-lg); box-shadow:var(--sh-lg); padding:var(--s-4); display:flex; flex-direction:column; gap:var(--s-3); animation:crise var(--d-base) var(--e-out); }
+#tab-chat .pop h3 { font-size:var(--t-sm); font-weight:var(--fw-semibold); }
+#tab-chat .pop .two { display:grid; grid-template-columns:1fr 1fr; gap:var(--s-3); }
+#tab-chat .switch { display:flex; align-items:center; gap:var(--s-2); font-size:var(--t-sm); cursor:pointer; }
+#tab-chat .switch input { accent-color:var(--c-accent); }
+@keyframes crise { from { opacity:0; transform:translateY(10px) scale(.99); } }
+
+/* main column */
+#tab-chat .cmain { display:flex; flex-direction:column; min-width:0; min-height:0; }
+#tab-chat .chatHead { display:flex; align-items:center; gap:var(--s-3); padding:var(--s-3) var(--s-5); border-bottom:1px solid var(--c-border); min-height:52px; }
+#tab-chat .chatTitle { font-size:var(--t-lg); font-weight:var(--fw-semibold); letter-spacing:-.012em; overflow:hidden; text-overflow:ellipsis;
+  white-space:nowrap; cursor:text; border-radius:var(--r-xs); padding:2px var(--s-1); min-width:0; }
+#tab-chat .chatTitle:hover { background:var(--c-panel); }
+#tab-chat .menuBtn { display:none; }
+#tab-chat .scroll { flex:1; min-height:0; overflow-y:auto; }
+#tab-chat .col { max-width:780px; margin:0 auto; padding:var(--s-6) var(--s-5) var(--s-4); display:flex; flex-direction:column; gap:var(--s-6); }
+
+#tab-chat .uturn { display:flex; flex-direction:column; align-items:flex-end; gap:var(--s-2); }
+#tab-chat .quote { display:flex; align-items:center; gap:var(--s-2); font-size:var(--t-xs); color:var(--c-text-muted);
+  border-left:2px solid var(--c-accent); padding:2px 0 2px var(--s-2); max-width:80%; cursor:pointer; }
+#tab-chat .quote:hover { color:var(--c-text); }
+#tab-chat .ell { overflow:hidden; text-overflow:ellipsis; white-space:nowrap; min-width:0; }
+#tab-chat .thumbs { display:flex; gap:var(--s-2); flex-wrap:wrap; justify-content:flex-end; }
+#tab-chat .bubble { background:var(--c-panel); border:1px solid var(--c-border); border-radius:var(--r-xl) var(--r-xl) var(--r-xs) var(--r-xl);
+  padding:var(--s-3) var(--s-4); max-width:80%; white-space:pre-wrap; overflow-wrap:anywhere; }
+#tab-chat .acts { display:flex; gap:2px; align-items:center; opacity:0; transition:opacity var(--d-fast) var(--e-out); }
+#tab-chat .uturn:hover .acts, #tab-chat .aturn:hover .acts { opacity:1; }
+#tab-chat .mention { color:var(--c-accent); background:var(--c-accent-soft); border-radius:var(--r-xs); padding:0 3px; font-weight:var(--fw-medium); }
+
+#tab-chat .tile { position:relative; width:72px; height:88px; border-radius:var(--r-md); border:1px solid var(--c-border);
+  background:var(--c-bg-sunken); overflow:hidden; flex:none; display:grid; place-items:center; color:var(--c-text-faint); font-size:var(--t-2xs); }
+#tab-chat .tile img { width:100%; height:100%; object-fit:cover; display:block; }
+#tab-chat .tile .h { position:absolute; left:0; right:0; bottom:0; padding:2px 6px; font-size:var(--t-2xs); color:var(--c-on-media);
+  background:var(--c-media-chip); overflow:hidden; text-overflow:ellipsis; white-space:nowrap; text-align:left; }
+
+#tab-chat .aturn { display:flex; flex-direction:column; gap:var(--s-3); }
+#tab-chat .talk { color:var(--c-text); white-space:pre-wrap; overflow-wrap:anywhere; }
+#tab-chat .alert { display:flex; gap:var(--s-3); padding:var(--s-3) var(--s-4); border-radius:var(--r-md); border:1px solid var(--c-error-line);
+  background:var(--c-error-soft); font-size:var(--t-sm); line-height:var(--lh-snug); overflow-wrap:anywhere; }
+#tab-chat .pcard { background:var(--c-panel); border:1px solid var(--c-border); border-radius:var(--r-lg);
+  transition:border-color var(--d-base) var(--e-out), box-shadow var(--d-base) var(--e-out); }
+#tab-chat .pcard.target { border-color:var(--c-accent); box-shadow:0 0 0 3px var(--c-accent-soft); }
+#tab-chat .pcard.flash { box-shadow:0 0 0 3px var(--c-info-soft); border-color:var(--c-info); }
+#tab-chat .pcardHead { display:flex; align-items:center; gap:var(--s-2); flex-wrap:wrap; padding:var(--s-2) var(--s-3) var(--s-2) var(--s-4);
+  border-bottom:1px solid var(--c-border); min-height:44px; }
+#tab-chat .pcardTitle { font-size:var(--t-sm); font-weight:var(--fw-semibold); }
+#tab-chat .trail { display:flex; align-items:center; gap:4px; font-size:var(--t-xs); color:var(--c-text-faint); }
+#tab-chat .trail button { color:var(--c-text-muted); padding:1px 5px; border-radius:var(--r-xs); font-size:var(--t-xs); font-family:var(--font-mono); }
+#tab-chat .trail button:hover { background:var(--c-panel-hover); color:var(--c-text); }
+#tab-chat .trail button.cur { color:var(--c-accent); background:var(--c-accent-soft); }
+#tab-chat .ptext { padding:var(--s-3) var(--s-4); white-space:pre-wrap; overflow-wrap:anywhere; font-size:var(--t-sm); line-height:var(--lh-loose);
+  max-height:calc(var(--t-sm) * 1.7 * 10 + var(--s-6)); overflow-y:auto; overscroll-behavior:contain; position:relative; }
+#tab-chat .ptext.open { max-height:none; overflow:visible; }
+#tab-chat .cursor { display:inline-block; width:7px; height:1em; background:var(--c-accent); vertical-align:text-bottom; margin-left:2px; animation:cblink 1s steps(2) infinite; }
+@keyframes cblink { 50% { opacity:0; } }
+#tab-chat .pcardFoot { display:flex; align-items:center; gap:var(--s-1); flex-wrap:wrap; padding:var(--s-2) var(--s-3); border-top:1px solid var(--c-border); }
+#tab-chat .meta { font-size:var(--t-2xs); color:var(--c-text-faint); font-family:var(--font-mono); font-variant-numeric:tabular-nums; padding-left:var(--s-1); }
+#tab-chat .shimmer { height:14px; border-radius:var(--r-sm); background:var(--c-skeleton); position:relative; overflow:hidden; margin:var(--s-2) 0; }
+#tab-chat .shimmer::after { content:''; position:absolute; inset:0; transform:translateX(-100%);
+  background:linear-gradient(90deg, transparent, var(--c-skeleton-sheen), transparent); animation:csheen 1.4s infinite; }
+@keyframes csheen { 100% { transform:translateX(100%); } }
+
+/* composer */
+#tab-chat .composerWrap { padding:0 var(--s-5) var(--s-4); }
+#tab-chat .composer { width:100%; max-width:780px; margin:0 auto; background:var(--c-panel); border:1px solid var(--c-border); border-radius:var(--r-xl);
+  box-shadow:var(--sh-md); padding:var(--s-2); position:relative; transition:border-color var(--d-fast) var(--e-out); }
+#tab-chat .composer:focus-within { border-color:var(--c-border-strong); }
+#tab-chat .composer.over { border-color:var(--c-accent); background:var(--c-accent-soft); }
+#tab-chat .editChip { display:flex; align-items:center; gap:var(--s-2); margin:0 0 var(--s-2); padding:var(--s-2) var(--s-2) var(--s-2) var(--s-3);
+  background:var(--c-accent-soft); border:1px solid var(--c-accent-line); border-radius:var(--r-md); font-size:var(--t-xs); color:var(--c-accent); }
+#tab-chat .editChip .ell { flex:1; color:var(--c-text-muted); }
+#tab-chat .editChip button { color:var(--c-accent); border-radius:var(--r-xs); width:22px; height:22px; flex:none; }
+#tab-chat .editChip button:hover { background:var(--c-accent-soft); }
+#tab-chat .attach { display:flex; gap:var(--s-2); flex-wrap:wrap; padding:0 var(--s-1) var(--s-2); }
+#tab-chat .attach:empty { display:none; }
+#tab-chat .achip { display:flex; align-items:center; gap:var(--s-2); padding:3px 4px 3px 3px; border:1px solid var(--c-border); border-radius:var(--r-md);
+  background:var(--c-elevated); font-size:var(--t-xs); }
+#tab-chat .achip .tile { width:28px; height:28px; border-radius:var(--r-sm); }
+#tab-chat .achip button { color:var(--c-text-faint); width:20px; height:20px; border-radius:var(--r-xs); }
+#tab-chat .achip button:hover { color:var(--c-text); background:var(--c-panel-hover); }
+#tab-chat .composer textarea { display:block; width:100%; border:0; background:transparent; resize:none; padding:var(--s-2) var(--s-3);
+  min-height:44px; max-height:240px; line-height:var(--lh-normal); font:inherit; font-size:var(--t-md); color:var(--c-text); box-shadow:none; border-radius:0; }
+#tab-chat .composer textarea:focus { outline:none; border:0; box-shadow:none; }
+#tab-chat .cbar { display:flex; align-items:center; gap:var(--s-1); padding:0 var(--s-1); }
+#tab-chat .send { width:36px; height:36px; border-radius:var(--r-full); padding:0; font-size:var(--t-lg); }
+#tab-chat .hintline { width:100%; max-width:780px; margin:var(--s-2) auto 0; font-size:var(--t-2xs); color:var(--c-text-faint); text-align:center; }
+#tab-chat .kbd { display:inline-block; padding:0 5px; border:1px solid var(--c-border); border-bottom-width:2px; border-radius:var(--r-xs);
+  background:var(--c-elevated); font-family:var(--font-mono); font-size:10px; color:var(--c-text); }
+#tab-chat .cerr { max-width:780px; margin:var(--s-2) auto 0; color:var(--c-error); font-size:var(--t-sm); white-space:pre-wrap; }
+#tab-chat .cerr:empty { display:none; }
+
+#tab-chat .mentions { position:absolute; left:var(--s-2); bottom:calc(100% + var(--s-2)); width:min(360px, calc(100% - var(--s-4))); background:var(--c-elevated);
+  border:1px solid var(--c-border); border-radius:var(--r-md); box-shadow:var(--sh-lg); padding:var(--s-1); z-index:var(--z-panel); max-height:300px; overflow-y:auto; }
+#tab-chat .mentions .mh { font-size:var(--t-2xs); color:var(--c-text-faint); padding:var(--s-1) var(--s-2); text-transform:uppercase; letter-spacing:.09em; font-weight:var(--fw-semibold); }
+#tab-chat .mopt { display:flex; align-items:center; gap:var(--s-3); width:100%; padding:var(--s-1) var(--s-2); border-radius:var(--r-sm); text-align:left; color:var(--c-text); }
+#tab-chat .mopt .tile { width:34px; height:34px; border-radius:var(--r-sm); }
+#tab-chat .mopt.on, #tab-chat .mopt:hover { background:var(--c-panel-hover); }
+#tab-chat .mopt small { display:block; color:var(--c-text-faint); font-size:var(--t-2xs); }
+
+#tab-chat .cmain.blank .scroll { display:none; }
+#tab-chat .cmain.blank .composerWrap { flex:1; display:flex; flex-direction:column; justify-content:center; padding-bottom:10vh; }
+#tab-chat .welcome { text-align:center; margin-bottom:var(--s-6); }
+#tab-chat .welcome h2 { font-size:var(--t-3xl); letter-spacing:-.02em; font-weight:var(--fw-semibold); }
+#tab-chat .welcome p { color:var(--c-text-muted); font-size:var(--t-sm); margin-top:var(--s-2); }
+#tab-chat .starters { display:flex; gap:var(--s-2); flex-wrap:wrap; justify-content:center; margin-top:var(--s-4); }
+#tab-chat .cmain:not(.blank) .welcome, #tab-chat .cmain:not(.blank) .starters { display:none; }
+
+/* modal */
+#tab-chat .backdrop { position:fixed; inset:0; background:var(--c-overlay); z-index:var(--z-modal); display:flex; align-items:center;
+  justify-content:center; padding:var(--s-4); animation:cfade var(--d-base) var(--e-out); backdrop-filter:blur(2px); }
+@keyframes cfade { from { opacity:0; } }
+#tab-chat .modal { background:var(--c-panel); border:1px solid var(--c-border); border-radius:var(--r-xl); box-shadow:var(--sh-lg);
+  width:min(920px, 100%); max-height:min(86vh, 820px); display:flex; flex-direction:column; animation:crise var(--d-base) var(--e-out); }
+#tab-chat .modal.small { width:min(440px, 100%); }
+#tab-chat .modal.view { width:auto; max-width:min(92vw, 1100px); }
+#tab-chat .modal.view img { max-width:100%; max-height:76vh; display:block; margin:0 auto; border-radius:var(--r-md); }
+#tab-chat .modalHead { display:flex; align-items:center; justify-content:space-between; gap:var(--s-3); padding:var(--s-4) var(--s-5); border-bottom:1px solid var(--c-border); }
+#tab-chat .modalTitle { font-size:var(--t-lg); font-weight:var(--fw-semibold); }
+#tab-chat .modalBody { padding:var(--s-5); overflow:auto; }
+#tab-chat .modalFoot { display:flex; justify-content:flex-end; gap:var(--s-3); margin-top:var(--s-5); }
+#tab-chat .segmented { display:inline-flex; padding:3px; gap:2px; background:var(--c-bg-sunken); border:1px solid var(--c-border); border-radius:var(--r-md); flex-wrap:wrap; }
+#tab-chat .segment { color:var(--c-text-muted); padding:5px var(--s-3); border-radius:var(--r-sm); font-size:var(--t-xs); font-weight:var(--fw-medium); white-space:nowrap; }
+#tab-chat .segment:hover { color:var(--c-text); }
+#tab-chat .segment.on, #tab-chat .segment.on:hover { background:var(--c-elevated); color:var(--c-text); box-shadow:var(--sh-sm); }
+#tab-chat .libBar { display:flex; gap:var(--s-3); align-items:center; flex-wrap:wrap; margin-bottom:var(--s-4); }
+#tab-chat .libBar .search { flex:1; min-width:200px; }
+#tab-chat .libGrid { display:grid; grid-template-columns:repeat(auto-fill, minmax(150px, 1fr)); gap:var(--s-3); }
+#tab-chat .lcard { background:var(--c-bg-sunken); border:1px solid var(--c-border); border-radius:var(--r-lg); overflow:hidden; display:flex; flex-direction:column;
+  transition:border-color var(--d-fast) var(--e-out); }
+#tab-chat .lcard:hover { border-color:var(--c-border-strong); }
+#tab-chat .lcard.picked { border-color:var(--c-accent); box-shadow:0 0 0 3px var(--c-accent-soft); }
+#tab-chat .lcard .tile { width:100%; height:150px; border:0; border-radius:0; cursor:pointer; }
+#tab-chat .lcard .lbody { padding:var(--s-2) var(--s-3) var(--s-3); display:flex; flex-direction:column; gap:var(--s-1); }
+#tab-chat .lcard .lh { font-size:var(--t-sm); font-weight:var(--fw-semibold); color:var(--c-accent); overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+#tab-chat .lcard .ln { font-size:var(--t-2xs); color:var(--c-text-faint); overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+#tab-chat .lcard .lacts { display:flex; gap:2px; margin-top:var(--s-1); }
+#tab-chat .empty { display:flex; flex-direction:column; align-items:center; text-align:center; gap:var(--s-2); padding:var(--s-10) var(--s-6); color:var(--c-text-muted); }
+#tab-chat .empty b { color:var(--c-text); }
+
+/* toasts */
+#tab-chat .toastHost { position:fixed; bottom:var(--s-6); left:50%; transform:translateX(-50%); z-index:var(--z-toast); display:flex; flex-direction:column;
+  gap:var(--s-2); align-items:center; pointer-events:none; }
+#tab-chat .ctoast { background:var(--c-elevated); border:1px solid var(--c-border); box-shadow:var(--sh-lg); border-radius:var(--r-full);
+  padding:var(--s-2) var(--s-5); font-size:var(--t-sm); animation:crise var(--d-base) var(--e-out); max-width:calc(100vw - 32px); }
+
+/* phones: the chat list becomes a drawer */
+@media (max-width:900px) {
+  #tab-chat { grid-template-columns:minmax(0,1fr); }
+  #tab-chat .menuBtn { display:inline-flex; }
+  #tab-chat .cnav { position:absolute; top:0; bottom:0; left:0; width:min(300px, 86%); z-index:var(--z-panel);
+    transform:translateX(-102%); transition:transform var(--d-base) var(--e-out); box-shadow:var(--sh-lg); }
+  #tab-chat.drawer .cnav { transform:none; }
+  #tab-chat .scrim { position:absolute; inset:0; background:var(--c-overlay); z-index:calc(var(--z-panel) - 1); }
+  #tab-chat .col { padding:var(--s-4) var(--s-3) var(--s-3); }
+  #tab-chat .chatHead { padding:var(--s-2) var(--s-3); }
+  #tab-chat .composerWrap { padding:0 var(--s-3) var(--s-3); }
+  #tab-chat .bubble { max-width:92%; }
+  #tab-chat .pop .two { grid-template-columns:1fr; }
+  #tab-chat .acts { opacity:1; }
+}
+
+/* ── its own page: the chat fills the window ── */
+* { box-sizing:border-box; }
+html, body { margin:0; height:100%; }
+body { background:var(--c-bg); color:var(--c-text); font:var(--t-md)/var(--lh-normal) var(--font-sans); }
+#tab-chat { height:100vh; height:100dvh; min-height:0; border:0; border-radius:0;
+            grid-template-rows:minmax(0,1fr); grid-auto-rows:0; }   /* #cFloat (menus, toasts) gets no row of its own */
+#tab-chat .back { color:var(--c-text-muted); font-size:var(--t-xs); text-decoration:none; padding:0 var(--s-1) var(--s-1); }
+#tab-chat .back:hover { color:var(--c-text); }
+#tab-chat .acctSel { width:auto; max-width:200px; height:28px; padding:0 var(--s-8) 0 var(--s-3); font-size:var(--t-xs); }
+</style>
+</head>
+<body>
+<div id="tab-chat">
+  <aside class="cnav" id="cNav">
+    <div class="navTop">
+      <a class="back" href="/" title="Back to the sniper">← AWS GPU sniper</a>
+      <button class="btn primary block" id="cNew">＋ New chat</button>
+      <div class="search"><span>⌕</span><input class="input" id="cSearch" placeholder="Search chats" autocomplete="off"></div>
+    </div>
+    <div class="navScroll" id="cList"></div>
+    <div class="navFoot">
+      <button class="btn block" id="cOpenLib">🖼 Library <span class="faint" id="cLibCount"></span></button>
+      <div class="spend" title="Chat spend, taken off the account's credit"><span>this session <b id="cSpendS">—</b></span><span>all time <b id="cSpendT">—</b></span></div>
+    </div>
+  </aside>
+  <section class="cmain blank" id="cMain">
+    <div class="chatHead">
+      <button class="btn ghost icon sm menuBtn" id="cMenu" title="Chats">☰</button>
+      <div class="chatTitle" id="cTitle" title="Click to rename">New chat</div>
+      <span class="grow"></span>
+      <span class="pill" title="Model">Qwen3-VL</span>
+      <select class="select acctSel" id="cAcct" title="Account that pays: its Bedrock credit"></select>
+      <button class="btn ghost sm" id="cHeadMode" data-float title="Base prompt for this chat"></button>
+      <button class="btn ghost icon sm" id="cSettings" data-float title="Send to the app">⚙</button>
+    </div>
+    <div class="scroll" id="cScroll"><div class="col" id="cCol"></div></div>
+    <div class="composerWrap">
+      <div class="welcome"><h2>What are we making?</h2><p>Describe a picture, drop reference images, or @mention one from the library.</p></div>
+      <div class="composer" id="cComposer">
+        <div class="mentions hidden" id="cMentions"></div>
+        <div class="editChip hidden" id="cEditChip"></div>
+        <div class="attach" id="cAttach"></div>
+        <textarea id="cInput" rows="1" placeholder="Message Qwen · @ to mention a picture"></textarea>
+        <div class="cbar">
+          <button class="btn ghost icon sm" id="cAttachBtn" title="Upload pictures">📎</button>
+          <input type="file" id="cFile" accept="image/jpeg,image/png,image/webp,image/gif" multiple hidden>
+          <button class="btn ghost icon sm" id="cLibBtn" title="Pick from the library">🖼</button>
+          <button class="pill" id="cModePill" data-float title="Base prompt for this chat"></button>
+          <span class="grow"></span>
+          <span class="faint" id="cCost" title="Rough estimate for this message"></span>
+          <button class="btn primary send" id="cSend" title="Send (Enter)">↑</button>
+        </div>
+      </div>
+      <div class="cerr" id="cErr"></div>
+      <div class="hintline"><span class="kbd">Enter</span> send · <span class="kbd">Shift</span>+<span class="kbd">Enter</span> new line · <span class="kbd">@</span> mention · paste or drop pictures · only this message is sent, or the picked prompt when editing</div>
+      <div class="starters" id="cStarters"></div>
+    </div>
+  </section>
+  <div id="cFloat"></div>
+</div>
+<script>
+// ── Helpers (the same as the sniper page's) ──
+const $ = id => document.getElementById(id);
+const esc = s => String(s ?? "").replace(/[&<>"']/g, c => ({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]));
+const store = {
+  get(k, d) { try { const v = localStorage.getItem("awssniper." + k); return v === null ? d : JSON.parse(v); } catch { return d; } },
+  set(k, v) { try { localStorage.setItem("awssniper." + k, JSON.stringify(v)); } catch {} },
+};
+async function api(path, body) {
+  const opt = body === undefined ? {} : {method: "POST", headers: {"content-type": "application/json", "x-sniper": "1"},
+                                         body: JSON.stringify(body)};
+  const r = await fetch(path, opt);
+  const j = await r.json().catch(() => ({error: "Bad answer from the server (" + r.status + ")."}));
+  if (!r.ok || j.error) throw new Error(j.error || r.statusText);
+  return j;
+}
+async function shrinkImage(file, maxSide, maxBytes) {
+  const name = file.name || `pasted-${Date.now()}.${file.type.split("/")[1]}`;
+  let bmp;
+  try { bmp = await createImageBitmap(file); } catch { return {blob: file, type: file.type, name}; }
+  const side = Math.max(bmp.width, bmp.height);
+  if (file.size <= maxBytes && side <= maxSide) { bmp.close(); return {blob: file, type: file.type, name}; }
+  let scale = Math.min(1, maxSide / side), blob = null;
+  for (let tries = 0; tries < 8; tries++) {
+    const c = document.createElement("canvas");
+    c.width = Math.max(1, Math.round(bmp.width * scale)); c.height = Math.max(1, Math.round(bmp.height * scale));
+    const g = c.getContext("2d");
+    g.fillStyle = "#fff"; g.fillRect(0, 0, c.width, c.height);      // transparent PNGs get a white background
+    g.drawImage(bmp, 0, 0, c.width, c.height);
+    for (const q of [0.92, 0.85, 0.75]) {
+      blob = await new Promise(ok => c.toBlob(ok, "image/jpeg", q));
+      if (blob && blob.size <= maxBytes) break;
+    }
+    if (blob && blob.size <= maxBytes) break;
+    scale *= 0.8;
+  }
+  bmp.close();
+  return {blob, type: "image/jpeg", name: name.replace(/\.[^.]*$/, "") + ".jpg"};
+}
+const readB64 = f => new Promise((ok, bad) => {
+  const fr = new FileReader();
+  fr.onload = () => ok(String(fr.result).split(",")[1]);
+  fr.onerror = () => bad(fr.error || new Error("Couldn't read the file."));
+  fr.readAsDataURL(f);
+});
+
+// ── Account (this page's own choice; starts from the sniper page's) ──
+let ACCOUNTS = [], ACCOUNT = store.get("c.account", store.get("account", "main"));
+const acct = () => ACCOUNT;
+function drawAccounts() {
+  if (ACCOUNTS.length && !ACCOUNTS.some(a => a.name === ACCOUNT)) ACCOUNT = ACCOUNTS[0].name;
+  $("cAcct").innerHTML = (ACCOUNTS.length ? ACCOUNTS : [{name: ACCOUNT}]).map(a =>
+    `<option value="${esc(a.name)}"${a.name === ACCOUNT ? " selected" : ""}>` +
+    `${esc(a.name)}${a.id ? " · " + a.id : a.error ? " · keys not working" : ""}</option>`).join("");
+}
+$("cAcct").onchange = () => { ACCOUNT = $("cAcct").value; store.set("c.account", ACCOUNT); poll(); };
+api("/api/config").then(cfg => { ACCOUNTS = cfg.accounts || []; drawAccounts(); })
+  .catch(e => { $("cErr").textContent = "Couldn't load the accounts: " + e.message; });
+drawAccounts();
+
+// ── Instances, for ⤒ Queue and Auto-send ──
+let LAST_ST = null;
+async function poll() {
+  try {
+    const r = await fetch("/api/status?account=" + encodeURIComponent(acct()));
+    const st = await r.json();
+    if (r.ok) LAST_ST = st;
+  } catch {}
+}
+poll(); setInterval(poll, 5000);
+</script>
+<script>
+// ── Chat (chatprompt.py) ──
+// Uses the helpers above: api(), store, esc, acct(), shrinkImage, readB64
+// and LAST_ST (the polled instances).
+// Every message goes out on its own; ✎ Edit on a prompt card sends only that
+// prompt as context with the next message.
+(() => {
+"use strict";
+const tab = $("tab-chat");
+const C = {cfg: null, chats: [], open: {}, cur: null, draftMode: null, lib: [], edit: {}, attached: [],
+           resend: null, streams: {}, sendChain: Promise.resolve(), appOpts: {}};
+const SRC = {chat: "Chat", img: "Image to prompt", txt: "Text to prompt"};
+const FORMATS = ["image/jpeg", "image/png", "image/webp", "image/gif"];
+const money = v => v == null ? "—" : "$" + (v > 0 && v < 0.01 ? v.toFixed(4) : v.toFixed(3));
+const words = s => ((s || "").trim().match(/\S+/g) || []).length;
+const sleep = ms => new Promise(ok => setTimeout(ok, ms));
+const imgUrl = (src, id) => `/api/chat/image?src=${encodeURIComponent(src)}&id=${encodeURIComponent(id)}`;
+const libBy = h => C.lib.find(i => i.handle.toLowerCase() === String(h).toLowerCase());
+const same = (a, b) => a.src === b.src && a.id === b.id;
+const chat = () => (C.cur && C.open[C.cur]) || null;
+const curMode = () => chat() ? chat().mode : C.draftMode;
+const modeLabel = k => k === "free" ? "Free chat" : String(k || "").replace(/-/g, " ").replace(/^./, c => c.toUpperCase());
+const isPrompt = m => m && m.prompt && !m.prompt.startsWith("SKIP:");
+
+// ── small helpers ────────────────────────────────────────────────────
+const host = document.createElement("div"); host.className = "toastHost"; $("cFloat").appendChild(host);
+function ctoast(msg) {
+  const t = document.createElement("div"); t.className = "ctoast"; t.textContent = msg;
+  host.appendChild(t); setTimeout(() => t.remove(), 3200);
+}
+const tile = p => `<div class="tile"><img src="${imgUrl(p.src, p.id)}" alt="" loading="lazy" onerror="this.remove()"><span class="h">@${esc(p.handle)}</span></div>`;
+const withMentions = text => esc(text).replace(/@([A-Za-z0-9_-]{1,32})/g, (m, h) => libBy(h) ? `<span class="mention">@${esc(h)}</span>` : m);
+function closeFloating() {
+  $("cFloat").querySelectorAll(".menu,.pop").forEach(e => e.remove());
+  tab.querySelectorAll(".more.open").forEach(e => e.classList.remove("open"));
+}
+function placeNear(el, anchor, alignRight) {
+  $("cFloat").appendChild(el);
+  const r = anchor.getBoundingClientRect(), w = el.offsetWidth, h = el.offsetHeight;
+  let left = alignRight ? r.right - w : r.left, top = r.bottom + 6;
+  if (top + h > innerHeight - 8) top = r.top - h - 6;
+  el.style.left = Math.max(8, Math.min(left, innerWidth - w - 8)) + "px";
+  el.style.top = Math.max(8, top) + "px";
+}
+document.addEventListener("click", e => { if (!e.target.closest("#tab-chat .menu, #tab-chat .pop, #tab-chat [data-float]")) closeFloating(); });
+document.addEventListener("keydown", e => {
+  if (e.key !== "Escape" || tab.hidden) return;
+  const modal = $("cFloat").querySelector(".backdrop:last-of-type");
+  if (modal) modal.remove(); else closeFloating();
+});
+function modal(html, cls = "") {
+  const b = document.createElement("div"); b.className = "backdrop";
+  b.innerHTML = `<div class="modal ${cls}" role="dialog">${html}</div>`;
+  b.addEventListener("click", e => { if (e.target === b || e.target.closest("[data-close]")) b.remove(); });
+  $("cFloat").appendChild(b); return b;
+}
+function confirmBox(title, text, okLabel, ok) {
+  const b = modal(`<div class="modalHead"><div class="modalTitle">${esc(title)}</div></div>
+    <div class="modalBody"><div class="muted" style="font-size:var(--t-sm)">${esc(text)}</div>
+    <div class="modalFoot"><button class="btn" data-close>Cancel</button><button class="btn danger" data-ok>${esc(okLabel)}</button></div></div>`, "small");
+  b.querySelector("[data-ok]").onclick = () => { b.remove(); ok(); };
+}
+function fit() {}                                    // the page is all chat: CSS sizes it
+function negLine() {                                   // the negative every queued job gets, as the prompt tabs show it
+  const n = (C.cfg && C.cfg.negative) || {};
+  return n.error ? `Negative: ${esc(n.error)}`
+    : n.text ? `Negative: chat2prompt/negative.json (${n.text.split(/\s+/).length} words), sent with every queued prompt.`
+    : `Negative: Natural Raw 2's own, while "negative" in chat2prompt/negative.json is empty.`;
+}
+function fades() {
+  // prompts are small boxes that scroll inside; nothing to fade
+}
+// Follow the bottom from a send until you scroll up yourself. Growth alone
+// (a picture loading, a reply streaming) fires no scroll event, so it
+// can't switch following off the way the old distance check did.
+let stick = true;
+$("cScroll").addEventListener("scroll", () => {
+  const s = $("cScroll"); stick = s.scrollHeight - s.scrollTop - s.clientHeight < 140;
+}, {passive: true});
+$("cCol").addEventListener("load", () => scrollBottom(false), true);     // thumbnails load after the jump
+function scrollBottom(force) {
+  const s = $("cScroll");
+  if (force) stick = true;
+  if (stick) s.scrollTop = s.scrollHeight;
+}
+function totals(t) {
+  if (!t) return;
+  $("cSpendS").textContent = money(t.session); $("cSpendT").textContent = money(t.total);
+}
+
+// ── loading ──────────────────────────────────────────────────────────
+async function load() {
+  C.cfg = await api("/api/chat");
+  C.chats = C.cfg.chats;
+  const saved = store.get("c.mode", null);
+  if (!C.draftMode || !(C.draftMode in C.cfg.modes)) C.draftMode = saved in C.cfg.modes ? saved : C.cfg.default_mode;
+  totals(C.cfg.totals);
+  loadLib();
+  const want = C.cur || store.get("c.cur", null);
+  if (want && C.chats.some(c => c.id === want)) await openChat(want);
+  else { C.cur = null; drawAll(); }
+}
+async function refreshList() {
+  try { C.cfg = await api("/api/chat"); C.chats = C.cfg.chats; totals(C.cfg.totals); } catch {}
+  drawList();
+}
+async function loadLib() {
+  try { C.lib = (await api("/api/chat/library")).images; } catch {}
+  $("cLibCount").textContent = C.lib.length || "";
+  if (chat()) { drawConv(); }
+}
+async function openChat(id) {
+  if (!C.streams[id]) C.open[id] = await api("/api/chat/c?id=" + encodeURIComponent(id));
+  C.cur = id; store.set("c.cur", id);
+  C.attached = []; C.resend = null; $("cErr").textContent = "";
+  drawAll(); scrollBottom(true);
+}
+function newDraft() {
+  C.cur = null; store.set("c.cur", null); C.attached = []; C.resend = null; $("cErr").textContent = "";
+  drawAll(); $("cInput").focus();
+}
+function drawAll() { drawList(); drawHead(); drawConv(); drawComposer(); }
+
+// ── chat list ────────────────────────────────────────────────────────
+function group(c) {
+  if (c.pinned) return "Pinned";
+  const d = (Date.now() / 1000 - c.updated) / 86400;
+  return d < 1 ? "Today" : d < 2 ? "Yesterday" : d < 7 ? "Previous 7 days" : "Older";
+}
+function drawList() {
+  const q = $("cSearch").value.trim().toLowerCase();
+  const rows = C.chats.filter(c => !q || c.title.toLowerCase().includes(q));
+  $("cList").innerHTML = ["Pinned", "Today", "Yesterday", "Previous 7 days", "Older"].map(g => {
+    const items = rows.filter(c => group(c) === g);
+    return items.length ? `<div class="navGroup"><div class="navTitle">${g}</div>` + items.map(c =>
+      `<div class="navLink${c.id === C.cur ? " on" : ""}" data-chat="${esc(c.id)}" title="${esc(c.title)}">
+        <span class="navLabel">${esc(c.title)}</span>
+        ${C.streams[c.id] || c.writing ? `<span class="spinner" title="Writing…"></span>` : ""}
+        <button class="more" data-float data-more="${esc(c.id)}" title="Rename, pin, delete">⋯</button></div>`).join("") + `</div>` : "";
+  }).join("") || `<div class="navEmpty">${q ? `Nothing matches “${esc(q)}”.` : "No chats yet. Write a message to start one."}</div>`;
+}
+$("cList").addEventListener("click", e => {
+  const more = e.target.closest("[data-more]");
+  if (more) { e.stopPropagation(); chatMenu(more.dataset.more, more); return; }
+  const row = e.target.closest("[data-chat]");
+  if (row) { closeDrawer(); openChat(row.dataset.chat).catch(err => $("cErr").textContent = err.message); }
+});
+$("cSearch").oninput = drawList;
+$("cNew").onclick = () => { closeDrawer(); newDraft(); };
+function chatMenu(id, anchor) {
+  closeFloating(); anchor.classList.add("open");
+  const c = C.chats.find(x => x.id === id); if (!c) return;
+  const m = document.createElement("div"); m.className = "menu";
+  m.innerHTML = `<button data-a="rename">✎ Rename</button><button data-a="pin">📌 ${c.pinned ? "Unpin" : "Pin"}</button><hr>
+    <button class="danger" data-a="delete">🗑 Delete chat</button>`;
+  m.onclick = ev => {
+    const a = ev.target.closest("button")?.dataset.a; if (!a) return; closeFloating();
+    if (a === "rename") renameChat(id);
+    if (a === "pin") editChat(id, {pinned: !c.pinned});
+    if (a === "delete") confirmBox(`Delete “${c.title}”?`, "Its messages go for good. What it cost stays in the totals and the Credit card. Pictures stay in the library.", "Delete", async () => {
+      try {
+        const r = await api("/api/chat/delete", {chat: id});
+        delete C.open[id]; delete C.edit[id]; totals(r.totals);
+        if (C.cur === id) newDraft();
+        await refreshList(); ctoast("Chat deleted.");
+      } catch (err) { ctoast(err.message); }
+    });
+  };
+  placeNear(m, anchor, true);
+}
+async function editChat(id, fields) {
+  try {
+    const c = await api("/api/chat/edit", Object.assign({chat: id}, fields));
+    if (C.open[id]) Object.assign(C.open[id], {title: c.title, mode: c.mode, pinned: c.pinned});
+    await refreshList(); drawHead(); drawComposer();
+    return c;
+  } catch (e) { ctoast(e.message); }
+}
+function renameChat(id) {
+  const c = C.chats.find(x => x.id === id); if (!c) return;
+  const t = prompt("Rename chat", c.title);
+  if (t && t.trim()) editChat(id, {title: t.trim()});
+}
+$("cTitle").onclick = () => { if (C.cur) renameChat(C.cur); };
+
+// phone drawer
+function closeDrawer() { tab.classList.remove("drawer"); tab.querySelector(".scrim")?.remove(); }
+$("cMenu").onclick = () => {
+  if (tab.classList.toggle("drawer")) {
+    const s = document.createElement("div"); s.className = "scrim"; s.onclick = closeDrawer; tab.appendChild(s);
+  } else closeDrawer();
+};
+
+// ── conversation ─────────────────────────────────────────────────────
+function drawHead() {
+  const c = chat();
+  $("cTitle").textContent = c ? c.title : "New chat";
+  $("cHeadMode").textContent = "Mode: " + modeLabel(curMode()) + " ▾";
+  $("cMain").classList.toggle("blank", !c || !c.messages.length);
+}
+// liveSplit: talk and prompt of a reply still arriving (a half-arrived tag is hidden)
+function liveSplit(t) {
+  const i = t.indexOf("<prompt>");
+  if (i < 0) {
+    const k = t.lastIndexOf("<"), tail = k >= 0 ? t.slice(k) : "";
+    return {talk: (tail && "<prompt>".startsWith(tail) ? t.slice(0, k) : t).trim(), prompt: null};
+  }
+  let p = t.slice(i + 8), after = "";
+  const j = p.indexOf("</prompt>");
+  if (j >= 0) { after = p.slice(j + 9); p = p.slice(0, j); }
+  else { const k = p.lastIndexOf("<"); if (k >= 0 && "</prompt>".startsWith(p.slice(k))) p = p.slice(0, k); }
+  return {talk: (t.slice(0, i) + " " + after).trim(), prompt: p.replace(/^\s+/, "")};
+}
+function chain(c, m) {
+  const byId = id => c.messages.find(x => x.id === id);
+  let root = m, guard = 0;
+  while (root.edit_of != null && byId(root.edit_of) && guard++ < 200) root = byId(root.edit_of);
+  const out = [], walk = r => { out.push(r); c.messages.filter(x => x.role === "assistant" && x.prompt && x.edit_of === r.id).forEach(walk); };
+  walk(root); return out;
+}
+function drawConv() {
+  const c = chat();
+  $("cCol").innerHTML = c ? c.messages.map(m => m.role === "user" ? userTurn(c, m) : asstTurn(c, m)).join("") : "";
+  fades();
+}
+function userTurn(c, m) {
+  const t = m.edit_of != null && c.messages.find(x => x.id === m.edit_of);
+  const busy = !!C.streams[c.id];
+  return `<div class="uturn" data-msg="${m.id}">
+    ${t ? `<div class="quote" data-jump="${t.id}" title="Show the version this edits">✎ editing v${t.v || "?"} · <span class="ell">${esc((t.prompt || "").slice(0, 80))}…</span></div>` : ""}
+    ${m.images && m.images.length ? `<div class="thumbs">${m.images.map(tile).join("")}</div>` : ""}
+    ${m.text ? `<div class="bubble">${withMentions(m.text)}</div>` : ""}
+    ${m.id === "pending" ? "" : `<div class="acts"><button class="btn ghost sm" data-resend="${m.id}" ${busy ? "disabled" : ""} title="Change this message and send it again: its reply is replaced">✎ Edit &amp; resend</button>
+      <button class="btn ghost sm" data-copyu="${m.id}">⧉ Copy</button></div>`}</div>`;
+}
+function asstTurn(c, m) {
+  const live = !!m.live, busy = !!C.streams[c.id];
+  const sp = live ? liveSplit(m.text) : {talk: m.talk || "", prompt: m.prompt};
+  const meta = !live && m.tokens_out != null ? `${modeLabel(m.mode)} · ${(m.tokens_in || 0).toLocaleString()} in / ${(m.tokens_out || 0).toLocaleString()} out${m.estimated ? " (estimated)" : ""} · ${money(m.cost)} · ${m.seconds} s` : "";
+  const skip = (sp.talk || "").startsWith("SKIP:") || (sp.prompt || "").startsWith("SKIP:");
+  let html = `<div class="aturn" data-msg="${m.id}">`;
+  if (sp.talk) html += `<div class="talk">${skip ? `<span class="pill warning">skipped</span> ` : ""}${withMentions(sp.talk)}</div>`;
+  if (m.error) html += `<div class="alert"><span>⚠</span><span>${esc(m.error)}</span></div>`;
+  if (sp.prompt != null) {
+    const from = m.edit_of != null && c.messages.find(x => x.id === m.edit_of);
+    const vs = live ? [] : chain(c, m), target = C.edit[c.id] === m.id, open = !live && m.open;
+    const body = live && !sp.prompt ? `<div class="shimmer" style="width:92%"></div><div class="shimmer" style="width:78%"></div>`
+      : esc(sp.prompt) + (live ? `<span class="cursor"></span>` : "");
+    const q = (m.queued || []).length, dis = live ? "disabled" : "";
+    html += `<div class="pcard${target ? " target" : ""}" id="ccard-${m.id}">
+      <div class="pcardHead">
+        <span class="pcardTitle">${live ? "Writing prompt" : "Prompt v" + m.v}</span>
+        ${from ? `<span class="faint">edited from v${from.v || "?"}</span>` : ""}
+        ${vs.length > 1 ? `<span class="trail">${vs.map((x, i) => `${i ? "→" : ""}<button class="${x.id === m.id ? "cur" : ""}" data-jump="${x.id}">v${x.v}</button>`).join("")}</span>` : ""}
+        <span class="grow"></span>
+        ${live ? `<span class="pill accent"><span class="spinner"></span> writing</span>` : ""}
+        ${m.stopped ? `<span class="pill warning">stopped</span>` : ""}
+        ${m.cut ? `<span class="pill warning" title="It reached the reply length limit before the end">cut off</span>` : ""}
+        ${m.queueState === "sending" ? `<span class="pill accent"><span class="spinner"></span> queueing</span>` : ""}
+        ${q ? `<span class="pill success" title="${esc((m.queued || []).map(s => `${new Date(s.time * 1000).toLocaleString()} · ${s.instance} · job ${s.job}`).join("\n"))}">queued${q > 1 ? " ×" + q : ""}</span>` : ""}
+        <span class="faint">${words(sp.prompt).toLocaleString()} words</span>
+      </div>
+      <div class="ptext${open ? " open" : ""}" id="cpt-${m.id}">${body}</div>
+      <div class="pcardFoot">
+        <button class="btn sm${target ? " primary" : ""}" data-edit="${m.id}" ${dis || (skip ? "disabled" : "")} title="Send only this prompt as context with your next message">✎ ${target ? "Editing this" : "Edit"}</button>
+        <button class="btn ghost sm" data-copy="${m.id}" ${dis}>⧉ Copy</button>
+        <button class="btn ghost sm" data-save="${m.id}" ${dis}>⤓ Save .txt</button>
+        <button class="btn ghost sm" data-queue="${m.id}" ${dis || (skip || m.queueState ? "disabled" : "")} title="Krea 2 V2 · Natural Raw 2 · batch 1, top of the queue (⚙ for instance, steps, aspect)">⤒ Queue</button>
+        <button class="btn ghost sm" data-regen="${m.id}" ${dis || (busy ? "disabled" : "")}>↻ Regenerate</button>
+        <span class="grow"></span>
+        ${live ? "" : `<button class="btn ghost sm" data-open="${m.id}">${m.open ? "Show less" : "Show all"}</button>`}
+      </div></div>`;
+  } else if (live && !sp.talk) {
+    html += `<div><div class="shimmer" style="width:70%"></div><div class="shimmer" style="width:52%"></div></div>`;
+  }
+  if (!live && sp.prompt == null) html += `<div class="acts"><button class="btn ghost sm" data-regen="${m.id}" ${busy ? "disabled" : ""}>↻ Regenerate</button>
+      <button class="btn ghost sm" data-copyt="${m.id}">⧉ Copy</button>${m.stopped ? `<span class="pill warning">stopped</span>` : ""}<span class="meta">${meta}</span></div>`;
+  else if (meta) html += `<span class="meta">${meta}</span>`;
+  return html + `</div>`;
+}
+function drawConvIf(cid) { if (C.cur === cid) drawConv(); }
+const rafs = {};
+function drawLive(cid) {
+  if (C.cur !== cid || rafs[cid]) return;
+  rafs[cid] = requestAnimationFrame(() => {
+    rafs[cid] = 0;
+    const s = C.streams[cid], el = $("cCol").querySelector('[data-msg="live"]');
+    if (s && el && C.cur === cid) {
+      el.outerHTML = asstTurn(C.open[cid], s.live); scrollBottom(false);
+      const box = $("cpt-live"); if (box) box.scrollTop = box.scrollHeight;     // follow the text inside the small box
+    }
+  });
+}
+function saveTxt(name, text) {
+  const a = document.createElement("a");
+  a.href = URL.createObjectURL(new Blob([text + "\n"], {type: "text/plain"}));
+  a.download = name.replace(/[\\/:*?"<>|]/g, "_") + ".prompt.txt";
+  document.body.appendChild(a); a.click(); a.remove();
+  setTimeout(() => URL.revokeObjectURL(a.href), 1000);
+}
+const copy = t => navigator.clipboard.writeText(t).then(() => ctoast("Copied."), () => ctoast("Couldn't copy."));
+$("cCol").addEventListener("click", e => {
+  const b = e.target.closest("button,[data-jump]"); if (!b) return;
+  const c = chat(); if (!c) return;
+  const d = b.dataset, find = id => c.messages.find(x => String(x.id) === String(id));
+  if (d.jump) jump(d.jump);
+  else if (d.edit) { C.edit[c.id] = C.edit[c.id] === +d.edit ? null : +d.edit; C.resend = null; drawConv(); drawComposer(); $("cInput").focus(); }
+  else if (d.open) { const m = find(d.open); m.open = !m.open; drawConv(); }
+  else if (d.copy) copy(find(d.copy).prompt);
+  else if (d.copyt) copy(find(d.copyt).text || find(d.copyt).talk || "");
+  else if (d.copyu) copy(find(d.copyu).text || "");
+  else if (d.save) { const m = find(d.save); saveTxt(`${c.title}.v${m.v}`, m.prompt); }
+  else if (d.queue) queueMsg(c.id, find(d.queue), false);
+  else if (d.regen) { const m = find(d.regen), u = find(m.reply_to); if (u) { fillFrom(c, u); send(); } }
+  else if (d.resend) { fillFrom(c, find(d.resend)); $("cInput").focus(); }
+});
+function jump(id) {
+  const el = $("ccard-" + id); if (!el) return;
+  el.scrollIntoView({behavior: "smooth", block: "center"});
+  el.classList.add("flash"); setTimeout(() => el.classList.remove("flash"), 900);
+}
+// Put a sent message back in the composer; sending it replaces it and what came after.
+function fillFrom(c, u) {
+  $("cInput").value = u.text || "";
+  C.attached = (u.images || []).map(p => ({src: p.src, id: p.id, handle: (C.lib.find(i => same(i, p)) || p).handle}));
+  C.edit[c.id] = u.edit_of ?? null;
+  C.resend = u.id;
+  autosize(); drawConv(); drawComposer();
+}
+
+// ── composer ─────────────────────────────────────────────────────────
+function drawComposer() {
+  const c = chat(), cid = c && c.id, busy = !!(cid && C.streams[cid]);
+  const t = c && C.edit[cid] != null && c.messages.find(x => x.id === C.edit[cid]);
+  const chips = [];
+  if (C.resend != null) chips.push(`<span>↺ Changing your earlier message</span><span class="ell">sending replaces it and everything after it</span>
+     <button data-cancelresend title="Keep the chat as it is">✕</button>`);
+  if (t) chips.push(`<span>✎ Editing v${t.v} · ${words(t.prompt).toLocaleString()} words</span>
+     <span class="ell">only this prompt is sent, with your changes${curMode() === "free" ? " (as context)" : ""}</span>
+     <button data-jump="${t.id}" title="Show it">↥</button><button data-clearedit title="Stop editing: send a fresh message">✕</button>`);
+  $("cEditChip").classList.toggle("hidden", !chips.length);
+  $("cEditChip").innerHTML = chips.join(`<span style="width:1px;align-self:stretch;background:var(--c-accent-line)"></span>`);
+  $("cAttach").innerHTML = C.attached.map(p => `<span class="achip">${tile(p)}<span>@${esc(p.handle)}</span><button data-unattach="${esc(p.src + ":" + p.id)}" title="Remove">✕</button></span>`).join("");
+  $("cModePill").innerHTML = `<b>${esc(modeLabel(curMode()))}</b>${t && curMode() !== "free" ? " · edit" : ""} ▾`;
+  $("cInput").placeholder = t ? `Say what to change in v${t.v}, e.g. "shorter hair, night time" · @ to add a picture` : "Message Qwen · @ to mention a picture";
+  $("cSend").textContent = busy ? "■" : "↑";
+  $("cSend").title = busy ? "Stop: keeps what was written" : "Send (Enter)";
+  const text = $("cInput").value.trim();
+  $("cSend").disabled = !busy && !text && !C.attached.length;
+  const n = C.attached.length, free = curMode() === "free", ctx = t ? 1500 : 0;
+  const tin = (free ? 200 : 3000) + text.length / 4 + 1100 * n + ctx, tout = free ? 250 : 1350;
+  $("cCost").textContent = text || n ? "≈ " + money((tin * C.price.in + tout * C.price.out) / 1e6) : "";
+  $("cStarters").innerHTML = [
+    ["Recreate a photo", "recreate @", "recreate"], ["Scene from a brief", "28-year-old woman in a mustard cotton kurta on a balcony swing at dusk, laughing at a friend off-camera, phone photo"],
+    ["Use library pictures", "outfit from @ , background like @ "], ["Ask anything", "what lens makes a portrait look like a phone photo?", "free"],
+  ].map(([l, v, m]) => `<button class="pill" data-starter="${esc(v)}" data-smode="${m || ""}">${l}</button>`).join("");
+  drawHead();
+}
+C.price = {in: 0.53, out: 2.66};
+$("cComposer").addEventListener("click", e => {
+  const b = e.target.closest("button"); if (!b) return;
+  const c = chat();
+  if ("clearedit" in b.dataset) { if (c) C.edit[c.id] = null; drawConv(); drawComposer(); }
+  else if ("cancelresend" in b.dataset) { C.resend = null; $("cInput").value = ""; C.attached = []; if (c) C.edit[c.id] = null; autosize(); drawConv(); drawComposer(); }
+  else if (b.dataset.jump) jump(b.dataset.jump);
+  else if (b.dataset.unattach) {
+    const p = C.attached.find(x => x.src + ":" + x.id === b.dataset.unattach);
+    C.attached = C.attached.filter(x => x !== p);
+    if (p) $("cInput").value = $("cInput").value.replace(new RegExp("@" + p.handle + "(?![A-Za-z0-9_-])\\s?", "gi"), "");
+    autosize(); drawComposer();
+  }
+});
+$("cStarters").addEventListener("click", e => {
+  const b = e.target.closest("[data-starter]"); if (!b) return;
+  if (b.dataset.smode && C.cfg && b.dataset.smode in C.cfg.modes) setMode(b.dataset.smode);
+  const t = $("cInput"); t.value = b.dataset.starter; t.focus();
+  const at = t.value.indexOf("@ "), pos = at >= 0 ? at + 1 : t.value.length;
+  t.selectionStart = t.selectionEnd = pos;
+  autosize(); drawComposer();
+  if (t.value.slice(0, pos).endsWith("@")) openMentions("");
+});
+function autosize() { const t = $("cInput"); t.style.height = "auto"; t.style.height = Math.min(t.scrollHeight, 240) + "px"; }
+function syncAttached() {
+  for (const m of $("cInput").value.matchAll(/@([A-Za-z0-9_-]{1,32})/g)) {
+    const p = libBy(m[1]);
+    if (p && !C.attached.some(x => same(x, p))) C.attached.push({src: p.src, id: p.id, handle: p.handle});
+  }
+}
+function attach(p) {
+  if (!C.attached.some(x => same(x, p))) C.attached.push({src: p.src, id: p.id, handle: p.handle});
+  const t = $("cInput");
+  if (!new RegExp("@" + p.handle + "(?![A-Za-z0-9_-])", "i").test(t.value)) t.value = (t.value && !/\s$/.test(t.value) ? t.value + " " : t.value) + "@" + p.handle + " ";
+  autosize(); drawComposer();
+}
+$("cInput").addEventListener("input", () => {
+  autosize();
+  const t = $("cInput"), m = t.value.slice(0, t.selectionStart).match(/@([A-Za-z0-9_-]*)$/);
+  m ? openMentions(m[1]) : closeMentions();
+  syncAttached(); drawComposer();
+});
+$("cInput").addEventListener("keydown", e => {
+  if (!$("cMentions").classList.contains("hidden")) {
+    const opts = [...$("cMentions").querySelectorAll(".mopt")], i = opts.findIndex(o => o.classList.contains("on"));
+    if (e.key === "ArrowDown" || e.key === "ArrowUp") {
+      e.preventDefault(); opts[i]?.classList.remove("on");
+      const n = opts[(i + (e.key === "ArrowDown" ? 1 : -1) + opts.length) % opts.length];
+      n?.classList.add("on"); n?.scrollIntoView({block: "nearest"}); return;
+    }
+    if ((e.key === "Enter" || e.key === "Tab") && opts.length) { e.preventDefault(); pickMention((opts[i] || opts[0]).dataset.k); return; }
+    if (e.key === "Escape") { closeMentions(); return; }
+  }
+  if (e.key === "Enter" && !e.shiftKey && !e.isComposing) { e.preventDefault(); send(); }
+});
+$("cInput").addEventListener("blur", () => setTimeout(closeMentions, 150));
+
+// @ autocomplete
+function openMentions(q) {
+  q = q.toLowerCase();
+  const hits = C.lib.filter(i => i.handle.toLowerCase().includes(q) || i.name.toLowerCase().includes(q)).slice(0, 8);
+  $("cMentions").classList.remove("hidden");
+  $("cMentions").innerHTML = `<div class="mh">Library · recent first</div>` + (hits.length ? hits.map((i, n) =>
+    `<button class="mopt${n ? "" : " on"}" data-k="${esc(i.src + ":" + i.id)}">${tile(i)}<span><b>@${esc(i.handle)}</b><small>${esc(i.name)} · ${SRC[i.src]}</small></span></button>`).join("")
+    : `<div class="muted" style="padding:8px">${C.lib.length ? `No picture matches “${esc(q)}”.` : "The library is empty: upload a picture with 📎."}</div>`);
+}
+function closeMentions() { $("cMentions").classList.add("hidden"); }
+$("cMentions").addEventListener("mousedown", e => { const o = e.target.closest(".mopt"); if (o) { e.preventDefault(); pickMention(o.dataset.k); } });
+function pickMention(k) {
+  const p = C.lib.find(i => i.src + ":" + i.id === k); if (!p) return;
+  const t = $("cInput"), pos = t.selectionStart, before = t.value.slice(0, pos).replace(/@([A-Za-z0-9_-]*)$/, "@" + p.handle + " ");
+  t.value = before + t.value.slice(pos).replace(/^ /, ""); t.selectionStart = t.selectionEnd = before.length;
+  if (!C.attached.some(x => same(x, p))) C.attached.push({src: p.src, id: p.id, handle: p.handle});
+  closeMentions(); autosize(); drawComposer(); t.focus();
+}
+
+// mode
+async function setMode(k) {
+  store.set("c.mode", k); C.draftMode = k;
+  const c = chat();
+  if (c) { c.mode = k; await editChat(c.id, {mode: k}); }
+  drawComposer();
+}
+function modeMenu(anchor) {
+  closeFloating(); if (!C.cfg) return;
+  const m = document.createElement("div"); m.className = "menu"; m.style.minWidth = "300px";
+  m.innerHTML = Object.entries(C.cfg.modes).map(([k, desc]) => `<button data-mode="${esc(k)}"><span class="tick">${curMode() === k ? "✓" : ""}</span>
+    <span><b>${esc(modeLabel(k))}</b><small>${esc(desc || "")}</small></span></button>`).join("") +
+    `<hr><div class="faint" style="padding:6px 10px">Applies from your next message.</div>`;
+  m.onclick = ev => { const k = ev.target.closest("[data-mode]")?.dataset.mode; if (!k) return; closeFloating(); setMode(k).then(() => ctoast(`Mode: ${modeLabel(k)} (from the next message)`)); };
+  placeNear(m, anchor, false);
+}
+$("cModePill").onclick = e => { e.stopPropagation(); modeMenu($("cModePill")); };
+$("cHeadMode").onclick = e => { e.stopPropagation(); modeMenu($("cHeadMode")); };
+
+// pictures: upload, paste, drop
+async function uploadFiles(files) {
+  const imgs = files.filter(f => f.type.startsWith("image/"));
+  if (!imgs.length) { if (files.length) $("cErr").textContent = "That isn't a picture."; return; }
+  $("cErr").textContent = "";
+  for (const f of imgs) {
+    if (!FORMATS.includes(f.type)) { $("cErr").textContent = `${f.name}: use a JPEG, PNG, WebP or GIF.`; continue; }
+    try {
+      const s = await shrinkImage(f, 1536, 380 * 1024);     // the Text to prompt references' size: several fit one request
+      const {image} = await api("/api/chat/upload", {name: s.name, type: s.type, data: await readB64(s.blob)});
+      C.lib = [image].concat(C.lib.filter(i => !same(i, image)));
+      $("cLibCount").textContent = C.lib.length;
+      attach(image);
+    } catch (e) { $("cErr").textContent = (f.name ? f.name + ": " : "") + e.message; }
+  }
+}
+$("cAttachBtn").onclick = () => $("cFile").click();
+$("cFile").onchange = () => { uploadFiles([...$("cFile").files]); $("cFile").value = ""; };
+document.addEventListener("paste", e => {
+  if (tab.hidden) return;
+  const files = [...(e.clipboardData || {}).files || []].filter(f => f.type.startsWith("image/"));
+  if (files.length) { e.preventDefault(); uploadFiles(files); }         // plain text pastes as usual
+});
+tab.addEventListener("dragover", e => { e.preventDefault(); $("cComposer").classList.add("over"); });
+tab.addEventListener("dragleave", e => { if (!tab.contains(e.relatedTarget)) $("cComposer").classList.remove("over"); });
+tab.addEventListener("drop", e => { e.preventDefault(); $("cComposer").classList.remove("over"); uploadFiles([...e.dataTransfer.files]); });
+
+// ── sending ──────────────────────────────────────────────────────────
+async function send() {
+  if (C.cur && C.streams[C.cur]) { stop(C.cur); return; }
+  syncAttached();
+  const text = $("cInput").value.trim();
+  if (!text && !C.attached.length) return;
+  $("cErr").textContent = ""; closeMentions();
+  let c = chat();
+  if (!c) {
+    try {
+      c = await api("/api/chat/new", {mode: C.draftMode});
+      C.open[c.id] = c; C.cur = c.id; store.set("c.cur", c.id);
+      C.chats.unshift({id: c.id, title: c.title, mode: c.mode, pinned: false, created: c.created, updated: c.updated, count: 0});
+    } catch (e) { $("cErr").textContent = e.message; return; }
+  }
+  const cid = c.id, editOf = C.edit[cid] ?? null, resend = C.resend;
+  const draft = {text, attached: C.attached.slice(), resend, editOf};
+  const body = {chat: cid, text, images: draft.attached.map(p => ({src: p.src, id: p.id})), account: acct(), mode: c.mode};
+  if (editOf != null) body.edit_of = editOf;
+  if (resend != null) body.resend_of = resend;
+  $("cInput").value = ""; C.attached = []; C.resend = null; autosize();
+  const keep = c.messages.slice();
+  if (resend != null) { const i = c.messages.findIndex(m => m.id === resend); if (i >= 0) c.messages = c.messages.slice(0, i); }
+  const tempUser = {id: "pending", role: "user", text, images: draft.attached, edit_of: editOf};
+  const live = {id: "live", role: "assistant", text: "", live: true, mode: c.mode, edit_of: editOf};
+  c.messages.push(tempUser, live);
+  const ctrl = new AbortController();
+  C.streams[cid] = {ctrl, live};
+  drawAll(); scrollBottom(true);
+
+  const putBack = msg => {             // refused before anything was saved: the message goes back in the box
+    delete C.streams[cid]; c.messages = keep;
+    if (C.cur === cid) {
+      $("cInput").value = draft.text; C.attached = draft.attached; C.resend = draft.resend; C.edit[cid] = draft.editOf;
+      autosize(); if (msg) $("cErr").textContent = msg;
+    }
+    drawAll();
+  };
+  let resp;
+  try {
+    resp = await fetch("/api/chat/send", {method: "POST", signal: ctrl.signal,
+      headers: {"content-type": "application/json", "x-sniper": "1"}, body: JSON.stringify(body)});
+  } catch (e) { return putBack(e.name === "AbortError" ? "" : "Can't reach the sniper server: " + e.message); }
+  if (!resp.ok) { const j = await resp.json().catch(() => ({})); return putBack(j.error || resp.statusText); }
+
+  let done = null, failed = null, buf = "";
+  const reader = resp.body.getReader(), dec = new TextDecoder();
+  try {
+    for (;;) {
+      const {value, done: end} = await reader.read();
+      if (end) break;
+      buf += dec.decode(value, {stream: true});
+      let nl;
+      while ((nl = buf.indexOf("\n")) >= 0) {
+        const line = buf.slice(0, nl); buf = buf.slice(nl + 1);
+        if (!line.trim()) continue;
+        let ev; try { ev = JSON.parse(line); } catch { continue; }
+        if (ev.t === "user") { const i = c.messages.indexOf(tempUser); if (i >= 0) c.messages[i] = ev.msg; live.reply_to = ev.msg.id; drawConvIf(cid); if (C.cur === cid) scrollBottom(false); }
+        else if (ev.t === "delta") { live.text += ev.text; drawLive(cid); }
+        else if (ev.t === "done") done = ev;
+        else if (ev.t === "error") failed = ev.error;
+      }
+    }
+  } catch { /* Stop, or the line dropped: the server keeps what was written */ }
+  delete C.streams[cid];
+  if (done) {
+    const msg = done.msg;                              // stays a small box; Show all opens it
+    const i = c.messages.indexOf(live);
+    if (i >= 0) c.messages[i] = msg; else c.messages.push(msg);
+    totals(done.totals);
+    if (msg.edit_of != null && msg.prompt && !msg.error) C.edit[cid] = msg.id;      // keep editing: the new version is the target
+    if (store.get("c.auto", false) && isPrompt(msg) && !msg.stopped && !msg.error) queueMsg(cid, msg, true);
+  } else {
+    // Stopped or cut off: read back what the server saved (it saves once it notices).
+    for (let n = 0; n < 12; n++) {
+      await sleep(400);
+      try { const fresh = await api("/api/chat/c?id=" + encodeURIComponent(cid)); if (!fresh.writing) { C.open[cid] = fresh; break; } } catch {}
+    }
+    if (failed && C.cur === cid) $("cErr").textContent = failed;
+  }
+  await refreshList();
+  const row = C.chats.find(x => x.id === cid);         // the server names a chat from its first message
+  if (row) (C.open[cid] || c).title = row.title;
+  if (C.cur === cid) { drawHead(); drawConv(); drawComposer(); scrollBottom(false); }
+  poll();                                              // fresh instance list for ⤒ Queue
+}
+function stop(cid) { const s = C.streams[cid]; if (s) { s.ctrl.abort(); ctoast("Stopped: what was written is kept."); } }
+$("cSend").onclick = () => send();
+
+// ── sending a prompt to an instance ──────────────────────────────────
+function instances() {
+  return ((typeof LAST_ST !== "undefined" && LAST_ST && LAST_ST.instances) || [])
+    .filter(i => i.account === acct() && i.state === "running" && i.url);
+}
+function pickInst() { const rows = instances(); return rows.find(i => i.id === store.get("c.inst", null)) || rows[0] || null; }
+function queueMsg(cid, m, auto) {
+  const inst = pickInst();
+  if (!inst) { ctoast("No running instance with the app in this account: start one, or pick it under ⚙."); return; }
+  m.queueState = "sending"; drawConvIf(cid);
+  C.sendChain = C.sendChain.then(async () => {           // one at a time, each landing on top of the last
+    try {
+      const res = await api("/api/chat/queue", {chat: cid, msg: m.id, id: inst.id,
+        steps: store.get("c.steps", "") || null, aspect: store.get("c.aspect", "") || null});
+      (m.queued = m.queued || []).push(res.sent);
+      ctoast(`${auto ? "Auto-sent" : "Queued"} v${m.v} at the top on ${inst.name || inst.id}`);
+    } catch (e) { ctoast("Queue: " + e.message); }
+    m.queueState = ""; drawConvIf(cid);
+  });
+}
+$("cSettings").onclick = async e => {
+  e.stopPropagation();
+  if ($("cFloat").querySelector(".pop")) { closeFloating(); return; }
+  closeFloating();
+  const rows = instances(), cur = pickInst();
+  const p = document.createElement("div"); p.className = "pop";
+  const draw = () => {
+    const o = cur && C.appOpts[cur.id], steps = store.get("c.steps", ""), aspect = store.get("c.aspect", "");
+    const aspects = (o && o.aspects) || (aspect ? [aspect] : []);
+    p.innerHTML = `<h3>Send to the app</h3>
+      <div class="muted">Krea 2 V2 · Natural Raw 2 · batch 1 · each job goes to the top of the queue. The chat's own settings.</div>
+      <div class="field"><span class="label">Instance</span><select class="select" id="cSetInst" ${rows.length ? "" : "disabled"}>${rows.length ? rows.map(i =>
+        `<option value="${esc(i.id)}"${cur && i.id === cur.id ? " selected" : ""}>${esc(i.name || i.id)} · ${esc(i.type)}${i.ready ? "" : " · app not answering"}</option>`).join("")
+        : `<option>No running instance with the app in account ${esc(acct())}</option>`}</select></div>
+      <div class="two"><div class="field"><span class="label">Steps</span><input class="input" id="cSetSteps" type="number" min="1" max="150" step="1"
+          placeholder="${o && o.preset_steps != null ? o.preset_steps + " (preset)" : "preset"}" value="${esc(steps)}"></div>
+        <div class="field"><span class="label">Aspect</span><select class="select" id="cSetAspect"><option value="">Preset's own${o && o.preset_aspect ? " · " + esc(o.preset_aspect) : ""}</option>${
+          aspects.map(a => `<option value="${esc(a)}"${a === aspect ? " selected" : ""}>${esc(a)}</option>`).join("")}</select></div></div>
+      <label class="switch"><input type="checkbox" id="cSetAuto"${store.get("c.auto", false) ? " checked" : ""}> Auto-send every new prompt to the top of the queue</label>
+      <div class="faint">${cur && !o ? "Reading the instance's preset…" : negLine()}</div>`;
+  };
+  draw();
+  p.addEventListener("change", ev => {
+    const id = ev.target.id;
+    if (id === "cSetInst") { store.set("c.inst", ev.target.value); closeFloating(); $("cSettings").click(); return; }
+    if (id === "cSetAspect") store.set("c.aspect", ev.target.value);
+    if (id === "cSetAuto") store.set("c.auto", ev.target.checked);
+  });
+  p.addEventListener("input", ev => { if (ev.target.id === "cSetSteps") store.set("c.steps", ev.target.value.trim()); });
+  placeNear(p, $("cSettings"), true);
+  if (cur && !C.appOpts[cur.id]) {
+    try { C.appOpts[cur.id] = await api("/api/img2prompt/app?id=" + encodeURIComponent(cur.id)); }
+    catch (err) { C.appOpts[cur.id] = {aspects: [], error: err.message}; }
+    if (p.isConnected) { draw(); }
+  }
+};
+
+// ── library ──────────────────────────────────────────────────────────
+let libFilter = "all", libQ = "";
+function openLibrary() {
+  const b = modal(`<div class="modalHead"><div><div class="modalTitle">Library</div>
+      <div class="muted">Every picture on this PC: chat uploads, Image to prompt and Text to prompt. Click one to attach it.</div></div>
+      <button class="btn ghost icon" data-close title="Close">✕</button></div>
+    <div class="modalBody">
+      <div class="libBar"><div class="segmented" id="cLibSeg"></div>
+        <div class="search"><span>⌕</span><input class="input" id="cLibSearch" placeholder="Search name or @handle" autocomplete="off"></div>
+        <button class="btn sm" data-upload>📎 Upload</button></div>
+      <div class="libGrid" id="cLibGrid"></div></div>`);
+  b.querySelector("#cLibSearch").value = libQ;
+  const draw = () => {
+    b.querySelector("#cLibSeg").innerHTML = [["all", "All"], ["chat", "Chat"], ["img", "Image to prompt"], ["txt", "Text to prompt"]].map(([k, l]) =>
+      `<button class="segment${libFilter === k ? " on" : ""}" data-f="${k}">${l} <span class="faint">${k === "all" ? C.lib.length : C.lib.filter(i => i.src === k).length}</span></button>`).join("");
+    const q = libQ.toLowerCase();
+    const items = C.lib.filter(i => (libFilter === "all" || i.src === libFilter) && (!q || (i.handle + " " + i.name).toLowerCase().includes(q)));
+    b.querySelector("#cLibGrid").innerHTML = items.length ? items.map(i => {
+      const on = C.attached.some(x => same(x, i)), k = esc(i.src + ":" + i.id);
+      return `<div class="lcard${on ? " picked" : ""}">
+        <div class="tile" data-view="${k}" title="View full size"><img src="${imgUrl(i.src, i.id)}" alt="" loading="lazy" onerror="this.remove()"></div>
+        <div class="lbody"><span class="lh">@${esc(i.handle)}</span><span class="ln" title="${esc(i.name)}">${esc(i.name)}</span>
+          <span><span class="pill">${SRC[i.src]}</span></span>
+          <div class="lacts"><button class="btn ghost sm" data-pick="${k}">${on ? "✓ Attached" : "＋ Attach"}</button>
+            <button class="btn ghost icon sm" data-rename="${k}" title="Rename the handle">✎</button>
+            ${i.src === "chat" ? `<button class="btn ghost icon sm" data-del="${k}" title="Delete (chat uploads only)">🗑</button>` : ""}</div></div></div>`;
+    }).join("") : `<div class="empty" style="grid-column:1/-1"><b>Nothing here</b><span class="muted">${C.lib.length ? "No picture matches." : "Upload a picture, or add some on the prompt tabs."}</span></div>`;
+  };
+  draw();
+  b.querySelector("#cLibSearch").oninput = e => { libQ = e.target.value; draw(); };
+  b.addEventListener("click", async e => {
+    const el = e.target.closest("[data-f],[data-pick],[data-rename],[data-del],[data-view],[data-upload]"); if (!el) return;
+    const d = el.dataset, item = k => C.lib.find(i => i.src + ":" + i.id === k);
+    if (d.f) { libFilter = d.f; draw(); }
+    else if (d.pick) {
+      const p = item(d.pick); if (!p) return;
+      if (C.attached.some(x => same(x, p))) {
+        C.attached = C.attached.filter(x => !same(x, p));
+        $("cInput").value = $("cInput").value.replace(new RegExp("@" + p.handle + "(?![A-Za-z0-9_-])\\s?", "gi"), "");
+        autosize(); drawComposer();
+      } else attach(p);
+      draw();
+    }
+    else if (d.view) {
+      const p = item(d.view); if (!p) return;
+      modal(`<div class="modalHead"><div class="modalTitle">@${esc(p.handle)} <span class="muted">${esc(p.name)} · ${SRC[p.src]}</span></div>
+        <button class="btn ghost icon" data-close>✕</button></div><div class="modalBody"><img src="${imgUrl(p.src, p.id)}" alt=""></div>`, "view");
+    }
+    else if (d.rename) {
+      const p = item(d.rename); if (!p) return;
+      const n = prompt("New handle (letters, digits, - or _)", p.handle);
+      if (!n || n.trim().replace(/^@/, "") === p.handle) return;
+      try {
+        const r = await api("/api/chat/handle", {src: p.src, id: p.id, handle: n.trim()});
+        const old = p.handle; p.handle = r.handle;
+        C.attached.forEach(x => { if (same(x, p)) x.handle = r.handle; });
+        $("cInput").value = $("cInput").value.replace(new RegExp("@" + old + "(?![A-Za-z0-9_-])", "gi"), "@" + r.handle);
+        draw(); drawComposer(); ctoast(`Renamed to @${r.handle}. Messages already sent keep the old name.`);
+      } catch (err) { ctoast(err.message); }
+    }
+    else if (d.del) {
+      const p = item(d.del); if (!p) return;
+      confirmBox(`Delete @${p.handle}?`, "The picture file goes for good. Chats that mentioned it keep their text.", "Delete", async () => {
+        try {
+          await api("/api/chat/image/delete", {src: p.src, id: p.id});
+          C.lib = C.lib.filter(i => !same(i, p)); C.attached = C.attached.filter(x => !same(x, p));
+          $("cLibCount").textContent = C.lib.length || ""; draw(); drawComposer();
+        } catch (err) { ctoast(err.message); }
+      });
+    }
+    else if ("upload" in d) {
+      const f = document.createElement("input"); f.type = "file"; f.multiple = true; f.accept = FORMATS.join(",");
+      f.onchange = async () => { await uploadFiles([...f.files]); draw(); }; f.click();
+    }
+  });
+}
+$("cOpenLib").onclick = () => { closeDrawer(); loadLib().then(openLibrary); };
+$("cLibBtn").onclick = () => loadLib().then(openLibrary);
+
+// ── showing the tab ──────────────────────────────────────────────────
+function onShow() {
+  requestAnimationFrame(fit);
+  if (!C.cfg) load().catch(e => $("cErr").textContent = e.message);
+  else { refreshList(); loadLib(); }
+}
+window.addEventListener("resize", () => { fit(); fades(); });
+drawComposer();
+if (!tab.hidden) onShow();
+})();
+</script>
+</body>
+</html>

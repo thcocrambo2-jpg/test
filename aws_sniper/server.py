@@ -38,6 +38,10 @@ taken off the account's credit.
 Text to prompt (third tab): txtprompt.py, the same models write a prompt
 from a short brief plus reference pictures; kept in txt2prompt/, spend
 taken off the credit too.
+
+Chat (its own page, /chat = chat.html): chatprompt.py, a chat with Qwen that writes and edits
+prompts, pictures uploaded or picked from a library of every picture and
+mentioned by @handle; kept in chat2prompt/, spend taken off the credit too.
 """
 
 import argparse
@@ -67,6 +71,7 @@ sys.path.insert(1, str(HERE.parent / "runpod_sniper"))
 import downloader                             # noqa: E402  (the Runpod page's, as is)
 import imgprompt                              # noqa: E402  (the Image to prompt tab)
 import txtprompt                              # noqa: E402  (the Text to prompt tab)
+import chatprompt                             # noqa: E402  (the Chat page)
 
 TOKENS_CSS = HERE / "tokens.css"
 HISTORY_FILE = HERE / "history.json"
@@ -1187,13 +1192,14 @@ def _money(rows: list, account: str) -> dict:
     synced = settings.get("aws_credit")
     rows = [r for r in rows if r["account"] == account]
     # Image and Text to prompt run on Bedrock, paid from the same credit.
-    prompts = imgprompt.LOG.spent(account) + txtprompt.LOG.spent(account)
+    prompts = imgprompt.LOG.spent(account) + txtprompt.LOG.spent(account) + chatprompt.STORE.spent(account)
     if synced:
         # AWS's own balance at the last sync (it already counts whatever
         # was used outside this page), minus what the page saw since.
         since_sync = (HISTORY.spent_since(synced["synced"], now, account)
                       + imgprompt.LOG.spent(account, synced["synced"])
-                      + txtprompt.LOG.spent(account, synced["synced"]))
+                      + txtprompt.LOG.spent(account, synced["synced"])
+                      + chatprompt.STORE.spent(account, synced["synced"]))
         left = synced["estimated"] - since_sync
     else:
         since_sync = None
@@ -1358,6 +1364,38 @@ class Handler(BaseHTTPRequestHandler):
     def error(self, message: str, code: int = 400) -> None:
         self.json({"error": message}, code)
 
+    def chat_send(self, session, account: str, body: dict) -> None:
+        """The Chat page's send: one JSON object per line as the reply is
+        written (user, delta..., then done or error). Headers go out with the
+        first line, so a message refused up front is a normal error reply.
+        The page closing the request (Stop) makes a write fail, which stops
+        the reply and keeps what was written."""
+        started = []
+
+        def emit(event: dict) -> bool:
+            try:
+                if not started:
+                    self.send_response(200)
+                    self.send_header("content-type", "application/x-ndjson; charset=utf-8")
+                    self.send_header("cache-control", "no-store")
+                    self.send_header("x-content-type-options", "nosniff")
+                    self.end_headers()
+                    started.append(1)
+                self.wfile.write((json.dumps(event) + "\n").encode("utf-8"))
+                self.wfile.flush()
+                return True
+            except OSError:
+                return False
+
+        try:
+            reply = chatprompt.send(session, account, body, emit)
+        except (ValueError, RuntimeError) as exc:
+            if not started:
+                return self.error(str(exc), 502 if isinstance(exc, RuntimeError) else 400)
+            emit({"t": "error", "error": str(exc)})
+            return
+        emit({"t": "done", "msg": reply, "totals": chatprompt.STORE.totals()})
+
     def local(self) -> bool:
         """Only this machine's page (no DNS rebinding): a web page elsewhere
         must not be able to launch instances."""
@@ -1372,6 +1410,8 @@ class Handler(BaseHTTPRequestHandler):
         try:
             if url.path == "/":
                 return self.send(200, (HERE / "index.html").read_bytes(), "text/html; charset=utf-8")
+            if url.path == "/chat":
+                return self.send(200, (HERE / "chat.html").read_bytes(), "text/html; charset=utf-8")
             if url.path == "/tokens.css":
                 return self.send(200, TOKENS_CSS.read_bytes(), "text/css; charset=utf-8")
             if url.path == "/api/config":
@@ -1424,6 +1464,17 @@ class Handler(BaseHTTPRequestHandler):
                 if not found:
                     return self.error("No such picture.", 404)
                 return self.send(200, found[0], found[1])
+            if url.path == "/api/chat":
+                return self.json(chatprompt.config())
+            if url.path == "/api/chat/c":
+                return self.json(chatprompt.STORE.get(query.get("id", [""])[0]))
+            if url.path == "/api/chat/library":
+                return self.json({"images": chatprompt.library()})
+            if url.path == "/api/chat/image":
+                found = chatprompt.image_file(query.get("src", [""])[0], query.get("id", [""])[0])
+                if not found:
+                    return self.error("No such picture.", 404)
+                return self.send(200, found[0], found[1])
             if url.path == "/api/logs":
                 try:
                     return self.json({"logs": _docker_logs(query.get("id", [""])[0])})
@@ -1442,12 +1493,34 @@ class Handler(BaseHTTPRequestHandler):
         try:
             length = int(self.headers.get("content-length") or 0)
             # an image, base64: a third bigger than the file
-            limit = 22_000_000 if url.path in ("/api/img2prompt/upload", "/api/txt2prompt/upload") else 100_000
+            limit = 22_000_000 if url.path in ("/api/img2prompt/upload", "/api/txt2prompt/upload",
+                                               "/api/chat/upload") else 100_000
             if length > limit:
                 return self.error("Request too large (%d MB)." % (length // 2 ** 20), 413)
             body = json.loads(self.rfile.read(length) or b"{}")
             if url.path == "/api/img2prompt/upload":
                 return self.json({"image": imgprompt.upload(body)})
+            if url.path == "/api/chat/upload":
+                return self.json({"image": chatprompt.upload(body)})
+            if url.path == "/api/chat/handle":
+                return self.json(chatprompt.rename_handle(body))
+            if url.path == "/api/chat/image/delete":
+                return self.json(chatprompt.delete_image(body))
+            if url.path == "/api/chat/new":
+                return self.json(chatprompt.new_chat(body))
+            if url.path == "/api/chat/edit":
+                return self.json(chatprompt.edit_chat(body))
+            if url.path == "/api/chat/delete":
+                return self.json(chatprompt.delete_chat(body))
+            if url.path == "/api/chat/queue":
+                iid = str(body.get("id") or "")
+                try:
+                    return self.json(chatprompt.send_to_queue(*_app_link(iid), iid, body))
+                except RuntimeError as exc:
+                    return self.error(str(exc), 502)
+            if url.path == "/api/chat/send":
+                account = _account(body.get("account"))
+                return self.chat_send(core.make_session(imgprompt.REGION, PROFILE, account), account, body)
             if url.path == "/api/txt2prompt/upload":
                 return self.json({"image": txtprompt.upload(body)})
             if url.path == "/api/txt2prompt/queue":

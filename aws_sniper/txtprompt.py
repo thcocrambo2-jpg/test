@@ -18,6 +18,7 @@ import imgprompt as ip
 
 DATA = ip.HERE / "txt2prompt"
 PREFIX = "base_prompt_"
+NEGATIVE_FILE = DATA / "negative.json"           # this tab's own negative
 LOG = ip.Log(DATA / "history.json", DATA / "images")
 MAX_TOKENS = 4000          # the base prompts ask for seven sections plus the specs
 MAX_BRIEF = 4000
@@ -32,9 +33,9 @@ NO_NOTE = "(no note: take its setting, light and camera feel, not its people)"
 def config() -> dict:
     found = ip.prompts(DATA, PREFIX)
     try:
-        neg = {"text": ip.negative(), "file": str(ip.NEGATIVE_FILE)}
+        neg = {"text": ip.negative(NEGATIVE_FILE), "file": str(NEGATIVE_FILE)}
     except ValueError as exc:
-        neg = {"text": "", "file": str(ip.NEGATIVE_FILE), "error": str(exc)}
+        neg = {"text": "", "file": str(NEGATIVE_FILE), "error": str(exc)}
     return {"models": ip.MODELS, "default_model": ip.DEFAULT_MODEL, "prompts": found,
             "default_prompt": DEFAULT_PROMPT if DEFAULT_PROMPT in found else next(iter(found), None),
             "prompt_dir": str(DATA), "totals": LOG.totals(), "records": LOG.recent(),
@@ -104,6 +105,6 @@ def send_to_queue(origin: str, key: str, instance: str, body: dict) -> dict:
         raise ValueError("That prompt isn't in the history any more.")
     if not rec["text"] or rec["text"].startswith("SKIP:"):
         raise ValueError("The model skipped this brief: there is no prompt to queue.")
-    result = ip.queue_text(origin, key, instance, rec["text"], body)
+    result = ip.queue_text(origin, key, instance, rec["text"], body, NEGATIVE_FILE)
     LOG.mark_queued(rec["time"], result["sent"])
     return result

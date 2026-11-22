@@ -182,14 +182,53 @@ as on Image to prompt (new file, then **↻ Reload**). Both refuse, with a
 real public figure or someone made to look like a person in a reference,
 and v2 also non-consensual acts.
 
-Sending to the app uses the same instance, Steps, Aspect and negative as
-Image to prompt (the controls move to whichever tab is open). **Use this
+Sending to the app uses the same instance, Steps and Aspect as Image to
+prompt (the controls move to whichever tab is open), with this tab's own
+negative: `txt2prompt/negative.json`. **Use this
 brief** on any past prompt puts its brief and references back. The brief,
 references and notes stay in the page between visits; the reference
 pictures and every prompt (tokens, cost, the brief) are kept in
 `txt2prompt/images/` and `txt2prompt/history.json`, git-ignored and left
 out of the friends' zip. The cost counts in the tab's totals and the
 Credit card.
+
+## Chat (its own page)
+
+**Chat ↗** next to the tabs opens `http://127.0.0.1:7896/chat` in its own
+browser tab (← goes back). The account that pays is picked in the chat's
+header, separately from the sniper's. A chat with **Qwen3-VL** that writes and edits prompts, laid out like Grok
+in Ember's look. Write a brief, attach pictures (📎, paste, drop, or 🖼
+**Library**) and mention them by `@handle` ("outfit from @kurta, background
+like @taj"); typing `@` lists the library. Replies stream in; a prompt shows
+as a card with **Copy**, **Save .txt**, **⤒ Queue** and **↻ Regenerate**.
+
+**Only the message you write is sent**, never the chat history. To change a
+prompt, click **✎ Edit** on its card: the next message is sent with only
+that prompt as context, and the reply is the next version (v2, v3...; the
+trail on each card jumps between them). Editing carries on from the newest
+version until you press ✕ on the "Editing" strip. **✎ Edit & resend** on
+one of your messages puts it back in the box; sending it replaces it and
+everything after it. ■ stops a reply and keeps what was written.
+
+**Modes** (the pill in the box, per chat) are the files
+`chat2prompt/base_prompt_<name>.md`, read on every send: **scene** (Text to
+prompt v1), **scene-explicit** (Text to prompt v2) and **recreate** (Image
+to prompt v4), each a word-for-word copy of the original with an "IN THIS
+CHAT" section added at the end; the originals are not touched. **Free
+chat** has no base prompt. An edit adds `chat2prompt/edit.md` to the mode
+(or `edit_<mode>.md`, if you make one). Add a mode by adding a file.
+
+The **Library** shows every picture on this PC: chat uploads plus the
+Image to prompt and Text to prompt ones (read only; only chat uploads can be
+deleted here). Every picture gets a renamable `@handle`.
+
+**⚙** has the chat's own Send to the app settings (instance, steps, aspect,
+auto-send), separate from the prompt tabs'; every mode's queued prompts get
+`chat2prompt/negative.json`. Chats, handles and spend are
+kept in `chat2prompt/chats.json` and chat uploads in `chat2prompt/images/`,
+git-ignored and left out of the friends' zip. A message costs about the same
+as a Text to prompt generation (~$0.006 for a full prompt), however long the
+chat is; deleting a chat keeps its cost in the totals and the Credit card.
 
 ## Accounts
 

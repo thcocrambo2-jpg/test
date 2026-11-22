@@ -349,16 +349,17 @@ APP_UA = ("Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 "
           "(KHTML, like Gecko) Chrome/124.0 Safari/537.36")    # the tunnel turns away python-urllib
 
 
-def negative() -> str:
-    """negative.json's "negative"; '' (keep the preset's own) while it's empty or missing."""
+def negative(path: Path = NEGATIVE_FILE) -> str:
+    """negative.json's "negative" (this tab's, or another tab's own file);
+    '' (keep the preset's own) while it's empty or missing."""
     try:
-        text = NEGATIVE_FILE.read_text(encoding="utf-8")
+        text = path.read_text(encoding="utf-8")
     except OSError:
         return ""
     try:
         value = json.loads(text).get("negative")
     except (ValueError, AttributeError):
-        raise ValueError("%s isn't valid JSON: fix it, or nothing can be queued." % NEGATIVE_FILE) from None
+        raise ValueError("%s isn't valid JSON: fix it, or nothing can be queued." % path) from None
     return value.strip() if isinstance(value, str) else ""
 
 
@@ -435,9 +436,11 @@ def send_to_queue(origin: str, key: str, instance: str, body: dict) -> dict:
     return result
 
 
-def queue_text(origin: str, key: str, instance: str, text: str, body: dict) -> dict:
+def queue_text(origin: str, key: str, instance: str, text: str, body: dict,
+               negative_file: Path = NEGATIVE_FILE) -> dict:
     """A prompt -> a Krea 2 V2 job (Natural Raw 2, batch 1, body's steps/aspect
-    if set), moved to the top of the instance's queue."""
+    if set, negative_file's negative: each tab passes its own), moved to the
+    top of the instance's queue."""
     steps = _steps(body.get("steps"))
     aspect = str(body.get("aspect") or "").strip() or None
     if aspect and aspect not in _aspects(origin, key):    # the app would quietly use 3:4 instead
@@ -452,7 +455,7 @@ def queue_text(origin: str, key: str, instance: str, text: str, body: dict) -> d
         values["steps"] = steps                            # the page's override beats the preset
     if aspect:
         values["aspect"] = aspect                          # so does the aspect
-    neg = negative()
+    neg = negative(negative_file)
     if neg:
         values["negative"] = neg
     job = _app(origin, key, "POST", "/tabs/%s/generate" % APP_TAB, {"values": values})["jobId"]

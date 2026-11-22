@@ -173,6 +173,7 @@
     <button data-tab="sniper">Sniper</button>
     <button data-tab="prompt">Image to prompt</button>
     <button data-tab="text">Text to prompt</button>
+    <button onclick="window.open('/chat', 'sniperchat')" title="Opens the Chat page in its own tab">Chat ↗</button>
   </nav>
   <div class="error" id="licence"></div>
   <div class="error" id="banner"></div>
@@ -939,6 +940,7 @@ function showTab(name) {
     if (!T.active) loadText().catch(e => $("tErr").textContent = e.message);
   }
   (name === "text" ? $("tSendSlot") : $("pSendSlot")).appendChild($("pSend"));
+  if (P.cfg) drawAppNote();
 }
 document.querySelectorAll("nav.tabs [data-tab]").forEach(b => b.onclick = () => showTab(b.dataset.tab));
 
@@ -995,7 +997,8 @@ async function loadAppOptions() {
   drawAppNote();
 }
 function drawAppNote() {
-  const n = P.cfg.negative;
+  // the panel is shared: on Text to prompt it shows that tab's own negative.json
+  const n = ($("pSend").parentElement.id === "tSendSlot" && T.cfg ? T.cfg : P.cfg).negative;
   const negLine = n.error ? `<span class="error">${esc(n.error)}</span>`
     : n.text ? `Negative: from <code>${esc(n.file)}</code> (${n.text.split(/\s+/).length} words).`
     : `Negative: Natural Raw 2's own, while "negative" in <code>${esc(n.file)}</code> is empty.`;
@@ -1346,6 +1349,7 @@ async function loadText() {
   T.models = pick(T.models, T.cfg.models, T.cfg.default_model);
   T.prompts = pick(T.prompts, T.cfg.prompts, T.cfg.default_prompt);
   drawText();
+  if (P.cfg) drawAppNote();
 }
 function drawText() {
   drawTextChips(); drawTotals("t", T.cfg.totals, T.lastRun); drawRefs(); drawTextResults(); drawTextHistory();

@@ -16,14 +16,15 @@ HERE = Path(__file__).resolve().parent
 RUNPOD = HERE.parent / "runpod_sniper"
 OUT = HERE.parent / "aws_sniper.zip"
 
-FILES = ["server.py", "sniper.py", "imgprompt.py", "txtprompt.py", "index.html", "tokens.css", "userdata.sh",
+FILES = ["server.py", "sniper.py", "imgprompt.py", "txtprompt.py", "chatprompt.py", "index.html", "chat.html", "tokens.css", "userdata.sh",
          "requirements.txt", ".env.example", "README.md", "start.bat",
-         "img2prompt/negative.json"] + sorted(
+         "img2prompt/negative.json", "txt2prompt/negative.json", "chat2prompt/negative.json"] + sorted(
             "img2prompt/" + p.name for p in (HERE / "img2prompt").glob("base_prompt_gpt_*.md")) + sorted(
-            "txt2prompt/" + p.name for p in (HERE / "txt2prompt").glob("base_prompt_*.md"))
+            "txt2prompt/" + p.name for p in (HERE / "txt2prompt").glob("base_prompt_*.md")) + sorted(
+            "chat2prompt/" + p.name for p in (HERE / "chat2prompt").glob("*.md"))
 FROM_RUNPOD = ["downloader.py", "ember_token.py"]
 NEVER = {".env", "history.json", "settings.json", "downloads.json", "known_hosts", "img2prompt/history.json",
-         "txt2prompt/history.json"}
+         "txt2prompt/history.json", "chat2prompt/chats.json"}
 
 
 def main() -> None:
