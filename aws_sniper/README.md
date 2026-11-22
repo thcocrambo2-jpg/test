@@ -220,10 +220,14 @@ chat** has no base prompt. An edit adds `chat2prompt/edit.md` to the mode
 
 The **Library** shows every picture on this PC: chat uploads plus the
 Image to prompt and Text to prompt ones (read only; only chat uploads can be
-deleted here). Every picture gets a renamable `@handle`.
+deleted here). Every picture gets a renamable `@handle`. Handles stay on the
+page: Qwen gets each mention as "Picture N", the picture's place in the
+message, so a handle like `@image-3` can't be mistaken for the third picture.
 
-**⚙** has the chat's own Send to the app settings, separate from the prompt
-tabs':
+The **⤒ pill** at the top right shows where prompts go: `Auto · <instance>`
+(accent), `Auto · no instance` (warning: nothing to send to) or `Manual`, and
+pulses once with "✓ sent" on each auto-send. Clicking it opens the chat's own
+Send to the app settings, separate from the prompt tabs':
 - **Instance**: every running instance in every account (the account picker
   only says who pays for Qwen), plus your own app links.
 - **Add an app link**: for a pod the sniper didn't start, as `host:7860`, or

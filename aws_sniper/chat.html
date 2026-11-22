@@ -116,6 +116,15 @@
 #tab-chat .switch input { accent-color:var(--c-accent); flex:none; width:15px; height:15px; margin:calc((1em * var(--lh-normal) - 15px) / 2) 0 0; }
 #tab-chat .pop .row { display:flex; gap:var(--s-2); }
 #tab-chat .pop .row .input { flex:1; min-width:0; }
+/* where prompts go: on (accent), on with nothing to send to (warning), off (plain); one pulse per auto-send */
+#tab-chat .autoPill { gap:var(--s-2); max-width:240px; }
+#tab-chat .autoPill .at { overflow:hidden; text-overflow:ellipsis; min-width:0; }
+#tab-chat .autoPill .dot { display:none; width:7px; height:7px; border-radius:var(--r-full); background:currentColor; flex:none; }
+#tab-chat .autoPill.on, #tab-chat button.autoPill.on:hover { border-color:var(--c-accent-line); background:var(--c-accent-soft); color:var(--c-accent); }
+#tab-chat .autoPill.warn, #tab-chat button.autoPill.warn:hover { border-color:var(--c-warning-line); background:var(--c-warning-soft); color:var(--c-warning); }
+#tab-chat button.autoPill.on:hover, #tab-chat button.autoPill.warn:hover { filter:brightness(1.12); }
+#tab-chat .autoPill.flash { animation:apulse 1.1s var(--e-out); }
+@keyframes apulse { from { box-shadow:0 0 0 0 var(--c-accent-line); } to { box-shadow:0 0 0 10px transparent; } }
 #tab-chat .caret { flex:none; width:10px; height:10px; background:var(--icon-caret) no-repeat center / contain; opacity:.8; }
 #tab-chat .ratio { flex:none; display:inline-flex; align-items:center; justify-content:center; width:14px; height:14px; }
 #tab-chat .menu button .ratio { height:calc(1em * var(--lh-normal)); }   /* level with the row's first line */
@@ -290,6 +299,8 @@
   #tab-chat .chatHead .modelPill, #tab-chat #cHeadMode { display:none; }   /* the mode pill sits under the message box */
   #tab-chat .chatTitle { font-size:var(--t-md); }
   #tab-chat .chatHead .acctSel { max-width:42vw; flex:0 1 auto; min-width:0; }
+  #tab-chat .autoPill .at, #tab-chat .autoPill .caret { display:none; }   /* just ⤒ and a coloured dot */
+  #tab-chat .autoPill .dot { display:block; }
   #tab-chat .composerWrap { padding:0 var(--s-3) var(--s-3); }
   #tab-chat .bubble { max-width:92%; }
   #tab-chat .pop .two { grid-template-columns:1fr; }
@@ -325,7 +336,7 @@ body { background:var(--c-bg); color:var(--c-text); font:var(--t-md)/var(--lh-no
       <span class="pill modelPill" title="Model">Qwen3-VL</span>
       <select class="select acctSel" id="cAcct" title="Account that pays: its Bedrock credit"></select>
       <button class="btn ghost sm" id="cHeadMode" data-float title="Base prompt for this chat"></button>
-      <button class="btn ghost icon sm" id="cSettings" data-float title="Send to the app">⚙</button>
+      <button class="pill autoPill" id="cSettings" data-float title="Send to the app"></button>
     </div>
     <div class="scroll" id="cScroll"><div class="col" id="cCol"></div></div>
     <div class="composerWrap">
@@ -691,7 +702,7 @@ function asstTurn(c, m) {
         <button class="btn sm${target ? " primary" : ""}" data-edit="${m.id}" ${dis || (skip ? "disabled" : "")} title="Send only this prompt as context with your next message">✎ ${target ? "Editing this" : "Edit"}</button>
         <button class="btn ghost sm" data-copy="${m.id}" ${dis}>⧉ Copy</button>
         <button class="btn ghost sm" data-save="${m.id}" ${dis}>⤓ Save .txt</button>
-        <button class="btn ghost sm" data-queue="${m.id}" ${dis || (skip || m.queueState ? "disabled" : "")} title="Krea 2 V2 · Natural Raw 2 · batch 1, top of the queue (⚙ for instance and steps, ▭ under the message box for aspect)">⤒ Queue</button>
+        <button class="btn ghost sm" data-queue="${m.id}" ${dis || (skip || m.queueState ? "disabled" : "")} title="Krea 2 V2 · Natural Raw 2 · batch 1, top of the queue (the ⤒ Auto pill at the top for instance and steps, ▭ under the message box for aspect)">⤒ Queue</button>
         <button class="btn ghost sm" data-regen="${m.id}" ${dis || (busy ? "disabled" : "")}>↻ Regenerate</button>
         <span class="grow"></span>
         ${live ? "" : `<button class="btn ghost sm" data-open="${m.id}">${m.open ? "Show less" : "Show all"}</button>`}
@@ -1003,7 +1014,7 @@ $("cSend").onclick = () => send();
 // ── sending a prompt to an instance ──────────────────────────────────
 // Where a prompt goes: any running sniper instance, in any account (the
 // account picker only says who pays for Qwen), or an app link you typed in
-// ⚙ for a pod the sniper didn't start (host:7860, optional #k=KEY).
+// the settings popover for a pod the sniper didn't start (host:7860, optional #k=KEY).
 const NR2_STEPS = 20;                                 // Natural Raw 2's own steps (prod DB, 11-22), shown until an app is read
 const ASPECTS = ["1:1", "3:4", "4:3", "2:3", "3:2", "9:16", "16:9"];   // until the app's own list is read
 const aspect = () => store.get("c.ar", "3:4");
@@ -1029,7 +1040,7 @@ function appOpts(t) {                                  // the target's preset st
       return o;
     });
 }
-setInterval(() => { const t = pickTarget(); if (t && needsRead(t)) appOpts(t); }, 15000);   // so ⚙ already knows the preset's steps
+setInterval(() => { const t = pickTarget(); if (t && needsRead(t)) appOpts(t); }, 15000);   // so the settings popover already knows the preset's steps
 function normLink(raw) {                               // "1.2.3.4:7860" -> {url: "http://1.2.3.4:7860/", name}
   raw = raw.trim(); if (!raw) return null;
   try {
@@ -1038,9 +1049,28 @@ function normLink(raw) {                               // "1.2.3.4:7860" -> {url
     return {url: u.origin + "/" + u.hash, name: u.host};
   } catch { return null; }
 }
+let autoFlash = 0;
+function drawAuto() {                                  // the header pill: is auto-send on, and where would it go
+  const b = $("cSettings"), on = store.get("c.auto", true), t = pickTarget();
+  const sent = Date.now() < autoFlash;
+  b.className = "pill autoPill" + (on ? (t ? " on" : " warn") : "") + (b.classList.contains("flash") ? " flash" : "");
+  const text = sent ? "✓ sent" : !on ? "Manual" : t ? "Auto · " + t.name : "Auto · no instance";
+  b.innerHTML = `<span>⤒</span><span class="dot"></span><span class="at">${esc(text)}</span><span class="caret"></span>`;
+  b.title = !on ? "Auto-send is off: queue prompts with ⤒ Queue. Click for settings."
+    : t ? `Auto-send is on: every new prompt goes to the top of ${t.name}'s queue. Click for settings.`
+    : "Auto-send is on, but there is no running instance or app link to send to. Click to add a link.";
+}
+function flashAuto() {
+  const b = $("cSettings");
+  autoFlash = Date.now() + 2500; b.classList.remove("flash"); void b.offsetWidth; b.classList.add("flash");
+  drawAuto(); setTimeout(drawAuto, 2600);
+}
+$("cSettings").addEventListener("animationend", () => $("cSettings").classList.remove("flash"));
+setInterval(drawAuto, 3000);                           // instances come and go with the 5 s poll
+drawAuto();
 function queueMsg(cid, m, auto) {
   const t = pickTarget();
-  if (!t) { ctoast(`${auto ? "Auto-send" : "Queue"}: no running instance or app link: start one, or add a link under ⚙.`); return; }
+  if (!t) { ctoast(`${auto ? "Auto-send" : "Queue"}: no running instance or app link: start one, or add a link from the ⤒ pill at the top.`); return; }
   m.queueState = "sending"; drawConvIf(cid);
   C.sendChain = C.sendChain.then(async () => {           // one at a time, each landing on top of the last
     try {
@@ -1048,6 +1078,7 @@ function queueMsg(cid, m, auto) {
         steps: store.get("c.steps", "") || null, aspect: aspect()}, t.link ? {link: t.link} : {id: t.id}));
       (m.queued = m.queued || []).push(res.sent);
       ctoast(`${auto ? "Auto-sent" : "Queued"} v${m.v} at the top on ${t.name} · ${aspect()}`);
+      if (auto) flashAuto();
     } catch (e) { ctoast("Queue: " + e.message); }
     m.queueState = ""; drawConvIf(cid);
   });
@@ -1095,7 +1126,7 @@ $("cSettings").onclick = async e => {
       <label class="switch"><input type="checkbox" id="cSetAuto"${store.get("c.auto", true) ? " checked" : ""}><span>Auto-send every new prompt to the top of the queue</span></label>
       ${o && o.error ? `<div class="faint">${esc(o.error)}</div>` : cur && !o ? `<div class="faint">Reading the app's preset…</div>` : ""}`;
   };
-  const load = async () => { draw(); if (cur && needsRead(cur)) { await appOpts(cur); if (p.isConnected && document.activeElement?.id !== "cSetSteps") draw(); } };
+  const load = async () => { draw(); drawAuto(); if (cur && needsRead(cur)) { await appOpts(cur); if (p.isConnected && document.activeElement?.id !== "cSetSteps") draw(); } };
   const addLink = () => {
     const l = normLink($("cLinkIn").value);
     if (!l) { ctoast("That isn't an app link: try host:7860 or https://…"); return; }
@@ -1106,7 +1137,7 @@ $("cSettings").onclick = async e => {
   p.addEventListener("change", ev => {
     const id = ev.target.id;
     if (id === "cSetInst") { store.set("c.inst", ev.target.value); load(); }
-    if (id === "cSetAuto") store.set("c.auto", ev.target.checked);
+    if (id === "cSetAuto") { store.set("c.auto", ev.target.checked); drawAuto(); }
   });
   p.addEventListener("input", ev => {                  // the preset's own number, or a cleared box, keeps following the preset
     if (ev.target.id !== "cSetSteps") return;

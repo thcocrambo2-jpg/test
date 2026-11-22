@@ -47,8 +47,8 @@ FREE = "free"
 FREE_SYSTEM = (
     "You are a helpful assistant for someone who writes prompts for photorealistic image "
     "generation. Answer questions about photography, light, posing, styling and prompt "
-    "wording concisely and concretely. Pictures arrive introduced as \"Image N (@handle)\" "
-    "and the user names them by @handle. When you are asked to write an image prompt, put "
+    "wording concisely and concretely. Pictures arrive introduced as \"Picture N\", numbered "
+    "in the order sent, and the user names them the same way. When you are asked to write an image prompt, put "
     "the complete prompt between <prompt> and </prompt>. Every person in a prompt you write "
     "must be an adult and an invented person.")
 FREE_DESC = "No base prompt: ask questions, brainstorm"
@@ -375,9 +375,20 @@ def _pictures(text: str, picked) -> list:
     return out
 
 
+def by_number(text: str, pictures: list) -> str:
+    """The message as Qwen gets it: each @handle of a sent picture becomes
+    "Picture N", its place in the order sent. Handles stay on the page; the
+    model sees one name per picture, so a handle like @image-3 can't be read
+    as the third picture. An @word that isn't a sent picture stays as typed."""
+    num = {p["handle"].lower(): n for n, p in enumerate(pictures, 1)}
+    return MENTION_RE.sub(lambda m: "Picture %d" % num[m.group(1).lower()] if m.group(1).lower() in num else m.group(0),
+                          text or "")
+
+
 def build_request(mode: str, text: str, pictures: list, context=None) -> tuple:
     """(system, content) for one message. context = the picked earlier
     prompt when editing, else None."""
+    text = by_number(text, pictures)
     if mode == FREE:
         system = FREE_SYSTEM
     else:
@@ -392,7 +403,7 @@ def build_request(mode: str, text: str, pictures: list, context=None) -> tuple:
     else:
         content.append({"type": "text", "text": text or "(no text: use the pictures)"})
     for n, p in enumerate(pictures, 1):
-        content.append({"type": "text", "text": "Image %d (@%s):" % (n, p["handle"])})
+        content.append({"type": "text", "text": "Picture %d:" % n})
         content.append(ip.image_part(p["data"], p["mime"]))
     return system, content
 
