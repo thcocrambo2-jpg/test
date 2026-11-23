@@ -198,6 +198,13 @@
 #tab-chat .editChip .ell { flex:1; color:var(--c-text-muted); }
 #tab-chat .editChip button { color:var(--c-accent); border-radius:var(--r-xs); width:22px; height:22px; flex:none; }
 #tab-chat .editChip button:hover { background:var(--c-accent-soft); }
+#tab-chat .waitList { display:flex; flex-direction:column; gap:2px; margin:0 0 var(--s-2); padding:var(--s-2) var(--s-2) var(--s-2) var(--s-3);
+  border:1px solid var(--c-border); border-radius:var(--r-md); font-size:var(--t-xs); color:var(--c-text-muted); }
+#tab-chat .waitList .wrow { display:flex; align-items:center; gap:var(--s-2); min-width:0; color:var(--c-text); }
+#tab-chat .waitList .wrow .ell { flex:1; min-width:0; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+#tab-chat .waitList .wrow .faint { flex:none; color:var(--c-text-muted); }
+#tab-chat .waitList button { border-radius:var(--r-xs); width:22px; height:22px; flex:none; color:var(--c-text-muted); }
+#tab-chat .waitList button:hover { background:var(--c-accent-soft); color:var(--c-text); }
 #tab-chat .attach { display:flex; gap:var(--s-2); flex-wrap:wrap; padding:0 var(--s-1) var(--s-2); }
 #tab-chat .attach:empty { display:none; }
 #tab-chat .achip { display:flex; align-items:center; gap:var(--s-2); padding:3px 4px 3px 3px; border:1px solid var(--c-border); border-radius:var(--r-md);
@@ -343,6 +350,7 @@ body { background:var(--c-bg); color:var(--c-text); font:var(--t-md)/var(--lh-no
       <div class="welcome"><h2>What are we making?</h2><p>Describe a picture, drop reference images, or @mention one from the library.</p></div>
       <div class="composer" id="cComposer">
         <div class="mentions hidden" id="cMentions"></div>
+        <div class="waitList hidden" id="cWait"></div>
         <div class="editChip hidden" id="cEditChip"></div>
         <div class="attach" id="cAttach"></div>
         <div class="inputWrap"><div class="hl" id="cHl" aria-hidden="true"></div>
@@ -355,11 +363,12 @@ body { background:var(--c-bg); color:var(--c-text); font:var(--t-md)/var(--lh-no
           <button class="pill" id="cAspectPill" data-float title="Aspect ratio of queued pictures"></button>
           <span class="grow"></span>
           <span class="faint" id="cCost" title="Rough estimate for this message"></span>
+          <button class="btn ghost icon sm hidden" id="cStop" title="Stop: keeps what was written">■</button>
           <button class="btn primary send" id="cSend" title="Send (Enter)">↑</button>
         </div>
       </div>
       <div class="cerr" id="cErr"></div>
-      <div class="hintline"><span class="kbd">Enter</span> send · <span class="kbd">Shift</span>+<span class="kbd">Enter</span> new line · <span class="kbd">@</span> mention · paste or drop pictures · only this message is sent, or the picked prompt when editing</div>
+      <div class="hintline"><span class="kbd">Enter</span> send · <span class="kbd">Shift</span>+<span class="kbd">Enter</span> new line · <span class="kbd">@</span> mention · paste or drop pictures · send while a reply is writing and it waits its turn · only this message is sent, or the picked prompt when editing</div>
       <div class="starters" id="cStarters"></div>
     </div>
   </section>
@@ -446,7 +455,7 @@ poll(); setInterval(poll, 5000);
 "use strict";
 const tab = $("tab-chat");
 const C = {cfg: null, chats: [], open: {}, cur: null, draftMode: null, lib: [], edit: {}, attached: [],
-           resend: null, streams: {}, sendChain: Promise.resolve(), appOpts: {}};
+           resend: null, streams: {}, waiting: {}, waitSeq: 0, sendChain: Promise.resolve(), appOpts: {}};
 const SRC = {chat: "Chat", img: "Image to prompt", txt: "Text to prompt"};
 const FORMATS = ["image/jpeg", "image/png", "image/webp", "image/gif"];
 const money = v => v == null ? "—" : "$" + (v > 0 && v < 0.01 ? v.toFixed(4) : v.toFixed(3));
@@ -598,7 +607,7 @@ function chatMenu(id, anchor) {
     if (a === "delete") confirmBox(`Delete “${c.title}”?`, "Its messages go for good. What it cost stays in the totals and the Credit card. Pictures stay in the library.", "Delete", async () => {
       try {
         const r = await api("/api/chat/delete", {chat: id});
-        delete C.open[id]; delete C.edit[id]; totals(r.totals);
+        delete C.open[id]; delete C.edit[id]; delete C.waiting[id]; totals(r.totals);
         if (C.cur === id) newDraft();
         await refreshList(); ctoast("Chat deleted.");
       } catch (err) { ctoast(err.message); }
@@ -782,10 +791,15 @@ function drawComposer() {
   $("cModePill").innerHTML = `<b>${esc(modeLabel(curMode()))}</b>${t && curMode() !== "free" ? " · edit" : ""}<span class="caret"></span>`;
   $("cAspectPill").innerHTML = `${ratioIcon(aspect())}<b>${esc(aspect())}</b><span class="caret"></span>`;
   $("cInput").placeholder = t ? `Say what to change in v${t.v}, e.g. "shorter hair, night time" · @ to add a picture` : "Message Qwen · @ to mention a picture";
-  $("cSend").textContent = busy ? "■" : "↑";
-  $("cSend").title = busy ? "Stop: keeps what was written" : "Send (Enter)";
-  const text = $("cInput").value.trim();
-  $("cSend").disabled = !busy && !text && !C.attached.length;
+  const text = $("cInput").value.trim(), wait = (cid && C.waiting[cid]) || [];
+  $("cStop").classList.toggle("hidden", !busy);
+  $("cSend").title = busy ? "Queue: goes out when the reply above finishes (Enter)" : "Send (Enter)";
+  $("cSend").disabled = (!text && !C.attached.length) || (busy && C.resend != null);
+  $("cWait").classList.toggle("hidden", !wait.length);
+  $("cWait").innerHTML = wait.length ? `<div>Waiting · ${wait.length} message${wait.length === 1 ? "" : "s"}, sent one at a time as each reply finishes</div>` +
+    wait.map((w, i) => `<div class="wrow"><span>${i + 1}.</span><span class="ell">${w.editOf != null ? "✎ " : ""}${esc(w.text || "(pictures only)")}</span>
+      <span class="faint">${w.attached.length ? w.attached.length + " pic" + (w.attached.length === 1 ? "" : "s") + " · " : ""}${esc(modeLabel(w.mode))}</span>
+      <button data-unwait="${w.id}" title="Remove from the line">✕</button></div>`).join("") : "";
   const n = C.attached.length, free = curMode() === "free", ctx = t ? 1500 : 0;
   const tin = (free ? 200 : 3000) + text.length / 4 + 1100 * n + ctx, tout = free ? 250 : 1350;
   $("cCost").textContent = text || n ? "≈ " + money((tin * C.price.in + tout * C.price.out) / 1e6) : "";
@@ -802,6 +816,7 @@ $("cComposer").addEventListener("click", e => {
   if ("clearedit" in b.dataset) { if (c) C.edit[c.id] = null; drawConv(); drawComposer(); }
   else if ("cancelresend" in b.dataset) { C.resend = null; $("cInput").value = ""; C.attached = []; if (c) C.edit[c.id] = null; autosize(); drawConv(); drawComposer(); }
   else if (b.dataset.jump) jump(b.dataset.jump);
+  else if (b.dataset.unwait && c) { C.waiting[c.id] = (C.waiting[c.id] || []).filter(w => String(w.id) !== b.dataset.unwait); drawComposer(); }
   else if (b.dataset.unattach) {
     const p = C.attached.find(x => x.src + ":" + x.id === b.dataset.unattach);
     C.attached = C.attached.filter(x => x !== p);
@@ -924,8 +939,9 @@ tab.addEventListener("dragleave", e => { if (!tab.contains(e.relatedTarget)) $("
 tab.addEventListener("drop", e => { e.preventDefault(); $("cComposer").classList.remove("over"); uploadFiles([...e.dataTransfer.files]); });
 
 // ── sending ──────────────────────────────────────────────────────────
+// While a chat is writing, Send puts the message in that chat's line; each
+// one goes out when the reply before it finishes. Stop never clears the line.
 async function send() {
-  if (C.cur && C.streams[C.cur]) { stop(C.cur); return; }
   syncAttached();
   const text = $("cInput").value.trim();
   if (!text && !C.attached.length) return;
@@ -938,16 +954,46 @@ async function send() {
       C.chats.unshift({id: c.id, title: c.title, mode: c.mode, pinned: false, created: c.created, updated: c.updated, count: 0});
     } catch (e) { $("cErr").textContent = e.message; return; }
   }
-  const cid = c.id, editOf = C.edit[cid] ?? null, resend = C.resend;
-  const draft = {text, attached: C.attached.slice(), resend, editOf};
-  const body = {chat: cid, text, images: draft.attached.map(p => ({src: p.src, id: p.id})), account: acct(), mode: c.mode};
+  const cid = c.id;
+  const draft = {id: ++C.waitSeq, text, attached: C.attached.slice(), resend: C.resend, editOf: C.edit[cid] ?? null, mode: c.mode, account: acct()};
+  if (C.streams[cid] || (C.waiting[cid] || []).length) {
+    if (draft.resend != null) { $("cErr").textContent = "Wait for the reply to finish before changing an earlier message."; return; }
+    (C.waiting[cid] = C.waiting[cid] || []).push(Object.assign(draft, {queued: true}));
+    $("cInput").value = ""; C.attached = []; autosize(); drawComposer();
+    ctoast(`Waiting · goes out when the reply above finishes (${C.waiting[cid].length} in line).`);
+    pump(cid);
+    return;
+  }
+  $("cInput").value = ""; C.attached = []; C.resend = null; autosize();
+  go(cid, draft);
+}
+// The newest version of an edited prompt: a waiting edit lands on what the replies before it wrote.
+function newest(c, id) {
+  for (let n = 0; id != null && n < 100; n++) {
+    const next = [...c.messages].reverse().find(m => m.role === "assistant" && m.edit_of === id && m.prompt && !m.error);
+    if (!next) break;
+    id = next.id;
+  }
+  return id;
+}
+function go(cid, draft) { run(cid, draft).catch(e => ctoast(e.message)).finally(() => pump(cid)); }
+function pump(cid) {
+  const line = C.waiting[cid];
+  if (C.streams[cid] || !line || !line.length || !C.open[cid]) return;
+  go(cid, line.shift());
+  if (C.cur === cid) drawComposer();
+}
+async function run(cid, draft) {
+  const c = C.open[cid];
+  if (draft.queued && draft.editOf != null) draft.editOf = newest(c, draft.editOf);
+  const {text, resend, editOf} = draft;
+  const body = {chat: cid, text, images: draft.attached.map(p => ({src: p.src, id: p.id})), account: draft.account, mode: draft.mode};
   if (editOf != null) body.edit_of = editOf;
   if (resend != null) body.resend_of = resend;
-  $("cInput").value = ""; C.attached = []; C.resend = null; autosize();
   const keep = c.messages.slice();
   if (resend != null) { const i = c.messages.findIndex(m => m.id === resend); if (i >= 0) c.messages = c.messages.slice(0, i); }
   const tempUser = {id: "pending", role: "user", text, images: draft.attached, edit_of: editOf};
-  const live = {id: "live", role: "assistant", text: "", live: true, mode: c.mode, edit_of: editOf};
+  const live = {id: "live", role: "assistant", text: "", live: true, mode: draft.mode, edit_of: editOf};
   c.messages.push(tempUser, live);
   const ctrl = new AbortController();
   C.streams[cid] = {ctrl, live};
@@ -955,7 +1001,8 @@ async function send() {
 
   const putBack = msg => {             // refused before anything was saved: the message goes back in the box
     delete C.streams[cid]; c.messages = keep;
-    if (C.cur === cid) {
+    if (draft.queued && msg) msg = "A waiting message wasn't sent: " + msg;
+    if (C.cur === cid && (!draft.queued || (!$("cInput").value.trim() && !C.attached.length))) {
       $("cInput").value = draft.text; C.attached = draft.attached; C.resend = draft.resend; C.edit[cid] = draft.editOf;
       autosize(); if (msg) $("cErr").textContent = msg;
     }
@@ -1009,8 +1056,13 @@ async function send() {
   if (C.cur === cid) { drawHead(); drawConv(); drawComposer(); scrollBottom(false); }
   poll();                                              // fresh instance list for ⤒ Queue
 }
-function stop(cid) { const s = C.streams[cid]; if (s) { s.ctrl.abort(); ctoast("Stopped: what was written is kept."); } }
+function stop(cid) {
+  const s = C.streams[cid]; if (!s) return;
+  s.ctrl.abort();
+  ctoast("Stopped: what was written is kept." + ((C.waiting[cid] || []).length ? " The next waiting message goes out after it." : ""));
+}
 $("cSend").onclick = () => send();
+$("cStop").onclick = () => { if (C.cur) stop(C.cur); };
 
 // ── sending a prompt to an instance ──────────────────────────────────
 // Where a prompt goes: any running sniper instance, in any account (the

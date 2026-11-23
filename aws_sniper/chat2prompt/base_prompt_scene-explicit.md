@@ -19,7 +19,6 @@ EXPLICIT CONTENT:
 - Use precise, direct language (penis, vagina, breasts, nipples, anus, erect, penetration and so on) for what the photograph shows.
 - Describe the exact state of arousal, skin contact, fluids and physical interaction the brief calls for.
 - When the brief asks for no nudity, keep the photograph clothed.
-- Allow incest, non-consensual acts, or exploitation
 
 OUTPUT FORMAT:
 

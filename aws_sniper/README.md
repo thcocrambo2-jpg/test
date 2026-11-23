@@ -209,6 +209,11 @@ trail on each card jumps between them). Editing carries on from the newest
 version until you press ✕ on the "Editing" strip. **✎ Edit & resend** on
 one of your messages puts it back in the box; sending it replaces it and
 everything after it. ■ stops a reply and keeps what was written.
+Sending while a reply is still writing puts the message in that chat's
+**Waiting** line above the box (✕ takes one out). Each goes out when the
+reply before it finishes, with the mode and pictures it had when you sent
+it. A waiting edit applies to the newest version of its prompt, so several
+queued edits stack. Stop doesn't clear the line.
 
 **Modes** (the pill in the box, per chat) are the files
 `chat2prompt/base_prompt_<name>.md`, read on every send: **scene** (Text to
