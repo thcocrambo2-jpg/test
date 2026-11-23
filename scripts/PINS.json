@@ -28,7 +28,7 @@
     "sha": "6fc90a3b1b653e935a0d175e260736de25b84df5"
   },
   "ComfyUI": {
-    "sha": "8ff6dc384ba5c410266b40e137799e049459d4f2",
+    "sha": "10cdd12609eb17e8a90f2a2dd811b1c82f6107e7",
     "url": "https://github.com/comfyanonymous/ComfyUI.git"
   },
   "ComfyUI-Frame-Interpolation": {

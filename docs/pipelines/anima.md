@@ -64,7 +64,7 @@ The other two files are fixed:
   `krea2` group too and a key with both tabs fetches it once.
 
 Anima is a 2B Cosmos-Predict2 DiT with an LLM adapter. ComfyUI supports it
-natively, the pinned v0.37.4 included, so there is no node pack and no
+natively, the pinned release included, so there is no node pack and no
 pin bump. It fits easily on an 8 GB card.
 
 ## The graph

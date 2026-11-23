@@ -319,7 +319,7 @@ same gate as the tab's others, so a licence without the tab gets a 403.
 
 The MiniMax nodes ship in ComfyUI **v0.34.0**, so the ComfyUI pin in
 `scripts/PINS.json` has to be that release or a later one. It is at
-v0.37.4 (`8ff6dc38`); the pin itself is described in
+v0.46.2 (`10cdd126`); the pin itself is described in
 [the mirror and the pins](../releasing/mirror-and-pins.md#the-comfyui-pin).
 Two things follow:
 

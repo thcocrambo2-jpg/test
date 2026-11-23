@@ -63,11 +63,18 @@ and is fed to `hf_hub_download(revision=…)`. A git repo records
 ### The ComfyUI pin
 
 ComfyUI itself is pinned the same way, under `ComfyUI` in `PINS.json`,
-at **v0.37.4** (`8ff6dc38`). Every tab runs on it, so it moves only when
+at **v0.46.2** (`10cdd126`). Every tab runs on it, so it moves only when
 a tab needs a newer release, and the floor is set by the tabs whose nodes
-are core ComfyUI: MiniMax needs v0.34.0 (`MINIMAX_COMFYUI_MIN`) and both
-Qwen 2.1 tabs v0.37.0 (`QWEN21_COMFYUI_MIN`), which is why the pin is
-where it is.
+are core ComfyUI: MiniMax needs v0.34.0 (`MINIMAX_COMFYUI_MIN`), both
+Qwen 2.1 tabs v0.37.0 (`QWEN21_COMFYUI_MIN`) and MOSS v0.42.0
+(`MOSS_COMFYUI_MIN`). It moved from v0.37.4 (`8ff6dc38`) for MOSS, to the
+newest release rather than the floor.
+
+On torch builds older than CUDA 13 (the Windows path's 2.8.0/cu128)
+ComfyUI switches comfy-kitchen's CUDA backend off at import, on v0.37.4
+and v0.46.2 alike, so int8 convrot weights run on its eager kernels: MOSS
+int8 measured 6.7 s/step on an RTX 5050 against 1.6 s/step on cu130.
+The Docker image's torch 2.11/cu130 keeps the fast path.
 
 A checkout that already exists (a pod volume, a Windows install, the
 Docker image's baked tree) is moved to a new pin on its next start by

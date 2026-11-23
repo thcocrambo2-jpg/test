@@ -35,7 +35,7 @@ text encoder, and spliced into the sequence as VAE latents.
 ## The graph
 
 Every node is core ComfyUI, and the two Qwen nodes first ship in
-**ComfyUI v0.37.0** — the reason the ComfyUI pin is at v0.37.4 (see
+**ComfyUI v0.37.0** — the floor of the ComfyUI pin, which is now at v0.46.2 (see
 [the mirror and the pins](../releasing/mirror-and-pins.md#the-comfyui-pin)).
 
 | Node | Values |
