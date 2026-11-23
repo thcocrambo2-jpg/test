@@ -142,6 +142,8 @@
     "fal/Qwen-Image-Edit-2511-Multiple-Angles-LoRA": "hf",
     "Isi99999/Frame_Interpolation_Models": "hf",
     "circlestone-labs/Anima": "hf",
+    "Comfy-Org/MOSS-Image": "hf",
+    "lodestones/MOSS-Image-SFT-8-steps-dmd": "hf",
     "https://github.com/comfyanonymous/ComfyUI.git": "git"
   }
 }

@@ -1,5 +1,5 @@
 """The model and LoRA catalogue — what each Krea, Z-Image, Qwen 2.1,
-Anima, MiniMax and Wan feature offers.
+Anima, MOSS, MiniMax and Wan feature offers.
 
 The licence server holds three collections: `loras` and `models` (one
 record per file, keyed by a readable id) and `feature_assets` (per

@@ -8,9 +8,9 @@ idempotent — re-running only downloads what is missing.
 Two kinds of weights, two sources of truth. The pipeline pieces every
 build needs — VAEs, text encoders, the Identity Edit LoRA, the Wan and
 MiniMax weights, Z-Image's encoder and upscale model, Qwen 2.1's encoder
-and VAE, Anima's encoder — are named in each pipeline's constants.py and
-fetched by their own groups. The Krea, Z-Image, Qwen 2.1 and Anima models
-and the LoRAs a customer picks from are named by the
+and VAE, Anima's encoder, MOSS's encoder, VAE and 8-step LoRA — are named
+in each pipeline's constants.py and fetched by their own groups. The
+Krea, Z-Image, Qwen 2.1, Anima and MOSS models and the LoRAs a customer picks from are named by the
 catalogue (ember.licensing.catalog, from the licence server) and fetched
 by the "catalog" group, which asks nothing of the pipeline constants at
 all.
@@ -65,6 +65,13 @@ from ember.pipelines.wan.constants import (
     WAN_RIFE_REPO,
 )
 from ember.pipelines.qwen21.constants import QWEN21_HF_FILES, QWEN21_HF_REPO
+from ember.pipelines.moss.constants import (
+    MOSS_DMD_LORA,
+    MOSS_DMD_REPO,
+    MOSS_DMD_REPO_FILE,
+    MOSS_HF_FILES,
+    MOSS_HF_REPO,
+)
 from ember.pipelines.qwen_edit.constants import (
     QWEN_EDIT_HF_FILES,
     QWEN_EDIT_HF_REPO,
@@ -519,7 +526,7 @@ def download_catalog() -> None:
 
     What to fetch is the union of the catalogue lists of the features that
     need this group and are on — the four Krea tabs, Z-Image, both Qwen 2.1
-    tabs, Anima, the two MiniMax tabs and Wan. MiniMax and Wan fall back to
+    tabs, Anima, MOSS, the two MiniMax tabs and Wan. MiniMax and Wan fall back to
     their built-in models when the catalogue lists none (catalog.py), so
     their checkpoints come through here either way. A tab that is off
     contributes nothing, so a V2-only licence never downloads a model only
@@ -806,6 +813,31 @@ def download_anima_models() -> None:
                       relpath, exc)
 
 
+def download_moss_models() -> None:
+    """Fetch MOSS-Image's text encoder, VAE and 8-step LoRA (~11 GB).
+
+    The diffusion model is a catalogue record, fetched by the "catalog"
+    group. Comfy-Org's repack keeps the encoder and VAE at the repo root
+    under ComfyUI's own folder names, so each lands at the same relative
+    path. The DMD LoRA is lodestones' lora.safetensors, renamed on the way
+    into loras/. Every item is independent: a missing encoder or VAE costs
+    the tab, a missing LoRA only Fast, and the next run retries it.
+    """
+    for relpath in MOSS_HF_FILES:
+        try:
+            fetch_hf_file_to(MOSS_HF_REPO, relpath, MODELS_DIR / relpath)
+        except Exception as exc:
+            log.error("MOSS file %s unavailable (%s) — the MOSS tab will "
+                      "refuse to run until a later run fetches it.",
+                      relpath, exc)
+    try:
+        fetch_hf_file_to(MOSS_DMD_REPO, MOSS_DMD_REPO_FILE,
+                         MODELS_DIR / "loras" / MOSS_DMD_LORA)
+    except Exception as exc:
+        log.error("MOSS 8-step LoRA unavailable (%s) — Fast will refuse to "
+                  "run until a later run fetches it.", exc)
+
+
 # Asset group → the function that fetches it. Iteration order is download
 # order, so the cheap shared pieces land before the tens of gigabytes.
 ASSET_GROUPS = {
@@ -819,6 +851,7 @@ ASSET_GROUPS = {
     "qwen21": download_qwen21_models,
     "qwen_edit": download_qwen_edit_models,
     "anima": download_anima_models,
+    "moss": download_moss_models,
     "wan": download_wan_models,
     "minimax": download_minimax_models,
 }

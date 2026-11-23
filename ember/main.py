@@ -47,6 +47,7 @@ from ember.pipelines.minimax.constants import (
     MINIMAX_NODE,
     MINIMAX_R2V_NODE,
 )
+from ember.pipelines.moss.constants import MOSS_COMFYUI_MIN, MOSS_MARKER_NODE
 from ember.pipelines.qwen21.constants import (
     QWEN21_COMFYUI_MIN,
     QWEN21_ENCODE_NODE,
@@ -216,6 +217,11 @@ def main() -> None:
         # checked for the same reason, and the release named is the one
         # whose reference method the 2511 graph needs.
         comfy.verify_core_node(QWEN_EDIT_ENCODE_NODE, QWEN_EDIT_COMFYUI_MIN)
+    if features.enabled(features.Key.MOSS_T2I):
+        # Core ComfyUI, newest of all: the model, its CLIPLoader type and
+        # this node all arrived in the release named, so a checkout the
+        # repin could not move has no MOSS at all.
+        comfy.verify_core_node(MOSS_MARKER_NODE, MOSS_COMFYUI_MIN)
     if (features.enabled(features.Key.KREA_EDIT)
             or features.enabled(features.Key.KREA_V2_EDIT)
             or features.enabled(features.Key.KREA_EDIT_V2)):

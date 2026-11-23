@@ -132,6 +132,7 @@ from ember.web.schema.tabs.minimax import (
     MINIMAX_R2V_SCHEMA,
     MINIMAX_T2V_SCHEMA,
 )
+from ember.web.schema.tabs.moss import MOSS_SCHEMA
 from ember.web.schema.tabs.qwen21 import QWEN21_REF_SCHEMA, QWEN21_T2I_SCHEMA
 from ember.web.schema.tabs.qwen_edit import QWEN_EDIT_SCHEMA
 from ember.web.schema.tabs.wan import WAN_SCHEMA
@@ -140,7 +141,7 @@ from ember.web.schema.tabs.zimage import ZIMAGE_SCHEMA
 Key = features.Key
 
 
-# ═════════════════════════════════════════════════ the fourteen tabs
+# ══════════════════════════════════════════════════ the fifteen tabs
 # Order is the order they appear in the navigation, which is ui.TAB_ORDER's
 # order with the two bespoke tabs (Gallery, Prompt Library) taken out —
 # those have no form and so no schema.
@@ -151,6 +152,7 @@ SCHEMAS = (
     ZIMAGE_SCHEMA,
     QWEN21_T2I_SCHEMA,
     ANIMA_SCHEMA,
+    MOSS_SCHEMA,
     KREA2_EDIT_SCHEMA,
     KREA2_V2_EDIT_SCHEMA,
     KREA2_EDIT_V2_SCHEMA,

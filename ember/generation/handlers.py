@@ -58,6 +58,9 @@ QWEN_EDIT_2511 = str(Key.QWEN_EDIT_2511)
 # And Anima. Its text encoder is fixed in pipelines/anima/constants.py; its
 # VAE is Krea's.
 ANIMA_T2I = str(Key.ANIMA_T2I)
+# And MOSS. Its text encoder, VAE and 8-step LoRA are fixed in
+# pipelines/moss/constants.py.
+MOSS_T2I = str(Key.MOSS_T2I)
 # The MiniMax tabs take LoRAs from the catalogue too, but no model: their
 # weights are fixed in pipelines/minimax/constants.py, so only the LoRA
 # list is read.
