@@ -252,6 +252,38 @@ class Sniper:
         ])
         return [i for r in resp["Reservations"] for i in r["Instances"]]
 
+    def shutting_down(self) -> list:
+        """Instances of this account in this region still shutting down (any
+        tag: they all hold vCPU quota until they are gone). Asked at most every
+        5 s, however many rounds want to know."""
+        with self.lock:
+            hit = getattr(self, "_sd", None)
+            if hit and time.time() - hit[0] < 5:
+                return hit[1]
+        try:
+            resp = self.ec2.describe_instances(Filters=[
+                {"Name": "instance-state-name", "Values": ["shutting-down"]}])
+            ids = [i["InstanceId"] for r in resp["Reservations"] for i in r["Instances"]]
+        except ClientError:
+            ids = []
+        with self.lock:
+            self._sd = (time.time(), ids)
+            if ids:
+                self._sd_seen = (time.time(), ids[0])
+        return ids
+
+    def quota_held_by(self):
+        """The instance whose quota hasn't been freed yet: one still shutting
+        down, or one that finished less than a minute ago (AWS releases its
+        vCPUs a little after it is gone). None when there is no such instance."""
+        ids = self.shutting_down()
+        if ids:
+            return ids[0]
+        seen = getattr(self, "_sd_seen", None)
+        if seen and time.time() - seen[0] < 60:
+            return seen[1]
+        return None
+
     def resolve_ami(self) -> tuple:
         ami = self.a.ami
         if not ami:
@@ -351,6 +383,11 @@ class Sniper:
                     f"in {i['Placement']['AvailabilityZone']} ({i['State']['Name']})")
             self.say("Stop or terminate it first. Not launching a second one.")
             return 1
+
+        leaving = self.shutting_down()
+        if leaving:
+            self.say(f"{', '.join(leaving)} still shutting down: sniping anyway. Until it is gone "
+                     "AWS counts it against the quota, so launches wait for that.")
 
         user_data = build_user_data(account_env(getattr(a, "account", None)))
         ami, root_device, ami_name = self.resolve_ami()
@@ -474,6 +511,11 @@ class Sniper:
                     continue
                 if self.wins and code in QUOTA_ERRORS:
                     continue        # another round already launched: quota full
+                if code in QUOTA_ERRORS:
+                    held = self.quota_held_by()
+                    if held:        # quota still held by an instance on its way out
+                        outcomes.append(f"{where}: quota held by {held} (shutting down)")
+                        continue
                 if code in ZONE_ERRORS:
                     self.say(f"{where}: {message_of(err)} (dropping this zone)")
                     with self.lock:
@@ -570,8 +612,8 @@ def main() -> int:
 
     if not 125 <= a.throughput <= 1000:
         ap.error("--throughput must be between 125 and 1000")
-    if a.interval < 5:
-        ap.error("--interval must be at least 5 seconds")
+    if a.interval < 2:
+        ap.error("--interval must be at least 2 seconds")
     a.types = list(dict.fromkeys(t.strip() for t in a.type.split(",") if t.strip()))
     if not a.types:
         ap.error("--type is empty")

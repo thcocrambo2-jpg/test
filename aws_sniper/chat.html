@@ -459,6 +459,7 @@ const chat = () => (C.cur && C.open[C.cur]) || null;
 const curMode = () => chat() ? chat().mode : C.draftMode;
 const modeLabel = k => k === "free" ? "Free chat" : String(k || "").replace(/-/g, " ").replace(/^./, c => c.toUpperCase());
 const isPrompt = m => m && m.prompt && !m.prompt.startsWith("SKIP:");
+const isVideo = m => !!(C.cfg && (C.cfg.video_modes || []).includes(m && m.mode));   // copied by hand, never queued as a picture
 
 // ── small helpers ────────────────────────────────────────────────────
 const host = document.createElement("div"); host.className = "toastHost"; $("cFloat").appendChild(host);
@@ -702,7 +703,7 @@ function asstTurn(c, m) {
         <button class="btn sm${target ? " primary" : ""}" data-edit="${m.id}" ${dis || (skip ? "disabled" : "")} title="Send only this prompt as context with your next message">✎ ${target ? "Editing this" : "Edit"}</button>
         <button class="btn ghost sm" data-copy="${m.id}" ${dis}>⧉ Copy</button>
         <button class="btn ghost sm" data-save="${m.id}" ${dis}>⤓ Save .txt</button>
-        <button class="btn ghost sm" data-queue="${m.id}" ${dis || (skip || m.queueState ? "disabled" : "")} title="Krea 2 V2 · Natural Raw 2 · batch 1, top of the queue (the ⤒ Auto pill at the top for instance and steps, ▭ under the message box for aspect)">⤒ Queue</button>
+        ${isVideo(m) ? "" : `<button class="btn ghost sm" data-queue="${m.id}" ${dis || (skip || m.queueState ? "disabled" : "")} title="Krea 2 V2 · Natural Raw 2 · batch 1, top of the queue (the ⤒ Auto pill at the top for instance and steps, ▭ under the message box for aspect)">⤒ Queue</button>`}
         <button class="btn ghost sm" data-regen="${m.id}" ${dis || (busy ? "disabled" : "")}>↻ Regenerate</button>
         <span class="grow"></span>
         ${live ? "" : `<button class="btn ghost sm" data-open="${m.id}">${m.open ? "Show less" : "Show all"}</button>`}
@@ -993,7 +994,7 @@ async function send() {
     if (i >= 0) c.messages[i] = msg; else c.messages.push(msg);
     totals(done.totals);
     if (msg.edit_of != null && msg.prompt && !msg.error) C.edit[cid] = msg.id;      // keep editing: the new version is the target
-    if (store.get("c.auto", true) && isPrompt(msg) && !msg.stopped && !msg.error) queueMsg(cid, msg, true);
+    if (store.get("c.auto", true) && isPrompt(msg) && !isVideo(msg) && !msg.stopped && !msg.error) queueMsg(cid, msg, true);
   } else {
     // Stopped or cut off: read back what the server saved (it saves once it notices).
     for (let n = 0; n < 12; n++) {

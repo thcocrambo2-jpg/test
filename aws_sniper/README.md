@@ -214,9 +214,18 @@ everything after it. ■ stops a reply and keeps what was written.
 `chat2prompt/base_prompt_<name>.md`, read on every send: **scene** (Text to
 prompt v1), **scene-explicit** (Text to prompt v2) and **recreate** (Image
 to prompt v4), each a word-for-word copy of the original with an "IN THIS
-CHAT" section added at the end; the originals are not touched. **Free
-chat** has no base prompt. An edit adds `chat2prompt/edit.md` to the mode
-(or `edit_<mode>.md`, if you make one). Add a mode by adding a file.
+CHAT" section added at the end; the originals are not touched.
+**video-explicit** is for MiniMax H3 (video with sound): the system prompt
+of Ember's MiniMax Auto Prompt (Hearmeman24's template), word for word, with
+start-picture, duration, explicit and safety rules added. It answers in H3's
+three fields (integrated_multimodal_description with numbered shots,
+overall_soundscape, non_diegetic_music) and has no negative prompt, which H3
+doesn't take. Picture 1 is the start frame; say the length and aspect in the
+message ("8 s, 9:16"), or it writes 5 s in the start picture's shape. Video prompts are copied into a video tab
+by hand: they have no ⤒ Queue and are never auto-sent. **Free chat** has no
+base prompt. An edit adds `chat2prompt/edit.md` to the mode (or
+`edit_<mode>.md`, as video-explicit has). Add a mode by adding a file; a
+name starting with `video` is never queued.
 
 The **Library** shows every picture on this PC: chat uploads plus the
 Image to prompt and Text to prompt ones (read only; only chat uploads can be

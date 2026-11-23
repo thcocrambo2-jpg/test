@@ -320,6 +320,12 @@ def modes() -> dict:
     return found
 
 
+def is_video(mode: str) -> bool:
+    """Video modes (base_prompt_video*.md) write image-to-video prompts: they
+    are copied into a video tab by hand, never queued as Krea 2 pictures."""
+    return str(mode or "").startswith("video")
+
+
 def _edit_template(mode: str) -> str:
     """edit_<mode>.md when the mode has one, else edit.md; without its description line."""
     for name in ("edit_%s.md" % mode, "edit.md"):
@@ -340,7 +346,8 @@ def config() -> dict:
     return {"model": dict(ip.MODELS[MODEL], key=MODEL), "modes": found,
             "default_mode": DEFAULT_MODE if DEFAULT_MODE in found else next(iter(found)),
             "prompt_dir": str(DATA), "totals": STORE.totals(), "chats": STORE.summary(),
-            "negative": neg, "max_images": MAX_IMAGES, "max_text": MAX_TEXT}
+            "negative": neg, "max_images": MAX_IMAGES, "max_text": MAX_TEXT,
+            "video_modes": [k for k in found if is_video(k)]}
 
 
 # ── one message -> one reply ─────────────────────────────────────────
@@ -576,6 +583,8 @@ def send_to_queue(origin: str, key: str, instance: str, body: dict) -> dict:
     m = STORE.message(cid, mid)
     if not m.get("prompt") or m["prompt"].startswith("SKIP:"):
         raise ValueError("That reply has no prompt to queue.")
+    if is_video(m.get("mode")):
+        raise ValueError("A video prompt can't be queued as a picture: copy it into a video tab.")
     want = str(body.get("aspect") or "").strip()
     if want:
         choices = ip._aspects(origin, key)

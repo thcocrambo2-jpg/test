@@ -154,15 +154,16 @@ def _account_id(account: str):
     return hit
 
 
-def _cached(key, seconds: float, fn):
+def _cached(key, seconds: float, fn, keep_none: bool = True):
     now = time.time()
     with _lock:
         hit = _cache.get(key)
         if hit and now - hit[0] < seconds:
             return hit[1]
     value = fn()
-    with _lock:
-        _cache[key] = (now, value)
+    if value is not None or keep_none:      # a failed lookup is retried next time
+        with _lock:
+            _cache[key] = (now, value)
     return value
 
 
@@ -223,8 +224,20 @@ def _spot_prices(region: str, account: str) -> dict:
 
 
 def _price_list(filters: dict) -> list:
-    """(attributes, unit, USD) for every on-demand price matching filters."""
-    pricing = _client("us-east-1", "pricing", _accounts()[0])
+    """(attributes, unit, USD) for every on-demand price matching filters.
+    Prices are public, so any account will do: the first one whose keys work
+    (a suspended account's keys fail and would blank every price)."""
+    err = None
+    for account in _accounts():
+        try:
+            return _price_list_with(account, filters)
+        except (ClientError, BotoCoreError) as exc:
+            err = exc
+    raise err
+
+
+def _price_list_with(account: str, filters: dict) -> list:
+    pricing = _client("us-east-1", "pricing", account)
     out = []
     pages = pricing.get_paginator("get_products").paginate(
         ServiceCode="AmazonEC2",
@@ -248,7 +261,7 @@ def _on_demand_price(region: str, itype: str):
         except (ClientError, BotoCoreError):
             return None
         return next((usd for _a, unit, usd in rows if unit == "Hrs" and usd > 0), None)
-    return _cached(("od", region, itype), 86400, fetch)
+    return _cached(("od", region, itype), 86400, fetch, keep_none=False)
 
 
 def _disk_rates(region: str):
@@ -267,7 +280,7 @@ def _disk_rates(region: str):
             elif unit == "IOPS-Mo":
                 rates["iops"] = usd
         return rates if "gb" in rates else None
-    return _cached(("disk", region), 86400, fetch)
+    return _cached(("disk", region), 86400, fetch, keep_none=False)
 
 
 def _disk_monthly(rates, size_gb: int, mibps: int, iops: int):
@@ -648,9 +661,10 @@ class Instances:
     def busy(self, account: str) -> list:
         """The account's instances that block a new snipe there: running in
         any region, or stopped by AWS (a persistent spot request brings
-        those back by itself)."""
+        those back by itself). A shutting-down one doesn't: it is on its way
+        out, and the snipe keeps trying until its quota is free."""
         return [r for r in self.rows if r["account"] == account and
-                (r["state"] in ("pending", "running", "stopping", "shutting-down")
+                (r["state"] in ("pending", "running", "stopping")
                  or r["stopped_by_aws"])]
 
 
@@ -690,7 +704,7 @@ class Snipe:
             key_name=r["key"], sg=r["sg"], region=r["region"], types=r["types"],
             type=",".join(r["types"]), zones=r["zones"], spot=r["market"] == "spot",
             ami="", disk=r["disk"], throughput=r["throughput"], iam_profile="",
-            name="ember-gpu", interval=5, minutes=0, dry_run=r["dry_run"],
+            name="ember-gpu", interval=2, minutes=0, dry_run=r["dry_run"],
             no_sound=not SOUND, account=r["account"])
         try:
             sn = core.Sniper(args, core.make_session(r["region"], PROFILE, r["account"]),
