@@ -12,7 +12,7 @@ eight tabs:
 
 | Generate | Edit |
 | --- | --- |
-| 🎨 Krea2, 🔶 Krea2 V2, 🌄 Qwen 2.1 | ✨ Krea2 Edit, 🔷 Krea2 V2 Edit, 💠 Krea2 Edit V2, 🧩 Qwen 2.1 Reference, 🪄 Qwen Edit 2511 |
+| 🎨 Krea2, 🔶 Krea2 V2, 🌄 Qwen 2.1, 🌿 MOSS | ✨ Krea2 Edit, 🔷 Krea2 V2 Edit, 💠 Krea2 Edit V2, 🧩 Qwen 2.1 Reference, 🪄 Qwen Edit 2511 |
 
 Not on ⚡ Ember Lite itself, which already has a start image, and not on
 🌸 Anima, whose drawings a photographic pass would undo.

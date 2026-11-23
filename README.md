@@ -12,7 +12,8 @@ Qwen 2.1 (Qwen Image 2.1 text-to-image) and 🧩 Qwen 2.1 Reference (one new
 image kept consistent with up to 10 reference images), 🪄 Qwen Edit 2511
 (instruction editing on Qwen-Image-Edit-2511 with up to 3 images, Lightning
 or normal, on no plan), 🌸 Anima (anime
-text-to-image, on no plan), 🎬 Wan Video (Wan 2.2 image-to-video), and 🎥
+text-to-image, on no plan), 🌿 MOSS (MOSS-Image text-to-image, Normal or
+an 8-step Fast, on no plan), 🎬 Wan Video (Wan 2.2 image-to-video), and 🎥
 MiniMax I2V, 🎞️ MiniMax T2V and 🖼️ MiniMax R2V
 (MiniMax H3 video with sound; R2V builds the clip from up to 9 reference
 pictures, on no plan). Alongside them are a gallery, a job queue

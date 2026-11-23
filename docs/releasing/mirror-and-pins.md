@@ -204,6 +204,14 @@ upload would be distribution. Leave both out of the mirror until a
 commercial licence says otherwise — see
 [anima.md](../pipelines/anima.md#licence).
 
+MOSS can be mirrored whenever a mirror run is wanted: everything it
+ships is Apache 2.0. Its encoder and VAE come from `Comfy-Org/MOSS-Image`
+(`2929efe3`) and its 8-step LoRA from
+`lodestones/MOSS-Image-SFT-8-steps-dmd` (`f95df83b`), both pinned and
+fetched upstream with no manifest item yet; its diffusion model is a
+catalogue record from the Comfy-Org repo. See
+[moss.md](../pipelines/moss.md#weights).
+
 Krea2 Edit V2's two LoRAs are the same case. They come from
 `conradlocke/krea2-identity-edit`, the repo the mirrored v1.2 LoRA comes
 from, pinned at `f33b2629` (the revision that added V2; v1.2's bytes are

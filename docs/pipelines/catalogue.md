@@ -4,7 +4,7 @@ Which diffusion models and style LoRAs each tab offers. For someone
 running the app who wants to add or remove one, and for someone changing
 the code who needs to know where those lists come from.
 
-The Krea, Ember Lite, Qwen 2.1 and Anima diffusion models and the style
+The Krea, Ember Lite, Qwen 2.1, Anima and MOSS diffusion models and the style
 LoRAs are **not compiled into the binary**. They live in the licence-server database, and the pod reads them
 at startup. The database side — the collections, the admin CLI, the
 validation rules — is documented in
@@ -24,10 +24,10 @@ validation rules — is documented in
   that tab offers. The first model is the tab's default. An id may appear
   in any number of features.
 
-Fourteen features have a `feature_assets` entry: `krea_t2i`, `krea_edit`,
+Fifteen features have a `feature_assets` entry: `krea_t2i`, `krea_edit`,
 `krea_v2_t2i`, `krea_v2_edit`, `krea_edit_v2`, `zimage_t2i`,
 `zimage_refine`, `qwen21_t2i`, `qwen21_edit`, `qwen_edit_2511`,
-`anima_t2i`, `minimax_i2v`, `minimax_t2v` and `minimax_r2v`.
+`anima_t2i`, `moss_t2i`, `minimax_i2v`, `minimax_t2v` and `minimax_r2v`.
 
 `zimage_t2i` lists one model, `z-image-turbo-bf16`, and LoRAs trained
 for Z-Image; the Krea LoRAs do not load on it, so none are shared.
@@ -51,6 +51,11 @@ records.
 merge of Anima Base and the Anima Turbo LoRA, 8 steps at CFG 1), and no
 LoRAs yet. Its record is never mirrored: see
 [anima.md](anima.md#licence).
+
+`moss_t2i` lists one model, `moss-image-sft-int8` (Comfy-Org's int8
+repack of MOSS-Image SFT, 50 steps at CFG 3), and no LoRAs yet. Its
+8-step Fast LoRA is a pipeline file, not a catalogue record. See
+[moss.md](moss.md).
 
 ## Tabs with built-in models
 
@@ -196,6 +201,9 @@ text-encoder weights). See [qwen21.md](qwen21.md#the-lora-stack).
 🪄 Qwen Edit 2511 has the left column's stack: eight blank slots,
 model-only, chained after the Lightning LoRA when one is on. See
 [qwen-edit-2511.md](qwen-edit-2511.md#the-lora-stack).
+
+🌿 MOSS has the same stack, chained after the 8-step LoRA when Fast is
+on. See [moss.md](moss.md#the-graph).
 
 The V2 tabs' rows are described under
 [krea2-v2.md](krea2-v2.md#lora-stack); the MiniMax chain under

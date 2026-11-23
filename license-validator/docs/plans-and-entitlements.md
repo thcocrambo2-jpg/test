@@ -31,7 +31,7 @@ Three tiers are public:
 
 Three more in `DEFAULT_PLANS` carry `is_public: false` and never reach
 the pricing page: `admin` (every tab the binary can build except
-`zimage_t2i`, `zimage_refine`, `qwen21_t2i`, `qwen21_edit`, `qwen_edit_2511`, `anima_t2i` and `minimax_r2v`, and where a new tab usually lands
+`zimage_t2i`, `zimage_refine`, `qwen21_t2i`, `qwen21_edit`, `qwen_edit_2511`, `anima_t2i`, `moss_t2i` and `minimax_r2v`, and where a new tab usually lands
 first), `admin-minimal`,
 and `test-krea1-only`. A fourth
 internal tier, `customer-admin`, exists only as a hand-made document in
@@ -129,6 +129,7 @@ keep a plain name. The registry, in `sort_order`:
 | `zimage_refine` | Ember Lite refine (not a tab: a section on the image tabs) | generation |
 | `qwen21_t2i` | Qwen 2.1 | generation |
 | `anima_t2i` | Anima | generation |
+| `moss_t2i` | MOSS | generation |
 | `gallery` | Gallery | tools |
 | `krea_edit` | Krea2 Edit | editing |
 | `community_prompts` | Prompt Library | tools |
@@ -141,7 +142,7 @@ keep a plain name. The registry, in `sort_order`:
 | `minimax_t2v` | MiniMax Text to Video | video |
 | `minimax_r2v` | MiniMax Reference to Video | video |
 
-`zimage_t2i`, `zimage_refine`, `qwen21_t2i`, `qwen21_edit`, `anima_t2i`, `krea_edit_v2`, `qwen_edit_2511` and `minimax_r2v` are on no plan yet, not even `admin`,
+`zimage_t2i`, `zimage_refine`, `qwen21_t2i`, `qwen21_edit`, `anima_t2i`, `moss_t2i`, `krea_edit_v2`, `qwen_edit_2511` and `minimax_r2v` are on no plan yet, not even `admin`,
 and their rows are `enabled: false`. A key gets one through
 `features_extra`:
 

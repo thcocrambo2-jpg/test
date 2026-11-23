@@ -162,6 +162,20 @@ official builds (`anima-turbo-v1.1`, `anima-aesthetic-v1.1`, from
 `circlestone-labs/Anima`) can join the list as further models the same
 way.
 
+## MOSS's list
+
+`moss_t2i` lists one model and no LoRAs yet. Its model record is
+`moss-image-sft-int8` — MOSS-Image SFT in Comfy-Org's int8 convrot
+repack, `moss_image_sft_int8_convrot.safetensors`, from
+`Comfy-Org/MOSS-Image` (`diffusion_models/`), variant `raw`, 50 steps,
+CFG 3, no turbo LoRA, no trigger, and a default negative (`worst quality,
+bad anatomy, watermark, jpeg artifact`). The tab's 8-step Fast LoRA is a
+pipeline file, not a record.
+
+Everything MOSS ships is Apache 2.0, so its `mirror` can be filled by a
+mirror run. The repo's bf16 and Base models can join the list as further
+models the same way.
+
 ## What a pod reads
 
 `POST /v1/catalog` is what a pod reads, once, at startup — after its seat is
@@ -270,12 +284,19 @@ them is **an id**, never a file name or a label:
   steps: 8, cfg: 1.0, sampler: "euler", scheduler: "simple",
   seed: 42, randomize: true, batch_count: 1,
   loras: [[false, null, 1.0], ...] }
+
+// moss_t2i — anima_t2i's shape plus speed and the refine block
+{ output_size: "1:1 · 1024×1024", speed: "Normal (steps and CFG below)",
+  model: "moss-image-sft-int8", steps: 50, cfg: 3.0, sampler: "euler",
+  scheduler: "simple", seed: 42, randomize: true, batch_count: 1,
+  refine: { on: false, denoise: 0.25 },
+  loras: [[false, null, 1.0], ...] }
 ```
 
 A preset can be saved for the tabs in `PRESET_TABS` in
 [`../src/app.js`](../src/app.js): `krea_t2i`, `krea_v2_t2i`,
-`minimax_i2v`, `zimage_t2i`, `qwen21_edit`, `qwen21_t2i` and
-`anima_t2i`.
+`minimax_i2v`, `zimage_t2i`, `qwen21_edit`, `qwen21_t2i`, `anima_t2i`,
+`qwen_edit_2511`, `minimax_r2v` and `moss_t2i`.
 
 Every LoRA row is a triple `[on, lora id | null, weight]`. An empty slot is
 `null`; the form calls it "None", but that word never reaches storage. The

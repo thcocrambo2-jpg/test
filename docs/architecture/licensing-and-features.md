@@ -33,6 +33,7 @@ asset groups it needs.
 | `zimage_refine` | not a tab: the [⚡ Ember Lite refine](../features/ember-lite-refine.md) on the image tabs — on no plan yet | shared with `zimage_t2i` |
 | `qwen21_t2i` | 🌄 Qwen 2.1 — on no plan yet | ~17.3 GB, shared with `qwen21_edit` |
 | `anima_t2i` | 🌸 Anima — on no plan (non-commercial licence) | ~5.2 GB, plus the Qwen image VAE Krea uses |
+| `moss_t2i` | 🌿 MOSS — on no plan yet | ~16.6 GB |
 | `gallery` | 🖼️ Gallery | none |
 | `krea_edit` | ✨ Krea2 Edit | ~1.9 GB + base |
 | `krea_v2_edit` | 🔷 Krea2 V2 Edit | ~1.9 GB + V2 |
@@ -70,7 +71,7 @@ tabs through `Field.feature`, and a licence without it never sees the
 section — see [Ember Lite refine](../features/ember-lite-refine.md#licensing).
 
 A tab can also be on no plan at all, which is where `zimage_t2i`, `zimage_refine`,
-`qwen21_t2i`, `qwen21_edit`, `qwen_edit_2511`, `anima_t2i` and `minimax_r2v` are. A key gets one through
+`qwen21_t2i`, `qwen21_edit`, `qwen_edit_2511`, `anima_t2i`, `moss_t2i` and `minimax_r2v` are. A key gets one through
 `features_extra` (`npm run issue-key -- --key <key> --features-extra
 zimage_t2i,qwen21_t2i,qwen21_edit --update`), and its row in the `features` collection is `enabled: false`, so neither `/v1/plans` nor the Telegram
 bot mentions it. That flag never touches an entitlement, so the key still
