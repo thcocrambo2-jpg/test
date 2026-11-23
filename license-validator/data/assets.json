@@ -1155,6 +1155,24 @@
       "trigger": "",
       "arch": "5b",
       "enabled": true
+    },
+    {
+      "id": "moss-image-sft-int8",
+      "name": "MOSS-Image SFT int8",
+      "file": "moss_image_sft_int8_convrot.safetensors",
+      "source": {
+        "kind": "hf",
+        "repo": "Comfy-Org/MOSS-Image",
+        "path": "diffusion_models/moss_image_sft_int8_convrot.safetensors"
+      },
+      "mirror": null,
+      "variant": "raw",
+      "steps": 50,
+      "cfg": 3.0,
+      "turbo_lora": null,
+      "trigger": "",
+      "negative": "worst quality, bad anatomy, watermark, jpeg artifact",
+      "enabled": true
     }
   ],
   "features": {
@@ -1379,6 +1397,12 @@
     "anima_t2i": {
       "models": [
         "bas-nsfw-anima-v1-0"
+      ],
+      "loras": []
+    },
+    "moss_t2i": {
+      "models": [
+        "moss-image-sft-int8"
       ],
       "loras": []
     },

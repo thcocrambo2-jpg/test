@@ -54,8 +54,10 @@
 //                 `turbo_strength`, plus `ref_size` (a Reference size
 //                 label). Never the pictures. Eight LoRA slots. No preset
 //                 is seeded for it.
+//   moss_t2i      anima_t2i's shape plus `speed` (a Speed label). No
+//                 preset is seeded for it.
 //
-// All nine store `loras` the same way: [on, lora id, weight] triples, with
+// All ten store `loras` the same way: [on, lora id, weight] triples, with
 // `null` for an empty slot (the form shows it as "None"; that word never
 // reaches storage).
 //
@@ -75,7 +77,7 @@ const dryRun = process.argv.includes("--dry-run");
 
 const PRESET_TABS = [
   "krea_t2i", "krea_v2_t2i", "minimax_i2v", "zimage_t2i", "qwen21_edit",
-  "qwen21_t2i", "anima_t2i", "qwen_edit_2511", "minimax_r2v",
+  "qwen21_t2i", "anima_t2i", "qwen_edit_2511", "minimax_r2v", "moss_t2i",
 ];
 
 // Model and LoRA values are catalogue ids (data/assets.json). Edit here and

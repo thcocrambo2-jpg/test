@@ -149,6 +149,18 @@ export const FEATURES = [
     sort_order: 27,
     enabled: false,
   },
+  // On no plan yet, so off here like Z-Image: see that entry. MOSS-Image is
+  // Apache 2.0, so selling it later is the usual plan edit plus this flag.
+  {
+    key: "moss_t2i",
+    name: "MOSS",
+    tab_label: "🌿 MOSS",
+    description: "Photos and illustrations from a long, detailed prompt",
+    category: "generation",
+    // 28, after Anima (27), with the other text-to-image tabs.
+    sort_order: 28,
+    enabled: false,
+  },
   {
     key: "gallery",
     name: "Gallery",
