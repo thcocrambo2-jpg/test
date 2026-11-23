@@ -173,6 +173,8 @@ def handler_modules() -> tuple:
     from ember.pipelines.krea2_v2_edit import workflow as krea2_v2_edit
     from ember.pipelines.minimax import handler as minimax_handler
     from ember.pipelines.minimax import workflow as minimax
+    from ember.pipelines.moss import handler as moss_handler
+    from ember.pipelines.moss import workflow as moss
     from ember.pipelines.qwen21 import handler as qwen21_handler
     from ember.pipelines.qwen21 import workflow as qwen21
     from ember.pipelines.qwen_edit import handler as qwen_edit_handler
@@ -186,8 +188,9 @@ def handler_modules() -> tuple:
             krea2_handler, krea2_v2_handler, krea2_v2_edit_handler,
             wan_handler, minimax_handler, zimage_handler, qwen21_handler,
             anima_handler, krea2_edit_v2_handler, qwen_edit_handler,
+            moss_handler,
             krea2, krea2_v2, krea2_v2_edit, wan, minimax, zimage, qwen21,
-            anima, krea2_edit_v2, qwen_edit, zimage_refine)
+            anima, krea2_edit_v2, qwen_edit, moss, zimage_refine)
 
 
 class Namespace:
@@ -303,6 +306,8 @@ def patch(users, capture) -> None:
     _patch_all(users, "anima_missing", lambda *a, **k: [])
     # Qwen Edit 2511's too; it takes the Lightning file it is asked about.
     _patch_all(users, "qwen_edit_missing", lambda *a, **k: [])
+    # MOSS's too; it takes whether Fast's LoRA is wanted.
+    _patch_all(users, "moss_missing", lambda *a, **k: [])
     _patch_all(users, "node_registered", lambda *a, **k: True)
 
     _patch_all(users, "comfy_ensure_alive", lambda *a, **k: (True, ""))
@@ -362,6 +367,7 @@ def cases(module) -> dict:
     qwen21_t2i_model = module.default_model(module.QWEN21_T2I)
     anima_model = module.default_model(module.ANIMA_T2I)
     qwen_edit_model = module.default_model(module.QWEN_EDIT_2511)
+    moss_model = module.default_model(module.MOSS_T2I)
     image = _image()
 
     # Krea2: eight blank slots. The first three name LoRAs — two on, one
@@ -423,6 +429,12 @@ def cases(module) -> dict:
     # Multiple Angles LoRA. The first row ticks it, the third ticks a Krea
     # LoRA this tab does not offer, so the snapshots show one chained after
     # Lightning and the other skipped.
+    # MOSS: eight blank slots over its own empty list, a Krea LoRA ticked
+    # on the fourth, so it is skipped and the chain holds only Fast's LoRA.
+    moss_triples = tuple(
+        v for i in range(module.MAX_LORA_SLOTS)
+        for v in (*({3: (True, "hmbody-d-e10")}.get(i, (False, "None"))),
+                  round(0.7 + i / 100, 2)))
     qwen_edit_triples = tuple(
         v for i in range(module.MAX_LORA_SLOTS)
         for v in (*({0: (True, "qwen-edit-2511-multiple-angles"),
@@ -566,6 +578,28 @@ def cases(module) -> dict:
             "16:9 · 1344×768", anima_model, 30, 4.5, "er_sde", "beta",
             9753108, False, 1, False, "",
         ) + anima_triples,
+
+        # MOSS at Normal, the model card's 50 steps and CFG 3 from the
+        # record, with the record's negative encoded, at 1:1. Saves a
+        # preset, so its blob (_moss_settings) is checked against
+        # settings().
+        "generate_moss": (
+            "a candid phone photo of a woman reading on a sunlit balcony, "
+            "potted plants, laundry lines, soft afternoon light",
+            "worst quality, bad anatomy, watermark, jpeg artifact",
+            "1:1 · 1024×1024", "Normal (steps and CFG below)", moss_model,
+            50, 3.0, "euler", "simple", 7531902, False, 2, True, "Golden",
+        ) + REFINE_OFF + moss_triples,
+
+        # Fast: the DMD LoRA first in the chain, 8 steps at CFG 1 whatever
+        # the sliders hold, so the negative is the positive's
+        # ConditioningZeroOut even though it has text. 9:16 is 768×1360.
+        "generate_moss_fast": (
+            "a street food stall at night, steam, neon reflections",
+            "blurry, watermark", "9:16 · 768×1360", "⚡ Fast · 8 steps",
+            moss_model, 50, 3.0, "euler", "beta", 8642013, False, 1, False,
+            "",
+        ) + REFINE_OFF + moss_triples,
 
         "generate_wan_video": (
             image, "the waves roll in", "static, blurry",
@@ -781,6 +815,7 @@ CASE_HANDLERS = {"generate_zimage_upscale": "generate_zimage",
                  "generate_qwen_edit_lightning8": "generate_qwen_edit",
                  "generate_qwen_edit_normal": "generate_qwen_edit",
                  "generate_anima_negative": "generate_anima",
+                 "generate_moss_fast": "generate_moss",
                  "generate_edit_v2_both": "generate_edit_v2",
                  "generate_wan_video_smooth": "generate_wan_video",
                  "generate_wan_video_5b_smooth": "generate_wan_video",
@@ -803,10 +838,10 @@ def check_settings(name, args, settings) -> None:
     inline inside generate_v2, so the only way to see it is to run the
     handler — which is what happens here. Every case that writes a blob
     ticks the save-preset box so it is captured: the Krea 2 and V2 cases,
-    the two MiniMax cases and the first MiniMax R2V, Z-Image, Qwen 2.1 Reference, Qwen 2.1, Anima and Qwen Edit 2511
-    cases, so their blobs (_krea_settings, _minimax_settings,
+    the two MiniMax cases and the first MiniMax R2V, Z-Image, Qwen 2.1 Reference, Qwen 2.1, Anima, Qwen Edit 2511
+    and MOSS cases, so their blobs (_krea_settings, _minimax_settings,
     _zimage_settings, _qwen21_settings, _qwen21_t2i_settings,
-    _anima_settings, _qwen_edit_settings) are checked too.
+    _anima_settings, _qwen_edit_settings, _moss_settings) are checked too.
 
     The inversion in the middle is worth reading twice. `Field.name` is
     the handler parameter name and `fields` is submission order, so

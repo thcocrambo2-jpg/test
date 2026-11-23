@@ -5719,6 +5719,530 @@
         }
       ]
     },
+    "moss_t2i": {
+      "tab_id": "moss",
+      "controls": [
+        {
+          "type": "Textbox",
+          "label": "Prompt",
+          "value": "A candid photo of a woman reading on a sunlit balcony in Mumbai, potted plants and laundry lines behind her, soft afternoon light, shot on a phone, natural skin texture",
+          "lines": 6,
+          "placeholder": null,
+          "interactive": null,
+          "visible": true,
+          "elem_id": null
+        },
+        {
+          "type": "Textbox",
+          "label": "Negative prompt",
+          "value": "worst quality, bad anatomy, watermark, jpeg artifact",
+          "lines": 3,
+          "placeholder": null,
+          "interactive": null,
+          "visible": true,
+          "elem_id": null
+        },
+        {
+          "type": "Dropdown",
+          "label": "Output size",
+          "value": "1:1 \u00b7 1024\u00d71024",
+          "interactive": null,
+          "visible": true,
+          "multiselect": null,
+          "elem_id": null,
+          "choices": [
+            [
+              "1:1 \u00b7 1024\u00d71024",
+              "1:1 \u00b7 1024\u00d71024"
+            ],
+            [
+              "4:5 \u00b7 896\u00d71152",
+              "4:5 \u00b7 896\u00d71152"
+            ],
+            [
+              "5:4 \u00b7 1152\u00d7896",
+              "5:4 \u00b7 1152\u00d7896"
+            ],
+            [
+              "2:3 \u00b7 832\u00d71248",
+              "2:3 \u00b7 832\u00d71248"
+            ],
+            [
+              "3:2 \u00b7 1248\u00d7832",
+              "3:2 \u00b7 1248\u00d7832"
+            ],
+            [
+              "9:16 \u00b7 768\u00d71360",
+              "9:16 \u00b7 768\u00d71360"
+            ],
+            [
+              "16:9 \u00b7 1360\u00d7768",
+              "16:9 \u00b7 1360\u00d7768"
+            ],
+            [
+              "1:1 \u00b7 1440\u00d71440 (2 MP)",
+              "1:1 \u00b7 1440\u00d71440 (2 MP)"
+            ]
+          ]
+        },
+        {
+          "type": "Dropdown",
+          "label": "Speed",
+          "value": "Normal (steps and CFG below)",
+          "interactive": null,
+          "visible": true,
+          "multiselect": null,
+          "elem_id": null,
+          "choices": [
+            [
+              "Normal (steps and CFG below)",
+              "Normal (steps and CFG below)"
+            ],
+            [
+              "\u26a1 Fast \u00b7 8 steps",
+              "\u26a1 Fast \u00b7 8 steps"
+            ]
+          ]
+        },
+        {
+          "type": "Dropdown",
+          "label": "Model",
+          "value": "moss-image-sft-int8",
+          "interactive": null,
+          "visible": true,
+          "multiselect": null,
+          "elem_id": null,
+          "choices": [
+            [
+              "moss-image-sft-int8",
+              "moss-image-sft-int8"
+            ]
+          ]
+        },
+        {
+          "type": "Slider",
+          "label": "Steps",
+          "value": 50,
+          "minimum": 1,
+          "maximum": 80,
+          "step": 1,
+          "interactive": null,
+          "visible": true,
+          "elem_id": null
+        },
+        {
+          "type": "Slider",
+          "label": "CFG",
+          "value": 3.0,
+          "minimum": 1.0,
+          "maximum": 8.0,
+          "step": 0.1,
+          "interactive": null,
+          "visible": true,
+          "elem_id": null
+        },
+        {
+          "type": "Dropdown",
+          "label": "Sampler",
+          "value": "euler",
+          "interactive": null,
+          "visible": true,
+          "multiselect": null,
+          "elem_id": null,
+          "choices": [
+            [
+              "euler",
+              "euler"
+            ],
+            [
+              "euler_ancestral",
+              "euler_ancestral"
+            ],
+            [
+              "res_multistep",
+              "res_multistep"
+            ],
+            [
+              "er_sde",
+              "er_sde"
+            ]
+          ]
+        },
+        {
+          "type": "Dropdown",
+          "label": "Scheduler",
+          "value": "simple",
+          "interactive": null,
+          "visible": true,
+          "multiselect": null,
+          "elem_id": null,
+          "choices": [
+            [
+              "simple",
+              "simple"
+            ],
+            [
+              "beta",
+              "beta"
+            ],
+            [
+              "normal",
+              "normal"
+            ]
+          ]
+        },
+        {
+          "type": "Number",
+          "label": "Seed",
+          "value": 42,
+          "minimum": 0,
+          "maximum": null,
+          "step": 1,
+          "placeholder": null,
+          "interactive": null,
+          "visible": true,
+          "elem_id": null
+        },
+        {
+          "type": "Checkbox",
+          "label": "\ud83c\udfb2 Random seed",
+          "value": true,
+          "interactive": null,
+          "visible": true,
+          "elem_id": null
+        },
+        {
+          "type": "Slider",
+          "label": "Batch count",
+          "value": 1,
+          "minimum": 1,
+          "maximum": 20,
+          "step": 1,
+          "interactive": null,
+          "visible": true,
+          "elem_id": null
+        },
+        {
+          "type": "Checkbox",
+          "label": "\ud83d\udcbe Save these settings as a preset",
+          "value": false,
+          "interactive": null,
+          "visible": true,
+          "elem_id": null
+        },
+        {
+          "type": "Textbox",
+          "label": "Preset name",
+          "value": null,
+          "lines": 1,
+          "placeholder": null,
+          "interactive": null,
+          "visible": true,
+          "elem_id": null
+        },
+        {
+          "type": "Checkbox",
+          "label": "Refine with \u26a1 Ember Lite",
+          "value": false,
+          "interactive": null,
+          "visible": true,
+          "elem_id": null
+        },
+        {
+          "type": "Slider",
+          "label": "Refine denoise",
+          "value": 0.25,
+          "minimum": 0.05,
+          "maximum": 1.0,
+          "step": 0.01,
+          "interactive": null,
+          "visible": true,
+          "elem_id": null
+        },
+        {
+          "type": "Textbox",
+          "label": "Refine prompt (optional)",
+          "value": null,
+          "lines": 3,
+          "placeholder": null,
+          "interactive": null,
+          "visible": true,
+          "elem_id": null
+        },
+        {
+          "type": "Checkbox",
+          "label": "On",
+          "value": false,
+          "interactive": null,
+          "visible": true,
+          "elem_id": null
+        },
+        {
+          "type": "Dropdown",
+          "label": "LoRA 1",
+          "value": "None",
+          "interactive": null,
+          "visible": true,
+          "multiselect": null,
+          "elem_id": null,
+          "choices": [
+            [
+              "None",
+              "None"
+            ]
+          ]
+        },
+        {
+          "type": "Slider",
+          "label": "Strength",
+          "value": 1.0,
+          "minimum": 0.0,
+          "maximum": 2.0,
+          "step": 0.01,
+          "interactive": null,
+          "visible": true,
+          "elem_id": null
+        },
+        {
+          "type": "Checkbox",
+          "label": "On",
+          "value": false,
+          "interactive": null,
+          "visible": true,
+          "elem_id": null
+        },
+        {
+          "type": "Dropdown",
+          "label": "LoRA 2",
+          "value": "None",
+          "interactive": null,
+          "visible": true,
+          "multiselect": null,
+          "elem_id": null,
+          "choices": [
+            [
+              "None",
+              "None"
+            ]
+          ]
+        },
+        {
+          "type": "Slider",
+          "label": "Strength",
+          "value": 1.0,
+          "minimum": 0.0,
+          "maximum": 2.0,
+          "step": 0.01,
+          "interactive": null,
+          "visible": true,
+          "elem_id": null
+        },
+        {
+          "type": "Checkbox",
+          "label": "On",
+          "value": false,
+          "interactive": null,
+          "visible": true,
+          "elem_id": null
+        },
+        {
+          "type": "Dropdown",
+          "label": "LoRA 3",
+          "value": "None",
+          "interactive": null,
+          "visible": true,
+          "multiselect": null,
+          "elem_id": null,
+          "choices": [
+            [
+              "None",
+              "None"
+            ]
+          ]
+        },
+        {
+          "type": "Slider",
+          "label": "Strength",
+          "value": 1.0,
+          "minimum": 0.0,
+          "maximum": 2.0,
+          "step": 0.01,
+          "interactive": null,
+          "visible": true,
+          "elem_id": null
+        },
+        {
+          "type": "Checkbox",
+          "label": "On",
+          "value": false,
+          "interactive": null,
+          "visible": true,
+          "elem_id": null
+        },
+        {
+          "type": "Dropdown",
+          "label": "LoRA 4",
+          "value": "None",
+          "interactive": null,
+          "visible": true,
+          "multiselect": null,
+          "elem_id": null,
+          "choices": [
+            [
+              "None",
+              "None"
+            ]
+          ]
+        },
+        {
+          "type": "Slider",
+          "label": "Strength",
+          "value": 1.0,
+          "minimum": 0.0,
+          "maximum": 2.0,
+          "step": 0.01,
+          "interactive": null,
+          "visible": true,
+          "elem_id": null
+        },
+        {
+          "type": "Checkbox",
+          "label": "On",
+          "value": false,
+          "interactive": null,
+          "visible": true,
+          "elem_id": null
+        },
+        {
+          "type": "Dropdown",
+          "label": "LoRA 5",
+          "value": "None",
+          "interactive": null,
+          "visible": true,
+          "multiselect": null,
+          "elem_id": null,
+          "choices": [
+            [
+              "None",
+              "None"
+            ]
+          ]
+        },
+        {
+          "type": "Slider",
+          "label": "Strength",
+          "value": 1.0,
+          "minimum": 0.0,
+          "maximum": 2.0,
+          "step": 0.01,
+          "interactive": null,
+          "visible": true,
+          "elem_id": null
+        },
+        {
+          "type": "Checkbox",
+          "label": "On",
+          "value": false,
+          "interactive": null,
+          "visible": true,
+          "elem_id": null
+        },
+        {
+          "type": "Dropdown",
+          "label": "LoRA 6",
+          "value": "None",
+          "interactive": null,
+          "visible": true,
+          "multiselect": null,
+          "elem_id": null,
+          "choices": [
+            [
+              "None",
+              "None"
+            ]
+          ]
+        },
+        {
+          "type": "Slider",
+          "label": "Strength",
+          "value": 1.0,
+          "minimum": 0.0,
+          "maximum": 2.0,
+          "step": 0.01,
+          "interactive": null,
+          "visible": true,
+          "elem_id": null
+        },
+        {
+          "type": "Checkbox",
+          "label": "On",
+          "value": false,
+          "interactive": null,
+          "visible": true,
+          "elem_id": null
+        },
+        {
+          "type": "Dropdown",
+          "label": "LoRA 7",
+          "value": "None",
+          "interactive": null,
+          "visible": true,
+          "multiselect": null,
+          "elem_id": null,
+          "choices": [
+            [
+              "None",
+              "None"
+            ]
+          ]
+        },
+        {
+          "type": "Slider",
+          "label": "Strength",
+          "value": 1.0,
+          "minimum": 0.0,
+          "maximum": 2.0,
+          "step": 0.01,
+          "interactive": null,
+          "visible": true,
+          "elem_id": null
+        },
+        {
+          "type": "Checkbox",
+          "label": "On",
+          "value": false,
+          "interactive": null,
+          "visible": true,
+          "elem_id": null
+        },
+        {
+          "type": "Dropdown",
+          "label": "LoRA 8",
+          "value": "None",
+          "interactive": null,
+          "visible": true,
+          "multiselect": null,
+          "elem_id": null,
+          "choices": [
+            [
+              "None",
+              "None"
+            ]
+          ]
+        },
+        {
+          "type": "Slider",
+          "label": "Strength",
+          "value": 1.0,
+          "minimum": 0.0,
+          "maximum": 2.0,
+          "step": 0.01,
+          "interactive": null,
+          "visible": true,
+          "elem_id": null
+        }
+      ]
+    },
     "krea_edit": {
       "tab_id": "edit",
       "controls": [
@@ -19430,6 +19954,29 @@
         "batch_count",
         "save_preset",
         "preset_name"
+      ],
+      "varargs": "lora_slots",
+      "keyword_only": []
+    },
+    "generate_moss": {
+      "positional": [
+        "prompt",
+        "negative",
+        "output_size",
+        "speed",
+        "model",
+        "steps",
+        "cfg",
+        "sampler",
+        "scheduler",
+        "seed",
+        "randomize",
+        "batch_count",
+        "save_preset",
+        "preset_name",
+        "refine",
+        "refine_denoise",
+        "refine_prompt"
       ],
       "varargs": "lora_slots",
       "keyword_only": []

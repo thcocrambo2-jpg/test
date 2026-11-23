@@ -121,6 +121,7 @@ SOURCES = [
     "ember.pipelines.qwen21.constants",
     "ember.pipelines.anima.constants",
     "ember.pipelines.qwen_edit.constants",
+    "ember.pipelines.moss.constants",
 ]
 
 # Baseline key -> (module, attribute) it lives at today. The keys are the
@@ -136,6 +137,7 @@ QUALIFIED = {
     "presets.TAB_ANIMA": ("ember.licensing.presets", "TAB_ANIMA"),
     "presets.TAB_QWEN_EDIT": ("ember.licensing.presets", "TAB_QWEN_EDIT"),
     "presets.TAB_MINIMAX_R2V": ("ember.licensing.presets", "TAB_MINIMAX_R2V"),
+    "presets.TAB_MOSS": ("ember.licensing.presets", "TAB_MOSS"),
     "handlers.KREA_T2I": ("ember.generation.handlers", "KREA_T2I"),
     "handlers.KREA_EDIT": ("ember.generation.handlers", "KREA_EDIT"),
     "handlers.KREA_V2_T2I": ("ember.generation.handlers", "KREA_V2_T2I"),
@@ -150,6 +152,7 @@ QUALIFIED = {
     "handlers.ANIMA_T2I": ("ember.generation.handlers", "ANIMA_T2I"),
     "handlers.QWEN_EDIT_2511": ("ember.generation.handlers",
                                 "QWEN_EDIT_2511"),
+    "handlers.MOSS_T2I": ("ember.generation.handlers", "MOSS_T2I"),
 }
 
 # A public module-level constant: upper case, not starting with an
