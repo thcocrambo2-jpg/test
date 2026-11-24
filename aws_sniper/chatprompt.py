@@ -38,6 +38,7 @@ PREFIX = "base_prompt_"
 STORE_FILE = DATA / "chats.json"
 NEGATIVE_FILE = DATA / "negative.json"           # every chat mode's negative
 MODEL = "qwen"                    # only Qwen for now
+MAX_COUNT = 4                     # replies one message can ask for at once (the page's ×N pill)
 MAX_TOKENS = 4000                 # a full prompt is ~1,400 tokens; edits rewrite all of it
 MAX_TEXT = 8000
 MAX_IMAGES = 6
@@ -415,11 +416,13 @@ def build_request(mode: str, text: str, pictures: list, context=None) -> tuple:
     return system, content
 
 
-def send(session, account: str, body: dict, emit) -> dict:
-    """One message -> one streamed reply, both saved in the chat.
+def send(session, account: str, body: dict, emit) -> list:
+    """One message -> n streamed replies (body["n"], 1 to MAX_COUNT, written
+    side by side as separate Qwen calls), all saved in the chat.
     emit(event: dict) -> bool sends a line to the page; False means the
-    page went away (Stop), which stops reading Bedrock and keeps the
-    partial reply. Returns the saved reply."""
+    page went away (Stop), which stops every reply and keeps what each
+    wrote. Each line about a reply carries k, its index. Returns the saved
+    replies in k order."""
     cid = str(body.get("chat") or "")
     chat = STORE.get(cid)
     mode = str(body.get("mode") or chat["mode"])
@@ -438,6 +441,10 @@ def send(session, account: str, body: dict, emit) -> dict:
         if not context:
             raise ValueError("That reply has no prompt to edit.")
     resend_of = body.get("resend_of")
+    try:
+        n = max(1, min(MAX_COUNT, int(body.get("n") or 1)))
+    except (TypeError, ValueError):
+        n = 1
     system, content = build_request(mode, text, pictures, context)
     req = {"model": ip.MODELS[MODEL]["id"], "max_tokens": MAX_TOKENS, "stream": True,
            "stream_options": {"include_usage": True},
@@ -460,46 +467,81 @@ def send(session, account: str, body: dict, emit) -> dict:
             "images": [{k: p[k] for k in ("src", "id", "handle")} for p in pictures],
             "edit_of": int(edit_of) if edit_of is not None else None},
             cut_from=int(resend_of) if resend_of is not None else None)
-        emit({"t": "user", "msg": user})
-        t, parts, usage, stop, stopped, error = time.time(), [], None, None, False, None
-        try:
-            for kind, value in _stream(creds.get_frozen_credentials(), data):
-                if kind == "text":
-                    parts.append(value)
-                    if not emit({"t": "delta", "text": value}):
-                        stopped = True
-                        break
-                elif kind == "stop":
-                    stop = value
-                elif kind == "usage":
-                    usage = value
-        except RuntimeError as exc:
-            error = str(exc)
-        raw = "".join(parts)
-        talk, prompt = split_reply(raw)
-        tin = (usage or {}).get("prompt_tokens") or 0
-        tout = (usage or {}).get("completion_tokens") or 0
-        estimated = not usage and bool(raw)
-        if estimated:                         # stopped before Bedrock sent the counts
-            tin = (len(system) + len(text) + len(context or "")) // 4 + 1200 * len(pictures)
-            tout = max(1, len(raw) // 4)
-        reply = {"role": "assistant", "time": time.time(), "account": account, "model": MODEL, "mode": mode,
-                 "prompt_sha": hashlib.sha256(system.encode()).hexdigest()[:8],
-                 "edit_of": user["edit_of"], "reply_to": user["id"],
-                 "text": raw, "talk": talk, "prompt": prompt,
-                 "v": STORE.next_version(cid) if prompt else None,
-                 "tokens_in": tin, "tokens_out": tout, "cost": ip.cost(MODEL, tin, tout),
-                 "seconds": round(time.time() - t, 1), "stop": stop}
-        if estimated:
-            reply["estimated"] = True
-        if stopped:
-            reply["stopped"] = True
-        if error:
-            reply["error"] = error
-        if prompt is not None and stop == "length":
-            reply["cut"] = True               # hit MAX_TOKENS before </prompt>
-        reply = STORE.append(cid, reply)
-        return reply
+        gate, gone, saving = threading.Lock(), threading.Event(), threading.Lock()
+
+        def say(event: dict) -> bool:          # lines from several replies go out one at a time
+            with gate:
+                if gone.is_set():
+                    return False
+                if not emit(event):
+                    gone.set()
+                    return False
+                return True
+
+        say({"t": "user", "msg": user, "n": n})
+        frozen = creds.get_frozen_credentials()
+
+        def one(k: int) -> dict:
+            t, parts, usage, stop, stopped, error = time.time(), [], None, None, False, None
+            try:
+                for kind, value in _stream(frozen, data):
+                    if kind == "text":
+                        parts.append(value)
+                        if not say({"t": "delta", "k": k, "text": value}):
+                            stopped = True
+                            break
+                    elif kind == "stop":
+                        stop = value
+                    elif kind == "usage":
+                        usage = value
+            except RuntimeError as exc:
+                error = str(exc)
+            raw = "".join(parts)
+            talk, prompt = split_reply(raw)
+            tin = (usage or {}).get("prompt_tokens") or 0
+            tout = (usage or {}).get("completion_tokens") or 0
+            estimated = not usage and bool(raw)
+            if estimated:                     # stopped before Bedrock sent the counts
+                tin = (len(system) + len(text) + len(context or "")) // 4 + 1200 * len(pictures)
+                tout = max(1, len(raw) // 4)
+            reply = {"role": "assistant", "time": time.time(), "account": account, "model": MODEL, "mode": mode,
+                     "prompt_sha": hashlib.sha256(system.encode()).hexdigest()[:8],
+                     "edit_of": user["edit_of"], "reply_to": user["id"],
+                     "text": raw, "talk": talk, "prompt": prompt,
+                     "tokens_in": tin, "tokens_out": tout, "cost": ip.cost(MODEL, tin, tout),
+                     "seconds": round(time.time() - t, 1), "stop": stop}
+            if n > 1:
+                reply["take"] = k + 1         # "take 2 of 3" on the page
+            if estimated:
+                reply["estimated"] = True
+            if stopped:
+                reply["stopped"] = True
+            if error:
+                reply["error"] = error
+            if prompt is not None and stop == "length":
+                reply["cut"] = True           # hit MAX_TOKENS before </prompt>
+            with saving:                      # versions number in the order replies finish
+                reply["v"] = STORE.next_version(cid) if prompt else None
+                reply = STORE.append(cid, reply)
+            if n > 1:
+                say({"t": "reply", "k": k, "msg": reply})
+            return reply
+
+        if n == 1:
+            return [one(0)]
+        out = [None] * n
+
+        def worker(k):
+            try:
+                out[k] = one(k)
+            except Exception as exc:          # one take failing never sinks the others
+                out[k] = {"role": "assistant", "error": str(exc), "take": k + 1}
+        threads = [threading.Thread(target=worker, args=(k,), daemon=True) for k in range(n)]
+        for th in threads:
+            th.start()
+        for th in threads:
+            th.join()
+        return out
     finally:
         with STORE.lock:
             STORE.busy.discard(cid)

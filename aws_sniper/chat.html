@@ -361,6 +361,7 @@ body { background:var(--c-bg); color:var(--c-text); font:var(--t-md)/var(--lh-no
           <button class="btn ghost icon sm" id="cLibBtn" title="Pick from the library">🖼</button>
           <button class="pill" id="cModePill" data-float title="Base prompt for this chat"></button>
           <button class="pill" id="cAspectPill" data-float title="Aspect ratio of queued pictures"></button>
+          <button class="pill" id="cCountPill" data-float title="How many prompts one message writes: separate Qwen calls side by side"></button>
           <span class="grow"></span>
           <span class="faint" id="cCost" title="Rough estimate for this message"></span>
           <button class="btn ghost icon sm hidden" id="cStop" title="Stop: keeps what was written">■</button>
@@ -678,6 +679,7 @@ function userTurn(c, m) {
     ${m.images && m.images.length ? `<div class="thumbs">${m.images.map(tile).join("")}</div>` : ""}
     ${m.text ? `<div class="bubble">${withMentions(m.text)}</div>` : ""}
     ${m.id === "pending" ? "" : `<div class="acts"><button class="btn ghost sm" data-resend="${m.id}" ${busy ? "disabled" : ""} title="Change this message and send it again: its reply is replaced">✎ Edit &amp; resend</button>
+      <button class="btn ghost sm" data-reuse="${m.id}" title="Put this message and its pictures in the box again, as a new message">↩ Reuse</button>
       <button class="btn ghost sm" data-copyu="${m.id}">⧉ Copy</button></div>`}</div>`;
 }
 function asstTurn(c, m) {
@@ -696,7 +698,7 @@ function asstTurn(c, m) {
     const q = (m.queued || []).length, dis = live ? "disabled" : "";
     html += `<div class="pcard${target ? " target" : ""}" id="ccard-${m.id}">
       <div class="pcardHead">
-        <span class="pcardTitle">${live ? "Writing prompt" : "Prompt v" + m.v}</span>
+        <span class="pcardTitle">${live ? "Writing prompt" : "Prompt v" + m.v}</span>${m.take ? `<span class="pill" title="One of several prompts written for the same message">take ${m.take}</span>` : ""}
         ${from ? `<span class="faint">edited from v${from.v || "?"}</span>` : ""}
         ${vs.length > 1 ? `<span class="trail">${vs.map((x, i) => `${i ? "→" : ""}<button class="${x.id === m.id ? "cur" : ""}" data-jump="${x.id}">v${x.v}</button>`).join("")}</span>` : ""}
         <span class="grow"></span>
@@ -731,11 +733,15 @@ function drawLive(cid) {
   if (C.cur !== cid || rafs[cid]) return;
   rafs[cid] = requestAnimationFrame(() => {
     rafs[cid] = 0;
-    const s = C.streams[cid], el = $("cCol").querySelector('[data-msg="live"]');
-    if (s && el && C.cur === cid) {
-      el.outerHTML = asstTurn(C.open[cid], s.live); scrollBottom(false);
-      const box = $("cpt-live"); if (box) box.scrollTop = box.scrollHeight;     // follow the text inside the small box
+    const s = C.streams[cid];
+    if (!s || C.cur !== cid) return;
+    for (const l of s.lives) {
+      const el = l.live && $("cCol").querySelector(`[data-msg="${l.id}"]`);
+      if (!el) continue;
+      el.outerHTML = asstTurn(C.open[cid], l);
+      const box = $("cpt-" + l.id); if (box) box.scrollTop = box.scrollHeight;  // follow the text inside the small box
     }
+    scrollBottom(false);
   });
 }
 function saveTxt(name, text) {
@@ -760,6 +766,14 @@ $("cCol").addEventListener("click", e => {
   else if (d.queue) queueMsg(c.id, find(d.queue), false);
   else if (d.regen) { const m = find(d.regen), u = find(m.reply_to); if (u) { fillFrom(c, u); send(); } }
   else if (d.resend) { fillFrom(c, find(d.resend)); $("cInput").focus(); }
+  else if (d.reuse) {                                  // a new message: nothing in the chat is replaced
+    const u = find(d.reuse);
+    $("cInput").value = u.text || "";
+    C.attached = (u.images || []).map(p => ({src: p.src, id: p.id, handle: (C.lib.find(i => same(i, p)) || p).handle}));
+    C.resend = null;
+    autosize(); drawComposer();
+    const t = $("cInput"); t.focus(); t.selectionStart = t.selectionEnd = t.value.length;
+  }
 });
 function jump(id) {
   const el = $("ccard-" + id); if (!el) return;
@@ -790,6 +804,7 @@ function drawComposer() {
   $("cAttach").innerHTML = C.attached.map(p => `<span class="achip">${tile(p)}<span>@${esc(p.handle)}</span><button data-unattach="${esc(p.src + ":" + p.id)}" title="Remove">✕</button></span>`).join("");
   $("cModePill").innerHTML = `<b>${esc(modeLabel(curMode()))}</b>${t && curMode() !== "free" ? " · edit" : ""}<span class="caret"></span>`;
   $("cAspectPill").innerHTML = `${ratioIcon(aspect())}<b>${esc(aspect())}</b><span class="caret"></span>`;
+  $("cCountPill").innerHTML = `<b>×${count()}</b><span class="caret"></span>`;
   $("cInput").placeholder = t ? `Say what to change in v${t.v}, e.g. "shorter hair, night time" · @ to add a picture` : "Message Qwen · @ to mention a picture";
   const text = $("cInput").value.trim(), wait = (cid && C.waiting[cid]) || [];
   $("cStop").classList.toggle("hidden", !busy);
@@ -798,11 +813,11 @@ function drawComposer() {
   $("cWait").classList.toggle("hidden", !wait.length);
   $("cWait").innerHTML = wait.length ? `<div>Waiting · ${wait.length} message${wait.length === 1 ? "" : "s"}, sent one at a time as each reply finishes</div>` +
     wait.map((w, i) => `<div class="wrow"><span>${i + 1}.</span><span class="ell">${w.editOf != null ? "✎ " : ""}${esc(w.text || "(pictures only)")}</span>
-      <span class="faint">${w.attached.length ? w.attached.length + " pic" + (w.attached.length === 1 ? "" : "s") + " · " : ""}${esc(modeLabel(w.mode))}</span>
+      <span class="faint">${w.attached.length ? w.attached.length + " pic" + (w.attached.length === 1 ? "" : "s") + " · " : ""}${esc(modeLabel(w.mode))}${w.n > 1 ? " · ×" + w.n : ""}</span>
       <button data-unwait="${w.id}" title="Remove from the line">✕</button></div>`).join("") : "";
   const n = C.attached.length, free = curMode() === "free", ctx = t ? 1500 : 0;
   const tin = (free ? 200 : 3000) + text.length / 4 + 1100 * n + ctx, tout = free ? 250 : 1350;
-  $("cCost").textContent = text || n ? "≈ " + money((tin * C.price.in + tout * C.price.out) / 1e6) : "";
+  $("cCost").textContent = text || n ? "≈ " + money(count() * (tin * C.price.in + tout * C.price.out) / 1e6) : "";
   $("cStarters").innerHTML = [
     ["Recreate a photo", "recreate @", "recreate"], ["Scene from a brief", "28-year-old woman in a mustard cotton kurta on a balcony swing at dusk, laughing at a friend off-camera, phone photo"],
     ["Use library pictures", "outfit from @ , background like @ "], ["Ask anything", "what lens makes a portrait look like a phone photo?", "free"],
@@ -955,7 +970,7 @@ async function send() {
     } catch (e) { $("cErr").textContent = e.message; return; }
   }
   const cid = c.id;
-  const draft = {id: ++C.waitSeq, text, attached: C.attached.slice(), resend: C.resend, editOf: C.edit[cid] ?? null, mode: c.mode, account: acct()};
+  const draft = {id: ++C.waitSeq, text, attached: C.attached.slice(), resend: C.resend, editOf: C.edit[cid] ?? null, mode: c.mode, account: acct(), n: count()};
   if (C.streams[cid] || (C.waiting[cid] || []).length) {
     if (draft.resend != null) { $("cErr").textContent = "Wait for the reply to finish before changing an earlier message."; return; }
     (C.waiting[cid] = C.waiting[cid] || []).push(Object.assign(draft, {queued: true}));
@@ -970,8 +985,9 @@ async function send() {
 // The newest version of an edited prompt: a waiting edit lands on what the replies before it wrote.
 function newest(c, id) {
   for (let n = 0; id != null && n < 100; n++) {
-    const next = [...c.messages].reverse().find(m => m.role === "assistant" && m.edit_of === id && m.prompt && !m.error);
-    if (!next) break;
+    const kids = c.messages.filter(m => m.role === "assistant" && m.edit_of === id && m.prompt && !m.error);
+    if (kids.length !== 1) break;                      // ×N takes: stay on the version you picked
+    const next = kids[0];
     id = next.id;
   }
   return id;
@@ -987,16 +1003,26 @@ async function run(cid, draft) {
   const c = C.open[cid];
   if (draft.queued && draft.editOf != null) draft.editOf = newest(c, draft.editOf);
   const {text, resend, editOf} = draft;
-  const body = {chat: cid, text, images: draft.attached.map(p => ({src: p.src, id: p.id})), account: draft.account, mode: draft.mode};
+  const body = {chat: cid, text, images: draft.attached.map(p => ({src: p.src, id: p.id})), account: draft.account, mode: draft.mode, n: draft.n || 1};
   if (editOf != null) body.edit_of = editOf;
   if (resend != null) body.resend_of = resend;
   const keep = c.messages.slice();
   if (resend != null) { const i = c.messages.findIndex(m => m.id === resend); if (i >= 0) c.messages = c.messages.slice(0, i); }
   const tempUser = {id: "pending", role: "user", text, images: draft.attached, edit_of: editOf};
-  const live = {id: "live", role: "assistant", text: "", live: true, mode: draft.mode, edit_of: editOf};
-  c.messages.push(tempUser, live);
+  const N = draft.n || 1;
+  const lives = Array.from({length: N}, (_, k) => ({id: "live" + k, role: "assistant", text: "", live: true, mode: draft.mode,
+                                                    edit_of: editOf, take: N > 1 ? k + 1 : undefined}));
+  c.messages.push(tempUser, ...lives);
   const ctrl = new AbortController();
-  C.streams[cid] = {ctrl, live};
+  C.streams[cid] = {ctrl, lives};
+  const land = (k, msg) => {                           // a finished take replaces its writing box
+    const i = c.messages.indexOf(lives[k]);
+    if (i >= 0) c.messages[i] = msg; else if (!c.messages.some(x => x.id === msg.id)) c.messages.push(msg);
+    lives[k] = msg;
+  };
+  const autoSend = msg => {
+    if (store.get("c.auto", true) && isPrompt(msg) && !isVideo(msg) && !msg.stopped && !msg.error) queueMsg(cid, msg, true);
+  };
   drawAll(); scrollBottom(true);
 
   const putBack = msg => {             // refused before anything was saved: the message goes back in the box
@@ -1027,8 +1053,9 @@ async function run(cid, draft) {
         const line = buf.slice(0, nl); buf = buf.slice(nl + 1);
         if (!line.trim()) continue;
         let ev; try { ev = JSON.parse(line); } catch { continue; }
-        if (ev.t === "user") { const i = c.messages.indexOf(tempUser); if (i >= 0) c.messages[i] = ev.msg; live.reply_to = ev.msg.id; drawConvIf(cid); if (C.cur === cid) scrollBottom(false); }
-        else if (ev.t === "delta") { live.text += ev.text; drawLive(cid); }
+        if (ev.t === "user") { const i = c.messages.indexOf(tempUser); if (i >= 0) c.messages[i] = ev.msg; lives.forEach(l => l.reply_to = ev.msg.id); drawConvIf(cid); if (C.cur === cid) scrollBottom(false); }
+        else if (ev.t === "delta") { const l = lives[ev.k || 0]; if (l && l.live) { l.text += ev.text; drawLive(cid); } }
+        else if (ev.t === "reply") { land(ev.k, ev.msg); autoSend(ev.msg); drawConvIf(cid); }
         else if (ev.t === "done") done = ev;
         else if (ev.t === "error") failed = ev.error;
       }
@@ -1036,12 +1063,14 @@ async function run(cid, draft) {
   } catch { /* Stop, or the line dropped: the server keeps what was written */ }
   delete C.streams[cid];
   if (done) {
-    const msg = done.msg;                              // stays a small box; Show all opens it
-    const i = c.messages.indexOf(live);
-    if (i >= 0) c.messages[i] = msg; else c.messages.push(msg);
+    const msgs = done.msgs || [done.msg];              // each stays a small box; Show all opens it
     totals(done.totals);
-    if (msg.edit_of != null && msg.prompt && !msg.error) C.edit[cid] = msg.id;      // keep editing: the new version is the target
-    if (store.get("c.auto", true) && isPrompt(msg) && !isVideo(msg) && !msg.stopped && !msg.error) queueMsg(cid, msg, true);
+    if (N === 1) {
+      land(0, msgs[0]); autoSend(msgs[0]);
+      if (msgs[0].edit_of != null && msgs[0].prompt && !msgs[0].error) C.edit[cid] = msgs[0].id;   // keep editing: the new version is the target
+    } else {                                           // takes already landed one by one; a broken one shows its error
+      msgs.forEach((m, k) => { if (lives[k] && lives[k].live) land(k, m.id != null ? m : Object.assign({id: "err" + k, text: ""}, m)); });
+    }
   } else {
     // Stopped or cut off: read back what the server saved (it saves once it notices).
     for (let n = 0; n < 12; n++) {
@@ -1071,6 +1100,8 @@ $("cStop").onclick = () => { if (C.cur) stop(C.cur); };
 const NR2_STEPS = 20;                                 // Natural Raw 2's own steps (prod DB, 11-22), shown until an app is read
 const ASPECTS = ["1:1", "3:4", "4:3", "2:3", "3:2", "9:16", "16:9"];   // until the app's own list is read
 const aspect = () => store.get("c.ar", "3:4");
+const MAX_COUNT = 4;                                  // chatprompt.MAX_COUNT
+const count = () => Math.max(1, Math.min(MAX_COUNT, Number(store.get("c.n", 1)) || 1));
 const links = () => store.get("c.links", []);
 function targets() {
   const inst = ((typeof LAST_ST !== "undefined" && LAST_ST && LAST_ST.instances) || [])
@@ -1136,6 +1167,15 @@ function queueMsg(cid, m, auto) {
     m.queueState = ""; drawConvIf(cid);
   });
 }
+$("cCountPill").onclick = e => {
+  e.stopPropagation(); closeFloating();
+  const m = document.createElement("div"); m.className = "menu"; m.style.minWidth = "200px";
+  m.innerHTML = Array.from({length: MAX_COUNT}, (_, i) => i + 1).map(n => `<button data-n="${n}"><span class="tick">${n === count() ? "✓" : ""}</span>
+      <span><b>×${n}</b><small>${n === 1 ? "one prompt" : n + " prompts side by side, each queued"}</small></span></button>`).join("") +
+    `<hr><div class="faint" style="padding:6px 10px">Same message, separate Qwen calls · costs ×N</div>`;
+  m.onclick = ev => { const n = ev.target.closest("[data-n]")?.dataset.n; if (!n) return; store.set("c.n", Number(n)); closeFloating(); drawComposer(); };
+  placeNear(m, $("cCountPill"), false);
+};
 $("cAspectPill").onclick = async e => {
   e.stopPropagation(); closeFloating();
   const anchor = $("cAspectPill"), t = pickTarget();

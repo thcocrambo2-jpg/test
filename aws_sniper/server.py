@@ -1424,13 +1424,13 @@ class Handler(BaseHTTPRequestHandler):
                 return False
 
         try:
-            reply = chatprompt.send(session, account, body, emit)
+            replies = chatprompt.send(session, account, body, emit)
         except (ValueError, RuntimeError) as exc:
             if not started:
                 return self.error(str(exc), 502 if isinstance(exc, RuntimeError) else 400)
             emit({"t": "error", "error": str(exc)})
             return
-        emit({"t": "done", "msg": reply, "totals": chatprompt.STORE.totals()})
+        emit({"t": "done", "msg": replies[0], "msgs": replies, "totals": chatprompt.STORE.totals()})
 
     def local(self) -> bool:
         """Only this machine's page (no DNS rebinding): a web page elsewhere

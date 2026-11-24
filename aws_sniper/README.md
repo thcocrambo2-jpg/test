@@ -208,12 +208,22 @@ that prompt as context, and the reply is the next version (v2, v3...; the
 trail on each card jumps between them). Editing carries on from the newest
 version until you press ✕ on the "Editing" strip. **✎ Edit & resend** on
 one of your messages puts it back in the box; sending it replaces it and
-everything after it. ■ stops a reply and keeps what was written.
+everything after it. **↩ Reuse** puts a message and its pictures back
+in the box exactly as sent, to send again as a new message (nothing in the
+chat is replaced). ■ stops a reply and keeps what was written.
 Sending while a reply is still writing puts the message in that chat's
 **Waiting** line above the box (✕ takes one out). Each goes out when the
 reply before it finishes, with the mode and pictures it had when you sent
 it. A waiting edit applies to the newest version of its prompt, so several
 queued edits stack. Stop doesn't clear the line.
+
+The **×N** pill under the box (1 to 4, remembered) makes one message write N
+prompts at once: separate Qwen calls side by side, each its own version
+labelled "take k". With auto-send on, every take goes to the instance's
+queue; otherwise each has its own ⤒ Queue. The cost estimate is ×N, and
+■ stops all the takes. After a ×N edit the edit target stays where it was,
+so pick the take you like with ✎ Edit. ↻ Regenerate still works, using the
+pill's current number.
 
 **Modes** (the pill in the box, per chat) are the files
 `chat2prompt/base_prompt_<name>.md`, read on every send: **scene** (Text to
