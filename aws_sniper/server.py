@@ -1,6 +1,6 @@
 """AWS GPU sniper page.
 
-    python aws_sniper/server.py [--port 7896] [--profile ember] [--no-sound]
+    python aws_sniper/server.py [--port 7896] [--profile ember] [--no-sound] [--share-chat]
 
 AWS credentials: AWS_ACCESS_KEY_ID / AWS_SECRET_ACCESS_KEY in aws_sniper/.env,
 or --profile for one set up with `aws configure`. More accounts:
@@ -1656,8 +1656,15 @@ def main() -> None:
     ap.add_argument("--profile", default=None,
                     help="AWS CLI profile (default: the keys in aws_sniper/.env)")
     ap.add_argument("--no-sound", action="store_true")
+    ap.add_argument("--share-chat", action="store_true",
+                    help="also start chat_share.py: a Cloudflare link to the Chat page only")
     a = ap.parse_args()
     PROFILE, SOUND = a.profile, not a.no_sound
+    if a.share_chat:                   # its own process, so it can't reach more than the chat routes
+        import atexit
+        import subprocess
+        share = subprocess.Popen([sys.executable, str(HERE / "chat_share.py"), "--sniper", str(a.port)])
+        atexit.register(share.terminate)
     _resume_downloads()
     threading.Thread(target=INSTANCES.loop, daemon=True).start()
     print("AWS sniper on http://127.0.0.1:%d  (accounts: %s)" % (a.port, ", ".join(

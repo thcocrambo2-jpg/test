@@ -4,6 +4,7 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Sniper chat</title>
+<link rel="icon" type="image/svg+xml" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'%3E%3Crect width='64' height='64' rx='14' fill='%23e8743b'/%3E%3Cpath d='M16 18h32a6 6 0 0 1 6 6v14a6 6 0 0 1-6 6H30l-10 8v-8h-4a6 6 0 0 1-6-6V24a6 6 0 0 1 6-6z' fill='%23fff'/%3E%3Ccircle cx='24' cy='31' r='3' fill='%23e8743b'/%3E%3Ccircle cx='32' cy='31' r='3' fill='%23e8743b'/%3E%3Ccircle cx='40' cy='31' r='3' fill='%23e8743b'/%3E%3C/svg%3E">
 <!-- The Chat page of the AWS sniper (chatprompt.py), opened from the sniper's
      Chat button and served by server.py at /chat. Ember's look: tokens.css
      (a copy of webui/src/theme/tokens.css) plus the styles below. -->
@@ -771,7 +772,10 @@ $("cCol").addEventListener("click", e => {
     $("cInput").value = u.text || "";
     C.attached = (u.images || []).map(p => ({src: p.src, id: p.id, handle: (C.lib.find(i => same(i, p)) || p).handle}));
     C.resend = null;
-    autosize(); drawComposer();
+    const base = u.edit_of != null && c.messages.find(x => x.id === u.edit_of && x.prompt);
+    C.edit[c.id] = base ? base.id : null;              // an edit comes back editing the same version
+    if (u.edit_of != null && !base) ctoast("The version this message edited is gone: it goes as a fresh message.");
+    autosize(); drawConv(); drawComposer();
     const t = $("cInput"); t.focus(); t.selectionStart = t.selectionEnd = t.value.length;
   }
 });
@@ -1101,7 +1105,12 @@ const NR2_STEPS = 20;                                 // Natural Raw 2's own ste
 const ASPECTS = ["1:1", "3:4", "4:3", "2:3", "3:2", "9:16", "16:9"];   // until the app's own list is read
 const aspect = () => store.get("c.ar", "3:4");
 const MAX_COUNT = 4;                                  // chatprompt.MAX_COUNT
-const count = () => Math.max(1, Math.min(MAX_COUNT, Number(store.get("c.n", 1)) || 1));
+// ×N belongs to this browser tab (sessionStorage): another tab keeps its own, a reload keeps it.
+const tabStore = {
+  get(k, d) { try { const v = sessionStorage.getItem("awssniper." + k); return v === null ? d : JSON.parse(v); } catch { return d; } },
+  set(k, v) { try { sessionStorage.setItem("awssniper." + k, JSON.stringify(v)); } catch {} },
+};
+const count = () => Math.max(1, Math.min(MAX_COUNT, Number(tabStore.get("c.n", 1)) || 1));
 const links = () => store.get("c.links", []);
 function targets() {
   const inst = ((typeof LAST_ST !== "undefined" && LAST_ST && LAST_ST.instances) || [])
@@ -1173,7 +1182,7 @@ $("cCountPill").onclick = e => {
   m.innerHTML = Array.from({length: MAX_COUNT}, (_, i) => i + 1).map(n => `<button data-n="${n}"><span class="tick">${n === count() ? "✓" : ""}</span>
       <span><b>×${n}</b><small>${n === 1 ? "one prompt" : n + " prompts side by side, each queued"}</small></span></button>`).join("") +
     `<hr><div class="faint" style="padding:6px 10px">Same message, separate Qwen calls · costs ×N</div>`;
-  m.onclick = ev => { const n = ev.target.closest("[data-n]")?.dataset.n; if (!n) return; store.set("c.n", Number(n)); closeFloating(); drawComposer(); };
+  m.onclick = ev => { const n = ev.target.closest("[data-n]")?.dataset.n; if (!n) return; tabStore.set("c.n", Number(n)); closeFloating(); drawComposer(); };
   placeNear(m, $("cCountPill"), false);
 };
 $("cAspectPill").onclick = async e => {

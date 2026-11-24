@@ -210,14 +210,14 @@ version until you press ✕ on the "Editing" strip. **✎ Edit & resend** on
 one of your messages puts it back in the box; sending it replaces it and
 everything after it. **↩ Reuse** puts a message and its pictures back
 in the box exactly as sent, to send again as a new message (nothing in the
-chat is replaced). ■ stops a reply and keeps what was written.
+chat is replaced). An edit comes back editing the same version it edited. ■ stops a reply and keeps what was written.
 Sending while a reply is still writing puts the message in that chat's
 **Waiting** line above the box (✕ takes one out). Each goes out when the
 reply before it finishes, with the mode and pictures it had when you sent
 it. A waiting edit applies to the newest version of its prompt, so several
 queued edits stack. Stop doesn't clear the line.
 
-The **×N** pill under the box (1 to 4, remembered) makes one message write N
+The **×N** pill under the box (1 to 4, per browser tab) makes one message write N
 prompts at once: separate Qwen calls side by side, each its own version
 labelled "take k". With auto-send on, every take goes to the instance's
 queue; otherwise each has its own ⤒ Queue. The cost estimate is ×N, and
@@ -266,6 +266,27 @@ kept in `chat2prompt/chats.json` and chat uploads in `chat2prompt/images/`,
 git-ignored and left out of the friends' zip. A message costs about the same
 as a Text to prompt generation (~$0.006 for a full prompt), however long the
 chat is; deleting a chat keeps its cost in the totals and the Credit card.
+
+### Chat from a phone (Cloudflare link)
+
+```
+python aws_sniper/server.py --share-chat
+```
+
+starts `chat_share.py` with the server (or run `python aws_sniper/chat_share.py`
+on its own while the server runs). It is a gateway on 127.0.0.1:7897 that
+passes on only the Chat page and its `/api/chat/…` calls, plus the account
+list and instance list it needs; launching, stopping, restarting and the
+other tabs answer 404. It runs a cloudflared quick tunnel (from PATH, the
+repo's `tmp/cloudflared.exe`, or `--cloudflared PATH`) and prints:
+
+```
+https://<random>.trycloudflare.com/chat
+```
+
+There is no sign-in: anyone with the link can use the chat, spend Bedrock
+money and queue jobs to your pods, so keep it private. The address changes
+on each start. The instance list goes out without the pods' app keys or IPs.
 
 ## Accounts
 
